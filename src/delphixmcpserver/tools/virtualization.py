@@ -32,7 +32,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
             params["sort"] = sort
 
         return await client.make_request(
-            "GET", "virtualization/databases", params=params
+            "GET", "vdbs", params=params
         )
 
     @mcp.tool()
@@ -60,7 +60,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
 
         return await client.make_request(
             "POST",
-            "virtualization/databases/search",
+            "vdbs/search",
             data={"filter": filter},
             params=params,
         )
@@ -72,7 +72,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
         """
-        return await client.make_request("GET", f"virtualization/databases/{vdb_id}")
+        return await client.make_request("GET", f"vdbs/{vdb_id}")
 
     @mcp.tool()
     async def dct_vdb_create(
@@ -108,7 +108,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
         if environment_user_id:
             data["environmentUserId"] = environment_user_id
 
-        return await client.make_request("POST", "virtualization/databases", data=data)
+        return await client.make_request("POST", "vdbs", data=data)
 
     @mcp.tool()
     async def dct_vdb_delete(vdb_id: str, force: bool = False) -> Dict[str, Any]:
@@ -120,7 +120,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
         """
         params = {"force": force}
         return await client.make_request(
-            "DELETE", f"virtualization/databases/{vdb_id}", params=params
+            "DELETE", f"vdbs/{vdb_id}", params=params
         )
 
     @mcp.tool()
@@ -143,7 +143,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
             data["bookmarkId"] = bookmark_id
 
         return await client.make_request(
-            "POST", f"virtualization/databases/{vdb_id}/refresh", data=data
+            "POST", f"vdbs/{vdb_id}/refresh", data=data
         )
 
     @mcp.tool()
@@ -161,7 +161,7 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
             data["name"] = name
 
         return await client.make_request(
-            "POST", f"virtualization/databases/{vdb_id}/snapshots", data=data
+            "POST", f"vdbs/{vdb_id}/snapshots", data=data
         )
 
     @mcp.tool()
@@ -182,5 +182,5 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
             params["cursor"] = cursor
 
         return await client.make_request(
-            "GET", f"virtualization/databases/{vdb_id}/snapshots", params=params
+            "GET", f"vdbs/{vdb_id}/snapshots", params=params
         )
