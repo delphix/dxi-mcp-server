@@ -1,0 +1,41 @@
+"""
+Tools package for DCT API categories
+"""
+
+import asyncio
+import logging
+from typing import Any, Awaitable, Callable, Dict, List
+
+from .dsources import register_dsource_tools
+from .virtualization import register_virtualization_tools
+
+logger = logging.getLogger("dct-tools")
+
+# Registry for cleanup handlers
+_cleanup_handlers: List[Callable[[], Awaitable[None]]] = []
+
+
+def register_cleanup_handler(handler: Callable[[], Awaitable[None]]) -> None:
+    """Register a cleanup handler to be called on shutdown"""
+    _cleanup_handlers.append(handler)
+
+
+async def run_cleanup() -> None:
+    """Run all registered cleanup handlers"""
+    if not _cleanup_handlers:
+        return
+
+    logger.info(f"Running {len(_cleanup_handlers)} cleanup handlers")
+    for handler in _cleanup_handlers:
+        try:
+            await handler()
+        except Exception as e:
+            logger.error(f"Error in cleanup handler: {str(e)}")
+
+
+__all__ = [
+    "register_dsource_tools",
+    "register_virtualization_tools",
+    "register_cleanup_handler",
+    "run_cleanup",
+]
