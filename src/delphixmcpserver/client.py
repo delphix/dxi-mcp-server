@@ -118,3 +118,6 @@ class DCTAPIClient:
                         f"Request failed (attempt {attempt + 1}/{self.max_retries}): {str(e)}"
                     )
                     await asyncio.sleep(2**attempt)  # Exponential backoff
+
+        # If we get here, all attempts failed
+        raise Exception("All retry attempts failed")

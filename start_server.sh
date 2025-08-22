@@ -4,8 +4,8 @@
 cd "$(dirname "$0")"
 
 # Set environment variables
-export DCT_API_KEY="20.MXi4WSGhHOsG2cCgjwEt33ZyxFwX9Wj7i8HNZNe5urlaZyo6Zj6qtonhCB8Xh5zI"
-export DCT_BASE_URL="https://dct20254.dlpxdc.co/dct/v3"
+export DCT_API_KEY="1.pEmYpdUPpm71cfosLXXD299g3BDZk59xpY1U3FBMImvj3oB7fOIMONmOQ9OFhI5P"
+export DCT_BASE_URL="https://dct20254.dlpxdc.co"
 export DCT_VERIFY_SSL=false
 export PYTHONPATH=src
 
