@@ -66,11 +66,11 @@ async def async_main():
         logger.info(f"DCT MCP Server initialized with base URL: {dct_client.base_url}")
 
         # Import all tool modules and register tools
-        from .tools import register_dsource_tools, register_virtualization_tools
+        from .tools import register_dsource_tools, register_vdb_tools
 
         # Register all tools
         register_dsource_tools(app, dct_client)
-        register_virtualization_tools(app, dct_client)
+        register_vdb_tools(app, dct_client)
 
         # Run the server
         try:

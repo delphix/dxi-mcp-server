@@ -1,16 +1,19 @@
 """
-Virtualization tools for DCT API
+VDB tools for DCT API
 """
 
+import logging
 from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from ..client import DCTAPIClient
 
+logger = logging.getLogger(__name__)
 
-def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
-    """Register virtualization-related tools"""
+
+def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
+    """Register VDB-related tools"""
 
     @mcp.tool()
     async def dct_vdb_list(
@@ -184,3 +187,5 @@ def register_virtualization_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request(
             "GET", f"vdbs/{vdb_id}/snapshots", params=params
         )
+
+    logger.info("VDB tools registered successfully")

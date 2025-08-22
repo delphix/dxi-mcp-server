@@ -7,7 +7,7 @@ import logging
 from typing import Any, Awaitable, Callable, Dict, List
 
 from .dsources import register_dsource_tools
-from .virtualization import register_virtualization_tools
+from .vdb import register_vdb_tools
 
 logger = logging.getLogger("dct-tools")
 
@@ -35,7 +35,7 @@ async def run_cleanup() -> None:
 
 __all__ = [
     "register_dsource_tools",
-    "register_virtualization_tools",
+    "register_vdb_tools",
     "register_cleanup_handler",
     "run_cleanup",
 ]
