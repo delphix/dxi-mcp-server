@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Snapshot-related tools"""
 
-    @mcp.tool()
-    async def dct_snapshots_list(
-        limit: int = None, cursor: str = None, sort: str = None
+        @app.tool()
+    async def list_snapshots(
+        limit: Optional[int] = None, cursor: Optional[str] = None
     ) -> Dict[str, Any]:
         """List all snapshots
 
@@ -38,12 +38,11 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
             "GET", "snapshots", params=params
         )
 
-    @mcp.tool()
-    async def dct_snapshots_search(
-        limit: int = None,
-        cursor: str = None,
-        sort: str = None,
-        filter: Dict[str, Any] = None,
+        @app.tool()
+    async def search_snapshots(
+        search_criteria: Dict[str, Any],
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Search for snapshots with filters
 
@@ -68,8 +67,8 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
             params=params,
         )
 
-    @mcp.tool()
-    async def dct_snapshot_get(snapshot_id: str) -> Dict[str, Any]:
+        @app.tool()
+    async def get_snapshot(snapshot_id: str) -> Dict[str, Any]:
         """Get snapshot details
 
         Args:
@@ -77,8 +76,8 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
         """
         return await client.make_request("GET", f"snapshots/{snapshot_id}")
 
-    @mcp.tool()
-    async def dct_snapshot_delete(snapshot_id: str) -> Dict[str, Any]:
+        @app.tool()
+    async def delete_snapshot(snapshot_id: str) -> Dict[str, Any]:
         """Delete a snapshot
 
         Args:

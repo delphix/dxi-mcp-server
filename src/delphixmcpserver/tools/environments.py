@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Environment-related tools"""
 
-    @mcp.tool()
-    async def dct_environments_list(
-        limit: int = None, cursor: str = None, sort: str = None
-    ) -> Dict[str, Any]:
-        """List all environments
-
+        @mcp.tool()
+        async def search_environments(
+            search_criteria: Dict[str, Any],
+            limit: Optional[int] = None,
+            cursor: Optional[str] = None,
+        ) -> Dict[str, Any]:
         Args:
             limit: Maximum number of results to return
             cursor: Pagination cursor
@@ -69,7 +69,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_environment_get(environment_id: str) -> Dict[str, Any]:
+    async def get_environment(environment_id: str) -> Dict[str, Any]:
         """Get environment details
 
         Args:
@@ -78,7 +78,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("GET", f"environments/{environment_id}")
 
     @mcp.tool()
-    async def dct_environment_enable(environment_id: str) -> Dict[str, Any]:
+    async def enable_environment(environment_id: str) -> Dict[str, Any]:
         """Enable an environment
 
         Args:
@@ -87,7 +87,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"environments/{environment_id}/enable")
 
     @mcp.tool()
-    async def dct_environment_disable(environment_id: str) -> Dict[str, Any]:
+    async def disable_environment(environment_id: str) -> Dict[str, Any]:
         """Disable an environment
 
         Args:
@@ -96,7 +96,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"environments/{environment_id}/disable")
 
     @mcp.tool()
-    async def dct_environment_refresh(environment_id: str) -> Dict[str, Any]:
+    async def refresh_environment(environment_id: str) -> Dict[str, Any]:
         """Refresh an environment (discover new databases/changes)
 
         Args:
@@ -105,7 +105,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"environments/{environment_id}/refresh")
 
     @mcp.tool()
-    async def dct_environment_users_list(environment_id: str) -> Dict[str, Any]:
+    async def list_environment_users(environment_id: str) -> Dict[str, Any]:
         """List users for an environment
 
         Args:
@@ -114,7 +114,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("GET", f"environments/{environment_id}/users")
 
     @mcp.tool()
-    async def dct_environments_compatible_repositories_by_snapshot(
+    async def compatible_repos_by_snapshot(
         snapshot_id: str,
     ) -> Dict[str, Any]:
         """Get compatible repositories by snapshot for provisioning
@@ -128,7 +128,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_environments_compatible_repositories_by_timestamp(
+    async def compatible_repos_by_timestamp(
         timeflow_id: str,
         timestamp: str,
     ) -> Dict[str, Any]:
@@ -144,7 +144,7 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_environments_compatible_repositories_from_bookmark(
+    async def compatible_repos_from_bookmark(
         bookmark_id: str,
     ) -> Dict[str, Any]:
         """Get compatible repositories from bookmark for provisioning

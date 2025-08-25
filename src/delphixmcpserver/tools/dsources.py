@@ -19,7 +19,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
     """Register all dSource-related tools with the FastMCP app"""
 
     @app.tool()
-    async def dct_dsources_list(
+    async def list_dsources(
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
         sort: Optional[str] = None,
@@ -53,7 +53,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_search(
+    async def search_dsources(
         search_criteria: Dict[str, Any],
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
@@ -113,7 +113,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_get(dsource_id: str) -> Dict[str, Any]:
+    async def get_dsource(dsource_id: str) -> Dict[str, Any]:
         """
         Get a specific dSource by ID.
 
@@ -133,7 +133,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_snapshots_list(
+    async def list_snapshots(
         dsource_id: str, limit: Optional[int] = None, cursor: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -167,7 +167,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_snapshot_create(
+    async def create_snapshot(
         dsource_id: str,
         skip_space_check: Optional[bool] = None,
         force_full_backup: Optional[str] = None,
@@ -225,7 +225,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_tags_get(dsource_id: str) -> Dict[str, Any]:
+    async def get_tags(dsource_id: str) -> Dict[str, Any]:
         """
         Get tags for a dSource.
 
@@ -245,7 +245,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_tags_create(
+    async def create_tags(
         dsource_id: str, tags: List[Dict[str, str]]
     ) -> Dict[str, Any]:
         """
@@ -277,7 +277,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             raise
 
     @app.tool()
-    async def dct_dsources_tags_delete(
+    async def delete_tags(
         dsource_id: str, delete_parameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """

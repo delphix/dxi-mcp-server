@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Bookmark-related tools"""
 
-    @mcp.tool()
-    async def dct_bookmarks_list(
-        limit: int = None, cursor: str = None, sort: str = None
+        @app.tool()
+    async def list_bookmarks(
+        limit: Optional[int] = None, cursor: Optional[str] = None
     ) -> Dict[str, Any]:
         """List all bookmarks
 
@@ -38,12 +38,11 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             "GET", "bookmarks", params=params
         )
 
-    @mcp.tool()
-    async def dct_bookmarks_search(
-        limit: int = None,
-        cursor: str = None,
-        sort: str = None,
-        filter: Dict[str, Any] = None,
+        @app.tool()
+    async def search_bookmarks(
+        search_criteria: Dict[str, Any],
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Search for bookmarks with filters
 
@@ -68,8 +67,8 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             params=params,
         )
 
-    @mcp.tool()
-    async def dct_bookmark_get(bookmark_id: str) -> Dict[str, Any]:
+        @app.tool()
+    async def get_bookmark(bookmark_id: str) -> Dict[str, Any]:
         """Get bookmark details
 
         Args:
@@ -77,8 +76,8 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
         """
         return await client.make_request("GET", f"bookmarks/{bookmark_id}")
 
-    @mcp.tool()
-    async def dct_bookmark_create(
+    @app.tool()
+    async def create_bookmark(
         name: str,
         dataset_id: str = None,
         vdb_ids: list = None,
@@ -107,8 +106,8 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
 
         return await client.make_request("POST", "bookmarks", data=data)
 
-    @mcp.tool()
-    async def dct_bookmark_delete(bookmark_id: str) -> Dict[str, Any]:
+        @app.tool()
+    async def delete_bookmark(bookmark_id: str) -> Dict[str, Any]:
         """Delete a bookmark
 
         Args:
@@ -116,8 +115,8 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
         """
         return await client.make_request("DELETE", f"bookmarks/{bookmark_id}")
 
-    @mcp.tool()
-    async def dct_bookmark_update(
+        @app.tool()
+    async def update_bookmark(
         bookmark_id: str,
         name: str = None,
         tags: list = None,
