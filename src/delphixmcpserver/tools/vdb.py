@@ -16,7 +16,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register VDB-related tools"""
 
     @mcp.tool()
-    async def dct_vdb_list(
+    async def list_vdbs(
         limit: int = None, cursor: str = None, sort: str = None
     ) -> Dict[str, Any]:
         """List all virtual databases (VDBs)
@@ -39,7 +39,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_search(
+    async def search_vdbs(
         limit: int = None,
         cursor: str = None,
         sort: str = None,
@@ -69,7 +69,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_get(vdb_id: str) -> Dict[str, Any]:
+    async def get_vdb(vdb_id: str) -> Dict[str, Any]:
         """Get virtual database details
 
         Args:
@@ -78,7 +78,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("GET", f"vdbs/{vdb_id}")
 
     @mcp.tool()
-    async def dct_vdb_provision_by_timestamp(
+    async def provision_vdb_by_timestamp(
         source_data_id: str,
         target_environment_id: str,
         name: str,
@@ -118,7 +118,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", "vdbs/provision_by_timestamp", data=data)
 
     @mcp.tool()
-    async def dct_vdb_provision_by_snapshot(
+    async def provision_vdb_by_snapshot(
         source_data_id: str,
         target_environment_id: str,
         name: str,
@@ -157,7 +157,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", "vdbs/provision_by_snapshot", data=data)
 
     @mcp.tool()
-    async def dct_vdb_provision_from_bookmark(
+    async def provision_vdb_from_bookmark(
         bookmark_id: str,
         target_environment_id: str,
         name: str,
@@ -193,7 +193,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", "vdbs/provision_from_bookmark", data=data)
 
     @mcp.tool()
-    async def dct_vdb_delete(vdb_id: str, force: bool = False) -> Dict[str, Any]:
+    async def delete_vdb(vdb_id: str, force: bool = False) -> Dict[str, Any]:
         """Delete a virtual database
 
         Args:
@@ -206,7 +206,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_refresh_by_timestamp(
+    async def refresh_vdb_by_timestamp(
         vdb_id: str,
         timestamp: str = None,
     ) -> Dict[str, Any]:
@@ -225,7 +225,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_refresh_by_snapshot(
+    async def refresh_vdb_by_snapshot(
         vdb_id: str,
         snapshot_id: str,
     ) -> Dict[str, Any]:
@@ -242,7 +242,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_refresh_from_bookmark(
+    async def refresh_vdb_from_bookmark(
         vdb_id: str,
         bookmark_id: str,
     ) -> Dict[str, Any]:
@@ -259,7 +259,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_rollback_by_timestamp(
+    async def rollback_vdb_by_timestamp(
         vdb_id: str,
         timestamp: str,
     ) -> Dict[str, Any]:
@@ -276,7 +276,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_rollback_by_snapshot(
+    async def rollback_vdb_by_snapshot(
         vdb_id: str,
         snapshot_id: str,
     ) -> Dict[str, Any]:
@@ -293,7 +293,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_rollback_from_bookmark(
+    async def rollback_vdb_from_bookmark(
         vdb_id: str,
         bookmark_id: str,
     ) -> Dict[str, Any]:
@@ -310,7 +310,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_start(vdb_id: str) -> Dict[str, Any]:
+    async def start_vdb(vdb_id: str) -> Dict[str, Any]:
         """Start a VDB
 
         Args:
@@ -319,7 +319,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"vdbs/{vdb_id}/start")
 
     @mcp.tool()
-    async def dct_vdb_stop(vdb_id: str) -> Dict[str, Any]:
+    async def stop_vdb(vdb_id: str) -> Dict[str, Any]:
         """Stop a VDB
 
         Args:
@@ -328,7 +328,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"vdbs/{vdb_id}/stop")
 
     @mcp.tool()
-    async def dct_vdb_enable(vdb_id: str) -> Dict[str, Any]:
+    async def enable_vdb(vdb_id: str) -> Dict[str, Any]:
         """Enable a VDB
 
         Args:
@@ -337,7 +337,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"vdbs/{vdb_id}/enable")
 
     @mcp.tool()
-    async def dct_vdb_disable(vdb_id: str) -> Dict[str, Any]:
+    async def disable_vdb(vdb_id: str) -> Dict[str, Any]:
         """Disable a VDB
 
         Args:
@@ -346,7 +346,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"vdbs/{vdb_id}/disable")
 
     @mcp.tool()
-    async def dct_vdb_lock(vdb_id: str) -> Dict[str, Any]:
+    async def lock_vdb(vdb_id: str) -> Dict[str, Any]:
         """Lock a VDB
 
         Args:
@@ -355,7 +355,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"vdbs/{vdb_id}/lock")
 
     @mcp.tool()
-    async def dct_vdb_unlock(vdb_id: str) -> Dict[str, Any]:
+    async def unlock_vdb(vdb_id: str) -> Dict[str, Any]:
         """Unlock a VDB
 
         Args:
@@ -364,7 +364,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         return await client.make_request("POST", f"vdbs/{vdb_id}/unlock")
 
     @mcp.tool()
-    async def dct_vdb_refresh_by_location(
+    async def refresh_vdb_by_location(
         vdb_id: str,
         location: str,
     ) -> Dict[str, Any]:
@@ -381,7 +381,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_snapshot(
+    async def snapshot_vdb(
         vdb_id: str, name: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create a snapshot of a virtual database
@@ -399,7 +399,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_vdb_snapshots_list(
+    async def list_vdb_snapshots(
         vdb_id: str, limit: int = None, cursor: str = None
     ) -> Dict[str, Any]:
         """List snapshots for a virtual database
