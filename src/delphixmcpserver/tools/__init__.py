@@ -8,6 +8,10 @@ from typing import Any, Awaitable, Callable, Dict, List
 
 from .dsources import register_dsource_tools
 from .vdb import register_vdb_tools
+from .environments import register_environment_tools
+from .engines import register_engine_tools
+from .bookmarks import register_bookmark_tools
+from .snapshots import register_snapshot_tools
 
 logger = logging.getLogger("dct-tools")
 
@@ -36,6 +40,10 @@ async def run_cleanup() -> None:
 __all__ = [
     "register_dsource_tools",
     "register_vdb_tools",
+    "register_environment_tools",
+    "register_engine_tools",
+    "register_bookmark_tools",
+    "register_snapshot_tools",
     "register_cleanup_handler",
     "run_cleanup",
 ]

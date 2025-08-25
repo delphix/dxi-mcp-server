@@ -9,6 +9,9 @@ __version__ = "1.0.0"
 __author__ = "Delphix"
 __description__ = "Delphix DCT API MCP Server"
 
-from .main import main
+def get_main():
+    """Lazy import of main function to avoid dependency issues"""
+    from .main import main
+    return main
 
-__all__ = ["main"]
+__all__ = ["get_main"]
