@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Bookmark-related tools"""
 
-        @app.tool()
+    @mcp.tool()
     async def list_bookmarks(
         limit: Optional[int] = None, cursor: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -38,7 +38,7 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             "GET", "bookmarks", params=params
         )
 
-        @app.tool()
+    @mcp.tool()
     async def search_bookmarks(
         search_criteria: Dict[str, Any],
         limit: Optional[int] = None,
@@ -67,7 +67,7 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             params=params,
         )
 
-        @app.tool()
+    @mcp.tool()
     async def get_bookmark(bookmark_id: str) -> Dict[str, Any]:
         """Get bookmark details
 
@@ -76,7 +76,7 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
         """
         return await client.make_request("GET", f"bookmarks/{bookmark_id}")
 
-    @app.tool()
+    @mcp.tool()
     async def create_bookmark(
         name: str,
         dataset_id: str = None,
@@ -106,7 +106,7 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
 
         return await client.make_request("POST", "bookmarks", data=data)
 
-        @app.tool()
+    @mcp.tool()
     async def delete_bookmark(bookmark_id: str) -> Dict[str, Any]:
         """Delete a bookmark
 
@@ -115,7 +115,7 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
         """
         return await client.make_request("DELETE", f"bookmarks/{bookmark_id}")
 
-        @app.tool()
+    @mcp.tool()
     async def update_bookmark(
         bookmark_id: str,
         name: str = None,

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Engine-related tools"""
 
-        @app.tool()
+    @mcp.tool()
     async def list_engines(
         limit: Optional[int] = None, cursor: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -38,7 +38,7 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
             "GET", "management/engines", params=params
         )
 
-        @app.tool()
+    @mcp.tool()
     async def search_engines(
         search_criteria: Dict[str, Any],
         limit: Optional[int] = None,
@@ -67,7 +67,7 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
             params=params,
         )
 
-        @app.tool()
+    @mcp.tool()
     async def get_engine(engine_id: str) -> Dict[str, Any]:
         """Get engine details
 

@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Environment-related tools"""
 
-        @mcp.tool()
-        async def search_environments(
+    @mcp.tool()
+    async def search_environments(
             search_criteria: Dict[str, Any],
             limit: Optional[int] = None,
             cursor: Optional[str] = None,
-        ) -> Dict[str, Any]:
-        Args:
+    ) -> Dict[str, Any]:
+        """Args:
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order

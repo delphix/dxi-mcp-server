@@ -15,10 +15,10 @@ from ..client import DCTAPIClient
 logger = logging.getLogger(__name__)
 
 
-def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
+def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
     """Register all dSource-related tools with the FastMCP app"""
 
-    @app.tool()
+    @mcp.tool()
     async def list_dsources(
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
@@ -52,7 +52,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error listing dSources: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def search_dsources(
         search_criteria: Dict[str, Any],
         limit: Optional[int] = None,
@@ -112,7 +112,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error searching dSources: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def get_dsource(dsource_id: str) -> Dict[str, Any]:
         """
         Get a specific dSource by ID.
@@ -132,7 +132,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error getting dSource {dsource_id}: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def list_snapshots(
         dsource_id: str, limit: Optional[int] = None, cursor: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -166,7 +166,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error listing snapshots for dSource {dsource_id}: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def create_snapshot(
         dsource_id: str,
         skip_space_check: Optional[bool] = None,
@@ -224,7 +224,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error creating snapshot for dSource {dsource_id}: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def get_tags(dsource_id: str) -> Dict[str, Any]:
         """
         Get tags for a dSource.
@@ -244,7 +244,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error getting tags for dSource {dsource_id}: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def create_tags(
         dsource_id: str, tags: List[Dict[str, str]]
     ) -> Dict[str, Any]:
@@ -276,7 +276,7 @@ def register_dsource_tools(app: FastMCP, client: DCTAPIClient) -> None:
             logger.error(f"Error creating tags for dSource {dsource_id}: {str(e)}")
             raise
 
-    @app.tool()
+    @mcp.tool()
     async def delete_tags(
         dsource_id: str, delete_parameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
