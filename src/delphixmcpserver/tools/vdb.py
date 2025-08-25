@@ -79,7 +79,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def dct_vdb_provision_by_timestamp(
-        source_id: str,
+        source_data_id: str,
         target_environment_id: str,
         name: str,
         engine_id: str,
@@ -91,7 +91,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         """Provision a new VDB by timestamp
 
         Args:
-            source_id: Source database ID
+            source_data_id: Source database ID
             target_environment_id: Target environment ID
             name: VDB name
             engine_id: Engine ID
@@ -101,11 +101,11 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             auto_select_repository: Auto select repository (default: True)
         """
         data = {
-            "sourceId": source_id,
-            "targetEnvironmentId": target_environment_id,
+            "source_data_id": source_data_id,
+            "target_environment_id": target_environment_id,
             "name": name,
-            "engineId": engine_id,
-            "autoSelectRepository": auto_select_repository,
+            "engine_id": engine_id,
+            "auto_select_repository": auto_select_repository,
         }
 
         if timestamp:
@@ -119,7 +119,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def dct_vdb_provision_by_snapshot(
-        source_id: str,
+        source_data_id: str,
         target_environment_id: str,
         name: str,
         engine_id: str,
@@ -131,7 +131,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         """Provision a new VDB by snapshot
 
         Args:
-            source_id: Source database ID
+            source_data_id: Source database ID
             target_environment_id: Target environment ID
             name: VDB name
             engine_id: Engine ID
@@ -141,12 +141,12 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             auto_select_repository: Auto select repository (default: True)
         """
         data = {
-            "sourceId": source_id,
-            "targetEnvironmentId": target_environment_id,
+            "source_data_id": source_data_id,
+            "target_environment_id": target_environment_id,
             "name": name,
-            "engineId": engine_id,
-            "snapshotId": snapshot_id,
-            "autoSelectRepository": auto_select_repository,
+            "engine_id": engine_id,
+            "snapshot_id": snapshot_id,
+            "auto_select_repository": auto_select_repository,
         }
 
         if database_name:
@@ -158,11 +158,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def dct_vdb_provision_from_bookmark(
-        source_id: str,
+        bookmark_id: str,
         target_environment_id: str,
         name: str,
         engine_id: str,
-        bookmark_id: str,
         database_name: str = None,
         environment_user_id: str = None,
         auto_select_repository: bool = True,
@@ -170,28 +169,26 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         """Provision a new VDB from bookmark
 
         Args:
-            source_id: Source database ID
+            bookmark_id: Bookmark ID to provision from
             target_environment_id: Target environment ID
             name: VDB name
             engine_id: Engine ID
-            bookmark_id: Bookmark ID to provision from
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
         """
         data = {
-            "sourceId": source_id,
-            "targetEnvironmentId": target_environment_id,
+            "bookmark_id": bookmark_id,
+            "target_environment_id": target_environment_id,
             "name": name,
-            "engineId": engine_id,
-            "bookmarkId": bookmark_id,
-            "autoSelectRepository": auto_select_repository,
+            "engine_id": engine_id,
+            "auto_select_repository": auto_select_repository,
         }
 
         if database_name:
-            data["databaseName"] = database_name
+            data["database_name"] = database_name
         if environment_user_id:
-            data["environmentUserId"] = environment_user_id
+            data["environment_user_id"] = environment_user_id
 
         return await client.make_request("POST", "vdbs/provision_from_bookmark", data=data)
 
