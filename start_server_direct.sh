@@ -17,4 +17,4 @@ if [ ! -d ".venv" ]; then
 fi
 
 # Use the virtual environment directly
-exec .venv/bin/python -m delphixmcpserver.main
+exec .venv/bin/python -m dxi_mcp_server.main

@@ -13,4 +13,4 @@ export PYTHONPATH=src
 uv sync --quiet
 
 # Start the MCP server
-uv run python -m delphixmcpserver.main
+uv run python -m dxi_mcp_server.main

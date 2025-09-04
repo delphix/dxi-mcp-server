@@ -76,7 +76,7 @@ After configuration, run the server:
 source .env
 
 # Run the server
-python -m delphixmcpserver.main
+python -m dxi_mcp_server.main
 ```
 
 ### Integration with Claude Desktop
@@ -88,7 +88,7 @@ Add this configuration to your Claude Desktop config file:
   "mcpServers": {
     "delphix-dct": {
       "command": "python",
-      "args": ["-m", "delphixmcpserver.main"],
+      "args": ["-m", "dxi_mcp_server.main"],
       "env": {
         "DCT_API_KEY": "your-api-key",
         "DCT_BASE_URL": "https://your-dct-host:8083",
@@ -174,7 +174,7 @@ The server provides the following categories of tools:
 
 ```
 src/
-├── delphixmcpserver/
+├── dxi_mcp_server/
 │   ├── __init__.py           # Package initialization
 │   ├── main.py              # Main server entry point
 │   ├── client.py            # DCT API client
