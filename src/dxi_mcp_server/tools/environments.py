@@ -16,12 +16,14 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
     """Register Environment-related tools"""
 
     @mcp.tool()
-    async def search_environments(
-            search_criteria: Dict[str, Any],
+    async def list_environments(
             limit: Optional[int] = None,
             cursor: Optional[str] = None,
+            sort: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Args:
+        """List all environments
+
+        Args:
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
@@ -39,34 +41,79 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         )
 
     @mcp.tool()
-    async def dct_environments_search(
-        limit: int = None,
-        cursor: str = None,
-        sort: str = None,
-        filter: Dict[str, Any] = None,
+    async def search_environments(
+        filter_expression: str,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
+        sort: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Search for environments with filters
+        """Search for environments with filter expressions
 
         Args:
+            filter_expression: Filter expression string (e.g., "name CONTAINS 'prod' AND status EQ 'online'")
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
-            filter: Search filters
-        """
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        if cursor is not None:
-            params["cursor"] = cursor
-        if sort is not None:
-            params["sort"] = sort
 
-        return await client.make_request(
-            "POST",
-            "environments/search",
-            data={"filter": filter},
-            params=params,
-        )
+        Available filterable fields:
+            - name
+            - namespace
+            - is_cluster
+            - cluster_home
+            - cluster_name
+            - scan
+            - remote_listener
+            - is_windows_target
+            - staging_environment
+            - enabled
+            - encryption_enabled
+            - description
+            - namespace_id
+            - namespace_name
+            - is_replica
+            - hosts (hostname, os_name, os_version, memory_size, available, available_timestamp, not_available_reason, nfs_addresses, dsp_keystore_alias, dsp_keystore_path, dsp_truststore_path, java_home, ssh_port, toolkit_path, connector_port, connector_version)
+
+        Literal values (per API docs):
+            - Nil: nil (case-insensitive)
+            - Boolean: true, false (unquoted)
+            - Number: 0, 1, -1, 1.2, 1.2e-2 (unquoted)
+            - String: quoted, e.g., 'foo', "bar"
+            - Datetime: RFC3339 literal without quotes, e.g., 2018-04-27T18:39:26.397237+00:00
+            - List: [0], [0, 1], ['foo', "bar"]
+
+        Important:
+            - Quote strings; do NOT quote datetimes.
+            - Example: available_timestamp GE 2024-01-01T00:00:00.000Z
+
+        Returns:
+            Dictionary containing search results and pagination metadata
+        """
+        try:
+            params = {}
+            if limit is not None:
+                params["limit"] = limit
+            if cursor:
+                params["cursor"] = cursor
+            if sort:
+                params["sort"] = sort
+
+            # Prepare search body
+            search_body = {"filter_expression": filter_expression}
+
+            result = await client.make_request(
+                "POST",
+                "environments/search",
+                params=params,
+                json=search_body,
+            )
+            logger.info(
+                f"Found {len(result.get('items', []))} environments matching filter expression"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"Error searching environments: {str(e)}")
+            raise
 
     @mcp.tool()
     async def get_environment(environment_id: str) -> Dict[str, Any]:
@@ -122,9 +169,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             snapshot_id: Snapshot ID to find compatible repositories for
         """
-        data = {"snapshotId": snapshot_id}
+        data = {"snapshot_id": snapshot_id}
         return await client.make_request(
-            "POST", "environments/compatible_repositories_by_snapshot", data=data
+            "POST", "environments/compatible_repositories_by_snapshot", json=data
         )
 
     @mcp.tool()
@@ -138,9 +185,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
             timeflow_id: Timeflow ID
             timestamp: Timestamp (ISO format)
         """
-        data = {"timeflowId": timeflow_id, "timestamp": timestamp}
+        data = {"timeflow_id": timeflow_id, "timestamp": timestamp}
         return await client.make_request(
-            "POST", "environments/compatible_repositories_by_timestamp", data=data
+            "POST", "environments/compatible_repositories_by_timestamp", json=data
         )
 
     @mcp.tool()
@@ -152,9 +199,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             bookmark_id: Bookmark ID to find compatible repositories for
         """
-        data = {"bookmarkId": bookmark_id}
+        data = {"bookmark_id": bookmark_id}
         return await client.make_request(
-            "POST", "environments/compatible_repositories_from_bookmark", data=data
+            "POST", "environments/compatible_repositories_from_bookmark", json=data
         )
 
     logger.info("Environment tools registered successfully")

@@ -17,7 +17,7 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def list_engines(
-        limit: Optional[int] = None, cursor: Optional[str] = None
+        limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None
     ) -> Dict[str, Any]:
         """List all engines
 
@@ -40,32 +40,84 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def search_engines(
-        search_criteria: Dict[str, Any],
+        filter_expression: str,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
+        sort: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Search for engines with filters
+        """Search for engines with filter expressions
 
         Args:
+            filter_expression: Filter expression string (e.g., "name CONTAINS 'prod' AND status EQ 'online'")
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
-            filter: Search filters
-        """
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        if cursor is not None:
-            params["cursor"] = cursor
-        if sort is not None:
-            params["sort"] = sort
 
-        return await client.make_request(
-            "POST",
-            "management/engines/search",
-            data={"filter": filter},
-            params=params,
-        )
+        Available filterable fields:
+            - id
+            - uuid
+            - ssh_public_key
+            - type
+            - version
+            - name
+            - hostname
+            - cpu_core_count
+            - memory_size
+            - data_storage_capacity
+            - data_storage_used
+            - insecure_ssl
+            - unsafe_ssl_hostname_check
+            - hyperscale_truststore_filename
+            - status
+            - username
+            - hashicorp_vault_id
+            - tags (key, value)
+            - connection_status
+            - connection_status_details
+            - engine_connection_status
+            - engine_connection_status_details
+
+        Literal values (per API docs):
+            - Nil: nil (case-insensitive)
+            - Boolean: true, false (unquoted)
+            - Number: 0, 1, -1, 1.2, 1.2e-2 (unquoted)
+            - String: quoted, e.g., 'foo', "bar"
+            - Datetime: RFC3339 literal without quotes, e.g., 2018-04-27T18:39:26.397237+00:00
+            - List: [0], [0, 1], ['foo', "bar"]
+
+        Important:
+            - Quote strings; do NOT quote datetimes.
+            - Example: version GE 2024-01-01T00:00:00.000Z (if a datetime field is applicable)
+
+        Returns:
+            Dictionary containing search results and pagination metadata
+        """
+        try:
+            params = {}
+            if limit is not None:
+                params["limit"] = limit
+            if cursor:
+                params["cursor"] = cursor
+            if sort:
+                params["sort"] = sort
+
+            # Prepare search body
+            search_body = {"filter_expression": filter_expression}
+
+            result = await client.make_request(
+                "POST",
+                "management/engines/search",
+                params=params,
+                json=search_body,
+            )
+            logger.info(
+                f"Found {len(result.get('items', []))} engines matching filter expression"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"Error searching engines: {str(e)}")
+            raise
 
     @mcp.tool()
     async def get_engine(engine_id: str) -> Dict[str, Any]:

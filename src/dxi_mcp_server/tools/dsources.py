@@ -54,21 +54,21 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
 
     @mcp.tool()
     async def search_dsources(
-        search_criteria: Dict[str, Any],
+        filter_expression: str,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
         sort: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Search for dSources using filters.
+        Search for dSources using filter expressions.
 
         Args:
-            search_criteria: Search filters (e.g., {"name": "prod-db", "database_type": "oracle"})
+            filter_expression: Filter expression string (e.g., "name CONTAINS 'prod' AND database_type EQ 'oracle'")
             limit: Maximum number of items to return
             cursor: Cursor for pagination
             sort: Sort order
 
-        Available search filters:
+        Available filterable fields:
             - id: dSource ID
             - data_uuid: Data UUID
             - database_type: Database type (oracle, postgres, mysql, etc.)
@@ -85,6 +85,25 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             - engine_name: Engine name
             - cdb_id: Container database ID (for Oracle)
 
+        Filter expression operators:
+            - CONTAINS: Substring or membership testing
+            - IN: Tests if field is a member of a list
+            - GE/GT/LE/LT: Greater/less than comparisons
+            - EQ/NE: Equal/not equal comparisons
+            - AND/OR: Logical operators
+
+        Literal values (per API docs):
+            - Nil: nil (case-insensitive)
+            - Boolean: true, false (unquoted)
+            - Number: 0, 1, -1, 1.2, 1.2e-2 (unquoted)
+            - String: quoted, e.g., 'foo', "bar"
+            - Datetime: RFC3339 literal without quotes, e.g., 2018-04-27T18:39:26.397237+00:00
+            - List: [0], [0, 1], ['foo', "bar"]
+
+        Important:
+            - Quote strings; do NOT quote datetimes.
+            - Example: creation_date GE 2024-01-01T00:00:00.000Z
+
         Returns:
             Dictionary containing search results and pagination metadata
         """
@@ -98,13 +117,13 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
                 params["sort"] = sort
 
             # Prepare search body
-            search_body = {"filter_expression": search_criteria}
+            search_body = {"filter_expression": filter_expression}
 
             result = await client.make_request(
                 "POST", "/dsources/search", params=params, json=search_body
             )
             logger.info(
-                f"Found {len(result.get('items', []))} dSources matching search criteria"
+                f"Found {len(result.get('items', []))} dSources matching filter expression"
             )
             return result
 

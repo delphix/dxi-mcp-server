@@ -17,7 +17,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def list_vdbs(
-        limit: int = None, cursor: str = None, sort: str = None
+        limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None
     ) -> Dict[str, Any]:
         """List all virtual databases (VDBs)
 
@@ -40,33 +40,94 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
     @mcp.tool()
     async def search_vdbs(
-        limit: int = None,
-        cursor: str = None,
-        sort: str = None,
-        filter: Dict[str, Any] = None,
+        filter_expression: str,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
+        sort: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Search for virtual databases with filters
+        """Search for virtual databases with filter expressions
 
         Args:
+            filter_expression: Filter expression string (e.g., "name CONTAINS 'test' AND status EQ 'running'")
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
-            filter: Search filters
-        """
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        if cursor is not None:
-            params["cursor"] = cursor
-        if sort is not None:
-            params["sort"] = sort
 
-        return await client.make_request(
-            "POST",
-            "vdbs/search",
-            data={"filter": filter},
-            params=params,
-        )
+        Available filterable fields:
+            - id
+            - database_type
+            - name
+            - database_name
+            - database_version
+            - jdbc_connection_string
+            - size
+            - storage_size
+            - engine_id
+            - status
+            - environment_id
+            - ip_address
+            - fqdn
+            - parent_id
+            - parent_dsource_id
+            - group_name
+            - creation_date
+            - enabled
+            - engine_name
+            - cdb_id
+            - pluggable_database_id
+            - container_name
+            - namespace_id
+            - namespace_name
+            - is_replica
+            - is_locked
+            - exported_data_directory
+            - vcdb_exported_data_directory
+            - locked_by
+            - locked_by_name
+            - content_type
+            - tags (key, value)
+
+        Literal values (per API docs):
+            - Nil: nil (case-insensitive)
+            - Boolean: true, false (unquoted)
+            - Number: 0, 1, -1, 1.2, 1.2e-2 (unquoted)
+            - String: quoted, e.g., 'foo', "bar"
+            - Datetime: RFC3339 literal without quotes, e.g., 2018-04-27T18:39:26.397237+00:00
+            - List: [0], [0, 1], ['foo', "bar"]
+
+        Important:
+            - Quote strings; do NOT quote datetimes.
+            - Example: creation_date GE 2024-01-01T00:00:00.000Z
+
+        Returns:
+            Dictionary containing search results and pagination metadata
+        """
+        try:
+            params = {}
+            if limit is not None:
+                params["limit"] = limit
+            if cursor:
+                params["cursor"] = cursor
+            if sort:
+                params["sort"] = sort
+
+            # Prepare search body
+            search_body = {"filter_expression": filter_expression}
+
+            result = await client.make_request(
+                "POST",
+                "vdbs/search",
+                params=params,
+                json=search_body,
+            )
+            logger.info(
+                f"Found {len(result.get('items', []))} VDBs matching filter expression"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"Error searching VDBs: {str(e)}")
+            raise
 
     @mcp.tool()
     async def get_vdb(vdb_id: str) -> Dict[str, Any]:
@@ -80,13 +141,17 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
     @mcp.tool()
     async def provision_vdb_by_timestamp(
         source_data_id: str,
-        target_environment_id: str,
-        name: str,
-        engine_id: str,
-        timestamp: str = None,
-        database_name: str = None,
-        environment_user_id: str = None,
-        auto_select_repository: bool = True,
+        name: Optional[str] = None,
+        engine_id: Optional[str] = None,
+        timestamp: Optional[str] = None,
+        timestamp_in_database_timezone: Optional[str] = None,
+        timeflow_id: Optional[str] = None,
+        database_name: Optional[str] = None,
+        environment_user_id: Optional[str] = None,
+        auto_select_repository: Optional[bool] = True,
+        target_group_id: Optional[str] = None,
+        repository_id: Optional[str] = None,
+        make_current_account_owner: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Provision a new VDB by timestamp
 
@@ -100,33 +165,47 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
         """
-        data = {
+        data: Dict[str, Any] = {
             "source_data_id": source_data_id,
-            "target_environment_id": target_environment_id,
-            "name": name,
-            "engine_id": engine_id,
-            "auto_select_repository": auto_select_repository,
         }
 
-        if timestamp:
+        if name is not None:
+            data["name"] = name
+        if engine_id is not None:
+            data["engine_id"] = engine_id
+        if timestamp is not None:
             data["timestamp"] = timestamp
-        if database_name:
-            data["databaseName"] = database_name
-        if environment_user_id:
-            data["environmentUserId"] = environment_user_id
+        if timestamp_in_database_timezone is not None:
+            data["timestamp_in_database_timezone"] = timestamp_in_database_timezone
+        if timeflow_id is not None:
+            data["timeflow_id"] = timeflow_id
+        if database_name is not None:
+            data["database_name"] = database_name
+        if environment_user_id is not None:
+            data["environment_user_id"] = environment_user_id
+        if auto_select_repository is not None:
+            data["auto_select_repository"] = auto_select_repository
+        if target_group_id is not None:
+            data["target_group_id"] = target_group_id
+        if repository_id is not None:
+            data["repository_id"] = repository_id
+        if make_current_account_owner is not None:
+            data["make_current_account_owner"] = make_current_account_owner
 
-        return await client.make_request("POST", "vdbs/provision_by_timestamp", data=data)
+        return await client.make_request("POST", "vdbs/provision_by_timestamp", json=data)
 
     @mcp.tool()
     async def provision_vdb_by_snapshot(
-        source_data_id: str,
-        target_environment_id: str,
-        name: str,
-        engine_id: str,
         snapshot_id: str,
-        database_name: str = None,
-        environment_user_id: str = None,
-        auto_select_repository: bool = True,
+        source_data_id: Optional[str] = None,
+        name: Optional[str] = None,
+        engine_id: Optional[str] = None,
+        database_name: Optional[str] = None,
+        environment_user_id: Optional[str] = None,
+        auto_select_repository: Optional[bool] = True,
+        target_group_id: Optional[str] = None,
+        repository_id: Optional[str] = None,
+        make_current_account_owner: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Provision a new VDB by snapshot
 
@@ -140,31 +219,42 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
         """
-        data = {
-            "source_data_id": source_data_id,
-            "target_environment_id": target_environment_id,
-            "name": name,
-            "engine_id": engine_id,
+        data: Dict[str, Any] = {
             "snapshot_id": snapshot_id,
-            "auto_select_repository": auto_select_repository,
         }
 
-        if database_name:
-            data["databaseName"] = database_name
-        if environment_user_id:
-            data["environmentUserId"] = environment_user_id
+        if source_data_id is not None:
+            data["source_data_id"] = source_data_id
+        if name is not None:
+            data["name"] = name
+        if engine_id is not None:
+            data["engine_id"] = engine_id
+        if database_name is not None:
+            data["database_name"] = database_name
+        if environment_user_id is not None:
+            data["environment_user_id"] = environment_user_id
+        if auto_select_repository is not None:
+            data["auto_select_repository"] = auto_select_repository
+        if target_group_id is not None:
+            data["target_group_id"] = target_group_id
+        if repository_id is not None:
+            data["repository_id"] = repository_id
+        if make_current_account_owner is not None:
+            data["make_current_account_owner"] = make_current_account_owner
 
-        return await client.make_request("POST", "vdbs/provision_by_snapshot", data=data)
+        return await client.make_request("POST", "vdbs/provision_by_snapshot", json=data)
 
     @mcp.tool()
     async def provision_vdb_from_bookmark(
         bookmark_id: str,
-        target_environment_id: str,
-        name: str,
-        engine_id: str,
-        database_name: str = None,
-        environment_user_id: str = None,
-        auto_select_repository: bool = True,
+        name: Optional[str] = None,
+        engine_id: Optional[str] = None,
+        database_name: Optional[str] = None,
+        environment_user_id: Optional[str] = None,
+        auto_select_repository: Optional[bool] = True,
+        target_group_id: Optional[str] = None,
+        repository_id: Optional[str] = None,
+        make_current_account_owner: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Provision a new VDB from bookmark
 
@@ -177,38 +267,54 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
         """
-        data = {
+        data: Dict[str, Any] = {
             "bookmark_id": bookmark_id,
-            "target_environment_id": target_environment_id,
-            "name": name,
-            "engine_id": engine_id,
-            "auto_select_repository": auto_select_repository,
         }
 
-        if database_name:
+        if name is not None:
+            data["name"] = name
+        if engine_id is not None:
+            data["engine_id"] = engine_id
+        if database_name is not None:
             data["database_name"] = database_name
-        if environment_user_id:
+        if environment_user_id is not None:
             data["environment_user_id"] = environment_user_id
+        if auto_select_repository is not None:
+            data["auto_select_repository"] = auto_select_repository
+        if target_group_id is not None:
+            data["target_group_id"] = target_group_id
+        if repository_id is not None:
+            data["repository_id"] = repository_id
+        if make_current_account_owner is not None:
+            data["make_current_account_owner"] = make_current_account_owner
 
-        return await client.make_request("POST", "vdbs/provision_from_bookmark", data=data)
+        return await client.make_request("POST", "vdbs/provision_from_bookmark", json=data)
 
     @mcp.tool()
-    async def delete_vdb(vdb_id: str, force: bool = False) -> Dict[str, Any]:
+    async def delete_vdb(
+        vdb_id: str,
+        force: bool = False,
+        delete_all_dependent_vdbs: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         """Delete a virtual database
 
         Args:
             vdb_id: Virtual Database ID
             force: Force deletion even if dependencies exist
         """
-        params = {"force": force}
+        body: Dict[str, Any] = {"force": force}
+        if delete_all_dependent_vdbs is not None:
+            body["delete_all_dependent_vdbs"] = delete_all_dependent_vdbs
         return await client.make_request(
-            "DELETE", f"vdbs/{vdb_id}", params=params
+            "POST", f"vdbs/{vdb_id}/delete", json=body
         )
 
     @mcp.tool()
     async def refresh_vdb_by_timestamp(
         vdb_id: str,
-        timestamp: str = None,
+        timestamp: Optional[str] = None,
+        timestamp_in_database_timezone: Optional[str] = None,
+        timeflow_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Refresh a VDB by timestamp
 
@@ -216,12 +322,16 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             vdb_id: Virtual Database ID
             timestamp: Timestamp to refresh to (ISO format, optional - uses latest if not provided)
         """
-        data = {}
-        if timestamp:
+        data: Dict[str, Any] = {}
+        if timestamp is not None:
             data["timestamp"] = timestamp
+        if timestamp_in_database_timezone is not None:
+            data["timestamp_in_database_timezone"] = timestamp_in_database_timezone
+        if timeflow_id is not None:
+            data["timeflow_id"] = timeflow_id
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/refresh_by_timestamp", data=data
+            "POST", f"vdbs/{vdb_id}/refresh_by_timestamp", json=data
         )
 
     @mcp.tool()
@@ -235,10 +345,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             vdb_id: Virtual Database ID
             snapshot_id: Snapshot ID to refresh from
         """
-        data = {"snapshotId": snapshot_id}
+        data = {"snapshot_id": snapshot_id}
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/refresh_by_snapshot", data=data
+            "POST", f"vdbs/{vdb_id}/refresh_by_snapshot", json=data
         )
 
     @mcp.tool()
@@ -252,10 +362,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             vdb_id: Virtual Database ID
             bookmark_id: Bookmark ID to refresh from
         """
-        data = {"bookmarkId": bookmark_id}
+        data = {"bookmark_id": bookmark_id}
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/refresh_from_bookmark", data=data
+            "POST", f"vdbs/{vdb_id}/refresh_from_bookmark", json=data
         )
 
     @mcp.tool()
@@ -272,7 +382,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         data = {"timestamp": timestamp}
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/rollback_by_timestamp", data=data
+            "POST", f"vdbs/{vdb_id}/rollback_by_timestamp", json=data
         )
 
     @mcp.tool()
@@ -286,10 +396,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             vdb_id: Virtual Database ID
             snapshot_id: Snapshot ID to rollback to
         """
-        data = {"snapshotId": snapshot_id}
+        data = {"snapshot_id": snapshot_id}
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/rollback_by_snapshot", data=data
+            "POST", f"vdbs/{vdb_id}/rollback_by_snapshot", json=data
         )
 
     @mcp.tool()
@@ -303,10 +413,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             vdb_id: Virtual Database ID
             bookmark_id: Bookmark ID to rollback from
         """
-        data = {"bookmarkId": bookmark_id}
+        data = {"bookmark_id": bookmark_id}
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/rollback_from_bookmark", data=data
+            "POST", f"vdbs/{vdb_id}/rollback_from_bookmark", json=data
         )
 
     @mcp.tool()
@@ -395,7 +505,7 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             data["name"] = name
 
         return await client.make_request(
-            "POST", f"vdbs/{vdb_id}/snapshots", data=data
+            "POST", f"vdbs/{vdb_id}/snapshots", json=data
         )
 
     @mcp.tool()
