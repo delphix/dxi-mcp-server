@@ -3,6 +3,19 @@ DSources (Data Sources) API tools for DCT MCP Server
 
 This module provides tools for managing dSources in the Delphix DCT API.
 dSources are physical databases or datasets that serve as the source for virtual databases.
+
+Schema summaries (key fields only):
+- DSource:
+  - id, name, database_type, database_version, content_type
+  - engine_id, engine_name, source_id, staging_source_id, status
+  - namespace_id, namespace_name, group_name, data_uuid
+  - storage_size, creation_date, enabled, is_detached, is_appdata
+  - current_timeflow_id, previous_timeflow_id, cdb_id
+  - tags[]
+- Snapshot (for dSource snapshots): see snapshots module notes
+- TagsResponse:
+  - tags[] of { key, value }
+- PaginatedResponseMetadata: prev_cursor, next_cursor, total
 """
 
 import logging
@@ -33,7 +46,10 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             sort: Sort order (e.g., 'name', 'creation_date', 'database_type')
 
         Returns:
-            Dictionary containing the list of dSources and pagination metadata
+            Object with:
+            - items: list of DSource objects
+            - errors: optional Errors object
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -105,7 +121,9 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             - Example: creation_date GE 2024-01-01T00:00:00.000Z
 
         Returns:
-            Dictionary containing search results and pagination metadata
+            Object with:
+            - items: list of DSource objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -140,7 +158,7 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             dsource_id: The ID of the dSource to retrieve
 
         Returns:
-            Dictionary containing the dSource details
+            DSource object
         """
         try:
             result = await client.make_request("GET", f"/dsources/{dsource_id}")
@@ -164,7 +182,9 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             cursor: Cursor for pagination
 
         Returns:
-            Dictionary containing the list of snapshots for the dSource
+            ListSnapshotsResponse object with:
+            - items: list of Snapshot objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -208,7 +228,8 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             ase_backup_files: List of backup files for ASE
 
         Returns:
-            Dictionary containing the job information for the snapshot operation
+            Object with:
+            - job: Job object indicating snapshot initiated
         """
         try:
             snapshot_params = {}
@@ -252,7 +273,8 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             dsource_id: The ID of the dSource
 
         Returns:
-            Dictionary containing the tags for the dSource
+            TagsResponse object with:
+            - tags: list of tags {key, value}
         """
         try:
             result = await client.make_request("GET", f"/dsources/{dsource_id}/tags")
@@ -281,7 +303,7 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             ]
 
         Returns:
-            Dictionary containing the created tags
+            TagsResponse object with created tags
         """
         try:
             tag_request = {"tags": tags}
@@ -307,7 +329,7 @@ def register_dsource_tools(mcp: FastMCP, client: DCTAPIClient) -> None:
             delete_parameters: Parameters for tag deletion
 
         Returns:
-            Dictionary containing the deletion result
+            No content (204) on success
         """
         try:
             if delete_parameters is None:

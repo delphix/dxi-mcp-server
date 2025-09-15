@@ -73,6 +73,7 @@ async def async_main():
             register_engine_tools,
             register_bookmark_tools,
             register_snapshot_tools,
+            register_schema_docs,
         )
 
         # Register all tools
@@ -82,6 +83,8 @@ async def async_main():
         register_engine_tools(app, dct_client)
         register_bookmark_tools(app, dct_client)
         register_snapshot_tools(app, dct_client)
+        # Register shared schema reference once
+        register_schema_docs(app)
 
         # Run the server
         try:

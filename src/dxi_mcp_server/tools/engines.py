@@ -1,5 +1,15 @@
 """
 Engine tools for DCT API
+
+Schema summaries (key fields only):
+- RegisteredEngine:
+  - id, uuid, type, name, hostname
+  - version, cpu_core_count, memory_size
+  - data_storage_capacity, data_storage_used
+  - insecure_ssl, unsafe_ssl_hostname_check
+  - status, username, connection_status, engine_connection_status
+  - tags[]
+- PaginatedResponseMetadata: prev_cursor, next_cursor, total
 """
 
 import logging
@@ -25,6 +35,10 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
+        Returns:
+            Object with:
+            - items: list of RegisteredEngine objects
+            - response_metadata: pagination metadata
         """
         params = {}
         if limit is not None:
@@ -90,7 +104,9 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
             - Example: version GE 2024-01-01T00:00:00.000Z (if a datetime field is applicable)
 
         Returns:
-            Dictionary containing search results and pagination metadata
+            Object with:
+            - items: list of RegisteredEngine objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -125,6 +141,8 @@ def register_engine_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             engine_id: Engine ID
+        Returns:
+            RegisteredEngine object
         """
         return await client.make_request("GET", f"management/engines/{engine_id}")
 

@@ -1,5 +1,15 @@
 """
 Snapshot tools for DCT API
+
+Schema summaries (key fields only):
+- Snapshot:
+  - id, dataset_id, engine_id, name
+  - timestamp, location, creation_time, start_timestamp, start_location
+  - consistency, missing_non_logged_data, timezone, version
+  - expiration, retain_forever, effective_expiration, effective_retain_forever
+  - tags[]
+- Job (delete/initiate ops): see vdb module notes
+- PaginatedResponseMetadata: prev_cursor, next_cursor, total
 """
 
 import logging
@@ -25,6 +35,11 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
+
+        Returns:
+            ListSnapshotsResponse object with:
+            - items: list of Snapshot objects
+            - response_metadata: pagination metadata
         """
         params = {}
         if limit is not None:
@@ -93,7 +108,9 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
             - Example: creation_time GE 2024-01-01T00:00:00.000Z
 
         Returns:
-            Dictionary containing search results and pagination metadata
+            Object with:
+            - items: list of Snapshot objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -128,6 +145,9 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             snapshot_id: Snapshot ID
+
+        Returns:
+            Snapshot object
         """
         return await client.make_request("GET", f"snapshots/{snapshot_id}")
 
@@ -137,6 +157,10 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             snapshot_id: Snapshot ID
+
+        Returns:
+            Object with:
+            - job: Job object indicating delete initiated
         """
         body: Dict[str, Any] = {}
         if delete_all_dependencies is not None:
@@ -153,6 +177,10 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             dataset_id: Dataset ID (dSource or VDB)
             timestamp: Timestamp to search for (ISO format)
+        Returns:
+            ListSnapshotsResponse-like object with:
+            - items: list of Snapshot objects
+            - response_metadata: pagination metadata
         """
         params = {
             "dataset_id": dataset_id,
@@ -170,6 +198,10 @@ def register_snapshot_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             dataset_id: Dataset ID (dSource or VDB)
             location: Location/SCN to search for
+        Returns:
+            ListSnapshotsResponse-like object with:
+            - items: list of Snapshot objects
+            - response_metadata: pagination metadata
         """
         params = {
             "dataset_id": dataset_id,

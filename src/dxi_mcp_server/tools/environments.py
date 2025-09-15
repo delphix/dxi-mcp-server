@@ -1,5 +1,19 @@
 """
 Environment tools for DCT API
+
+Schema summaries (key fields only):
+- Environment:
+  - id, name, description, os_type [UNIX|WINDOWS]
+  - engine_id, namespace_id, namespace_name, namespace
+  - enabled, encryption_enabled, is_cluster, cluster_home, cluster_name
+  - scan, remote_listener, is_windows_target, staging_environment
+  - hosts[] (Host), repositories[] (Repository), listeners[] (OracleListener)
+  - env_users[] (EnvironmentUser), tags[]
+- EnvironmentUser (list_environment_users):
+  - user_ref, username, primary_user, auth_type
+- Job (enable/disable/refresh): see vdb module notes
+- Compatible repositories endpoints return items: Environment[]
+- PaginatedResponseMetadata: prev_cursor, next_cursor, total
 """
 
 import logging
@@ -27,6 +41,11 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
+        Returns:
+            Object with:
+            - items: list of Environment objects
+            - errors: optional Errors object
+            - response_metadata: pagination metadata
         """
         params = {}
         if limit is not None:
@@ -86,7 +105,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
             - Example: available_timestamp GE 2024-01-01T00:00:00.000Z
 
         Returns:
-            Dictionary containing search results and pagination metadata
+            Object with:
+            - items: list of Environment objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -121,6 +142,8 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             environment_id: Environment ID
+        Returns:
+            Environment object
         """
         return await client.make_request("GET", f"environments/{environment_id}")
 
@@ -130,6 +153,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             environment_id: Environment ID
+        Returns:
+            Object with:
+            - job: Job object indicating enable initiated
         """
         return await client.make_request("POST", f"environments/{environment_id}/enable")
 
@@ -139,6 +165,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             environment_id: Environment ID
+        Returns:
+            Object with:
+            - job: Job object indicating disable initiated
         """
         return await client.make_request("POST", f"environments/{environment_id}/disable")
 
@@ -148,6 +177,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             environment_id: Environment ID
+        Returns:
+            Object with:
+            - job: Job object indicating refresh initiated
         """
         return await client.make_request("POST", f"environments/{environment_id}/refresh")
 
@@ -157,6 +189,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             environment_id: Environment ID
+        Returns:
+            Object with:
+            - items: list of EnvironmentUser objects or user descriptors
         """
         return await client.make_request("GET", f"environments/{environment_id}/users")
 
@@ -168,6 +203,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             snapshot_id: Snapshot ID to find compatible repositories for
+        Returns:
+            Object with:
+            - items: list of Environment objects compatible with snapshot
         """
         data = {"snapshot_id": snapshot_id}
         return await client.make_request(
@@ -184,6 +222,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             timeflow_id: Timeflow ID
             timestamp: Timestamp (ISO format)
+        Returns:
+            Object with:
+            - items: list of Environment objects compatible with timestamp
         """
         data = {"timeflow_id": timeflow_id, "timestamp": timestamp}
         return await client.make_request(
@@ -198,6 +239,9 @@ def register_environment_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             bookmark_id: Bookmark ID to find compatible repositories for
+        Returns:
+            Object with:
+            - items: list of Environment objects compatible with bookmark
         """
         data = {"bookmark_id": bookmark_id}
         return await client.make_request(

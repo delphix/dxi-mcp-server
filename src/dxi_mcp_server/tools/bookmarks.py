@@ -1,5 +1,18 @@
 """
 Bookmark tools for DCT API
+
+Schema summaries (key fields only):
+- Bookmark:
+  - id, name, creation_date, data_timestamp
+  - vdb_ids[], dsource_ids[], vdb_group_id, vdb_group_name
+  - vdbs[] { vdb_id, vdb_name, root_parent_id, snapshot_id, timeflow_id, data_timestamp }
+  - dsources[] { dsource_id, dsource_name, snapshot_id, timeflow_id, data_timestamp }
+  - timeflow_id, location, retention (deprecated), expiration
+  - bookmark_source [DCT|ENGINE], bookmark_status [ACTIVE|INACTIVE]
+  - ss_data_layout_id, ss_bookmark_reference, ss_bookmark_errors[]
+  - bookmark_type [PUBLIC|PRIVATE], tags[]
+- Job (create/delete may return job): see vdb module notes
+- PaginatedResponseMetadata: prev_cursor, next_cursor, total
 """
 
 import logging
@@ -25,6 +38,10 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
+        Returns:
+            Object with:
+            - items: list of Bookmark objects
+            - response_metadata: pagination metadata
         """
         params = {}
         if limit is not None:
@@ -80,7 +97,9 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             - Example: data_timestamp GE 2024-01-01T00:00:00.000Z
 
         Returns:
-            Dictionary containing search results and pagination metadata
+            Object with:
+            - items: list of Bookmark objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -115,6 +134,8 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             bookmark_id: Bookmark ID
+        Returns:
+            Bookmark object
         """
         return await client.make_request("GET", f"bookmarks/{bookmark_id}")
 
@@ -152,6 +173,10 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
             tags: List of {key, value}
             bookmark_type: PUBLIC or PRIVATE
             make_current_account_owner: Set current account as owner
+        Returns:
+            Object with:
+            - bookmark: Bookmark object
+            - job: Job object (if applicable)
         """
         body: Dict[str, Any] = {"name": name}
 
@@ -190,6 +215,9 @@ def register_bookmark_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             bookmark_id: Bookmark ID
+        Returns:
+            Object with:
+            - job: Job object indicating deletion initiated
         """
         return await client.make_request("DELETE", f"bookmarks/{bookmark_id}")
 

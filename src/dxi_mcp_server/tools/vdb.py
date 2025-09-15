@@ -1,5 +1,28 @@
 """
 VDB tools for DCT API
+
+Schema summaries (key fields only):
+- VDB:
+  - id, name, database_type, database_name
+  - engine_id, engine_name, environment_id, fqdn, ip_address
+  - status, size, storage_size, masked, content_type
+  - namespace_id, namespace_name, group_name, cdb_id
+  - parent_id, parent_dsource_id, root_parent_id
+  - current_timeflow_id, previous_timeflow_id, last_refreshed_date
+  - parent_timeflow_timestamp, parent_timeflow_timezone
+  - tags[], creation_date, mount_point
+- Job (async operation result):
+  - id, status [PENDING|STARTED|RUNNING|WAITING|COMPLETED|FAILED|...]
+  - target_id, target_name, start_time, update_time
+  - error_details, warning_message, percent_complete, tasks[]
+- Snapshot (for list_vdb_snapshots):
+  - id, dataset_id, name, engine_id
+  - timestamp, location, creation_time
+  - consistency, missing_non_logged_data, timezone, version
+  - expiration, retain_forever, effective_expiration, effective_retain_forever
+  - tags[]
+- PaginatedResponseMetadata:
+  - prev_cursor, next_cursor, total
 """
 
 import logging
@@ -25,6 +48,12 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             limit: Maximum number of results to return
             cursor: Pagination cursor
             sort: Sort order
+
+        Returns:
+            Object with:
+            - items: list of VDB objects
+            - errors: optional Errors object
+            - response_metadata: pagination metadata
         """
         params = {}
         if limit is not None:
@@ -100,7 +129,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             - Example: creation_date GE 2024-01-01T00:00:00.000Z
 
         Returns:
-            Dictionary containing search results and pagination metadata
+            Object with:
+            - items: list of VDB objects
+            - response_metadata: pagination metadata
         """
         try:
             params = {}
@@ -135,6 +166,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+
+        Returns:
+            VDB object
         """
         return await client.make_request("GET", f"vdbs/{vdb_id}")
 
@@ -164,6 +198,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
+        Returns:
+            ProvisionVDBResponse object with:
+            - job: Job object
+            - vdb: optional VDB object or identifier depending on API schema
         """
         data: Dict[str, Any] = {
             "source_data_id": source_data_id,
@@ -218,6 +256,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
+        Returns:
+            ProvisionVDBResponse object with:
+            - job: Job object
+            - vdb: optional VDB object or identifier depending on API schema
         """
         data: Dict[str, Any] = {
             "snapshot_id": snapshot_id,
@@ -266,6 +308,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
+        Returns:
+            ProvisionVDBResponse object with:
+            - job: Job object
+            - vdb: optional VDB object or identifier depending on API schema
         """
         data: Dict[str, Any] = {
             "bookmark_id": bookmark_id,
@@ -301,6 +347,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             force: Force deletion even if dependencies exist
+        Returns:
+            Object with:
+            - job: Job object indicating deletion initiated
         """
         body: Dict[str, Any] = {"force": force}
         if delete_all_dependent_vdbs is not None:
@@ -321,6 +370,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             timestamp: Timestamp to refresh to (ISO format, optional - uses latest if not provided)
+        Returns:
+            Object with:
+            - job: Job object indicating refresh initiated
         """
         data: Dict[str, Any] = {}
         if timestamp is not None:
@@ -344,6 +396,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             snapshot_id: Snapshot ID to refresh from
+        Returns:
+            Object with:
+            - job: Job object indicating refresh initiated
         """
         data = {"snapshot_id": snapshot_id}
 
@@ -361,6 +416,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             bookmark_id: Bookmark ID to refresh from
+        Returns:
+            Object with:
+            - job: Job object indicating refresh initiated
         """
         data = {"bookmark_id": bookmark_id}
 
@@ -378,6 +436,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             timestamp: Timestamp to rollback to (ISO format)
+        Returns:
+            Object with:
+            - job: Job object indicating rollback initiated
         """
         data = {"timestamp": timestamp}
 
@@ -395,6 +456,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             snapshot_id: Snapshot ID to rollback to
+        Returns:
+            Object with:
+            - job: Job object indicating rollback initiated
         """
         data = {"snapshot_id": snapshot_id}
 
@@ -412,6 +476,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             bookmark_id: Bookmark ID to rollback from
+        Returns:
+            Object with:
+            - job: Job object indicating rollback initiated
         """
         data = {"bookmark_id": bookmark_id}
 
@@ -425,6 +492,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+        Returns:
+            Object with:
+            - job: Job object indicating start initiated
         """
         return await client.make_request("POST", f"vdbs/{vdb_id}/start")
 
@@ -434,6 +504,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+        Returns:
+            Object with:
+            - job: Job object indicating stop initiated
         """
         return await client.make_request("POST", f"vdbs/{vdb_id}/stop")
 
@@ -443,6 +516,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+        Returns:
+            Object with:
+            - job: Job object indicating enable initiated
         """
         return await client.make_request("POST", f"vdbs/{vdb_id}/enable")
 
@@ -452,6 +528,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+        Returns:
+            Object with:
+            - job: Job object indicating disable initiated
         """
         return await client.make_request("POST", f"vdbs/{vdb_id}/disable")
 
@@ -461,6 +540,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+        Returns:
+            Object with:
+            - job: Job object indicating lock initiated
         """
         return await client.make_request("POST", f"vdbs/{vdb_id}/lock")
 
@@ -470,6 +552,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
 
         Args:
             vdb_id: Virtual Database ID
+        Returns:
+            Object with:
+            - job: Job object indicating unlock initiated
         """
         return await client.make_request("POST", f"vdbs/{vdb_id}/unlock")
 
@@ -483,6 +568,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             location: Location/SCN to refresh to
+        Returns:
+            Object with:
+            - job: Job object indicating refresh initiated
         """
         data = {"location": location}
 
@@ -499,6 +587,9 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         Args:
             vdb_id: Virtual Database ID
             name: Snapshot name
+        Returns:
+            Object with:
+            - job: Job object indicating snapshot initiated
         """
         data = {}
         if name:
@@ -518,6 +609,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             vdb_id: Virtual Database ID
             limit: Maximum number of results to return
             cursor: Pagination cursor
+        Returns:
+            Object with:
+            - items: list of Snapshot objects
+            - response_metadata: pagination metadata
         """
         params = {}
         if limit is not None:

@@ -12,6 +12,7 @@ from .environments import register_environment_tools
 from .engines import register_engine_tools
 from .bookmarks import register_bookmark_tools
 from .snapshots import register_snapshot_tools
+from .schema_docs import register_schema_docs
 
 logger = logging.getLogger("dct-tools")
 
@@ -44,6 +45,7 @@ __all__ = [
     "register_engine_tools",
     "register_bookmark_tools",
     "register_snapshot_tools",
+    "register_schema_docs",
     "register_cleanup_handler",
     "run_cleanup",
 ]
