@@ -186,6 +186,8 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         target_group_id: Optional[str] = None,
         repository_id: Optional[str] = None,
         make_current_account_owner: Optional[bool] = None,
+        mount_point: Optional[str] = None,
+        postgres_port: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Provision a new VDB by timestamp
 
@@ -198,6 +200,8 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
+            mount_point: Mount point for the VDB (required for some database types)
+            postgres_port: Port number for PostgreSQL target database (PostgreSQL only)
         Returns:
             ProvisionVDBResponse object with:
             - job: Job object
@@ -229,6 +233,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             data["repository_id"] = repository_id
         if make_current_account_owner is not None:
             data["make_current_account_owner"] = make_current_account_owner
+        if mount_point is not None:
+            data["mount_point"] = mount_point
+        if postgres_port is not None:
+            data["postgres_port"] = postgres_port
 
         return await client.make_request("POST", "vdbs/provision_by_timestamp", json=data)
 
@@ -244,6 +252,8 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         target_group_id: Optional[str] = None,
         repository_id: Optional[str] = None,
         make_current_account_owner: Optional[bool] = None,
+        mount_point: Optional[str] = None,
+        postgres_port: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Provision a new VDB by snapshot
 
@@ -256,6 +266,8 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
+            mount_point: Mount point for the VDB (required for some database types)
+            postgres_port: Port number for PostgreSQL target database (PostgreSQL only)
         Returns:
             ProvisionVDBResponse object with:
             - job: Job object
@@ -283,6 +295,10 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             data["repository_id"] = repository_id
         if make_current_account_owner is not None:
             data["make_current_account_owner"] = make_current_account_owner
+        if mount_point is not None:
+            data["mount_point"] = mount_point
+        if postgres_port is not None:
+            data["postgres_port"] = postgres_port
 
         return await client.make_request("POST", "vdbs/provision_by_snapshot", json=data)
 
@@ -297,6 +313,8 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
         target_group_id: Optional[str] = None,
         repository_id: Optional[str] = None,
         make_current_account_owner: Optional[bool] = None,
+        mount_point: Optional[str] = None,
+        postgres_port: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Provision a new VDB from bookmark
 
@@ -308,6 +326,8 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             database_name: Database name (optional)
             environment_user_id: Environment user ID (optional)
             auto_select_repository: Auto select repository (default: True)
+            mount_point: Mount point for the VDB (required for some database types)
+            postgres_port: Port number for PostgreSQL target database (PostgreSQL only)
         Returns:
             ProvisionVDBResponse object with:
             - job: Job object
@@ -333,8 +353,85 @@ def register_vdb_tools(mcp: FastMCP, client: DCTAPIClient):
             data["repository_id"] = repository_id
         if make_current_account_owner is not None:
             data["make_current_account_owner"] = make_current_account_owner
+        if mount_point is not None:
+            data["mount_point"] = mount_point
+        if postgres_port is not None:
+            data["postgres_port"] = postgres_port
 
         return await client.make_request("POST", "vdbs/provision_from_bookmark", json=data)
+
+    @mcp.tool()
+    async def provision_vdb_by_snapshot_defaults(
+        snapshot_id: Optional[str] = None,
+        engine_id: Optional[str] = None,
+        source_data_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get default provision parameters for provisioning a new VDB by snapshot
+
+        Args:
+            snapshot_id: Snapshot ID to provision from
+            engine_id: Engine ID (optional)
+            source_data_id: Source database ID (optional)
+        Returns:
+            Default ProvisionVDBBySnapshotParameters object
+        """
+        body: Dict[str, Any] = {}
+        if snapshot_id is not None:
+            body["snapshot_id"] = snapshot_id
+        if engine_id is not None:
+            body["engine_id"] = engine_id
+        if source_data_id is not None:
+            body["source_data_id"] = source_data_id
+
+        return await client.make_request(
+            "POST", "vdbs/provision_by_snapshot/defaults", json=body
+        )
+
+    @mcp.tool()
+    async def provision_vdb_by_timestamp_defaults(
+        source_data_id: str,
+        timestamp: Optional[str] = None,
+        timestamp_in_database_timezone: Optional[str] = None,
+        timeflow_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get default provision parameters for provisioning a new VDB by timestamp
+
+        Args:
+            source_data_id: Source database ID
+            timestamp: Timestamp (optional)
+            timestamp_in_database_timezone: Timestamp in DB timezone (optional)
+            timeflow_id: Timeflow ID (optional)
+        Returns:
+            Default ProvisionVDBByTimestampParameters object
+        """
+        body: Dict[str, Any] = {"source_data_id": source_data_id}
+        if timestamp is not None:
+            body["timestamp"] = timestamp
+        if timestamp_in_database_timezone is not None:
+            body["timestamp_in_database_timezone"] = timestamp_in_database_timezone
+        if timeflow_id is not None:
+            body["timeflow_id"] = timeflow_id
+
+        return await client.make_request(
+            "POST", "vdbs/provision_by_timestamp/defaults", json=body
+        )
+
+    @mcp.tool()
+    async def provision_vdb_from_bookmark_defaults(
+        bookmark_id: str,
+    ) -> Dict[str, Any]:
+        """Get default provision parameters for provisioning a new VDB from a bookmark
+
+        Args:
+            bookmark_id: Bookmark ID to provision from
+        Returns:
+            Default ProvisionVDBFromBookmarkParameters object
+        """
+        body: Dict[str, Any] = {"bookmark_id": bookmark_id}
+
+        return await client.make_request(
+            "POST", "vdbs/provision_from_bookmark/defaults", json=body
+        )
 
     @mcp.tool()
     async def delete_vdb(
