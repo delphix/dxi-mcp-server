@@ -185,10 +185,13 @@ SCHEMAS = {
     "Job": {
         "id": "Job ID (e.g., 'job-123').",
         "status": "PENDING/STARTED/RUNNING/WAITING/COMPLETED/FAILED/etc.",
+        "type": "Internal job type identifier (stable for automation).",
+        "localized_type": "Human-friendly localized type label.",
         "target_id": "Target object id.",
         "target_name": "Target object name.",
         "start_time": "When job started.",
         "update_time": "When job last updated.",
+        "is_waiting_for_telemetry": "Operations completed but object changes not yet reflected; occurs only while STARTED and won't transition to FAILED.",
         "error_details": "Failure details for FAILED jobs.",
         "warning_message": "Warning details.",
         "percent_complete": "Completion percentage.",
@@ -267,6 +270,30 @@ def register_schema_docs(mcp: FastMCP) -> None:
             "parent_id": "Immediate lineage traversal (choose dSource vs VDB path).",
             "parent_dsource_id": "Indicates immediate parent is a dSource (search dSource snapshots).",
             "root_parent_id": "Ultimate ancestor for lineage analytics; not passed to provision endpoints.",
+        }
+
+    @mcp.tool()
+    async def job_guidance() -> Dict[str, Any]:
+        """Explain job lifecycle and terminal statuses.
+
+        Useful for deciding when to stop polling and how to interpret results.
+        """
+        return {
+            "terminal_statuses": [
+                "COMPLETED",
+                "FAILED",
+                "CANCELED",
+                "ABANDONED",
+                "TIMEDOUT",
+            ],
+            "non_terminal_examples": [
+                "PENDING",
+                "STARTED",
+                "RUNNING",
+                "WAITING",
+                "SUSPENDED",
+            ],
+            "notes": "While STARTED, is_waiting_for_telemetry may be true indicating operations finished but object state not yet reflected.",
         }
 
 

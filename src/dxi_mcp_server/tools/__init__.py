@@ -13,6 +13,7 @@ from .engines import register_engine_tools
 from .bookmarks import register_bookmark_tools
 from .snapshots import register_snapshot_tools
 from .schema_docs import register_schema_docs
+from .jobs import register_job_tools
 
 logger = logging.getLogger("dct-tools")
 
@@ -46,6 +47,7 @@ __all__ = [
     "register_bookmark_tools",
     "register_snapshot_tools",
     "register_schema_docs",
+    "register_job_tools",
     "register_cleanup_handler",
     "run_cleanup",
 ]
