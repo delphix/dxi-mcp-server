@@ -37,25 +37,26 @@ def get_dct_config() -> Dict[str, Any]:
 
 
 def print_config_help():
-    """Print configuration help"""
-    print("\nDelphix DCT MCP Server Configuration:")
-    print("=====================================")
-    print()
-    print("Required Environment Variables:")
-    print("  DCT_API_KEY      Your DCT API key (required)")
-    print()
-    print("Optional Environment Variables:")
-    print("  DCT_BASE_URL     DCT base URL (default: https://localhost:8083)")
-    print("  DCT_VERIFY_SSL   Verify SSL certificates (default: false)")
-    print("  DCT_TIMEOUT      Request timeout in seconds (default: 30)")
-    print("  DCT_MAX_RETRIES  Maximum retry attempts (default: 3)")
-    print(
-        "  DCT_LOG_LEVEL    Logging level (default: INFO, options: DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    )
-    print()
-    print("Example:")
-    print("  export DCT_API_KEY=apk1.your-api-key-here")
-    print("  export DCT_BASE_URL=https://your-dct-host:8083")
-    print("  export DCT_VERIFY_SSL=true")
-    print("  export DCT_LOG_LEVEL=DEBUG")
-    print()
+    message = """
+    Print configuration help
+    Delphix DCT MCP Server Configuration:
+    =====================================
+
+    Required Environment Variables:
+        DCT_API_KEY      Your DCT API key (required)
+
+    Optional Environment Variables:
+        DCT_BASE_URL     DCT base URL (default: https://localhost:8083)
+        DCT_VERIFY_SSL   Verify SSL certificates (default: false)
+        DCT_TIMEOUT      Request timeout in seconds (default: 30)
+        DCT_MAX_RETRIES  Maximum retry attempts (default: 3)
+        DCT_LOG_LEVEL    Logging level (default: INFO, options: DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+    Example:
+        export DCT_API_KEY=apk1.your-api-key-here
+        export DCT_BASE_URL=https://your-dct-host:8083
+        export DCT_VERIFY_SSL=true
+        export DCT_LOG_LEVEL=DEBUG
+
+    """
+    print(message)
