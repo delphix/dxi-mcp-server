@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from mcp.server.fastmcp import FastMCP
-from .config.config import verify_config
+from .config.utils import verify_config
 
 logger = logging.getLogger("dct-mcp-server")
 

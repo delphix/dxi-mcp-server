@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.24.0",
     "uv>=0.9.0",
     "aiohttp>=3.13.0",
+    "pydantic-settings>=2.10.1",
 ]
 
 [project.scripts]
