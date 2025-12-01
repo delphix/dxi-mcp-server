@@ -8,6 +8,7 @@ import platform
 import sys
 import threading
 import uuid
+import getpass
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -22,7 +23,6 @@ class SessionConfig:
     """Configuration constants for session logging"""
 
     REQUEST_TIMEOUT = 5
-    TELEMETRY_CONSENT_FILE = ".dct_mcp_telemetry_consent.json"
     WHEN = "midnight"
     DAY_INTERVAL = 1  # Rotate logs daily
     MAX_LOG_SIZE = 100 * 1024 * 1024  # 100MB
@@ -44,16 +44,10 @@ class SessionManager:
         return self._current_session_id
 
     def _get_user_id(self) -> str:
-        """Get user ID from consent file"""
-        consent_path = Path.home() / SessionConfig.TELEMETRY_CONSENT_FILE
-        if not consent_path.exists():
-            return "unknown"
-
+        """Get user ID from the OS"""
         try:
-            with open(consent_path, "r") as f:
-                consent_data = json.load(f)
-                return consent_data.get("user_id", "unknown")
-        except (json.JSONDecodeError, IOError, KeyError):
+            return getpass.getuser()
+        except Exception:
             return "unknown"
 
     def get_user_details(self) -> Dict[str, Any]:

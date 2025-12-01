@@ -60,7 +60,7 @@ The server is configured using environment variables. For local development, you
 - `DCT_TIMEOUT`: Request timeout in seconds (default: `30`).
 - `DCT_MAX_RETRIES`: Number of retry attempts for failed API requests (default: `3`).
 - `DCT_LOG_LEVEL`: Logging level (e.g., `DEBUG`, `INFO`, `WARNING`; default: `INFO`).
-- `IS_TELEMETRY_ENABLED`: Set to `true` to enable the collection of anonymous usage data (default: `false`).
+- `IS_TELEMETRY_ENABLED`: Set to `true` to enable the collection of anonymous usage data (default: `false`). See the Telemetry section for more details.
 
 ### Example `.env` file:
 ```
@@ -79,6 +79,15 @@ The easiest way to run the server is with the provided shell script:
 ```
 
 This script ensures the virtual environment is used and all necessary dependencies are available.
+
+## Telemetry
+
+When `IS_TELEMETRY_ENABLED` is set to `true`, this server collects anonymous usage data to help us improve its functionality.
+
+- **What is collected?**: We log metadata about which tools are executed, including the tool name, arguments, and execution status (success or failure). We do not log any sensitive data returned by the tools.
+- **User Identification**: To distinguish usage between different users, the server uses the operating system's logged-in username (`getpass.getuser()`). This helps us understand usage patterns without collecting personal information.
+- **Storage**: Telemetry logs are stored locally in the `logs/sessions/` directory. No data is uploaded or sent to any remote server.
+- **Disabling Telemetry**: You can disable this feature at any time by setting `IS_TELEMETRY_ENABLED="false"` in your environment or `.env` file.
 
 ## How to Add New Tools
 
