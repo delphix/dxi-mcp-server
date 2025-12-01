@@ -49,7 +49,7 @@ env.bak/
 venv.bak/
 
 # IDE and editor files
-.vscode/
+# .vscode/
 .cursor/
 .idea/
 *.swp
@@ -83,7 +83,7 @@ dmypy.json
 .ipynb_checkpoints
 
 # pyenv
-.python-version
+# .python-version
 
 # pipenv
 Pipfile.lock

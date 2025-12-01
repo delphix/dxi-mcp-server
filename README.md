@@ -1,136 +1,110 @@
 # Delphix DCT API MCP Server
 
-A Model Context Protocol (MCP) server that provides tools for interacting with the Delphix Data Control Tower (DCT) API. This server enables AI assistants to manage Delphix data sources, virtual databases, and other DCT resources.
+A streamlined Model Context Protocol (MCP) server for interacting with the Delphix Data Control Tower (DCT) API.
+
+This server is designed to be extensible, allowing new tools to be added easily by simply creating new Python modules in the `tools` directory.
 
 ## Features
 
-- **DSources Management**: Create, list, search, and manage data sources
-- **Virtual Database Operations**: Provision, refresh, rollback, snapshot, and manage VDBs
-- **Environment Management**: List, search, and manage DCT environments
-- **Engine Management**: List, search, and manage DCT engines
-- **Bookmark Management**: Create, search, and manage bookmarks for point-in-time operations
-- **Snapshot Management**: Create, search, and manage snapshots for data sources and VDBs
-- **Tag Management**: Add, retrieve, and delete tags for resources
-- **Async Operations**: Built with modern async/await patterns for performance
-- **Error Handling**: Robust retry logic and error handling
-- **SSL Support**: Configurable SSL verification
-- **Logging**: Comprehensive logging with configurable levels
-- **API Compliance**: Full compliance with DCT API v3 specification
+- **Dynamic Tool Registration**: Automatically discovers and registers tools from modules in the `src/dct_mcp_server/tools` directory.
+- **Robust API Client**: A resilient, asynchronous client for interacting with the DCT API, featuring retry logic and exponential backoff.
+- **Centralized Configuration**: Easy setup via environment variables.
+- **Structured Logging**: Centralized and configurable logging for better observability.
+- **Custom Exceptions**: A clear and specific exception hierarchy for predictable error handling.
 
-## Installation
+## Prerequisites
 
-### Prerequisites
+- Python 3.11+
+- Access to a Delphix DCT instance and an API key.
 
-- Python 3.11 or higher
-- Access to a Delphix DCT instance
-- DCT API key
+## Setup and Installation
 
-### Install Dependencies
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/delphix/dxi-mcp-server.git
+    cd dxi-mcp-server
+    ```
 
-```bash
-# Using uv (recommended)
-uv add "mcp[cli]>=1.13.0" httpx>=0.24.0
+2.  **Create and activate a virtual environment:**
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
 
-# Or using pip
-pip install "mcp[cli]>=1.13.0" httpx>=0.24.0
-```
+3.  **Install dependencies:**
+
+    You can install the project dependencies using either `pip` or `uv`.
+
+    #### Option 1: Using pip
+    Install the project in editable mode. This is useful for development as your changes will be reflected immediately.
+    ```bash
+    pip install -e .
+    ```
+
+    #### Option 2: Using uv (Recommended)
+    For a faster and more deterministic installation, you can use `uv`. The `uv.lock` file ensures a consistent, reproducible environment.
+    ```bash
+    uv sync
+    ```
 
 ## Configuration
 
-The server is configured using environment variables. Set the following environment variables in your shell or use them directly in your MCP client configuration:
+The server is configured using environment variables. For local development, you can create a `.env` file in the project root.
 
-### Required Environment Variables
+**Required:**
+- `DCT_API_KEY`: Your DCT API key.
+- `DCT_BASE_URL`: The base URL of your DCT instance (e.g., `https://your-dct-host.delphix.com`).
 
-```bash
-# Required: Your DCT API Key
-export DCT_API_KEY="your-api-key-here"
+**Optional:**
+- `DCT_VERIFY_SSL`: Set to `true` to enable SSL certificate verification (default: `false`).
+- `DCT_TIMEOUT`: Request timeout in seconds (default: `30`).
+- `DCT_MAX_RETRIES`: Number of retry attempts for failed API requests (default: `3`).
+- `DCT_LOG_LEVEL`: Logging level (e.g., `DEBUG`, `INFO`, `WARNING`; default: `INFO`).
+- `IS_TELEMETRY_ENABLED`: Set to `true` to enable the collection of anonymous usage data (default: `false`).
 
-# Required: DCT instance URL
-export DCT_BASE_URL="https://your-dct-host:8083"
+### Example `.env` file:
+```
+DCT_API_KEY="apk1.your-api-key-here"
+DCT_BASE_URL="https://your-dct-host.delphix.com"
+DCT_LOG_LEVEL="DEBUG"
+IS_TELEMETRY_ENABLED="true"
 ```
 
-### Optional Environment Variables
+## Running the Server
+
+The easiest way to run the server is with the provided shell script:
 
 ```bash
-# Optional: SSL verification (default: false)
-export DCT_VERIFY_SSL="true"
-
-# Optional: Request timeout in seconds (default: 30)
-export DCT_TIMEOUT="30"
-
-# Optional: Maximum retry attempts (default: 3)
-export DCT_MAX_RETRIES="3"
-
-# Optional: Log level (default: INFO)
-export DCT_LOG_LEVEL="DEBUG"
-```
-
-You can add these to your shell profile (`~/.zshrc`, `~/.bashrc`) for persistence.
-
-## Usage
-
-### Running the Server
-
-After setting up your environment variables, run the server:
-
-```bash
-# Using the startup script (recommended)
 ./start_mcp_server_python.sh
-
-# Or run directly
-python -m dxi_mcp_server.main
 ```
 
-### Integration with Claude Desktop
+This script ensures the virtual environment is used and all necessary dependencies are available.
 
-Add this configuration to your Claude Desktop config file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+## How to Add New Tools
 
-#### Option 1: Using Startup Script (Recommended for Local Development)
-```json
-{
-  "mcpServers": {
-    "delphix-dct": {
-      "command": "/path/to/your/project/start_mcp_server_python.sh",
-      "env": {
-        "DCT_API_KEY": "your-api-key",
-        "DCT_BASE_URL": "https://your-dct-host:8083",
-        "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
+1.  Create a new Python file in the `src/dct_mcp_server/tools/` directory (e.g., `my_new_tool.py`).
+2.  Define your tool functions within this file. It's recommended to use the `@log_tool_execution` decorator for automatic logging.
+3.  Create a function named `register_tools(app, dct_client)`.
+4.  Inside `register_tools`, use `app.register_tool()` to register each of your functions.
 
-#### Option 2: Using uvx from Git Repository (Recommended for Production)
+The server will automatically discover and load your new tools on startup.
+
+### Advanced Usage: Running from a Git Repository
+
+You can run the MCP server directly from a Git repository using a tool like `uvx`. This is useful for deployments or for running the server without cloning it locally.
+
+Here is an example of how you might configure this in a `settings.json` file for an application that consumes MCP servers:
+
 ```json
 {
   "mcpServers": {
     "delphix-dct": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dxi-mcp-server"],
+      "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
         "DCT_API_KEY": "your-api-key",
-        "DCT_BASE_URL": "https://your-dct-host:8083",
+        "DCT_BASE_URL": "https://your-dct-host.delphix.com",
         "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-#### Option 3: Direct Python Module
-```json
-{
-  "mcpServers": {
-    "delphix-dct": {
-      "command": "python",
-      "args": ["-m", "dxi_mcp_server.main"],
-      "cwd": "/path/to/your/project",
-      "env": {
-        "DCT_API_KEY": "your-api-key",
-        "DCT_BASE_URL": "https://your-dct-host:8083",
-        "DCT_VERIFY_SSL": "true",
-        "PYTHONPATH": "src"
       }
     }
   }
@@ -141,91 +115,37 @@ Add this configuration to your Claude Desktop config file (`~/Library/Applicatio
 
 ### Available Tools
 
-The server provides the following categories of tools:
+This MCP server is designed for extensibility. Currently, it includes a basic health check tool.
 
-#### DSources Tools
-- `list_dsources` - List all dSources
-- `search_dsources` - Search dSources with filters
-- `get_dsource` - Get specific dSource details
-- `list_snapshots` - List snapshots for a dSource
-- `create_snapshot` - Create a snapshot for a dSource
-- `get_tags` - Get tags for a dSource
-- `create_tags` - Create tags for a dSource
-- `delete_tags` - Delete tags from a dSource
-
-#### VDB (Virtual Database) Tools
-- `list_vdbs` - List all virtual databases
-- `search_vdbs` - Search VDBs with filters
-- `get_vdb` - Get VDB details
-- `provision_vdb_by_timestamp` - Provision VDB by timestamp
-- `provision_vdb_by_snapshot` - Provision VDB by snapshot
-- `provision_vdb_from_bookmark` - Provision VDB from bookmark
-- `delete_vdb` - Delete a VDB
-- `refresh_vdb_by_timestamp` - Refresh VDB by timestamp
-- `refresh_vdb_by_snapshot` - Refresh VDB by snapshot
-- `refresh_vdb_from_bookmark` - Refresh VDB from bookmark
-- `refresh_vdb_by_location` - Refresh VDB by location/SCN
-- `rollback_vdb_by_timestamp` - Rollback VDB by timestamp
-- `rollback_vdb_by_snapshot` - Rollback VDB by snapshot
-- `rollback_vdb_from_bookmark` - Rollback VDB from bookmark
-- `start_vdb` - Start a VDB
-- `stop_vdb` - Stop a VDB
-- `enable_vdb` - Enable a VDB
-- `disable_vdb` - Disable a VDB
-- `lock_vdb` - Lock a VDB
-- `unlock_vdb` - Unlock a VDB
-- `snapshot_vdb` - Create VDB snapshot
-- `list_vdb_snapshots` - List VDB snapshots
-
-#### Environment Tools
-- `search_environments` - Search environments with filters
-- `get_environment` - Get environment details
-- `enable_environment` - Enable an environment
-- `disable_environment` - Disable an environment
-- `refresh_environment` - Refresh environment (discover changes)
-- `list_environment_users` - List users for an environment
-- `compatible_repos_by_snapshot` - Get compatible repositories by snapshot
-- `compatible_repos_by_timestamp` - Get compatible repositories by timestamp
-- `compatible_repos_from_bookmark` - Get compatible repositories from bookmark
-
-#### Engine Tools
-- `list_engines` - List all engines
-- `search_engines` - Search engines with filters
-- `get_engine` - Get engine details
-
-#### Bookmark Tools
-- `list_bookmarks` - List all bookmarks
-- `search_bookmarks` - Search bookmarks with filters
-- `get_bookmark` - Get bookmark details
-- `create_bookmark` - Create a bookmark
-- `delete_bookmark` - Delete a bookmark
-- `update_bookmark` - Update a bookmark
-
-#### Snapshot Tools
-- `list_snapshots` - List all snapshots
-- `search_snapshots` - Search snapshots with filters
-- `get_snapshot` - Get snapshot details
-- `delete_snapshot` - Delete a snapshot
-- `dct_snapshots_find_by_timestamp` - Find snapshots by timestamp
-- `dct_snapshots_find_by_location` - Find snapshots by location/SCN
+#### Health Check
+- **`ping`** - A simple tool to confirm that the MCP server is running and responsive.
+  - **Returns**: A simple success message.
+  - **Example**:
+    ```
+    {"status": "ok"}
+    ```
 
 ## Project Structure
 
 ```
 src/
-├── dxi_mcp_server/
-│   ├── __init__.py           # Package initialization
-│   ├── main.py              # Main server entry point
-│   ├── client.py            # DCT API client
-│   ├── config.py            # Configuration management
-│   └── tools/               # Tool implementations
-│       ├── __init__.py      # Tools package
-│       ├── dsources.py      # DSources API tools
-│       ├── vdb.py           # Virtual Database API tools
-│       ├── environments.py  # Environment API tools
-│       ├── engines.py       # Engine API tools
-│       ├── bookmarks.py     # Bookmark API tools
-│       └── snapshots.py     # Snapshot API tools
+├── dct_mcp_server/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config/
+│   │   ├── __init__.py
+│   │   └── config.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── decorators.py
+│   │   ├── exceptions.py
+│   │   └── logging.py
+│   ├── dct_client/
+│   │   ├── __init__.py
+│   │   └── client.py
+│   └── tools/
+│       ├── __init__.py
+│       └── health_check.py
 ```
 
 ## Contributing
