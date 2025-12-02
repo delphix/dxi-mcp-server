@@ -17,6 +17,7 @@ from dct_mcp_server.core import end_session, start_session
 from dct_mcp_server.core.exceptions import MCPError
 from dct_mcp_server.core.logging import get_logger, setup_logging
 from dct_mcp_server.dct_client import DCTAPIClient
+from dct_mcp_server.toolsgenerator.driver import generate_tools_from_openapi
 from mcp.server.fastmcp import FastMCP
 
 # Initialize logging with default level first
@@ -129,7 +130,7 @@ def main():
     """Synchronous main entry point - wrapper for async_main"""
     setup_logging()
     logger = logging.getLogger(__name__)
-
+    generate_tools_from_openapi()
     try:
         # Run the async main function
         loop = asyncio.get_event_loop()

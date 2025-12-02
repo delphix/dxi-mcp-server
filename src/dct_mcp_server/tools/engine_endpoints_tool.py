@@ -2,10 +2,12 @@ from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from ..core.decorators import log_tool_execution
 import asyncio
+import logging
 import threading
 from functools import wraps
 
 client = None
+logger = logging.getLogger(__name__)
 
 def async_to_sync(async_func):
     """Utility decorator to convert async functions to sync with proper event loop handling."""
@@ -185,4 +187,4 @@ def register_tools(app, dct_client):
     try:
         app.add_tool(search_engines, name="search_engines")
     except Exception as e:
-        print(f"Error registering tools: {e}")
+        logger.info(f"Error registering tools: {e}")
