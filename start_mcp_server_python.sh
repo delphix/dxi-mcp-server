@@ -9,9 +9,11 @@ export PYTHONPATH=src
 
 # Ensure dependencies are installed
 if [ ! -d ".venv" ]; then
-    echo "Installing dependencies..."
-    uv sync
+    echo "Creating virtual environment and installing dependencies..."
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -e .
 fi
 
 # Use the virtual environment directly
-exec .venv/bin/python -m dxi_mcp_server.main
+exec .venv/bin/python -m dct_mcp_server.main
