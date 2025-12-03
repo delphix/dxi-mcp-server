@@ -9,7 +9,7 @@ export PYTHONPATH=src
 
 # Ensure dependencies are installed
 if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment and installing dependencies..."
+    echo "Creating virtual environment and installing dependencies..." >> logfile.txt
     python3 -m venv .venv
     source .venv/bin/activate
     pip install .

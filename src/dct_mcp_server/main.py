@@ -136,9 +136,7 @@ def main():
     generate_tools_from_openapi()
     try:
         # Run the async main function
-        loop = asyncio.get_event_loop()
-        setup_signal_handlers()
-        loop.run_until_complete(async_main())
+        asyncio.run(async_main())
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

@@ -48,8 +48,8 @@ def download_open_api_yaml(api_url: str, save_path: str):
     """Downloads the OpenAPI YAML from the given URL."""
     try:
         logger.info(f"Downloading OpenAPI spec from {api_url}...")
+        
         # Insecure: Disabling SSL certificate verification for self-signed certs.
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         response = requests.get(api_url, timeout=30, verify=False)
         response.raise_for_status()  # Raise an exception for bad status codes
         with open(save_path, "w", encoding="utf-8") as f:
