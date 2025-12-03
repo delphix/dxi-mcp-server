@@ -1,0 +1,33 @@
+# Core MCP Framework (using fastmcp, not standard mcp)
+fastmcp>=2.13.2
+
+# HTTP Client for API requests
+httpx>=0.24.0
+
+# YAML processing for API specs (used in toolsgenerator/driver.py)
+pyyaml>=6.0
+
+# HTTP requests (for synchronous operations and SSL cert download)
+requests>=2.28.0
+
+# URL handling and SSL
+urllib3>=1.26.0
+certifi>=2022.12.7
+
+# Environment variable handling
+python-dotenv>=1.0.0
+
+# JSON schema validation (if needed by MCP framework)
+pydantic>=2.0.0
+
+# Async utilities (required by fastmcp)
+anyio>=3.6.0
+
+# Additional utilities that might be needed
+typing-extensions>=4.0.0
+
+# Optional: Development dependencies (uncomment if needed)
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
+# black>=22.0.0
+# flake8>=5.0.0
