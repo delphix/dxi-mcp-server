@@ -10,6 +10,8 @@ A Model Context Protocol (MCP) server that provides tools for interacting with t
 - **Engine Management**: List, search, and manage DCT engines
 - **Bookmark Management**: Create, search, and manage bookmarks for point-in-time operations
 - **Snapshot Management**: Create, search, and manage snapshots for data sources and VDBs
+- **Ruleset Management**: Create, update, list, search, and manage governance rulesets for continuous compliance
+- **Connector Management**: Create, update, list, search, and manage data source connectors for compliance
 - **Tag Management**: Add, retrieve, and delete tags for resources
 - **Async Operations**: Built with modern async/await patterns for performance
 - **Error Handling**: Robust retry logic and error handling
@@ -209,6 +211,20 @@ The server provides the following categories of tools:
 - `dct_snapshots_find_by_timestamp` - Find snapshots by timestamp
 - `dct_snapshots_find_by_location` - Find snapshots by location/SCN
 
+#### Ruleset Tools
+- `list_rulesets` - List all governance rulesets
+- `search_rulesets` - Search rulesets with filters
+- `get_ruleset` - Get specific ruleset details
+- `create_ruleset` - Create a new ruleset
+- `update_ruleset` - Update an existing ruleset
+
+#### Connector Tools
+- `list_connectors` - List all data source connectors
+- `search_connectors` - Search connectors with filters
+- `get_connector` - Get specific connector details
+- `create_connector` - Create a new connector
+- `update_connector` - Update an existing connector
+
 ## Project Structure
 
 ```
@@ -225,7 +241,9 @@ src/
 │       ├── environments.py  # Environment API tools
 │       ├── engines.py       # Engine API tools
 │       ├── bookmarks.py     # Bookmark API tools
-│       └── snapshots.py     # Snapshot API tools
+│       ├── snapshots.py     # Snapshot API tools
+│       ├── rulesets.py      # Ruleset and governance API tools
+│       └── connectors.py    # Connector and data source API tools
 ```
 
 ## Contributing

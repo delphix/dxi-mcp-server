@@ -3,6 +3,12 @@
 # Navigate to the project directory
 cd "$(dirname "$0")"
 
+# Load .env file if it exists
+if [ -f .env ]; then
+    echo "Loading environment from .env file..."
+    source .env
+fi
+
 # Set environment variables from .env file or system environment
 # Note: Set DCT_API_KEY, DCT_BASE_URL, DCT_VERIFY_SSL, DCT_LOG_LEVEL in your environment
 export PYTHONPATH=src
