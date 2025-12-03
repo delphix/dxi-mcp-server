@@ -34,7 +34,7 @@ async def lifespan(app: FastMCP):
     """
     config = get_dct_config()
     session_id = None
-    if config.get("is_telemetry_enabled"):
+    if config.get("is_local_telemetry_enabled"):
         session_id = start_session()
         logger.info(f"Telemetry enabled. Session ID: {session_id}")
     else:

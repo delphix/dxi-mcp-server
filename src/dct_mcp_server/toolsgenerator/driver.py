@@ -21,7 +21,6 @@ from textwrap import indent
 import yaml
 import os
 import requests
-import sys
 import urllib3
 import logging
 
@@ -57,7 +56,7 @@ def download_open_api_yaml(api_url: str, save_path: str):
             f.write(response.text)
         logger.info(f"Successfully saved OpenAPI spec to {save_path}")
     except requests.exceptions.RequestException as e:
-        logger.info(f"Error downloading OpenAPI spec: {e}", file=sys.stderr)
+        logger.info(f"Error downloading OpenAPI spec: {e}")
         raise
 
 translated_dict_for_types = {

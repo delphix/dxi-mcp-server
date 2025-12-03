@@ -2,15 +2,15 @@
 
 A streamlined Model Context Protocol (MCP) server for interacting with the Delphix Data Control Tower (DCT) API.
 
-This server is designed to be extensible, allowing new tools to be added easily by simply creating new Python modules in the `tools` directory.
 
 ## Features
 
-- **Dynamic Tool Registration**: Automatically discovers and registers tools from modules in the `src/dct_mcp_server/tools` directory.
 - **Robust API Client**: A resilient, asynchronous client for interacting with the DCT API, featuring retry logic and exponential backoff.
 - **Centralized Configuration**: Easy setup via environment variables.
 - **Structured Logging**: Centralized and configurable logging for better observability.
 - **Custom Exceptions**: A clear and specific exception hierarchy for predictable error handling.
+- **Graceful Shutdown**: Handles `SIGINT` and `SIGTERM` for a clean shutdown process.
+- **Local Telemetry**: Optional, opt-in anonymous usage tracking stored locally.
 
 ## Prerequisites
 
@@ -36,7 +36,12 @@ This server is designed to be extensible, allowing new tools to be added easily 
     You can install the project dependencies using either `pip` or `uv`.
 
     #### Option 1: Using pip
-    Install the project in editable mode. This is useful for development as your changes will be reflected immediately.
+    Install the dependencies using `pip` and the `requirements.txt` file.
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    To install the project in editable mode, which is useful for development:
     ```bash
     pip install -e .
     ```
@@ -44,6 +49,7 @@ This server is designed to be extensible, allowing new tools to be added easily 
     #### Option 2: Using uv (Recommended)
     For a faster and more deterministic installation, you can use `uv`. The `uv.lock` file ensures a consistent, reproducible environment.
     ```bash
+    pip install uv
     uv sync
     ```
 
@@ -60,14 +66,14 @@ The server is configured using environment variables. For local development, you
 - `DCT_TIMEOUT`: Request timeout in seconds (default: `30`).
 - `DCT_MAX_RETRIES`: Number of retry attempts for failed API requests (default: `3`).
 - `DCT_LOG_LEVEL`: Logging level (e.g., `DEBUG`, `INFO`, `WARNING`; default: `INFO`).
-- `IS_TELEMETRY_ENABLED`: Set to `true` to enable the collection of anonymous usage data (default: `false`). See the Telemetry section for more details.
+- `IS_LOCAL_TELEMETRY_ENABLED`: Set to `true` to enable the collection of anonymous usage data (default: `false`). See the Telemetry section for more details.
 
 ### Example `.env` file:
 ```
 DCT_API_KEY="apk1.your-api-key-here"
 DCT_BASE_URL="https://your-dct-host.delphix.com"
 DCT_LOG_LEVEL="DEBUG"
-IS_TELEMETRY_ENABLED="true"
+IS_LOCAL_TELEMETRY_ENABLED="true"
 ```
 
 ## Running the Server
@@ -82,21 +88,13 @@ This script ensures the virtual environment is used and all necessary dependenci
 
 ## Telemetry
 
-When `IS_TELEMETRY_ENABLED` is set to `true`, this server collects anonymous usage data to help us improve its functionality.
+When `IS_LOCAL_TELEMETRY_ENABLED` is set to `true`, this server collects anonymous usage data to help us improve its functionality.
 
 - **What is collected?**: We log metadata about which tools are executed, including the tool name, arguments, and execution status (success or failure). We do not log any sensitive data returned by the tools.
 - **User Identification**: To distinguish usage between different users, the server uses the operating system's logged-in username (`getpass.getuser()`). This helps us understand usage patterns without collecting personal information.
 - **Storage**: Telemetry logs are stored locally in the `logs/sessions/` directory. No data is uploaded or sent to any remote server.
-- **Disabling Telemetry**: You can disable this feature at any time by setting `IS_TELEMETRY_ENABLED="false"` in your environment or `.env` file.
+- **Disabling Telemetry**: You can disable this feature at any time by setting `IS_LOCAL_TELEMETRY_ENABLED="false"` in your environment or `.env` file.
 
-## How to Add New Tools
-
-1.  Create a new Python file in the `src/dct_mcp_server/tools/` directory (e.g., `my_new_tool.py`).
-2.  Define your tool functions within this file. It's recommended to use the `@log_tool_execution` decorator for automatic logging.
-3.  Create a function named `register_tools(app, dct_client)`.
-4.  Inside `register_tools`, use `app.register_tool()` to register each of your functions.
-
-The server will automatically discover and load your new tools on startup.
 
 ### Advanced Usage: Running from a Git Repository
 
@@ -122,17 +120,8 @@ Here is an example of how you might configure this in a `settings.json` file for
 
 **Note**: For private repositories, use SSH authentication: `git+ssh://git@github.com/delphix/dxi-mcp-server.git`
 
-### Available Tools
 
-This MCP server is designed for extensibility. Currently, it includes a basic health check tool.
 
-#### Health Check
-- **`ping`** - A simple tool to confirm that the MCP server is running and responsive.
-  - **Returns**: A simple success message.
-  - **Example**:
-    ```
-    {"status": "ok"}
-    ```
 
 ## Project Structure
 
@@ -153,8 +142,7 @@ src/
 │   │   ├── __init__.py
 │   │   └── client.py
 │   └── tools/
-│       ├── __init__.py
-│       └── health_check.py
+│       └── __init__.py
 ```
 
 ## Contributing
