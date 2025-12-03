@@ -12,7 +12,7 @@ if [ ! -d ".venv" ]; then
     echo "Creating virtual environment and installing dependencies..."
     python3 -m venv .venv
     source .venv/bin/activate
-    pip install -e .
+    pip install .
 fi
 
 # Use the virtual environment directly

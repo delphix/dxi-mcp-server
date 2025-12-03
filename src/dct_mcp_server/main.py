@@ -53,7 +53,10 @@ async def lifespan(app: FastMCP):
 
 
 # Server instance
-app = FastMCP(name="dct-mcp-server", lifespan=lifespan)
+app = FastMCP(
+    name="dct-mcp-server",
+    lifespan=lifespan,
+)
 
 
 # Initialize DCT client - will be set in main()

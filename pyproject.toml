@@ -5,7 +5,7 @@ description = "Delphix DCT API MCP Server - A Model Context Protocol server for 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=0.1.0",
+    "fastmcp>=2.13.2",
     "httpx>=0.24.0"
 ]
 

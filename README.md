@@ -33,15 +33,15 @@ A streamlined Model Context Protocol (MCP) server for interacting with the Delph
 
 3.  **Install dependencies:**
 
-    You can install the project dependencies using either `pip` or `uv`.
+    You can install the project and its dependencies using either `pip` or `uv`.
 
     #### Option 1: Using pip
-    Install the dependencies using `pip` and the `requirements.txt` file.
+    To install the project, run the following command from the project root. This will also install all necessary dependencies defined in `pyproject.toml`.
     ```bash
-    pip install -r requirements.txt
+    pip install .
     ```
 
-    To install the project in editable mode, which is useful for development:
+    For development, you can install the project in "editable" mode. This allows your code changes to be reflected immediately without needing to reinstall.
     ```bash
     pip install -e .
     ```
