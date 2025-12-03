@@ -24,4 +24,4 @@ def register_tools(app, dct_client):
         app.add_tool(ping, name="health_ping")
         logger.info("Health check tool 'health_ping' registered successfully.")
     except Exception as e:
-        logger.exception(f"Failed to register health check tool: {e}")
+        logger.exception(f"Failed to register health check tool due to: {e}")
