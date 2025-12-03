@@ -73,6 +73,12 @@ async def async_main():
             register_engine_tools,
             register_bookmark_tools,
             register_snapshot_tools,
+            register_ruleset_tools,
+            register_connector_tools,
+            register_jobs_tools,
+            register_executions_tools,
+            register_logs_tools,
+            register_log_explanation_tools,
         )
 
         # Register all tools
@@ -82,6 +88,12 @@ async def async_main():
         register_engine_tools(app, dct_client)
         register_bookmark_tools(app, dct_client)
         register_snapshot_tools(app, dct_client)
+        register_ruleset_tools(app, dct_client)
+        register_connector_tools(app, dct_client)
+        register_jobs_tools(app, dct_client)
+        register_executions_tools(app, dct_client)
+        register_logs_tools(app, dct_client)
+        register_log_explanation_tools(app)
 
         # Run the server
         try:
