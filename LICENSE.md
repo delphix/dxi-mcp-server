@@ -23,18 +23,18 @@ DEALINGS IN THE SOFTWARE.
 
 <!-- ===================== BOTTOM FOOTER ===================== -->
 
-<table width="100%" border="0" cellspacing="0" cellpadding="0">
-  <tr>
-    <td style="text-align: left;">
-      Perforce Software, Inc.<br/>
-      <a href="https://www.perforce.com">perforce.com</a>
-    </td>
-    <td style="text-align: center;">
-      400 First Avenue North, Suite 400<br/>
-      Minneapolis, MN 55401
-    </td>
-    <td style="text-align: right;">
-      +1 612.517.2100
-    </td>
-  </tr>
-</table>
+<div style="display: flex; justify-content: space-between; width: 100%; font-family: sans-serif; font-size: 14px;">
+  <div style="text-align: left;">
+    Perforce Software, Inc.<br/>
+    <a href="https://www.perforce.com">perforce.com</a>
+  </div>
+  <div style="text-align: center;">
+    400 First Avenue North, Suite 400<br/>
+    Minneapolis, MN 55401
+  </div>
+  <div style="text-align: right;">
+    +1 612.517.2100
+  </div>
+</div>
+
+
