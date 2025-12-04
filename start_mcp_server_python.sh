@@ -10,10 +10,10 @@ export PYTHONPATH=src
 # Ensure dependencies are installed
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment and installing dependencies..."
-    python3 -m venv .venv
-    source .venv/bin/activate
+    python -m venv .venv
+    source .venv/Scripts/activate
     pip install -e .
 fi
 
 # Use the virtual environment directly
-exec .venv/bin/python -m dct_mcp_server.main
+exec .venv/Scripts/python -m dct_mcp_server.main
