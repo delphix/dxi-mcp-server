@@ -21,15 +21,43 @@ if %errorlevel% == 0 (
     goto :setup_venv
 )
 
-goto :run_powershell
+echo Python not found. Attempting automatic installation...>>mcp_server_setup_logfile.txt
+goto :install_python
 
-:run_powershell
-echo.>>mcp_server_setup_logfile.txt
-echo Running PowerShell installation script...>>mcp_server_setup_logfile.txt
-echo If this hangs, press Ctrl+C and run this script again, then choose option 2.>>mcp_server_setup_logfile.txt
-echo.>>mcp_server_setup_logfile.txt
-powershell -ExecutionPolicy Bypass -File "%~dp0start_mcp_server_windows.ps1" >>mcp_server_setup_logfile.txt 2>&1
-goto :end
+:install_python
+echo Trying to install Python via winget...>>mcp_server_setup_logfile.txt
+winget --version >nul 2>&1
+if not errorlevel 1 (
+    winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements --silent >>mcp_server_setup_logfile.txt 2>&1
+    if not errorlevel 1 (
+        echo Python installed successfully via winget.>>mcp_server_setup_logfile.txt
+        goto :verify_python
+    )
+)
+
+echo Trying to install Python via chocolatey...>>mcp_server_setup_logfile.txt
+choco --version >nul 2>&1
+if not errorlevel 1 (
+    choco install python -y >>mcp_server_setup_logfile.txt 2>&1
+    if not errorlevel 1 (
+        echo Python installed successfully via chocolatey.>>mcp_server_setup_logfile.txt
+        goto :verify_python
+    )
+)
+
+goto :manual_install
+
+:verify_python
+echo Verifying Python installation...>>mcp_server_setup_logfile.txt
+python --version >nul 2>&1
+if %errorlevel% == 0 (
+    echo Python verification successful.>>mcp_server_setup_logfile.txt
+    python --version >>mcp_server_setup_logfile.txt 2>&1
+    goto :setup_venv
+) else (
+    echo Python installation verification failed.>>mcp_server_setup_logfile.txt
+    goto :manual_install
+)
 
 :manual_install
 echo.>>mcp_server_setup_logfile.txt
@@ -54,21 +82,6 @@ echo Setting up virtual environment and dependencies with pip...>>mcp_server_set
 goto :create_requirements
 
 :create_requirements
-:: Check if requirements.txt exists
-if not exist "requirements.txt" (
-    echo ERROR: requirements.txt not found.>>mcp_server_setup_logfile.txt
-    echo Please create a requirements.txt file in the project root directory.>>mcp_server_setup_logfile.txt
-    echo Example contents:>>mcp_server_setup_logfile.txt
-    echo   fastmcp^>=2.13.2>>mcp_server_setup_logfile.txt
-    echo   httpx^>=0.24.0>>mcp_server_setup_logfile.txt
-    echo   pyyaml^>=6.0>>mcp_server_setup_logfile.txt
-    echo   requests^>=2.28.0>>mcp_server_setup_logfile.txt
-    pause
-    goto :exit
-) else (
-    echo Found existing requirements.txt file.>>mcp_server_setup_logfile.txt
-)
-
 :: Check if requirements.txt exists
 if not exist "requirements.txt" (
     echo ERROR: requirements.txt not found.>>mcp_server_setup_logfile.txt
@@ -139,12 +152,3 @@ echo ====================================>>mcp_server_setup_logfile.txt
 echo.>>mcp_server_setup_logfile.txt
 
 .venv\Scripts\python.exe -m dct_mcp_server.main
-
-:end
-echo.>>mcp_server_setup_logfile.txt
-echo Server stopped.>>mcp_server_setup_logfile.txt
-pause
-goto :exit
-
-:exit
-exit /b
