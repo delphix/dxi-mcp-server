@@ -33,7 +33,7 @@ class DCTAPIClient:
         try:
             version = importlib.metadata.version("dct-mcp-server")
         except importlib.metadata.PackageNotFoundError:
-            version = "2025.1.0-Preview"
+            version = "2025.0.1.0-preview"
 
         # Default headers
         self.headers = {
