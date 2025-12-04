@@ -52,8 +52,8 @@ This server is designed to be extensible, allowing new tools to be added easily 
 The server is configured using environment variables. For local development, you can create a `.env` file in the project root.
 
 **Required:**
-- `DCT_API_KEY`: Your DCT API key.
-- `DCT_BASE_URL`: The base URL of your DCT instance (e.g., `https://your-dct-host.delphix.com`).
+- `DCT_API_KEY`: Your DCT API key. (example: `apk 1.12345...`)
+- `DCT_BASE_URL`: The base URL of your DCT instance (e.g., `your-dct-host.delphix.com`).
 
 **Optional:**
 - `DCT_VERIFY_SSL`: Set to `true` to enable SSL certificate verification (default: `false`).
@@ -64,7 +64,7 @@ The server is configured using environment variables. For local development, you
 
 ### Example `.env` file:
 ```
-DCT_API_KEY="apk1.your-api-key-here"
+DCT_API_KEY="apk 1.your-api-key-here"
 DCT_BASE_URL="https://your-dct-host.delphix.com"
 DCT_LOG_LEVEL="DEBUG"
 IS_TELEMETRY_ENABLED="true"
