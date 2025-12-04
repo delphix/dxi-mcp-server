@@ -1,18 +1,3 @@
-<!-- ===================== TOP HEADER ===================== -->
-
-<table width="100%" border="0" cellspacing="0" cellpadding="0">
-  <tr>
-    <td style="text-align: left;">
-      <img src="src/dct_mcp_server/icons/header.png" alt="Header Graphic" width="350" />
-    </td>
-    <td style="text-align: right;">
-      <img src="src/dct_mcp_server/icons/delphixperforce.png" alt="Perforce Delphix Logo" width="200" />
-    </td>
-  </tr>
-</table>
-
-<br/>
-
 # MIT License
 
 Copyright © 2025 Delphix Corp., a Perforce company
