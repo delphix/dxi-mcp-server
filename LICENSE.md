@@ -1,0 +1,55 @@
+<!-- ===================== TOP HEADER ===================== -->
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td style="text-align: left;">
+      <img src="src/dct_mcp_server/icons/header.png" alt="Header Graphic" width="350" />
+    </td>
+    <td style="text-align: right;">
+      <img src="src/dct_mcp_server/icons/delphixperforce.png" alt="Perforce Delphix Logo" width="200" />
+    </td>
+  </tr>
+</table>
+
+<br/>
+
+# MIT License
+
+Copyright © 2025 Delphix Corp., a Perforce company
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the “Software”), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be included in all copies
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+<br/><br/>
+
+<!-- ===================== BOTTOM FOOTER ===================== -->
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td style="text-align: left;">
+      Perforce Software, Inc.<br/>
+      <a href="https://www.perforce.com">perforce.com</a>
+    </td>
+    <td style="text-align: center;">
+      400 First Avenue North, Suite 400<br/>
+      Minneapolis, MN 55401
+    </td>
+    <td style="text-align: right;">
+      +1 612.517.2100
+    </td>
+  </tr>
+</table>

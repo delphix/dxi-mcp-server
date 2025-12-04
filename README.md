@@ -1,3 +1,9 @@
+![Support](https://img.shields.io/badge/Support-Community-yellow.svg)
+
+<div style="text-align: right; width: 100%;">
+  <img src="src/dct_mcp_server/icons/logo-delphixmcp-reg.png" alt="Perforce Delphix Logo" width="200" />
+</div>
+
 # Delphix DCT API MCP Server
 
 A streamlined Model Context Protocol (MCP) server for interacting with the Delphix Data Control Tower (DCT) API.
