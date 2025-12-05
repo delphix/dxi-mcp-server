@@ -262,8 +262,12 @@ def search_executions(limit: Optional[int] = None, cursor: Optional[str] = None,
 def register_tools(app, dct_client):
     global client
     client = dct_client
+    logger.info(f'Registering tools for compliance_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_connectors')
         app.add_tool(search_connectors, name="search_connectors")
+        logger.info(f'  Registering tool function: search_executions')
         app.add_tool(search_executions, name="search_executions")
     except Exception as e:
-        logger.info(f"Error registering tools: {e}")
+        logger.error(f'Error registering tools for compliance_endpoints: {e}')
+    logger.info(f'Tools registration finished for compliance_endpoints.')

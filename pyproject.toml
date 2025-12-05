@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=2.13.2",
-    "httpx>=0.24.0"
+    "httpx>=0.24.0",
+    "pyyaml",
+    "requests",
+    "urllib3"
 ]
 
 [project.scripts]
