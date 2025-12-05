@@ -99,6 +99,7 @@ else
 fi
 
 # Check environment variables
+echo "" >> mcp_server_setup_logfile.txt
 echo "Checking environment configuration..." >> mcp_server_setup_logfile.txt
 if [ -z "$DCT_API_KEY" ]; then
     echo "WARNING: DCT_API_KEY environment variable not set" >> mcp_server_setup_logfile.txt
@@ -108,5 +109,9 @@ if [ -z "$DCT_BASE_URL" ]; then
 fi
 
 # Run the server
-echo "Starting MCP server..." >> mcp_server_setup_logfile.txt
+echo "" >> mcp_server_setup_logfile.txt
+echo "========================================" >> mcp_server_setup_logfile.txt
+echo "Starting DCT MCP Server with pip..." >> mcp_server_setup_logfile.txt
+echo "========================================" >> mcp_server_setup_logfile.txt
+echo "" >> mcp_server_setup_logfile.txt
 exec .venv/bin/python -m dct_mcp_server.main
