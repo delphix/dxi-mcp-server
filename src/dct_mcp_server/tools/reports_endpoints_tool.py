@@ -320,9 +320,14 @@ def search_virtualization_storage_summary_report(limit: Optional[int] = None, cu
 def register_tools(app, dct_client):
     global client
     client = dct_client
+    logger.info(f'Registering tools for reports_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_storage_capacity_data')
         app.add_tool(search_storage_capacity_data, name="search_storage_capacity_data")
+        logger.info(f'  Registering tool function: search_storage_savings_summary_report')
         app.add_tool(search_storage_savings_summary_report, name="search_storage_savings_summary_report")
+        logger.info(f'  Registering tool function: search_virtualization_storage_summary_report')
         app.add_tool(search_virtualization_storage_summary_report, name="search_virtualization_storage_summary_report")
     except Exception as e:
-        logger.info(f"Error registering tools: {e}")
+        logger.error(f'Error registering tools for reports_endpoints: {e}')
+    logger.info(f'Tools registration finished for reports_endpoints.')

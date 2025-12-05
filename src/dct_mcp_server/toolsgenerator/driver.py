@@ -24,8 +24,11 @@ import requests
 import urllib3
 import logging
 
-TOOL_DIR = "src/dct_mcp_server/toolsgenerator/endpoints"
-TOOLS_DIR = "src/dct_mcp_server/tools/"
+# Get the absolute path of the project root
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+TOOL_DIR = os.path.join(project_root, "src/dct_mcp_server/toolsgenerator/endpoints")
+TOOLS_DIR = os.path.join(project_root, "src/dct_mcp_server/tools/")
 APIS_TO_SUPPORT = {}
 indent = 4
 
@@ -34,14 +37,18 @@ logger = logging.getLogger(__name__)
 def load_api_endpoints():
     """Loads API endpoints from files in TOOL_DIR into APIS_TO_SUPPORT dict."""
     global APIS_TO_SUPPORT
+    APIS_TO_SUPPORT = {}  # Reset the dictionary before loading
+    os.makedirs(TOOL_DIR, exist_ok=True)
     for file in os.listdir(TOOL_DIR):
         # Store the files as values of the dict with key as filename without _endpoints.txt
         if file.endswith("_endpoints.txt"):
+            file_name = file.split(".")[0]
+            APIS_TO_SUPPORT[file_name] = []
             with open(os.path.join(TOOL_DIR, file), "r") as f:
-                file_name = file.split(".")[0]
-                APIS_TO_SUPPORT[file_name] = []
                 for line in f:
-                    APIS_TO_SUPPORT[file_name].append(line.strip())
+                    stripped_line = line.strip()
+                    if stripped_line:
+                        APIS_TO_SUPPORT[file_name].append(stripped_line)
 
 
 def download_open_api_yaml(api_url: str, save_path: str):
@@ -118,16 +125,19 @@ def build_params(**kwargs):
 
 """
 
-def create_register_tool_function(apis):
+def create_register_tool_function(tool_name, apis):
     func_str = "\n"
     func_str += "def register_tools(app, dct_client):\n"
     func_str += " "*indent + "global client\n"
     func_str += " "*indent + "client = dct_client\n"
+    func_str += " "*indent + f"logger.info(f'Registering tools for {tool_name}...')\n"
     func_str += " "*indent + "try:\n"
     for function in apis:
+        func_str += " "*indent*2 + f"logger.info(f'  Registering tool function: {function}')\n"
         func_str += " "*indent*2 + f"app.add_tool({function}, name=\"{function}\")\n"
     func_str += " "*indent + "except Exception as e:\n"
-    func_str += " "*indent*2 + "logger.info(f\"Error registering tools: {e}\")\n"
+    func_str += " "*indent*2 + f"logger.error(f'Error registering tools for {tool_name}: {{e}}')\n"
+    func_str += " "*indent + f"logger.info(f'Tools registration finished for {tool_name}.')\n"
     return func_str
 
 def read_open_api_yaml(api_file):
@@ -159,7 +169,7 @@ def generate_tools_from_openapi():
 
     # Download the openapi yaml from application using client
     client_address = f"{os.getenv('DCT_BASE_URL')}/dct/static/api-external.yaml"
-    API_FILE = "src/api.yaml"
+    API_FILE = os.path.join(project_root, "src", "api.yaml")
     download_open_api_yaml(client_address, API_FILE)
 
     if client_address:
@@ -167,11 +177,15 @@ def generate_tools_from_openapi():
 
     api_spec = read_open_api_yaml(API_FILE)
     logger.info("APIS to support loaded:", APIS_TO_SUPPORT)
+    
+    os.makedirs(TOOLS_DIR, exist_ok=True)
+
     for tool_name, apis in APIS_TO_SUPPORT.items():
         TOOL_FILE = os.path.join(TOOLS_DIR, f"{tool_name}_tool.py")
-        with open(TOOL_FILE, "w") as f:
-            f.write(prefix)
+        
+        tool_file_content = prefix
         function_lists = []
+
         for api in apis:
             function_head = "@log_tool_execution\ndef "
             docstring = ""
@@ -235,7 +249,6 @@ def generate_tools_from_openapi():
                 docstring += "\n" + " "*indent + "How to use filter_expresssion: \n"
                 for line in api_spec['components']['requestBodies']['SearchBody']['description'].split('\n'):
                     docstring += " "*indent + f"{line}\n"
-                # docstring += " "*indent + f"{api_spec['components']['requestBodies']['SearchBody']['description']}\n"
 
             # Generate function implementation using utility functions
             function_body = " "*indent + "# Build parameters excluding None values\n"
@@ -252,11 +265,13 @@ def generate_tools_from_openapi():
             else:
                 function_body += " "*indent + f"return make_api_request('{http_method}', '{api}', params=params)\n"
 
-            with open(TOOL_FILE, "a") as f:
-                f.write(function_head+docstring+indent*" "+"\"\"\"\n"+function_body+"\n")
+            tool_file_content += function_head + docstring + indent * " " + "\"\"\"\n" + function_body + "\n"
 
-        with open(TOOL_FILE, "a") as f:
-            f.write(create_register_tool_function(function_lists))
-        # Delete the api.yaml file after generating all tools
+        tool_file_content += create_register_tool_function(tool_name, function_lists)
+
+        with open(TOOL_FILE, "w") as f:
+            f.write(tool_file_content)
+
+    # Delete the api.yaml file after generating all tools
     if os.path.exists(API_FILE):
         os.remove(API_FILE)

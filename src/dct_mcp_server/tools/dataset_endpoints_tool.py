@@ -883,13 +883,22 @@ Required to provision from snapshots of PDB containing encrypted database files 
 def register_tools(app, dct_client):
     global client
     client = dct_client
+    logger.info(f'Registering tools for dataset_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_data_connections')
         app.add_tool(search_data_connections, name="search_data_connections")
+        logger.info(f'  Registering tool function: search_dsources')
         app.add_tool(search_dsources, name="search_dsources")
+        logger.info(f'  Registering tool function: search_snapshots')
         app.add_tool(search_snapshots, name="search_snapshots")
+        logger.info(f'  Registering tool function: search_sources')
         app.add_tool(search_sources, name="search_sources")
+        logger.info(f'  Registering tool function: search_timeflows')
         app.add_tool(search_timeflows, name="search_timeflows")
+        logger.info(f'  Registering tool function: search_vdb_groups')
         app.add_tool(search_vdb_groups, name="search_vdb_groups")
+        logger.info(f'  Registering tool function: search_vdbs')
         app.add_tool(search_vdbs, name="search_vdbs")
     except Exception as e:
-        logger.info(f"Error registering tools: {e}")
+        logger.error(f'Error registering tools for dataset_endpoints: {e}')
+    logger.info(f'Tools registration finished for dataset_endpoints.')

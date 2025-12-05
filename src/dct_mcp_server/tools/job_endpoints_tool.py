@@ -149,7 +149,10 @@ def search_jobs(limit: Optional[int] = None, cursor: Optional[str] = None, sort:
 def register_tools(app, dct_client):
     global client
     client = dct_client
+    logger.info(f'Registering tools for job_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_jobs')
         app.add_tool(search_jobs, name="search_jobs")
     except Exception as e:
-        logger.info(f"Error registering tools: {e}")
+        logger.error(f'Error registering tools for job_endpoints: {e}')
+    logger.info(f'Tools registration finished for job_endpoints.')

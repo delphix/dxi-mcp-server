@@ -154,7 +154,10 @@ def search_environments(limit: Optional[int] = None, cursor: Optional[str] = Non
 def register_tools(app, dct_client):
     global client
     client = dct_client
+    logger.info(f'Registering tools for environment_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_environments')
         app.add_tool(search_environments, name="search_environments")
     except Exception as e:
-        logger.info(f"Error registering tools: {e}")
+        logger.error(f'Error registering tools for environment_endpoints: {e}')
+    logger.info(f'Tools registration finished for environment_endpoints.')

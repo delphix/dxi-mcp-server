@@ -184,7 +184,10 @@ null if the engine is not initialized (unlikely) or the engine API version does 
 def register_tools(app, dct_client):
     global client
     client = dct_client
+    logger.info(f'Registering tools for engine_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_engines')
         app.add_tool(search_engines, name="search_engines")
     except Exception as e:
-        logger.info(f"Error registering tools: {e}")
+        logger.error(f'Error registering tools for engine_endpoints: {e}')
+    logger.info(f'Tools registration finished for engine_endpoints.')
