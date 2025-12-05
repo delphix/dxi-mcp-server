@@ -5,7 +5,7 @@ A Model Context Protocol server for the Delphix Data Control Tower API.
 Provides tools for each DCT API category with environment variable configuration.
 """
 
-__version__ = "1.0.0"
+__version__ = "2025.0.1.0-preview"
 __author__ = "Delphix"
 __description__ = "Delphix DCT API MCP Server"
 

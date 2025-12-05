@@ -16,7 +16,7 @@ def get_dct_config() -> Dict[str, Any]:
         "timeout": int(os.getenv("DCT_TIMEOUT", "30")),
         "max_retries": int(os.getenv("DCT_MAX_RETRIES", "3")),
         "log_level": os.getenv("DCT_LOG_LEVEL", "INFO").upper(),
-        "is_telemetry_enabled": os.getenv("IS_TELEMETRY_ENABLED", "false").lower()
+        "is_local_telemetry_enabled": os.getenv("IS_LOCAL_TELEMETRY_ENABLED", "false").lower()
         == "true",
     }
 
@@ -55,7 +55,7 @@ def print_config_help():
         "  DCT_LOG_LEVEL    Logging level (default: INFO, options: DEBUG, INFO, WARNING, ERROR, CRITICAL)"
     )
     print(
-        "  IS_TELEMETRY_ENABLED Enable telemetry data collection (default: false)"
+        "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
     )
     print()
     print("Example:")

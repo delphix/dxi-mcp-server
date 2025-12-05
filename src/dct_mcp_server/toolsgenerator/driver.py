@@ -21,7 +21,6 @@ from textwrap import indent
 import yaml
 import os
 import requests
-import sys
 import urllib3
 import logging
 
@@ -49,15 +48,15 @@ def download_open_api_yaml(api_url: str, save_path: str):
     """Downloads the OpenAPI YAML from the given URL."""
     try:
         logger.info(f"Downloading OpenAPI spec from {api_url}...")
+        
         # Insecure: Disabling SSL certificate verification for self-signed certs.
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         response = requests.get(api_url, timeout=30, verify=False)
         response.raise_for_status()  # Raise an exception for bad status codes
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(response.text)
         logger.info(f"Successfully saved OpenAPI spec to {save_path}")
     except requests.exceptions.RequestException as e:
-        logger.info(f"Error downloading OpenAPI spec: {e}", file=sys.stderr)
+        logger.info(f"Error downloading OpenAPI spec: {e}")
         raise
 
 translated_dict_for_types = {

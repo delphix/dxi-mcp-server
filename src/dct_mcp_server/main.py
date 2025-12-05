@@ -34,7 +34,7 @@ async def lifespan(app: FastMCP):
     """
     config = get_dct_config()
     session_id = None
-    if config.get("is_telemetry_enabled"):
+    if config.get("is_local_telemetry_enabled"):
         session_id = start_session()
         logger.info(f"Telemetry enabled. Session ID: {session_id}")
     else:
@@ -53,7 +53,10 @@ async def lifespan(app: FastMCP):
 
 
 # Server instance
-app = FastMCP(name="dct-mcp-server", lifespan=lifespan)
+app = FastMCP(
+    name="dct-mcp-server",
+    lifespan=lifespan,
+)
 
 
 # Initialize DCT client - will be set in main()
@@ -133,9 +136,7 @@ def main():
     generate_tools_from_openapi()
     try:
         # Run the async main function
-        loop = asyncio.get_event_loop()
-        setup_signal_handlers()
-        loop.run_until_complete(async_main())
+        asyncio.run(async_main())
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

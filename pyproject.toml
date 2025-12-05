@@ -1,11 +1,11 @@
 [project]
 name = "dct-mcp-server"
-version = "0.0.1"
+version = "2025.0.1.0-preview"
 description = "Delphix DCT API MCP Server - A Model Context Protocol server for the Delphix Data Control Tower API"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=0.1.0",
+    "fastmcp>=2.13.2",
     "httpx>=0.24.0"
 ]
 
