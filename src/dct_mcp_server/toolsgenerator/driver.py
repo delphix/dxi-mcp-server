@@ -23,6 +23,7 @@ import os
 import requests
 import urllib3
 import logging
+from dct_mcp_server.config.config import get_dct_config
 
 # Get the absolute path of the project root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -56,8 +57,12 @@ def download_open_api_yaml(api_url: str, save_path: str):
     try:
         logger.info(f"Downloading OpenAPI spec from {api_url}...")
         
-        # Insecure: Disabling SSL certificate verification for self-signed certs.
-        response = requests.get(api_url, timeout=30, verify=False)
+        # Get SSL verification setting from config
+        dct_config = get_dct_config()
+        verify_ssl = dct_config.get("verify_ssl", False)
+
+        # Use the configured SSL verification
+        response = requests.get(api_url, timeout=30, verify=verify_ssl)
         response.raise_for_status()  # Raise an exception for bad status codes
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(response.text)
