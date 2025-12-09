@@ -37,7 +37,7 @@ A comprehensive Model Context Protocol (MCP) server for interacting with the Del
 
 - **Python 3.11+**: Required for modern async features and type hints
 - **Delphix DCT Instance**: Access to a running Delphix Data Control Tower
-- **API Key**: Valid DCT API key with appropriate permissions
+- **API Key**: Valid DCT API key with read-only permissions
 - **Network Access**: Connectivity to your DCT instance
 
 ## Installation
@@ -304,11 +304,6 @@ Add to your Cursor settings (`~/.cursor/settings.json`):
     }
   ]
 }
-        "DCT_BASE_URL": "https://your-dct-host.company.com"
-      }
-    }
-  ]
-}
 ```
 
 </details>
@@ -368,7 +363,6 @@ Configure in your Continue extension settings:
       }
     }
   ]
-}
 }
 ```
 
@@ -948,7 +942,7 @@ tail -f logs/dct_mcp_server.log
 ls -la logs/sessions/
 
 # Startup logs
-cat mcp_server_setup_logfile.txt
+cat logs/mcp_server_setup_logfile.txt
 ```
 
 ## License
