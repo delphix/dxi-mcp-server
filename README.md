@@ -13,9 +13,8 @@ A comprehensive Model Context Protocol (MCP) server for interacting with the Del
 ## Table of Contents
 - [Features](#features)
 - [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
 - [MCP Client Configuration](#mcp-client-configuration)
+- [Installation](#installation)
 - [Available Tools](#available-tools)
 - [Usage Examples](#usage-examples)
 - [Development](#development)
@@ -40,142 +39,9 @@ A comprehensive Model Context Protocol (MCP) server for interacting with the Del
 - **API Key**: Valid DCT API key with read-only permissions
 - **Network Access**: Connectivity to your DCT instance
 
-## Installation
-
-<details><summary><b>Development Installation</b></summary>
-
-For development or customization:
-
-```bash
-# Clone the repository
-git clone https://github.com/delphix/dxi-mcp-server.git
-cd dxi-mcp-server
-
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install with uv (recommended for faster, deterministic builds)
-pip install uv
-uv sync
-
-# Or install with pip (development mode)
-pip install -e .
-```
-
-</details>
-
-<details><summary><b>Production Installation</b></summary>
-
-For production deployments:
-
-```bash
-# Install from GitHub release
-pip install git+https://github.com/delphix/dxi-mcp-server.git
-
-# Verify installation
-dct-mcp-server --help
-```
-
-</details>
-
-<details><summary><b>Using Cross-Platform Scripts</b></summary>
-
-The project includes ready-to-use startup scripts for all platforms:
-
-```bash
-# Clone the repository first
-git clone https://github.com/delphix/dxi-mcp-server.git
-cd dxi-mcp-server
-
-# Unix/Linux/macOS users:
-chmod +x start_mcp_server_python.sh
-./start_mcp_server_python.sh
-
-# Or with uv:
-chmod +x start_mcp_server_uv.sh
-./start_mcp_server_uv.sh
-
-# Windows users:
-start_mcp_server_windows_python.bat
-
-# Or with uv:
-start_mcp_server_windows_uv.bat
-```
-
-These scripts automatically handle environment setup and dependencies.
-
-</details>
-
-<details><summary><b>Container Installation</b></summary>
-
-Using Docker for isolated deployment:
-
-```bash
-# Build the container
-git clone https://github.com/delphix/dxi-mcp-server.git
-cd dxi-mcp-server
-docker build -t dxi-mcp-server .
-
-# Run with environment variables
-docker run -e DCT_API_KEY="your-key" -e DCT_BASE_URL="https://your-dct-host.com" dxi-mcp-server
-```
-
-</details>
-
-## Configuration
-
-### Environment Variables
-
-Set up your environment variables. Create a `.env` file in the project root:
-
-```bash
-# Required Configuration
-DCT_API_KEY="apk1.your-api-key-here"
-DCT_BASE_URL="https://your-dct-host.company.com"
-
-# Optional Configuration
-DCT_VERIFY_SSL="true"
-DCT_LOG_LEVEL="INFO"
-DCT_TIMEOUT="30"
-DCT_MAX_RETRIES="3"
-IS_LOCAL_TELEMETRY_ENABLED="false"
-```
-
-### Required Settings
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DCT_API_KEY` | Your Delphix DCT API key | `apk1.a1b2c3d4e5f6...` |
-| `DCT_BASE_URL` | DCT instance base URL | `https://dct.company.com` |
-
-### Optional Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DCT_VERIFY_SSL` | `false` | Enable SSL certificate verification |
-| `DCT_TIMEOUT` | `30` | Request timeout in seconds |
-| `DCT_MAX_RETRIES` | `3` | Maximum retry attempts for failed requests |
-| `DCT_LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
-| `IS_LOCAL_TELEMETRY_ENABLED` | `false` | Enable anonymous usage tracking |
-
-### Starting the Server
-
-Start the MCP server using the provided script:
-
-```bash
-./start_mcp_server_python.sh
-```
-
-The server will automatically:
-- Load and validate the DCT API configuration
-- Initialize tools for all available API endpoints
-- Start the MCP server on stdio transport
-- Log startup information and available tools
-
 ## MCP Client Configuration
 
-> **Note:** Use absolute paths for the `command` field in all configurations. Ensure environment variables are properly set for each host. Different hosts may have different argument parsing. Refer to the host's documentation.
+> **Note:** Use absolute paths for the `command` field in all configurations. Ensure the correct environment variables are provided for each client application, as the server process relies on them. Different client applications may have different argument parsing. Refer to the client application's documentation.
 
 ### Environment Variables
 
@@ -191,9 +57,10 @@ All configurations support these environment variables:
 <details>
 <summary><strong>Claude Desktop</strong></summary>
 
-Configure in your Claude Desktop settings (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Configure in your Claude Desktop settings file:
 
 **Option 1: Using uvx (Recommended)**
+> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "mcpServers": {
@@ -210,6 +77,7 @@ Configure in your Claude Desktop settings (`~/Library/Application Support/Claude
   }
 }
 ```
+Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -229,6 +97,7 @@ Configure in your Claude Desktop settings (`~/Library/Application Support/Claude
 ```
 
 **Option 3: Using shell/batch scripts**
+> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "mcpServers": {
@@ -249,9 +118,10 @@ Configure in your Claude Desktop settings (`~/Library/Application Support/Claude
 <details>
 <summary><strong>Cursor IDE</strong></summary>
 
-Add to your Cursor settings (`~/.cursor/settings.json`):
+Add to your Cursor settings:
 
 **Option 1: Using uvx (Recommended)**
+> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "mcpServers": [
@@ -270,6 +140,8 @@ Add to your Cursor settings (`~/.cursor/settings.json`):
 }
 ```
 
+Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
+
 **Option 2: Using Python directly**
 ```json
 {
@@ -289,6 +161,7 @@ Add to your Cursor settings (`~/.cursor/settings.json`):
 ```
 
 **Option 3: Using shell scripts**
+> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "mcpServers": [
@@ -309,17 +182,17 @@ Add to your Cursor settings (`~/.cursor/settings.json`):
 </details>
 
 <details>
-<summary><strong>VS Code with Continue</strong></summary>
+<summary><strong>VS Code</strong></summary>
 
-Configure in your Continue extension settings:
+Configure in your VS Code settings:
 
 **Option 1: Using uvx (Recommended)**
+> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
-  "mcpServers": [
-    {
-      "name": "delphix-dct",
-      "command": "uvx", 
+  "servers": {
+    "delphix-dct": {
+      "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
         "DCT_API_KEY": "apk1.your-api-key-here",
@@ -327,16 +200,16 @@ Configure in your Continue extension settings:
         "DCT_VERIFY_SSL": "true"
       }
     }
-  ]
+  }
 }
 ```
+Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
 {
-  "mcpServers": [
-    {
-      "name": "delphix-dct",
+  "servers": {
+    "delphix-dct": {
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
@@ -345,16 +218,16 @@ Configure in your Continue extension settings:
         "DCT_VERIFY_SSL": "true"
       }
     }
-  ]
+  }
 }
 ```
 
 **Option 3: Using shell scripts**
+> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
-  "mcpServers": [
-    {
-      "name": "delphix-dct",
+  "servers": {
+    "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
         "DCT_API_KEY": "apk1.your-api-key-here",
@@ -362,7 +235,7 @@ Configure in your Continue extension settings:
         "DCT_VERIFY_SSL": "true"
       }
     }
-  ]
+  }
 }
 ```
 
@@ -374,6 +247,7 @@ Configure in your Continue extension settings:
 Configure in your Eclipse MCP settings:
 
 **Option 1: Using uvx (Recommended)**
+> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "servers": {
@@ -390,6 +264,8 @@ Configure in your Eclipse MCP settings:
   }
 }
 ```
+Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
+
 
 **Option 2: Using Python directly**
 ```json
@@ -409,6 +285,7 @@ Configure in your Eclipse MCP settings:
 ```
 
 **Option 3: Using shell scripts**
+> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "servers": {
@@ -433,6 +310,7 @@ Configure in your Eclipse MCP settings:
 Configure in your IntelliJ MCP settings:
 
 **Option 1: Using uvx (Recommended)**
+> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "servers": {
@@ -450,6 +328,7 @@ Configure in your IntelliJ MCP settings:
   }
 }
 ```
+Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -470,6 +349,7 @@ Configure in your IntelliJ MCP settings:
 ```
 
 **Option 3: Using shell scripts**
+> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "servers": {
@@ -495,6 +375,7 @@ Configure in your IntelliJ MCP settings:
 Configure in your Windsurf MCP settings:
 
 **Option 1: Using uvx (Recommended)**
+> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "mcpServers": {
@@ -510,6 +391,7 @@ Configure in your Windsurf MCP settings:
   }
 }
 ```
+Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -529,6 +411,7 @@ Configure in your Windsurf MCP settings:
 ```
 
 **Option 3: Using shell scripts**
+> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "mcpServers": {
@@ -546,86 +429,121 @@ Configure in your Windsurf MCP settings:
 
 </details>
 
+
+
+## Installation
+
+This section is for users who want to run the server as a standalone command-line tool or contribute to its development. If you only plan to use this server within a specific client application, the `uvx` method in the [MCP Client Configuration](#mcp-client-configuration) section is recommended and does not require a separate installation.
+
+The server is configured by setting environment variables. Below are examples for setting these variables on different platforms.
+
 <details>
-<summary><strong>Generic MCP Client</strong></summary>
+<summary><strong>Command-Line (Linux/macOS)</strong></summary>
 
-For any MCP-compatible client, you can use:
+Use the `export` command to set variables for your current shell session. For improved security, avoid adding secrets like the API key to your shell's profile file.
 
+**Production Example:**
 ```bash
-# Run from Git repository with uvx
-uvx --from git+https://github.com/delphix/dxi-mcp-server.git dct-mcp-server
-
-# Run locally installed version
-/absolute/path/to/dxi-mcp-server/start_mcp_server_python.sh
-
-# Run with custom Python path
-PYTHONPATH=/absolute/path/to/dxi-mcp-server/src python -m dct_mcp_server.main
+export DCT_API_KEY="apk1.your-production-key"
+export DCT_BASE_URL="https://dct-prod.company.com"
+export DCT_VERIFY_SSL="true"
+export DCT_LOG_LEVEL="INFO"
 ```
 
-**For private repositories:** Use SSH authentication: `git+ssh://git@github.com/delphix/dxi-mcp-server.git`
-
-</details>
-
-### Configuration Examples
-
-<details>
-<summary><strong>Development Environment</strong></summary>
-
-```json
-{
-  "env": {
-    "DCT_API_KEY": "apk1.your-development-key",
-    "DCT_BASE_URL": "https://dct-dev.company.com",
-    "DCT_VERIFY_SSL": "false",
-    "DCT_LOG_LEVEL": "DEBUG",
-    "DCT_TIMEOUT": "30",
-    "IS_LOCAL_TELEMETRY_ENABLED": "true"
-  }
-}
+**Development Example:**
+```bash
+export DCT_API_KEY="apk1.your-development-key"
+export DCT_BASE_URL="https://dct-dev.company.com"
+export DCT_VERIFY_SSL="false"
+export DCT_LOG_LEVEL="DEBUG"
 ```
-
 </details>
 
 <details>
-<summary><strong>Production Environment</strong></summary>
+<summary><strong>Command-Line (Windows)</strong></summary>
+
+Use the `set` command in Command Prompt or `$env:` in PowerShell for the current session. For improved security, avoid setting secrets like the API key permanently.
+
+**Command Prompt:**
+```powershell
+set DCT_API_KEY="apk1.your-production-key"
+set DCT_BASE_URL="https://dct-prod.company.com"
+set DCT_VERIFY_SSL="true"
+```
+
+**PowerShell:**
+```powershell
+$env:DCT_API_KEY="apk1.your-production-key"
+$env:DCT_BASE_URL="https://dct-prod.company.com"
+$env:DCT_VERIFY_SSL="true"
+```
+</details>
+
+Choose the installation method that best suits your needs.
+
+### Quick Start: As a Command-Line Tool
+
+This is the recommended method for users who want to use the server without modifying its code.
+
+**Prerequisites**:
+- Python 3.11+
+- `pip` and `git` installed on your system.
+- Your DCT API Key and DCT Base URL must be provided as environment variables. See the command-line examples in the [Installation](#installation) section for details.
+
+Install the server directly from GitHub using `pip`:
+```bash
+pip install git+https://github.com/delphix/dxi-mcp-server.git
+
+# Verify the installation
+dct-mcp-server --help
+```
+This makes the `dct-mcp-server` command available globally in your environment.
+
+
+### For Developers: Local Setup from Source
+
+This method is for developers who want to modify the code or run it from a local clone.
+
+**Prerequisites**:
+- Python 3.11+
+- `git` installed on your system.
+- Your DCT API Key and DCT Base URL must be provided as environment variables. See the command-line examples in the [Installation](#installation) section for details.
+
+
+**Steps**:
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/delphix/dxi-mcp-server.git
+    cd dxi-mcp-server
+    ```
+
+2.  **Set up the environment and install dependencies:**
+    The included scripts handle environment setup automatically. We recommend using `uv` for the best performance. On macOS or Linux, run:
+    ```bash
+    chmod +x start_mcp_server_uv.sh
+    ./start_mcp_server_uv.sh
+    ```
+    > **Note**: Other startup scripts are available. For Windows, use `start_mcp_server_windows_uv.bat`. If you prefer not to use `uv`, scripts for standard Python with `venv` are also provided (`start_mcp_server_python.sh` and `start_mcp_server_windows_python.bat`).
+
+### Connecting a Client to a Running Server
+
+Once the server is running (either via the command-line tool or from the source), it will print the port it is listening on to the console (e.g., `INFO:     Uvicorn running on http://127.0.0.1:6790 (Press CTRL+C to quit)`). To connect your client, you only need to specify this port number. You do not need to provide environment variables in the client configuration, as the server already has them from your terminal session.
+
+**Example for Claude Desktop:**
+Configure your Claude Desktop settings to connect to the running server by specifying the port.
 
 ```json
 {
-  "env": {
-    "DCT_API_KEY": "apk1.your-production-key",
-    "DCT_BASE_URL": "https://dct-prod.company.com",
-    "DCT_VERIFY_SSL": "true",
-    "DCT_LOG_LEVEL": "INFO",
-    "DCT_TIMEOUT": "60",
-    "DCT_MAX_RETRIES": "5"
+  "mcpServers": {
+    "delphix-dct": {
+      "port": 6790
+    }
   }
 }
 ```
+> **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
 
-</details>
 
-<details>
-<summary><strong>Testing Environment</strong></summary>
-
-```json
-{
-  "env": {
-    "DCT_API_KEY": "apk1.your-test-key", 
-    "DCT_BASE_URL": "https://dct-test.company.com",
-    "DCT_VERIFY_SSL": "false",
-    "DCT_LOG_LEVEL": "WARNING",
-    "DCT_TIMEOUT": "45"
-  }
-}
-```
-
-</details>
-
-### Required Configurations
-
-- Use absolute paths for the `command` field in all configurations
-- Ensure environment variables are properly set for each host
-- Different hosts may have different argument parsing - refer to the host's documentation
 
 ## Available Tools
 
@@ -932,7 +850,12 @@ export IS_LOCAL_TELEMETRY_ENABLED="true"
 
 ### Log Analysis
 
-Check logs for issues:
+By default, all log files are generated in a `logs` directory. The location depends on how the server is started:
+
+- **Local Development**: When you run the server from the cloned source code, the `logs` directory is created at the root of the project.
+- **Client Application**: When an MCP client starts the server, the `logs` directory is typically created at the root of the workspace or project folder you have open in that client.
+
+Check these logs for issues:
 
 ```bash
 # Main application logs
@@ -952,7 +875,6 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 ## Support & Community
 
 - **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/delphix/dxi-mcp-server/issues)
-- **Discussions**: Join the conversation in [GitHub Discussions](https://github.com/delphix/dxi-mcp-server/discussions)  
 - **Documentation**: Full documentation available in the [project wiki](https://github.com/delphix/dxi-mcp-server/wiki)
 - **Community Support**: ![Support](https://img.shields.io/badge/Support-Community-yellow.svg) - Community-driven support
 
@@ -965,18 +887,12 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ### Contributing
 
-We welcome contributions! Please see our contributing guidelines:
-
-1. **Code of Conduct**: Be respectful and inclusive in all interactions
-2. **Issue First**: For significant changes, create an issue to discuss the approach
-3. **Development Setup**: Follow the development setup in the [Development](#development) section
-4. **Testing**: Ensure all tests pass and add tests for new functionality
-5. **Documentation**: Update README for changes
+We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for more details. When creating a pull request, please use the [provided template](github_pull_request_template.md).
 
 ---
 
 *Enable your AI assistants to seamlessly manage your data infrastructure with Delphix DCT.*
 
 For issues and questions:
-- Check the [Delphix DCT API documentation](https://docs.delphix.com/)
+- Check the [Delphix DCT API documentation](https://help.delphix.com/dct/current/content/home.htm)
 - Open an issue in this repository
