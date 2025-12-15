@@ -20,6 +20,7 @@ A comprehensive Model Context Protocol (MCP) server for interacting with the Del
 - [Development](#development)
 - [Privacy & Telemetry](#privacy--telemetry)
 - [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 - [License](#license)
 - [Support](#support)
 
@@ -47,6 +48,7 @@ A comprehensive Model Context Protocol (MCP) server for interacting with the Del
 
 All configurations support these environment variables:
 - `DCT_API_KEY` - Your Delphix DCT API key (required)
+  > **⚠️ Important**: Do NOT prefix your API key with `apk.` - use the key exactly as provided by DCT
 - `DCT_BASE_URL` - Your DCT instance URL (required)  
 - `DCT_VERIFY_SSL` - Enable SSL verification (`true`/`false`, default: `false`)
 - `DCT_LOG_LEVEL` - Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
@@ -68,7 +70,7 @@ Configure in your Claude Desktop settings file:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO"
@@ -77,7 +79,6 @@ Configure in your Claude Desktop settings file:
   }
 }
 ```
-Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -87,7 +88,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -104,7 +105,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
     "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -130,7 +131,7 @@ Add to your Cursor settings:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO"
@@ -139,8 +140,6 @@ Add to your Cursor settings:
   ]
 }
 ```
-
-Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -151,7 +150,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -169,7 +168,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "name": "delphix-dct",
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO"
@@ -195,7 +194,7 @@ Configure in your VS Code settings:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -203,7 +202,6 @@ Configure in your VS Code settings:
   }
 }
 ```
-Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -213,7 +211,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -230,7 +228,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
     "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -255,7 +253,7 @@ Configure in your Eclipse MCP settings:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO"
@@ -264,7 +262,6 @@ Configure in your Eclipse MCP settings:
   }
 }
 ```
-Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 
 **Option 2: Using Python directly**
@@ -275,7 +272,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -292,7 +289,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
     "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO"
@@ -318,7 +315,7 @@ Configure in your IntelliJ MCP settings:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "DEBUG",
@@ -328,7 +325,6 @@ Configure in your IntelliJ MCP settings:
   }
 }
 ```
-Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -338,7 +334,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_TIMEOUT": "60"
@@ -356,7 +352,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
     "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "DEBUG",
@@ -368,7 +364,6 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
 ```
 
 </details>
-
 <details>
 <summary><strong>Windsurf</strong></summary>
 
@@ -383,7 +378,7 @@ Configure in your Windsurf MCP settings:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -391,7 +386,6 @@ Configure in your Windsurf MCP settings:
   }
 }
 ```
-Alternatively, you can use `pip` by replacing the `command` and `args` with `"command": "pip"` and `"args": ["install", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"]`.
 
 **Option 2: Using Python directly**
 ```json
@@ -401,7 +395,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
       "command": "python",
       "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -418,7 +412,7 @@ Alternatively, you can use `pip` by replacing the `command` and `args` with `"co
     "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
-        "DCT_API_KEY": "apk1.your-api-key-here",
+        "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true"
       }
@@ -437,6 +431,8 @@ This section is for users who want to run the server as a standalone command-lin
 
 The server is configured by setting environment variables. Below are examples for setting these variables on different platforms.
 
+> **⚠️ Important**: Do NOT prefix your API key with `apk.` - use the key exactly as provided by DCT
+
 <details>
 <summary><strong>Command-Line (Linux/macOS)</strong></summary>
 
@@ -444,7 +440,7 @@ Use the `export` command to set variables for your current shell session. For im
 
 **Production Example:**
 ```bash
-export DCT_API_KEY="apk1.your-production-key"
+export DCT_API_KEY="your-production-key"
 export DCT_BASE_URL="https://dct-prod.company.com"
 export DCT_VERIFY_SSL="true"
 export DCT_LOG_LEVEL="INFO"
@@ -452,7 +448,7 @@ export DCT_LOG_LEVEL="INFO"
 
 **Development Example:**
 ```bash
-export DCT_API_KEY="apk1.your-development-key"
+export DCT_API_KEY="your-development-key"
 export DCT_BASE_URL="https://dct-dev.company.com"
 export DCT_VERIFY_SSL="false"
 export DCT_LOG_LEVEL="DEBUG"
@@ -466,14 +462,14 @@ Use the `set` command in Command Prompt or `$env:` in PowerShell for the current
 
 **Command Prompt:**
 ```powershell
-set DCT_API_KEY="apk1.your-production-key"
+set DCT_API_KEY="your-production-key"
 set DCT_BASE_URL="https://dct-prod.company.com"
 set DCT_VERIFY_SSL="true"
 ```
 
 **PowerShell:**
 ```powershell
-$env:DCT_API_KEY="apk1.your-production-key"
+$env:DCT_API_KEY="your-production-key"
 $env:DCT_BASE_URL="https://dct-prod.company.com"
 $env:DCT_VERIFY_SSL="true"
 ```
@@ -813,8 +809,8 @@ export DCT_VERIFY_SSL="false"  # For self-signed certificates
 
 **Authentication Failures**:
 ```bash
-# Verify API key format
-echo $DCT_API_KEY  # Should start with 'apk1.'
+# Verify API key is set
+echo $DCT_API_KEY  # Should be your DCT API key (do NOT add 'apk.' prefix)
 
 # Check API key permissions in DCT admin console
 ```
@@ -868,6 +864,11 @@ ls -la logs/sessions/
 cat logs/mcp_server_setup_logfile.txt
 ```
 
+### "Server starting..." followed by "No such file or directory" or "command not found"
+
+-   **Cause:** This happens when the `command` path in your MCP client's JSON configuration is incorrect. The client optimistically reports that it is "starting" the server, but then the operating system immediately fails because it cannot find the script at the specified location.
+-   **Solution:** Ensure the `command` value is the **absolute path** to the correct startup script (e.g., `start_mcp_server_uv.sh` or `start_mcp_server_python.sh`). Verify that the file exists at that exact path and that it has execute permissions (`chmod +x <script_name>`).
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
@@ -887,7 +888,13 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ### Contributing
 
-We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for more details. When creating a pull request, please use the [provided template](github_pull_request_template.md).
+We welcome contributions from the community! Before you start, please take a moment to review our community documents:
+
+- **[Community Guidelines](.github/COMMUNITY_GUIDELINES.md)**: An overview of how our community operates.
+- **[Code of Conduct](.github/CODE_OF_CONDUCT.md)**: Our commitment to a respectful and inclusive environment.
+- **[Contributing Guidelines](.github/CONTRIBUTING.md)**: The technical guide on how to contribute to this project.
+
+When you are ready to submit a change, please use our [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md).
 
 ---
 
