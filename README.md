@@ -902,4 +902,4 @@ When you are ready to submit a change, please use our [Pull Request Template](.g
 
 For issues and questions:
 - Check the [Delphix DCT API documentation](https://help.delphix.com/dct/current/content/home.htm)
-- Open an issue in this repository
+- Open an issue in this repository.
