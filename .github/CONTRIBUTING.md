@@ -8,7 +8,8 @@ Send a pull request.
 Contributions must be signed as User Name <user@email.com>. Make sure to set up Git with your user name and email address. All pull requests should target the `main` branch.
 
 Contributor Agreement
-All contributors are required to sign the Delphix Contributor agreement prior to contributing code to an open source repository. This process is handled automatically by cla-assistant. Simply open a pull request and a bot will automatically check to see if you have signed the latest agreement. If not, you will be prompted to do so as part of the pull request process.
+All contributors are required to sign the Delphix Contributor agreement prior to contributing code to an open source repository. 
+This CLA is the entire agreement between the parties, and supersedes any and all prior agreements, understandings or communications, written or oral, between the parties relating to the subject matter hereof.  This Agreement, and any amendments thereto, may be executed in one or more counterparts each of which will be deemed an original, but all of which together will constitute one and the same instrument.  The parties may transmit their signatures via scanned PDF, e-signature, or other electronic signature tools with the same effect as if the parties had provided each other with original signatures. You can refer below review process for more details.
 
 Code of Conduct
 This project operates under the Delphix Code of Conduct. By participating in this project you agree to abide by its terms.
