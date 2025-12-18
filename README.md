@@ -60,7 +60,7 @@ Watch these videos to see the MCP Server in action:
 
  - [General overview of the MCP Server](https://help.delphix.com/eh/current/content/resources/media/general-overview-mcp-server.mp4)
  - [Claude App configuration and sample usage](https://help.delphix.com/eh/current/content/resources/media/claude-configuration-mcp-server.mp4)
- - [Visual Studio Code configuration and sample usage](https://help.delphix.com/eh/current/content/resources/media/vscode-configuration-mcp-server.mp4)
+ - [Visual Studio Code configuration and sample usage](https://help.delphix.com/eh/current/content/resources/media/mcp-server-visual-studio-code-config.mp4)
 
 ## Environment Variables
 
