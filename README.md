@@ -36,7 +36,7 @@ Configure the MCP server within your AI client application (such as Claude Deskt
 
 **What you need:**
 - **Delphix DCT Instance**: Running Delphix Data Control Tower instance
-- **API Key**: Valid DCT API key with the following permissions:
+- **API Key**: Valid DCT API key with the following READ permissions:
   - VDBs
   - VDB Groups
   - dSources
