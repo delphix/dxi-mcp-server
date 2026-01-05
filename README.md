@@ -2,67 +2,112 @@
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-<div style="text-align: right; width: 100%;">
-  <img src="src/dct_mcp_server/icons/logo-delphixmcp-reg.png" alt="Perforce Delphix Logo" width="200" />
-</div>
-
 # Delphix DCT API MCP Server
 
-A comprehensive Model Context Protocol (MCP) server for interacting with the Delphix Data Control Tower (DCT) API. This server provides AI assistants with structured access to Delphix's data management capabilities through a robust tool interface.
+The Delphix DCT API MCP Server provides a robust Model Context Protocol (MCP) interface for interacting with the Delphix Data Control Tower (DCT) API. This service enables AI assistants and client applications to securely access test data management capabilities through a structured toolset.
 
 ## Table of Contents
 - [Features](#features)
-- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Videos](#videos)
+- [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
-- [Installation](#installation)
+- [Advanced Installation](#advanced-installation)
 - [Available Tools](#available-tools)
-- [Usage Examples](#usage-examples)
-- [Development](#development)
 - [Privacy & Telemetry](#privacy--telemetry)
 - [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
+- [Project Structure](#project-structure)
 - [License](#license)
-- [Support](#support)
+- [Support & Contributing](#support--contributing)
 
 ## Features
 
-- **Comprehensive DCT integration**: Specialized tools across datasets, environments, engines, compliance, jobs, and reporting
-- **Safety first**: Robust API client with retry logic, exponential backoff, and SSL configuration  
-- **Flexible configuration**: Environment-based setup with comprehensive validation
-- **Cross-platform support**: Ready-to-use startup scripts for Windows, macOS, and Linux
-- **Optional telemetry**: Consent-gated usage analytics. Disabled by default.
-- **Structured logging**: Application and session logging with telemetry tracking
+- **Comprehensive DCT integration**: Access datasets, environments, engines, compliance, jobs, and reporting through specialized tools.
+- **Security and reliability**: API client includes retry logic, exponential backoff, and SSL configuration.  
+- **Flexible configuration**: Environment-based setup with validation.
+- **Cross-platform support**: Startup scripts for Windows, macOS, and Linux.
+- **Structured logging**: Application and session logging with telemetry tracking.
+- **Telemetry (Optional)**: Usage analytics are disabled by default and require user consent.
 
-## Prerequisites
 
-- **Python 3.11+**: Required for modern async features and type hints
-- **Delphix DCT Instance**: Access to a running Delphix Data Control Tower
-- **API Key**: Valid DCT API key with read-only permissions
-- **Network Access**: Connectivity to your DCT instance
+## Quick Start
 
-## MCP Client Configuration
+Configure the MCP server within your AI client application (such as Claude Desktop, Cursor, or VS Code). This is the recommended method and does not require separate installation.
 
-> **Note:** Use absolute paths for the `command` field in all configurations. Ensure the correct environment variables are provided for each client application, as the server process relies on them. Different client applications may have different argument parsing. Refer to the client application's documentation.
+**What you need:**
+- **Delphix DCT Instance**: Running Delphix Data Control Tower instance
+- **API Key**: Valid DCT API key with the following READ permissions:
+  - VDBs
+  - VDB Groups
+  - dSources
+  - Environments
+  - Bookmarks
+  - Snapshots
+  - Data Connections
+  - Engines
+  - Virtualization and Compliance Job Executions
+  - All Virtualization Storage Insights
+- **uv** (recommended): Install using [uv](https://pypi.org/project/uv/). This method provides access to the uvx command. 
+- **OR Python 3.11+**: If not using uv/uvx
 
-### Environment Variables
+**Next step:** Proceed to [MCP Client Configuration](#mcp-client-configuration) to complete setup.
 
-All configurations support these environment variables:
-- `DCT_API_KEY` - Your Delphix DCT API key (required)
-  > **⚠️ Important**: Do NOT prefix your API key with `apk.` - use the key exactly as provided by DCT
-- `DCT_BASE_URL` - Your DCT instance URL (required)  
+**Alternative:** To run the server as a standalone command-line tool or contribute to development, see [Advanced Installation](#advanced-installation).
+
+## Videos
+
+Watch these videos to see the MCP Server in action:
+
+ - [General overview of the MCP Server](https://help.delphix.com/eh/current/content/resources/media/general-overview-mcp-server.mp4)
+ - [Claude App configuration and sample usage](https://help.delphix.com/eh/current/content/resources/media/claude-configuration-mcp-server.mp4)
+ - [Visual Studio Code configuration and sample usage](https://help.delphix.com/eh/current/content/resources/media/mcp-server-visual-studio-code-config.mp4)
+
+## Environment Variables
+
+All configuration methods use these environment variables:
+
+- `DCT_API_KEY` - Your Delphix DCT API key (required).
+
+   _Do not prefix with `apk`. Use the key exactly as provided by DCT. Example: `2.123abc...`_
+- `DCT_BASE_URL` - Your DCT instance URL (required).
+
+   _Do not append with `/dct`. Example: `https://dct-hostname.com`_
 - `DCT_VERIFY_SSL` - Enable SSL verification (`true`/`false`, default: `false`)
 - `DCT_LOG_LEVEL` - Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 - `DCT_TIMEOUT` - Request timeout in seconds (default: `30`)
 - `DCT_MAX_RETRIES` - Maximum retry attempts (default: `3`)
 - `IS_LOCAL_TELEMETRY_ENABLED` - Enable telemetry (`true`/`false`, default: `false`)
 
+## MCP Client Configuration
+
+> **Note:** Use absolute paths for the `command` field in all configurations. Ensure environment variables are set for each client application.
+
+Configuration examples for popular MCP clients are provided below. The structure may vary (some use mcpServers, others use servers).
+
+### Configuration Methods
+
+All clients support three installation methods:
+
+ - **Using uvx (Recommended):**
+
+    Requires [uv](https://pypi.org/project/uv/). Handles dependencies automatically.
+
+ - **Using Python directly:**
+
+    Point to the main.py file in your local repository clone.
+
+ - **Using shell/batch scripts**
+
+    Use provided startup scripts (`_python.sh` for Linux/macOS, `_python.bat` for Windows). The `_uv.sh` and `_uv.bat` scripts require `uv`.
+
+See below for the full JSON configuration examples for each client.
+
+---
+
 <details>
 <summary><strong>Claude Desktop</strong></summary>
 
-Configure in your Claude Desktop settings file:
-
 **Option 1: Using uvx (Recommended)**
-> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "mcpServers": {
@@ -98,7 +143,6 @@ Configure in your Claude Desktop settings file:
 ```
 
 **Option 3: Using shell/batch scripts**
-> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "mcpServers": {
@@ -113,16 +157,12 @@ Configure in your Claude Desktop settings file:
   }
 }
 ```
-
 </details>
 
 <details>
-<summary><strong>Cursor IDE</strong></summary>
-
-Add to your Cursor settings:
+<summary><strong>Cursor IDE & Windsurf</strong></summary>
 
 **Option 1: Using uvx (Recommended)**
-> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "mcpServers": [
@@ -160,7 +200,6 @@ Add to your Cursor settings:
 ```
 
 **Option 3: Using shell scripts**
-> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "mcpServers": [
@@ -170,82 +209,20 @@ Add to your Cursor settings:
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "INFO"
+        "DCT_VERIFY_SSL": "true"
       }
     }
   ]
 }
 ```
 
+> **Note**: Windsurf uses the same configuration format as Cursor (mcpServers object).
 </details>
 
 <details>
-<summary><strong>VS Code</strong></summary>
-
-Configure in your VS Code settings:
+<summary><strong>VS Code, Eclipse, & IntelliJ IDEA</strong></summary>
 
 **Option 1: Using uvx (Recommended)**
-> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
-```json
-{
-  "servers": {
-    "delphix-dct": {
-      "command": "uvx",
-      "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-**Option 2: Using Python directly**
-```json
-{
-  "servers": {
-    "delphix-dct": {
-      "command": "python",
-      "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-**Option 3: Using shell scripts**
-> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
-```json
-{
-  "servers": {
-    "delphix-dct": {
-      "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Eclipse</strong></summary>
-
-Configure in your Eclipse MCP settings:
-
-**Option 1: Using uvx (Recommended)**
-> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
 ```json
 {
   "servers": {
@@ -263,7 +240,6 @@ Configure in your Eclipse MCP settings:
 }
 ```
 
-
 **Option 2: Using Python directly**
 ```json
 {
@@ -282,133 +258,9 @@ Configure in your Eclipse MCP settings:
 ```
 
 **Option 3: Using shell scripts**
-> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
 ```json
 {
   "servers": {
-    "delphix-dct": {
-      "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "INFO"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>IntelliJ IDEA</strong></summary>
-
-Configure in your IntelliJ MCP settings:
-
-**Option 1: Using uvx (Recommended)**
-> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
-```json
-{
-  "servers": {
-    "delphix-dct": {
-      "command": "uvx",
-      "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "DEBUG",
-        "DCT_TIMEOUT": "60"
-      }
-    }
-  }
-}
-```
-
-**Option 2: Using Python directly**
-```json
-{
-  "servers": {
-    "delphix-dct": {
-      "command": "python",
-      "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true",
-        "DCT_TIMEOUT": "60"
-      }
-    }
-  }
-}
-```
-
-**Option 3: Using shell scripts**
-> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
-```json
-{
-  "servers": {
-    "delphix-dct": {
-      "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "DEBUG",
-        "DCT_TIMEOUT": "60"
-      }
-    }
-  }
-}
-```
-
-</details>
-<details>
-<summary><strong>Windsurf</strong></summary>
-
-Configure in your Windsurf MCP settings:
-
-**Option 1: Using uvx (Recommended)**
-> **Note**: This option requires [uv](https://github.com/astral-sh/uv) to be installed on your system.
-```json
-{
-  "mcpServers": {
-    "delphix-dct": {
-      "command": "uvx",
-      "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-**Option 2: Using Python directly**
-```json
-{
-  "mcpServers": {
-    "delphix-dct": {
-      "command": "python",
-      "args": ["/absolute/path/to/dxi-mcp-server/src/dct_mcp_server/main.py"],
-      "env": {
-        "DCT_API_KEY": "your-api-key-here",
-        "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-**Option 3: Using shell scripts**
-> **Note**: The `command` path should point to the startup script that matches your system. Scripts are provided for different platforms (`.sh` for Linux/macOS, `.bat` for Windows). If you choose a `_uv` script (e.g., `start_mcp_server_uv.sh`), you must have [uv](https://github.com/astral-sh/uv) installed.
-```json
-{
-  "mcpServers": {
     "delphix-dct": {
       "command": "/absolute/path/to/dxi-mcp-server/start_mcp_server_uv.sh",
       "env": {
@@ -421,20 +273,21 @@ Configure in your Windsurf MCP settings:
 }
 ```
 
+> **Note**: VS Code, Eclipse, and IntelliJ all use the same configuration format (servers object).
 </details>
 
+## Advanced Installation
 
+For standalone command-line tool or contribute to development. 
 
-## Installation
+Most use the [MCP Client Configuration](#mcp-client-configuration) above instead.
 
-This section is for users who want to run the server as a standalone command-line tool or contribute to its development. If you only plan to use this server within a specific client application, the `uvx` method in the [MCP Client Configuration](#mcp-client-configuration) section is recommended and does not require a separate installation.
+### Setting Environment Variables
 
-The server is configured by setting environment variables. Below are examples for setting these variables on different platforms.
-
-> **⚠️ Important**: Do NOT prefix your API key with `apk.` - use the key exactly as provided by DCT
+For standalone installation, to set the [environment variables](#environment-variables) in your shell before running the server.
 
 <details>
-<summary><strong>Command-Line (Linux/macOS)</strong></summary>
+<summary><strong>Linux/macOS</strong></summary>
 
 Use the `export` command to set variables for your current shell session. For improved security, avoid adding secrets like the API key to your shell's profile file.
 
@@ -456,7 +309,7 @@ export DCT_LOG_LEVEL="DEBUG"
 </details>
 
 <details>
-<summary><strong>Command-Line (Windows)</strong></summary>
+<summary><strong>Windows</strong></summary>
 
 Use the `set` command in Command Prompt or `$env:` in PowerShell for the current session. For improved security, avoid setting secrets like the API key permanently.
 
@@ -475,16 +328,14 @@ $env:DCT_VERIFY_SSL="true"
 ```
 </details>
 
-Choose the installation method that best suits your needs.
+### Quick Start (Command-Line Tool)
 
-### Quick Start: As a Command-Line Tool
-
-This is the recommended method for users who want to use the server without modifying its code.
+Recommended method for users who want to use the server without modifying its code.
 
 **Prerequisites**:
 - Python 3.11+
-- `pip` and `git` installed on your system.
-- Your DCT API Key and DCT Base URL must be provided as environment variables. See the command-line examples in the [Installation](#installation) section for details.
+- `pip` and `git` installed on your system
+- [Environment variables](#environment-variables) configured in your shell. See above examples.
 
 Install the server directly from GitHub using `pip`:
 ```bash
@@ -493,41 +344,50 @@ pip install git+https://github.com/delphix/dxi-mcp-server.git
 # Verify the installation
 dct-mcp-server --help
 ```
+
 This makes the `dct-mcp-server` command available globally in your environment.
 
+### Developer Setup
 
-### For Developers: Local Setup from Source
-
-This method is for developers who want to modify the code or run it from a local clone.
+Method for developers who want to modify the code or run it from a local clone.
 
 **Prerequisites**:
 - Python 3.11+
-- `git` installed on your system.
-- Your DCT API Key and DCT Base URL must be provided as environment variables. See the command-line examples in the [Installation](#installation) section for details.
-
+- `git` installed on your system
+- [Environment variables](#environment-variables) configured in your shell. See above examples.
 
 **Steps**:
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/delphix/dxi-mcp-server.git
-    cd dxi-mcp-server
-    ```
 
-2.  **Set up the environment and install dependencies:**
-    The included scripts handle environment setup automatically. We recommend using `uv` for the best performance. On macOS or Linux, run:
-    ```bash
-    chmod +x start_mcp_server_uv.sh
-    ./start_mcp_server_uv.sh
-    ```
-    > **Note**: Other startup scripts are available. For Windows, use `start_mcp_server_windows_uv.bat`. If you prefer not to use `uv`, scripts for standard Python with `venv` are also provided (`start_mcp_server_python.sh` and `start_mcp_server_windows_python.bat`).
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/delphix/dxi-mcp-server.git
+   cd dxi-mcp-server
+   ```
+
+2. **Set up the environment and install dependencies:**
+   
+   The included scripts handle environment setup automatically. We recommend using `uv` (which provides `uvx`) for the best performance:
+   
+   **Linux/macOS:**
+   ```bash
+   chmod +x start_mcp_server_uv.sh
+   ./start_mcp_server_uv.sh
+   ```
+   
+   **Windows:**
+   ```bash
+   start_mcp_server_windows_uv.bat
+   ```
+   
+   > **Note**: If you prefer not to use `uv`, scripts for standard Python with `venv` are also provided (`start_mcp_server_python.sh` and `start_mcp_server_windows_python.bat`).
 
 ### Connecting a Client to a Running Server
 
-Once the server is running (either via the command-line tool or from the source), it will print the port it is listening on to the console (e.g., `INFO:     Uvicorn running on http://127.0.0.1:6790 (Press CTRL+C to quit)`). To connect your client, you only need to specify this port number. You do not need to provide environment variables in the client configuration, as the server already has them from your terminal session.
+Once the server is running (either via the command-line tool or from the source), it will print the port it is listening on to the console (e.g., `INFO:     Uvicorn running on http://127.0.0.1:6790 (Press CTRL+C to quit)`). 
+
+To connect your client, you only need to specify this port number. You do not need to provide environment variables in the client configuration, as the server already has them from your terminal session.
 
 **Example for Claude Desktop:**
-Configure your Claude Desktop settings to connect to the running server by specifying the port.
-
 ```json
 {
   "mcpServers": {
@@ -537,9 +397,8 @@ Configure your Claude Desktop settings to connect to the running server by speci
   }
 }
 ```
+
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
-
-
 
 ## Available Tools
 
@@ -553,7 +412,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Discover database connections by platform, status, and capabilities
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Connection discovery, status monitoring, platform inventory
-
 </details>
 
 <details>
@@ -562,7 +420,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find linked data sources with filtering and pagination
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Data source management, capacity planning, source discovery
-
 </details>
 
 <details>
@@ -571,7 +428,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find snapshots with time-based filtering
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Point-in-time recovery, backup verification, timeline analysis
-
 </details>
 
 <details>
@@ -580,7 +436,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Discover source databases and their settings
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Source inventory, configuration review, compliance checking
-
 </details>
 
 <details>
@@ -589,7 +444,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find timeline flows and recovery points
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Data lineage, recovery planning, timeline management
-
 </details>
 
 <details>
@@ -598,7 +452,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find VDB groups and their member databases
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Group management, resource organization, bulk operations
-
 </details>
 
 <details>
@@ -607,7 +460,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find virtual databases with status and environment filtering
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: VDB inventory, environment management, status monitoring
-
 </details>
 
 ### Environment Management Tools
@@ -618,7 +470,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Discover environments by type, status, and configuration
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Environment discovery, capacity planning, status monitoring
-
 </details>
 
 ### Engine Administration Tools
@@ -629,7 +480,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find engines and check their operational status
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Engine monitoring, capacity management, health checking
-
 </details>
 
 ### Compliance & Security Tools
@@ -640,7 +490,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Discover connectors for data governance workflows
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Compliance management, connector inventory, governance tracking
-
 </details>
 
 <details>
@@ -649,7 +498,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find compliance execution history and audit trails
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Audit trail analysis, compliance reporting, execution monitoring
-
 </details>
 
 ### Job Monitoring Tools
@@ -660,7 +508,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Find jobs with status filtering and error details
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Job monitoring, error analysis, performance tracking
-
 </details>
 
 ### Reporting & Analytics Tools
@@ -671,7 +518,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Retrieve storage capacity and utilization data
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Capacity planning, storage optimization, usage reporting
-
 </details>
 
 <details>
@@ -680,7 +526,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Create storage efficiency and compression reports
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: Cost analysis, efficiency reporting, savings tracking
-
 </details>
 
 <details>
@@ -689,7 +534,6 @@ The server provides specialized tools for interacting with different aspects of 
 - **Purpose**: Generate virtualization impact and savings reports
 - **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
 - **Use cases**: ROI analysis, virtualization benefits, impact assessment
-
 </details>
 
 ### Common Tool Features
@@ -717,9 +561,121 @@ All tools support:
 "filter_expression": "NOT (status EQ 'INACTIVE') AND (platform IN ['oracle', 'postgresql'])"
 ```
 
-## Usage Examples
+## Privacy & Telemetry
 
-### Project Structure
+When `IS_LOCAL_TELEMETRY_ENABLED` is set to `true`, the server collects anonymous usage analytics to improve functionality and user experience.
+
+### What Data is Collected
+
+- **Tool execution details**: Tool name, execution status (success or failure), and session duration
+- **User identifier**: Operating system username (via `getpass.getuser()`) for usage analysis
+- **Error context**: Anonymized error types and frequencies (no sensitive data)
+- **Performance metrics**: Execution times and resource usage
+
+### What is NOT Collected
+
+- **Sensitive data**: No API keys, database content, or business data
+- **Personal information**: No personally identifiable information beyond OS username
+- **DCT data**: No data returned from DCT API calls
+- **Network details**: No IP addresses or network configurations
+
+### Data Storage & Privacy
+
+- **Local only**: Telemetry data is stored in the `logs/sessions/` directory
+- **No remote transmission**: Data never leaves your machine
+- **User control**: Disable telemetry by setting `IS_LOCAL_TELEMETRY_ENABLED="false"`
+- **Readable format**: Logs use human-readable JSON
+
+### Sample Telemetry Entry
+
+```json
+{
+  "session_id": "abc123",
+  "timestamp": "2025-12-05T10:30:00Z",
+  "user": "developer",
+  "tool": "get_datasets",
+  "status": "success",
+  "duration_ms": 245,
+  "args_count": 3
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection Errors**
+```bash
+# Check DCT connectivity
+curl -k -H "Authorization: Bearer $DCT_API_KEY" "$DCT_BASE_URL/v1/about"
+
+# Verify SSL settings
+export DCT_VERIFY_SSL="false"  # For self-signed certificates
+```
+
+**Authentication Failures**
+```bash
+# Verify API key is set
+echo $DCT_API_KEY  # Should be your DCT API key (do NOT add 'apk' prefix)
+
+# Check API key permissions in DCT admin console
+```
+
+**Tool Generation Issues**
+```bash
+# Enable debug logging
+export DCT_LOG_LEVEL="DEBUG"
+
+# Check DCT API accessibility
+curl -k "$DCT_BASE_URL/v1/about"
+```
+
+**MCP Client Connection Issues**
+```bash
+# Test server startup
+./start_mcp_server_python.sh
+
+# Verify Python path
+export PYTHONPATH=src
+python -c "import dct_mcp_server; print('Import successful')"
+```
+
+### Debug Mode
+
+Enable comprehensive debugging:
+
+```bash
+export DCT_LOG_LEVEL="DEBUG"
+export IS_LOCAL_TELEMETRY_ENABLED="true"
+./start_mcp_server_python.sh 2>&1 | tee debug.log
+```
+
+### Log Analysis
+
+By default, all log files are generated in a `logs` directory. The location depends on how the server is started:
+
+- **Local development**: When you run the server from the cloned source code, the `logs` directory is created at the root of the project.
+- **Client application**: When an MCP client starts the server, the `logs` directory is typically created at the root of the workspace or project folder you have open in that client.
+
+Check these logs for issues:
+
+```bash
+# Main application logs
+tail -f logs/dct_mcp_server.log
+
+# Session telemetry
+ls -la logs/sessions/
+
+# Startup logs
+cat logs/mcp_server_setup_logfile.txt
+```
+
+### "Server starting..." followed by "No such file or directory" or "command not found"
+
+- **Cause**: This happens when the `command` path in your MCP client's JSON configuration is incorrect. The client optimistically reports that it is "starting" the server, but then the operating system immediately fails because it cannot find the script at the specified location.
+- **Solution**: Ensure the `command` value is the **absolute path** to the correct startup script (e.g., `start_mcp_server_uv.sh` or `start_mcp_server_python.sh`). Verify that the file exists at that exact path and that it has execute permissions (`chmod +x <script_name>`).
+
+## Project Structure
 
 ```
 dxi-mcp-server/
@@ -755,140 +711,29 @@ dxi-mcp-server/
             └── logo-delphixmcp-reg.png
 ```
 
-## Privacy & Telemetry
-
-When `IS_LOCAL_TELEMETRY_ENABLED` is set to `true`, the server collects anonymous usage analytics to help improve functionality and user experience.
-
-### What Data is Collected
-
-- **Tool Execution Metadata**: Tool name, execution status (success/failure), and session duration
-- **User Identification**: Operating system username (via `getpass.getuser()`) for usage pattern analysis
-- **Error Context**: Anonymized error types and frequencies (no sensitive data)
-- **Performance Metrics**: Tool execution times and system resource usage
-
-### What is NOT Collected
-
-- **Sensitive Data**: No API keys, database content, or business data
-- **Personal Information**: No personally identifiable information beyond OS username
-- **DCT Data**: No data returned from DCT API calls
-- **Network Information**: No IP addresses or network configurations
-
-### Data Storage & Privacy
-
-- **Local Storage Only**: All telemetry data is stored locally in `logs/sessions/` directory
-- **No Remote Transmission**: Data never leaves your local machine
-- **User Control**: Easily disabled by setting `IS_LOCAL_TELEMETRY_ENABLED="false"`
-- **Transparent Format**: Log files use human-readable JSON format
-
-### Sample Telemetry Entry
-
-```json
-{
-  "session_id": "abc123",
-  "timestamp": "2025-12-05T10:30:00Z",
-  "user": "developer",
-  "tool": "get_datasets",
-  "status": "success",
-  "duration_ms": 245,
-  "args_count": 3
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Connection Errors**:
-```bash
-# Check DCT connectivity
-curl -k -H "Authorization: Bearer $DCT_API_KEY" "$DCT_BASE_URL/v1/about"
-
-# Verify SSL settings
-export DCT_VERIFY_SSL="false"  # For self-signed certificates
-```
-
-**Authentication Failures**:
-```bash
-# Verify API key is set
-echo $DCT_API_KEY  # Should be your DCT API key (do NOT add 'apk.' prefix)
-
-# Check API key permissions in DCT admin console
-```
-
-**Tool Generation Issues**:
-```bash
-# Enable debug logging
-export DCT_LOG_LEVEL="DEBUG"
-
-# Check DCT API accessibility
-curl -k "$DCT_BASE_URL/v1/about"
-```
-
-**MCP Client Connection Issues**:
-```bash
-# Test server startup
-./start_mcp_server_python.sh
-
-# Verify Python path
-export PYTHONPATH=src
-python -c "import dct_mcp_server; print('Import successful')"
-```
-
-### Debug Mode
-
-Enable comprehensive debugging:
-
-```bash
-export DCT_LOG_LEVEL="DEBUG"
-export IS_LOCAL_TELEMETRY_ENABLED="true"
-./start_mcp_server_python.sh 2>&1 | tee debug.log
-```
-
-### Log Analysis
-
-By default, all log files are generated in a `logs` directory. The location depends on how the server is started:
-
-- **Local Development**: When you run the server from the cloned source code, the `logs` directory is created at the root of the project.
-- **Client Application**: When an MCP client starts the server, the `logs` directory is typically created at the root of the workspace or project folder you have open in that client.
-
-Check these logs for issues:
-
-```bash
-# Main application logs
-tail -f logs/dct_mcp_server.log
-
-# Session telemetry
-ls -la logs/sessions/
-
-# Startup logs
-cat logs/mcp_server_setup_logfile.txt
-```
-
-### "Server starting..." followed by "No such file or directory" or "command not found"
-
--   **Cause:** This happens when the `command` path in your MCP client's JSON configuration is incorrect. The client optimistically reports that it is "starting" the server, but then the operating system immediately fails because it cannot find the script at the specified location.
--   **Solution:** Ensure the `command` value is the **absolute path** to the correct startup script (e.g., `start_mcp_server_uv.sh` or `start_mcp_server_python.sh`). Verify that the file exists at that exact path and that it has execute permissions (`chmod +x <script_name>`).
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
-## Support & Community
-
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/delphix/dxi-mcp-server/issues)
-- **Documentation**: Full documentation available in the [project wiki](https://github.com/delphix/dxi-mcp-server/wiki)
-- **Community Support**: ![Support](https://img.shields.io/badge/Support-Community-yellow.svg) - Community-driven support
+## Support & Contributing
 
 ### Getting Help
 
-1. **Check the logs**: Review `logs/dct_mcp_server.log` for error details
-2. **Enable debug mode**: Set `DCT_LOG_LEVEL="DEBUG"` for verbose output
-3. **Search existing issues**: Check [GitHub Issues](https://github.com/delphix/dxi-mcp-server/issues) for similar problems
-4. **Create a new issue**: Provide DCT version, Python version, and complete error logs
+1. **Check the logs**: Review `logs/dct_mcp_server.log` for error details.
+2. **Enable debug mode**: Set `DCT_LOG_LEVEL="DEBUG"` for verbose output.
+3. **Search existing issues**: Check [GitHub Issues](https://github.com/delphix/dxi-mcp-server/issues) for similar problems.
+4. **Create a new issue**: Provide DCT version, Python version, and error logs.
+
+### Community Resources
+
+- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/delphix/dxi-mcp-server/issues)
+- **Documentation**: Full documentation available in the [project wiki](https://github.com/delphix/dxi-mcp-server/wiki)
+- **Community support**: ![Support](https://img.shields.io/badge/Support-Community-yellow.svg) - Community-driven support
+- **Delphix DCT API documentation**: [Official API docs](https://help.delphix.com/dct/current/content/api_references.htm)
 
 ### Contributing
 
-We welcome contributions from the community! Before you start, please take a moment to review our community documents:
+We welcome contributions! Please review our community documents:
 
 - **[Community Guidelines](.github/COMMUNITY_GUIDELINES.md)**: An overview of how our community operates.
 - **[Code of Conduct](.github/CODE_OF_CONDUCT.md)**: Our commitment to a respectful and inclusive environment.
@@ -899,7 +744,3 @@ When you are ready to submit a change, please use our [Pull Request Template](.g
 ---
 
 *Enable your AI assistants to seamlessly manage your data infrastructure with Delphix DCT.*
-
-For issues and questions:
-- Check the [Delphix DCT API documentation](https://help.delphix.com/dct/current/content/home.htm)
-- Open an issue in this repository

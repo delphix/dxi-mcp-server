@@ -48,3 +48,4 @@ Thumbs.db
 # Logs
 *.log
 logs/
+mcp_server_setup_logfile.txt
