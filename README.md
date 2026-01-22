@@ -407,6 +407,14 @@ The server provides specialized tools for interacting with different aspects of 
 ### Dataset Management Tools
 
 <details>
+<summary><strong><code>search_bookmarks</code></strong> - Search for bookmarks and point-in-time markers</summary>
+
+- **Purpose**: Find bookmarks across datasets for point-in-time operations
+- **Parameters**: `filter_expression`, `limit`, `cursor`, `sort`
+- **Use cases**: Bookmark discovery, point-in-time recovery, timeline navigation
+</details>
+
+<details>
 <summary><strong><code>search_data_connections</code></strong> - Find and filter database connections</summary>
 
 - **Purpose**: Discover database connections by platform, status, and capabilities

@@ -9,7 +9,7 @@ dependencies = [
     "httpx>=0.24.0",
     "pyyaml",
     "requests",
-    "urllib3"
+    "urllib3>=2.6.3"
 ]
 
 [project.scripts]

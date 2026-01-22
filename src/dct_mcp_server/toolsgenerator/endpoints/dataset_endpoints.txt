@@ -1,3 +1,4 @@
+/bookmarks/search
 /data-connections/search
 /dsources/search
 /snapshots/search
