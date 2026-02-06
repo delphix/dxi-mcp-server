@@ -49,6 +49,110 @@ def build_params(**kwargs):
     return {k: v for k, v in kwargs.items() if v is not None}
 
 @log_tool_execution
+def search_bookmarks(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Search for bookmarks.
+    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.
+    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.(optional)
+    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
+    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
+    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
+    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
+    :param filter_expression: Filter expression string (optional)
+    Filter expression can include the following fields:
+     - id: The Bookmark object entity ID.
+     - name: The user-defined name of this bookmark.
+     - creation_date: The date and time that this bookmark was created.
+     - data_timestamp: The timestamp for the data that the bookmark refers to.
+     - timeflow_id: The timeflow for the snapshot that the bookmark was created of.
+     - location: The location for the data that the bookmark refers to.
+     - vdb_ids: The list of VDB IDs associated with this bookmark.
+     - dsource_ids: The list of dSource IDs associated with this bookmark.
+     - vdb_group_id: The ID of the VDB group on which bookmark is created.
+     - vdb_group_name: The name of the VDB group on which bookmark is created.
+     - vdbs: The list of VDB IDs and VDB names associated with this bookmark.
+     - dsources: The list of dSource IDs and dSource names associated with this bookmark.
+     - retention: The retention policy for this bookmark, in days. A value of -1 indicates the bookmark should be kept forever. Deprecated in favor of expiration.
+     - expiration: The expiration for this bookmark. When unset, indicates the bookmark is kept forever except for bookmarks of replicated datasets. Expiration cannot be set for bookmarks of replicated datasets.
+     - status: A message with details about operation progress or state of this bookmark.
+     - replicated_dataset: Whether this bookmark is created from a replicated dataset or not.
+     - bookmark_source: Source of the bookmark, default is DCT. In case of self-service bookmarks, this value would be ENGINE.
+     - bookmark_status: Status of the bookmark. It can have INACTIVE value for engine bookmarks only. If this value is INACTIVE then ss_bookmark_errors would have the list of associated errors.
+     - ss_data_layout_id: Data-layout Id for engine-managed bookmarks.
+     - ss_bookmark_reference: Engine reference of the self-service bookmark.
+     - ss_bookmark_errors: List of errors if any, during bookmark creation in DCT from self-service.
+     - bookmark_type: Type of the bookmark, either PUBLIC or PRIVATE.
+     - namespace_id: The namespace id of this bookmark.
+     - namespace_name: The namespace name of this bookmark.
+     - is_replica: Is this a replicated bookmark.
+     - primary_object_id: Id of the parent bookmark from which this bookmark was replicated.
+     - primary_engine_id: The ID of the parent engine from which replication was done.
+     - primary_engine_name: The name of the parent engine from which replication was done.
+     - replicas: The list of replicas replicated from this object.
+     - tags: The tags to be created for this Bookmark.
+
+    How to use filter_expresssion: 
+    A request body containing a filter expression. This enables searching
+    for items matching arbitrarily complex conditions. The list of
+    attributes which can be used in filter expressions is available
+    in the x-filterable vendor extension.
+    
+    # Filter Expression Overview
+    **Note: All keywords are case-insensitive**
+    
+    ## Comparison Operators
+    | Operator | Description | Example |
+    | --- | --- | --- |
+    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
+    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
+    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
+    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
+    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
+    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
+    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
+    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
+    
+    ## Search Operator
+    The SEARCH operator filters for items which have any filterable
+    attribute that contains the input string as a substring, comparison
+    is done case-insensitively. This is not restricted to attributes with
+    string values. Specifically `SEARCH '12'` would match an item with an
+    attribute with an integer value of `123`.
+    
+    ## Logical Operators
+    Ordered by precedence.
+    | Operator | Description | Example |
+    | --- | --- | --- |
+    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
+    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
+    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
+    
+    ## Grouping
+    Parenthesis `()` can be used to override operator precedence.
+    
+    For example:
+    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
+    
+    ## Literal Values
+    | Literal      | Description | Examples |
+    | --- | --- | --- |
+    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
+    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
+    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
+    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
+    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
+    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
+    
+    ## Limitations
+    - A maximum of 8 unique identifiers may be used inside a filter expression.
+    
+    """
+    # Build parameters excluding None values
+    params = build_params(limit=limit, cursor=cursor, sort=sort)
+    search_body = {'filter_expression': filter_expression}
+    return make_api_request('POST', '/bookmarks/search', params=params, json_body=search_body)
+
+@log_tool_execution
 def search_data_connections(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
     """
     Search for data connections.
@@ -352,7 +456,6 @@ applied in order to provision a database.
      - mssql_backup_software_type: Backup software used to restore the source database backup for this snapshot
      - mssql_backup_location_type: Backup software used to restore the source database backup for this snapshot
      - mssql_empty_snapshot: True if the staging push dSource snapshot is empty.
-     - mssql_incremental_export_source_snapshot: True if this snapshot belongs to Incremental VDB and can be used for Incremental V2P.
      - oracle_from_physical_standby_vdb: True if this snapshot was taken of a standby database.
      - oracle_redo_log_size_in_bytes: Online redo log size in bytes when this snapshot was taken.
      - tags: No description
@@ -815,8 +918,6 @@ Required to provision from snapshots of PDB containing encrypted database files 
      - nfs_version: The NFS version that was last used to mount this source."
      - nfs_version_reason: No description
      - nfs_encryption_enabled: Flag indicating whether the data transfer is encrypted or not.
-     - cache_priority: When set to a value other than NORMAL (valid only for object storage engines) the engine will aggressively cache required data to ensure improved performance.
-     - mssql_incremental_export_backup_frequency_minutes: Frequency in minutes for incremental export backups for VDBs.
 
     How to use filter_expresssion: 
     A request body containing a filter expression. This enables searching
@@ -885,6 +986,8 @@ def register_tools(app, dct_client):
     client = dct_client
     logger.info(f'Registering tools for dataset_endpoints...')
     try:
+        logger.info(f'  Registering tool function: search_bookmarks')
+        app.add_tool(search_bookmarks, name="search_bookmarks")
         logger.info(f'  Registering tool function: search_data_connections')
         app.add_tool(search_data_connections, name="search_data_connections")
         logger.info(f'  Registering tool function: search_dsources')

@@ -16,8 +16,6 @@ Each generated function includes:
 """
 
 
-from textwrap import indent
-
 import yaml
 import os
 import requests
@@ -28,10 +26,17 @@ from dct_mcp_server.config.config import get_dct_config
 # Get the absolute path of the project root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-TOOL_DIR = os.path.join(project_root, "src/dct_mcp_server/toolsgenerator/endpoints")
-TOOLS_DIR = os.path.join(project_root, "src/dct_mcp_server/tools/")
+# For uvx/package installations, use the package directory structure
+if 'site-packages' in __file__:
+    # When installed as package, endpoints are in the same directory as this file
+    TOOL_DIR = os.path.join(os.path.dirname(__file__), "endpoints")
+    TOOLS_DIR = os.path.join(os.path.dirname(__file__), '..', "tools")
+else:
+    # For local development, use the project structure
+    TOOL_DIR = os.path.join(project_root, "src/dct_mcp_server/toolsgenerator/endpoints")
+    TOOLS_DIR = os.path.join(project_root, "src/dct_mcp_server/tools/")
 APIS_TO_SUPPORT = {}
-indent = 4
+INDENT_SIZE = 4
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,11 @@ def load_api_endpoints():
     global APIS_TO_SUPPORT
     APIS_TO_SUPPORT = {}  # Reset the dictionary before loading
     os.makedirs(TOOL_DIR, exist_ok=True)
+    
+    if not os.path.exists(TOOL_DIR):
+        logger.error(f"TOOL_DIR does not exist: {TOOL_DIR}")
+        return
+        
     for file in os.listdir(TOOL_DIR):
         # Store the files as values of the dict with key as filename without _endpoints.txt
         if file.endswith("_endpoints.txt"):
@@ -50,6 +60,8 @@ def load_api_endpoints():
                     stripped_line = line.strip()
                     if stripped_line:
                         APIS_TO_SUPPORT[file_name].append(stripped_line)
+    
+    logger.info(f"Loaded {len(APIS_TO_SUPPORT)} endpoint file(s)")
 
 
 def download_open_api_yaml(api_url: str, save_path: str):
@@ -133,16 +145,16 @@ def build_params(**kwargs):
 def create_register_tool_function(tool_name, apis):
     func_str = "\n"
     func_str += "def register_tools(app, dct_client):\n"
-    func_str += " "*indent + "global client\n"
-    func_str += " "*indent + "client = dct_client\n"
-    func_str += " "*indent + f"logger.info(f'Registering tools for {tool_name}...')\n"
-    func_str += " "*indent + "try:\n"
+    func_str += " "* INDENT_SIZE + "global client\n"
+    func_str += " "* INDENT_SIZE + "client = dct_client\n"
+    func_str += " "* INDENT_SIZE + f"logger.info(f'Registering tools for {tool_name}...')\n"
+    func_str += " "* INDENT_SIZE + "try:\n"
     for function in apis:
-        func_str += " "*indent*2 + f"logger.info(f'  Registering tool function: {function}')\n"
-        func_str += " "*indent*2 + f"app.add_tool({function}, name=\"{function}\")\n"
-    func_str += " "*indent + "except Exception as e:\n"
-    func_str += " "*indent*2 + f"logger.error(f'Error registering tools for {tool_name}: {{e}}')\n"
-    func_str += " "*indent + f"logger.info(f'Tools registration finished for {tool_name}.')\n"
+        func_str += " "* INDENT_SIZE*2 + f"logger.info(f'  Registering tool function: {function}')\n"
+        func_str += " "* INDENT_SIZE*2 + f"app.add_tool({function}, name=\"{function}\")\n"
+    func_str += " "* INDENT_SIZE + "except Exception as e:\n"
+    func_str += " "* INDENT_SIZE*2 + f"logger.error(f'Error registering tools for {tool_name}: {{e}}')\n"
+    func_str += " "* INDENT_SIZE + f"logger.info(f'Tools registration finished for {tool_name}.')\n"
     return func_str
 
 def read_open_api_yaml(api_file):
@@ -181,7 +193,7 @@ def generate_tools_from_openapi():
         logger.info(f"DCT_BASE_URL found: {client_address}")
 
     api_spec = read_open_api_yaml(API_FILE)
-    logger.info("APIS to support loaded:", APIS_TO_SUPPORT)
+    logger.info(f"APIS to support loaded: {APIS_TO_SUPPORT}")
     
     os.makedirs(TOOLS_DIR, exist_ok=True)
 
@@ -226,51 +238,51 @@ def generate_tools_from_openapi():
                 except KeyError:
                     continue
                 desc = param_def.get("description", "No description")
-                docstring += " "*indent + f":param {name}: {desc}\n"
+                docstring += " "* INDENT_SIZE + f":param {name}: {desc}\n"
                 required = param_def.get("required")
                 if required:
                     required = "required"
                 else:
                     required = "optional"
-                docstring += " "*indent + f":param {name}: {desc}({required})\n"
+                docstring += " "* INDENT_SIZE + f":param {name}: {desc}({required})\n"
 
             has_search_criteria = operation.get('x-filterable')
             if has_search_criteria:
                 function_head+= "filter_expression: Optional[str] = None) -> Dict[str, Any]:\n"
-                docstring += " "*indent + ":param filter_expression: Filter expression string (optional)\n"
+                docstring += " "* INDENT_SIZE + ":param filter_expression: Filter expression string (optional)\n"
             else:
                 function_head = function_head.rstrip(", ") + ") -> Dict[str, Any]:\n"
-            function_head+= " "*indent +"\"\"\"\n"+" "*indent +f"{operation.get('summary')}\n"
+            function_head+= " "* INDENT_SIZE +"\"\"\"\n"+" "* INDENT_SIZE +f"{operation.get('summary')}\n"
             responses = operation.get("responses", {})
 
             for status_code, details in responses.items():
                 properties = details['content']['application/json']['schema']['properties']
                 response_schema = resolve_ref(properties['items']['items']['$ref'], api_spec)
-                docstring+=" "*indent + "Filter expression can include the following fields:\n"
+                docstring+=" "* INDENT_SIZE + "Filter expression can include the following fields:\n"
                 for prop_name, prop_def in response_schema.get("properties", {}).items():
                     prop_desc = prop_def.get("description", "No description")
-                    docstring+= " "*indent +" - " + f"{prop_name}: {prop_desc}\n"
+                    docstring+= " "* INDENT_SIZE +" - " + f"{prop_name}: {prop_desc}\n"
             if has_search_criteria:
-                docstring += "\n" + " "*indent + "How to use filter_expresssion: \n"
+                docstring += "\n" + " "* INDENT_SIZE + "How to use filter_expresssion: \n"
                 for line in api_spec['components']['requestBodies']['SearchBody']['description'].split('\n'):
-                    docstring += " "*indent + f"{line}\n"
+                    docstring += " "* INDENT_SIZE + f"{line}\n"
 
             # Generate function implementation using utility functions
-            function_body = " "*indent + "# Build parameters excluding None values\n"
+            function_body = " "* INDENT_SIZE + "# Build parameters excluding None values\n"
 
             if param_names:
                 param_list = ", ".join([f"{name}={name}" for name in param_names])
-                function_body += " "*indent + f"params = build_params({param_list})\n"
+                function_body += " "* INDENT_SIZE + f"params = build_params({param_list})\n"
             else:
-                function_body += " "*indent + "params = {}\n"
+                function_body += " "* INDENT_SIZE + "params = {}\n"
 
             if has_search_criteria and http_method == "POST":
-                function_body += " "*indent + "search_body = {'filter_expression': filter_expression}\n"
-                function_body += " "*indent + f"return make_api_request('{http_method}', '{api}', params=params, json_body=search_body)\n"
+                function_body += " "* INDENT_SIZE + "search_body = {'filter_expression': filter_expression}\n"
+                function_body += " "* INDENT_SIZE + f"return make_api_request('{http_method}', '{api}', params=params, json_body=search_body)\n"
             else:
-                function_body += " "*indent + f"return make_api_request('{http_method}', '{api}', params=params)\n"
+                function_body += " "* INDENT_SIZE + f"return make_api_request('{http_method}', '{api}', params=params)\n"
 
-            tool_file_content += function_head + docstring + indent * " " + "\"\"\"\n" + function_body + "\n"
+            tool_file_content += function_head + docstring + INDENT_SIZE * " " + "\"\"\"\n" + function_body + "\n"
 
         tool_file_content += create_register_tool_function(tool_name, function_lists)
 
