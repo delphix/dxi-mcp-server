@@ -21,6 +21,7 @@ import os
 import requests
 import urllib3
 import logging
+import tempfile
 from dct_mcp_server.config.config import get_dct_config
 
 # Get the absolute path of the project root
@@ -30,7 +31,8 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if 'site-packages' in __file__:
     # When installed as package, endpoints are in the same directory as this file
     TOOL_DIR = os.path.join(os.path.dirname(__file__), "endpoints")
-    TOOLS_DIR = os.path.join(os.path.dirname(__file__), '..', "tools")
+    # Use temp directory for generated tools to avoid permission issues
+    TOOLS_DIR = os.path.join(tempfile.gettempdir(), "dct_mcp_tools")
 else:
     # For local development, use the project structure
     TOOL_DIR = os.path.join(project_root, "src/dct_mcp_server/toolsgenerator/endpoints")
@@ -69,18 +71,27 @@ def download_open_api_yaml(api_url: str, save_path: str):
     try:
         logger.info(f"Downloading OpenAPI spec from {api_url}...")
         
-        # Get SSL verification setting from config
+        # Get DCT configuration for proper authentication and SSL settings
         dct_config = get_dct_config()
         verify_ssl = dct_config.get("verify_ssl", False)
+        api_key = dct_config.get("api_key")
+        
+        # Prepare headers with authentication if API key is available
+        headers = {
+            "Accept": "application/x-yaml, text/yaml, application/json",
+            "User-Agent": "dct-mcp-server-toolgen/1.0"
+        }
+        if api_key:
+            headers["Authorization"] = f"apk {api_key}"
 
-        # Use the configured SSL verification
-        response = requests.get(api_url, timeout=30, verify=verify_ssl)
+        # Use the configured SSL verification and authentication
+        response = requests.get(api_url, timeout=30, verify=verify_ssl, headers=headers)
         response.raise_for_status()  # Raise an exception for bad status codes
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(response.text)
         logger.info(f"Successfully saved OpenAPI spec to {save_path}")
     except requests.exceptions.RequestException as e:
-        logger.info(f"Error downloading OpenAPI spec: {e}")
+        logger.warning(f"Error downloading OpenAPI spec: {e}")
         raise
 
 translated_dict_for_types = {
@@ -92,7 +103,7 @@ translated_dict_for_types = {
 
 prefix = """from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
-from ..core.decorators import log_tool_execution
+from dct_mcp_server.core.decorators import log_tool_execution
 import asyncio
 import logging
 import threading
@@ -184,13 +195,24 @@ def generate_tools_from_openapi():
     """Generates tool files from OpenAPI spec based on APIS_TO_SUPPORT."""
     load_api_endpoints()
 
-    # Download the openapi yaml from application using client
-    client_address = f"{os.getenv('DCT_BASE_URL')}/dct/static/api-external.yaml"
-    API_FILE = os.path.join(project_root, "src", "api.yaml")
+    # Get DCT base URL from config (this uses the same source as the main client)
+    dct_config = get_dct_config()
+    base_url = dct_config.get("base_url")
+    if not base_url:
+        logger.error("DCT_BASE_URL not configured. Cannot download OpenAPI specification.")
+        raise ValueError("DCT_BASE_URL is required for tool generation")
+    
+    # Construct the OpenAPI spec URL
+    client_address = f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
+    logger.info(f"OpenAPI spec URL: {client_address}")
+    
+    # Use temp directory for package installations, project directory for local development
+    if 'site-packages' in __file__:
+        API_FILE = os.path.join(tempfile.gettempdir(), "api.yaml")
+    else:
+        API_FILE = os.path.join(project_root, "src", "api.yaml")
+    
     download_open_api_yaml(client_address, API_FILE)
-
-    if client_address:
-        logger.info(f"DCT_BASE_URL found: {client_address}")
 
     api_spec = read_open_api_yaml(API_FILE)
     logger.info(f"APIS to support loaded: {APIS_TO_SUPPORT}")
