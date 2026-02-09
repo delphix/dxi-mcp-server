@@ -133,7 +133,14 @@ def main():
     """Synchronous main entry point - wrapper for async_main"""
     setup_logging()
     logger = logging.getLogger(__name__)
-    generate_tools_from_openapi()
+    
+    # Try to generate fresh tools, but don't fail if it doesn't work
+    try:
+        generate_tools_from_openapi()
+        logger.info("Successfully generated fresh tools from DCT API")
+    except Exception as e:
+        logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
+    
     try:
         # Run the async main function
         asyncio.run(async_main())
