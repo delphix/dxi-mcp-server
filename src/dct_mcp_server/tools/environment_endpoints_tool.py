@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
+from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
 import asyncio
 import logging
 import threading
@@ -8,6 +9,38 @@ from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CONFIRMATION INTEGRATION
+# =============================================================================
+# For destructive operations (DELETE, POST .../delete), generated tools should:
+# 1. Call requires_confirmation(method, path) to check if confirmation needed
+# 2. If True, include confirmation_message in the response
+# 3. LLM should use check_operation_confirmation meta-tool before executing
+#
+# Example usage in generated tool:
+#   confirmation = get_confirmation_for_operation("DELETE", "/vdbs/{id}")
+#   if confirmation["level"] != "none":
+#       return {
+#           "requires_confirmation": True,
+#           "confirmation_level": confirmation["level"],
+#           "confirmation_message": confirmation["message"],
+#           "operation": "delete_vdb"
+#       }
+# =============================================================================
+
+def check_confirmation(method: str, api_path: str) -> Optional[Dict[str, Any]]:
+    """Check if operation requires confirmation. Returns confirmation details or None."""
+    confirmation = get_confirmation_for_operation(method, api_path)
+    if confirmation["level"] != "none":
+        return {
+            "requires_confirmation": True,
+            "confirmation_level": confirmation["level"],
+            "confirmation_message": confirmation.get("message", "Please confirm this operation."),
+            "conditional": confirmation.get("conditional", False),
+            "threshold_days": confirmation.get("threshold_days")
+        }
+    return None
 
 def async_to_sync(async_func):
     """Utility decorator to convert async functions to sync with proper event loop handling."""
@@ -49,106 +82,222 @@ def build_params(**kwargs):
     return {k: v for k, v in kwargs.items() if v is not None}
 
 @log_tool_execution
-def search_environments(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
+def environment_tool(
+    action: str,  # One of: search, get, create, update, delete, enable, disable, refresh, add_tags
+    cursor: Optional[str] = None,
+    environment_id: Optional[str] = None,
+    filter_expression: Optional[str] = None,
+    limit: Optional[int] = None,
+    sort: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Search for environments.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.(optional)
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
-    :param filter_expression: Filter expression string (optional)
-    Filter expression can include the following fields:
-     - id: The Environment object entity ID.
-     - name: The name of this environment.
-     - namespace_id: The namespace id of this environment.
-     - namespace_name: The namespace name of this environment.
-     - is_replica: Is this a replicated object.
-     - namespace: The namespace of this environment for replicated and restored objects.
-     - engine_id: A reference to the Engine that this Environment connection is associated with.
-     - engine_name: A reference to the Engine that this Environment connection is associated with.
-     - enabled: True if this environment is enabled.
-     - encryption_enabled: Flag indicating whether the data transfer is encrypted or not.
-     - description: The environment description.
-     - is_cluster: True if this environment is a cluster of hosts.
-     - cluster_home: Cluster home for RAC environment.
-     - cluster_name: Cluster name for Oracle RAC environment.
-     - cluster_user: Cluster user for Oracle RAC environment.
-     - scan: The Single Client Access Name of the cluster (11.2 and greater clusters only).
-     - remote_listener: The default remote_listener parameter to be used for databases on the cluster.
-     - is_windows_target: True if this windows environment is a target environment.
-     - staging_environment: ID of the staging environment.
-     - hosts: The hosts that are part of this environment.
-     - tags: The tags to be created for this environment.
-     - repositories: Repositories associated with this environment. A Repository typically corresponds to a database installation.
-     - listeners: Oracle listeners associated with this environment.
-     - os_type: The operating system type of this environment.
-     - env_users: Environment users associated with this environment.
-     - ase_db_user_name: The username of the SAP ASE database user.
-     - ase_enable_tls: True if SAP ASE environment configured with TLS/SSL to discover the SAP ASE instances.
-     - ase_skip_server_certificate_validation: If True, ASE database connection will skip the server certificate validation during the TLS/SSL handshake.
-
-    How to use filter_expresssion: 
-    A request body containing a filter expression. This enables searching
-    for items matching arbitrarily complex conditions. The list of
-    attributes which can be used in filter expressions is available
-    in the x-filterable vendor extension.
+    Unified tool for ENVIRONMENT operations.
     
-    # Filter Expression Overview
-    **Note: All keywords are case-insensitive**
+    This tool supports 9 actions: search, get, create, update, delete, enable, disable, refresh, add_tags
     
-    ## Comparison Operators
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
-    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
-    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
-    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
-    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
-    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
-    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
-    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
+    ======================================================================
+    ACTION REFERENCE
+    ======================================================================
     
-    ## Search Operator
-    The SEARCH operator filters for items which have any filterable
-    attribute that contains the input string as a substring, comparison
-    is done case-insensitively. This is not restricted to attributes with
-    string values. Specifically `SEARCH '12'` would match an item with an
-    attribute with an integer value of `123`.
+    ACTION: search
+    ----------------------------------------
+    Summary: Search for environments.
+    Method: POST
+    Endpoint: /environments/search
+    Required Parameters: limit, cursor, sort
     
-    ## Logical Operators
-    Ordered by precedence.
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
-    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
-    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
+    Filterable Fields:
+        - id: The Environment object entity ID.
+        - name: The name of this environment.
+        - namespace_id: The namespace id of this environment.
+        - namespace_name: The namespace name of this environment.
+        - is_replica: Is this a replicated object.
+        - namespace: The namespace of this environment for replicated and rest...
+        - engine_id: A reference to the Engine that this Environment connectio...
+        - engine_name: A reference to the Engine that this Environment connectio...
+        - enabled: True if this environment is enabled.
+        - encryption_enabled: Flag indicating whether the data transfer is encrypted or...
+        - description: The environment description.
+        - is_cluster: True if this environment is a cluster of hosts.
+        - cluster_home: Cluster home for RAC environment.
+        - cluster_name: Cluster name for Oracle RAC environment.
+        - cluster_user: Cluster user for Oracle RAC environment.
+        - scan: The Single Client Access Name of the cluster (11.2 and gr...
+        - remote_listener: The default remote_listener parameter to be used for data...
+        - is_windows_target: True if this windows environment is a target environment.
+        - staging_environment: ID of the staging environment.
+        - hosts: The hosts that are part of this environment.
+        - tags: The tags to be created for this environment.
+        - repositories: Repositories associated with this environment. A Reposito...
+        - listeners: Oracle listeners associated with this environment.
+        - os_type: The operating system type of this environment.
+        - env_users: Environment users associated with this environment.
+        - ase_db_user_name: The username of the SAP ASE database user.
+        - ase_enable_tls: True if SAP ASE environment configured with TLS/SSL to di...
+        - ase_skip_server_certificate_validation: If True, ASE database connection will skip the server cer...
     
-    ## Grouping
-    Parenthesis `()` can be used to override operator precedence.
+    Filter Syntax:
+        Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
+        Combine: AND, OR
+        Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
     
-    For example:
-    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
+    Example:
+        >>> environment_tool(action='search', limit=..., cursor=..., sort=...)
     
-    ## Literal Values
-    | Literal      | Description | Examples |
-    | --- | --- | --- |
-    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
-    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
-    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
-    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
-    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
-    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
+    ACTION: get
+    ----------------------------------------
+    Summary: Returns an environment by ID.
+    Method: GET
+    Endpoint: /environments/{environmentId}
+    Required Parameters: environment_id
     
-    ## Limitations
-    - A maximum of 8 unique identifiers may be used inside a filter expression.
+    Example:
+        >>> environment_tool(action='get', environment_id='example-environment-123')
     
+    ACTION: create
+    ----------------------------------------
+    Summary: Create an environment.
+    Method: POST
+    Endpoint: /environments
+    
+    Example:
+        >>> environment_tool(action='create')
+    
+    ACTION: update
+    ----------------------------------------
+    Summary: Update an environment by ID.
+    Method: PATCH
+    Endpoint: /environments/{environmentId}
+    Required Parameters: environment_id
+    
+    Example:
+        >>> environment_tool(action='update', environment_id='example-environment-123')
+    
+    ACTION: delete
+    ----------------------------------------
+    Summary: Delete an environment by ID.
+    Method: DELETE
+    Endpoint: /environments/{environmentId}
+    Required Parameters: environment_id
+    
+    Example:
+        >>> environment_tool(action='delete', environment_id='example-environment-123')
+    
+    ACTION: enable
+    ----------------------------------------
+    Summary: Enable a disabled environment.
+    Method: POST
+    Endpoint: /environments/{environmentId}/enable
+    Required Parameters: environment_id
+    
+    Example:
+        >>> environment_tool(action='enable', environment_id='example-environment-123')
+    
+    ACTION: disable
+    ----------------------------------------
+    Summary: Disable environment.
+    Method: POST
+    Endpoint: /environments/{environmentId}/disable
+    Required Parameters: environment_id
+    
+    Example:
+        >>> environment_tool(action='disable', environment_id='example-environment-123')
+    
+    ACTION: refresh
+    ----------------------------------------
+    Summary: Refresh environment.
+    Method: POST
+    Endpoint: /environments/{environmentId}/refresh
+    Required Parameters: environment_id
+    
+    Example:
+        >>> environment_tool(action='refresh', environment_id='example-environment-123')
+    
+    ACTION: add_tags
+    ----------------------------------------
+    Summary: Create tags for an Environment.
+    Method: POST
+    Endpoint: /environments/{environmentId}/tags
+    Required Parameters: environment_id
+    
+    Example:
+        >>> environment_tool(action='add_tags', environment_id='example-environment-123')
+    
+    ======================================================================
+    PARAMETERS
+    ======================================================================
+    
+    Args:
+        action (str): The operation to perform. One of: search, get, create, update, delete, enable, disable, refresh, add_tags
+        cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
+            [Required for: search]
+        environment_id (str): The unique identifier for the environment.
+            [Required for: get, update, delete, enable, disable, refresh, add_tags]
+        filter_expression (str): Filter expression to narrow results (e.g., "name CONTAINS 'prod'")
+            [Optional for all actions]
+        limit (int): Maximum number of objects to return per query. The value must be between 1 an...
+            [Required for: search]
+        sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
+            [Required for: search]
+    
+    Returns:
+        Dict[str, Any]: The API response containing operation results
+    
+    Raises:
+        Returns error dict if required parameters are missing for the action
     """
-    # Build parameters excluding None values
-    params = build_params(limit=limit, cursor=cursor, sort=sort)
-    search_body = {'filter_expression': filter_expression}
-    return make_api_request('POST', '/environments/search', params=params, json_body=search_body)
+    # Route to appropriate API based on action
+    if action == 'search':
+        params = build_params(limit=limit, cursor=cursor, sort=sort)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        return make_api_request('POST', '/environments/search', params=params, json_body=body)
+    elif action == 'get':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action get'}
+        endpoint = f'/environments/{environment_id}'
+        params = build_params()
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'create':
+        params = build_params()
+        return make_api_request('POST', '/environments', params=params)
+    elif action == 'update':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action update'}
+        endpoint = f'/environments/{environment_id}'
+        params = build_params()
+        return make_api_request('PATCH', endpoint, params=params)
+    elif action == 'delete':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action delete'}
+        endpoint = f'/environments/{environment_id}'
+        params = build_params()
+        return make_api_request('DELETE', endpoint, params=params)
+    elif action == 'enable':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action enable'}
+        endpoint = f'/environments/{environment_id}/enable'
+        params = build_params()
+        return make_api_request('POST', endpoint, params=params)
+    elif action == 'disable':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action disable'}
+        endpoint = f'/environments/{environment_id}/disable'
+        params = build_params()
+        return make_api_request('POST', endpoint, params=params)
+    elif action == 'refresh':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action refresh'}
+        endpoint = f'/environments/{environment_id}/refresh'
+        params = build_params()
+        return make_api_request('POST', endpoint, params=params)
+    elif action == 'add_tags':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action add_tags'}
+        endpoint = f'/environments/{environment_id}/tags'
+        params = build_params()
+        return make_api_request('POST', endpoint, params=params)
+    else:
+        return {'error': f'Unknown action: {action}. Valid actions: search, get, create, update, delete, enable, disable, refresh, add_tags'}
 
 
 def register_tools(app, dct_client):
@@ -156,8 +305,8 @@ def register_tools(app, dct_client):
     client = dct_client
     logger.info(f'Registering tools for environment_endpoints...')
     try:
-        logger.info(f'  Registering tool function: search_environments')
-        app.add_tool(search_environments, name="search_environments")
+        logger.info(f'  Registering tool function: environment_tool')
+        app.add_tool(environment_tool, name="environment_tool")
     except Exception as e:
         logger.error(f'Error registering tools for environment_endpoints: {e}')
     logger.info(f'Tools registration finished for environment_endpoints.')

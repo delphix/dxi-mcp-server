@@ -1,2 +1,0 @@
-/connectors/search
-/executions/search

@@ -1,8 +1,0 @@
-/bookmarks/search
-/data-connections/search
-/dsources/search
-/snapshots/search
-/sources/search
-/timeflows/search
-/vdb-groups/search
-/vdbs/search

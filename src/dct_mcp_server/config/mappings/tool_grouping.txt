@@ -1,0 +1,66 @@
+# Tool Grouping Configuration
+# Format: tool_name|base_path_pattern(s)|description
+# Multiple patterns separated by comma
+# Based on DCT API v3 OpenAPI specification
+
+# ========================================
+# DATASET & VIRTUALIZATION TOOLS
+# ========================================
+vdb_tool|/vdbs|Virtual Database operations - search, provision, refresh, rollback, start, stop, enable, disable
+vdb_group_tool|/vdb-groups|VDB Group operations - manage groups of VDBs with coordinated refresh and rollback
+dsource_tool|/dsources|dSource operations - search, view data sources
+snapshot_tool|/snapshots|Snapshot operations - search, get, update retention, delete snapshots
+bookmark_tool|/bookmarks|Bookmark operations - create and manage point-in-time bookmarks across VDBs
+
+# ========================================
+# DATA SOURCE TOOLS
+# ========================================
+instance_tool|/cdbs,/vcdbs|Container Database operations - CDBs and vCDBs (Oracle)
+source_tool|/sources|Source operations - manage production sources
+
+# ========================================
+# TEMPLATE & CONFIGURATION TOOLS
+# ========================================
+database_template_tool|/database-templates|Database Template operations - manage VDB provisioning templates
+hook_template_tool|/hook-templates|Hook Template operations - manage pre/post operation hook templates
+
+# ========================================
+# POLICY TOOLS
+# ========================================
+virtualization_policy_tool|/virtualization-policies|Virtualization Policy operations - manage retention, refresh, sync policies
+replication_tool|/replication-profiles|Replication Profile operations - configure and execute data replication
+
+# ========================================
+# PLATFORM MANAGEMENT TOOLS
+# ========================================
+engine_tool|/management/engines|Engine operations - register, update, unregister Delphix engines
+environment_tool|/environments|Environment operations - create, manage hosts, listeners
+data_connection_tool|/data-connections|Data Connection operations - manage database connectivity
+
+# ========================================
+# MERGED TOOLS (CD Admin specific)
+# ========================================
+data_tool|/vdbs,/vdb-groups,/dsources|Merged VDB/VDB Group/dSource operations for CD Admin
+snapshot_bookmark_tool|/snapshots,/bookmarks|Merged Snapshot + Bookmark operations for CD Admin
+environment_source_tool|/environments,/sources|Merged Environment + Source operations for CD Admin
+
+# ========================================
+# IDENTITY & ACCESS MANAGEMENT TOOLS
+# ========================================
+iam_tool|/management/accounts,/roles,/access-groups,/management/api-clients|Full IAM operations - accounts, roles, access groups, authentication
+tag_tool|/management/tags|Tag operations - create and manage resource tags
+
+# ========================================
+# JOB & MONITORING TOOLS
+# ========================================
+job_tool|/jobs|Job operations - monitor and manage async operations
+
+# ========================================
+# REPORTING TOOLS
+# ========================================
+reporting_tool|/reporting,/management/license|Reporting operations - storage, inventory, performance, license reports
+
+# ========================================
+# PLATFORM ADMIN MERGED TOOL
+# ========================================
+admin_platform_tool|/ai/management,/management/telemetry,/management/properties,/management/smtp,/management/ldap-config,/management/saml-config,/management/proxy-configuration|Merged AI Services + Telemetry + SMTP/LDAP/SAML/Proxy admin config

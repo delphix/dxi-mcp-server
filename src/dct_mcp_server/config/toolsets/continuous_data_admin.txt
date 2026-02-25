@@ -1,0 +1,259 @@
+# Continuous Data Administrator Toolset - 14 Tools
+# Description: Perform traditional Continuous Data "Management App" operations
+# Format: METHOD|/endpoint/path|action_name
+# Target users: DBAs, Data administrators with full data management capability
+
+# ----------------------------------------------------------------------------
+# TOOL 1: data_tool - VDB / VDB Group / dSources (merged)
+# ----------------------------------------------------------------------------
+# VDB Operations
+POST|/vdbs/search|search_vdbs
+GET|/vdbs/{vdbId}|get_vdb
+POST|/vdbs/provision_by_timestamp|provision_by_timestamp
+POST|/vdbs/provision_by_snapshot|provision_by_snapshot
+POST|/vdbs/provision_from_bookmark|provision_from_bookmark
+POST|/vdbs/provision_by_location|provision_by_location
+PATCH|/vdbs/{vdbId}|update_vdb
+POST|/vdbs/{vdbId}/delete|delete_vdb
+POST|/vdbs/{vdbId}/start|start_vdb
+POST|/vdbs/{vdbId}/stop|stop_vdb
+POST|/vdbs/{vdbId}/enable|enable_vdb
+POST|/vdbs/{vdbId}/disable|disable_vdb
+POST|/vdbs/{vdbId}/refresh_by_timestamp|refresh_vdb_by_timestamp
+POST|/vdbs/{vdbId}/refresh_by_snapshot|refresh_vdb_by_snapshot
+POST|/vdbs/{vdbId}/refresh_from_bookmark|refresh_vdb_from_bookmark
+POST|/vdbs/{vdbId}/rollback_by_timestamp|rollback_vdb_by_timestamp
+POST|/vdbs/{vdbId}/rollback_by_snapshot|rollback_vdb_by_snapshot
+POST|/vdbs/{vdbId}/rollback_from_bookmark|rollback_vdb_from_bookmark
+POST|/vdbs/{vdbId}/switch_timeflow|switch_vdb_timeflow
+POST|/vdbs/{vdbId}/lock|lock_vdb
+POST|/vdbs/{vdbId}/unlock|unlock_vdb
+GET|/vdbs/{vdbId}/snapshots|list_vdb_snapshots
+POST|/vdbs/{vdbId}/tags|add_vdb_tags
+DELETE|/vdbs/{vdbId}/tags/delete|delete_vdb_tags
+# VDB Group Operations
+POST|/vdb-groups/search|search_vdb_groups
+GET|/vdb-groups/{vdbGroupId}|get_vdb_group
+POST|/vdb-groups|create_vdb_group
+PATCH|/vdb-groups/{vdbGroupId}|update_vdb_group
+DELETE|/vdb-groups/{vdbGroupId}|delete_vdb_group
+POST|/vdb-groups/{vdbGroupId}/refresh|refresh_vdb_group
+POST|/vdb-groups/{vdbGroupId}/rollback|rollback_vdb_group
+POST|/vdb-groups/{vdbGroupId}/lock|lock_vdb_group
+POST|/vdb-groups/{vdbGroupId}/unlock|unlock_vdb_group
+POST|/vdb-groups/{vdbGroupId}/start|start_vdb_group
+POST|/vdb-groups/{vdbGroupId}/stop|stop_vdb_group
+POST|/vdb-groups/provision_from_bookmark|provision_vdb_group_from_bookmark
+POST|/vdb-groups/{vdbGroupId}/tags|add_vdb_group_tags
+DELETE|/vdb-groups/{vdbGroupId}/tags/delete|delete_vdb_group_tags
+# dSource Operations
+POST|/dsources/search|search_dsources
+GET|/dsources/{dsourceId}|get_dsource
+GET|/dsources/{dsourceId}/snapshots|list_dsource_snapshots
+
+# ----------------------------------------------------------------------------
+# TOOL 2: snapshot_bookmark_tool - Snapshots + Bookmarks (merged)
+# ----------------------------------------------------------------------------
+# Snapshot Operations
+POST|/snapshots/search|search_snapshots
+GET|/snapshots/{snapshotId}|get_snapshot
+PATCH|/snapshots/{snapshotId}|update_snapshot
+POST|/snapshots/{snapshotId}/delete|delete_snapshot
+POST|/snapshots/{snapshotId}/unset_expiration|unset_snapshot_expiration
+GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
+POST|/snapshots/find_by_location|find_snapshot_by_location
+POST|/snapshots/find_by_timestamp|find_snapshot_by_timestamp
+POST|/snapshots/{snapshotId}/tags|add_snapshot_tags
+DELETE|/snapshots/{snapshotId}/tags/delete|delete_snapshot_tags
+# Bookmark Operations
+POST|/bookmarks/search|search_bookmarks
+GET|/bookmarks/{bookmarkId}|get_bookmark
+POST|/bookmarks|create_bookmark
+PATCH|/bookmarks/{bookmarkId}|update_bookmark
+DELETE|/bookmarks/{bookmarkId}|delete_bookmark
+GET|/bookmarks/{bookmarkId}/vdb-groups|get_bookmark_vdb_groups
+POST|/bookmarks/{bookmarkId}/tags|add_bookmark_tags
+DELETE|/bookmarks/{bookmarkId}/tags/delete|delete_bookmark_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 3: instance_tool - Instances (CDB, vCDB)
+# ----------------------------------------------------------------------------
+POST|/cdbs/search|search_cdbs
+GET|/cdbs/{cdbId}|get_cdb
+PATCH|/cdbs/{cdbId}/update|update_cdb
+POST|/cdbs/{cdbId}/delete|delete_cdb
+POST|/cdbs/{cdbId}/enable|enable_cdb
+POST|/cdbs/{cdbId}/disable|disable_cdb
+POST|/vcdbs/search|search_vcdbs
+GET|/vcdbs/{vcdbId}|get_vcdb
+PATCH|/vcdbs/{vcdbId}/update|update_vcdb
+POST|/vcdbs/{vcdbId}/delete|delete_vcdb
+POST|/vcdbs/{vcdbId}/enable|enable_vcdb
+POST|/vcdbs/{vcdbId}/disable|disable_vcdb
+POST|/vcdbs/{vcdbId}/start|start_vcdb
+POST|/vcdbs/{vcdbId}/stop|stop_vcdb
+
+# ----------------------------------------------------------------------------
+# TOOL 4: database_template_tool - VDB Templates
+# ----------------------------------------------------------------------------
+POST|/database-templates/search|search
+GET|/database-templates/{databaseTemplateId}|get
+POST|/database-templates|create
+PATCH|/database-templates/{databaseTemplateId}|update
+DELETE|/database-templates/{databaseTemplateId}|delete
+POST|/database-templates/{databaseTemplateId}/tags|add_tags
+DELETE|/database-templates/{databaseTemplateId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 5: hook_template_tool - Hooks
+# ----------------------------------------------------------------------------
+POST|/hook-templates/search|search
+GET|/hook-templates/{hookTemplateId}|get
+POST|/hook-templates|create
+PATCH|/hook-templates/{hookTemplateId}|update
+DELETE|/hook-templates/{hookTemplateId}|delete
+POST|/hook-templates/{hookTemplateId}/tags|add_tags
+DELETE|/hook-templates/{hookTemplateId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 6: virtualization_policy_tool - Policies
+# ----------------------------------------------------------------------------
+POST|/virtualization-policies/search|search
+GET|/virtualization-policies/{policyId}|get
+POST|/virtualization-policies|create
+PATCH|/virtualization-policies/{policyId}|update
+DELETE|/virtualization-policies/{policyId}|delete
+POST|/virtualization-policies/{policyId}/apply|apply
+POST|/virtualization-policies/{policyId}/unapply|unapply
+POST|/virtualization-policies/targets/search|search_targets
+POST|/virtualization-policies/{policyId}/tags|add_tags
+DELETE|/virtualization-policies/{policyId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 7: job_tool - Operations
+# ----------------------------------------------------------------------------
+POST|/jobs/search|search
+GET|/jobs/{jobId}|get
+POST|/jobs/{jobId}/abandon|abandon
+GET|/jobs/{jobId}/result|get_result
+POST|/jobs/{jobId}/tags|add_tags
+DELETE|/jobs/{jobId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 8: engine_tool - CD Engines
+# ----------------------------------------------------------------------------
+POST|/management/engines/search|search
+GET|/management/engines/{engineId}|get
+PATCH|/management/engines/{engineId}|update
+POST|/management/engines/{engineId}/tags|add_tags
+DELETE|/management/engines/{engineId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 9: environment_source_tool - Environments + Sources (merged)
+# ----------------------------------------------------------------------------
+# Environment Operations
+POST|/environments/search|search_environments
+GET|/environments/{environmentId}|get_environment
+POST|/environments|create_environment
+PATCH|/environments/{environmentId}|update_environment
+DELETE|/environments/{environmentId}|delete_environment
+POST|/environments/{environmentId}/enable|enable_environment
+POST|/environments/{environmentId}/disable|disable_environment
+POST|/environments/{environmentId}/refresh|refresh_environment
+GET|/environments/{environmentId}/hosts|list_environment_hosts
+GET|/environments/{environmentId}/listeners|list_environment_listeners
+POST|/environments/{environmentId}/tags|add_environment_tags
+DELETE|/environments/{environmentId}/tags/delete|delete_environment_tags
+# Source Operations
+POST|/sources/search|search_sources
+GET|/sources/{sourceId}|get_source
+PATCH|/sources/{sourceId}|update_source
+POST|/sources/{sourceId}/tags|add_source_tags
+DELETE|/sources/{sourceId}/tags/delete|delete_source_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 10: replication_tool - Replication & Retention
+# ----------------------------------------------------------------------------
+POST|/replication-profiles/search|search
+GET|/replication-profiles/{replicationProfileId}|get
+POST|/replication-profiles|create
+PATCH|/replication-profiles/{replicationProfileId}|update
+DELETE|/replication-profiles/{replicationProfileId}|delete
+POST|/replication-profiles/{replicationProfileId}/execute|execute
+POST|/replication-profiles/{replicationProfileId}/tags|add_tags
+DELETE|/replication-profiles/{replicationProfileId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 11: reporting_tool - Insights + License Report + Automated Reports
+# ----------------------------------------------------------------------------
+# Storage Reports
+POST|/reporting/storage-savings-report/search|search_storage_savings_report
+POST|/reporting/storage-capacity-data-report|get_storage_capacity_report
+POST|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
+# VDB Inventory Reports
+POST|/reporting/vdb-inventory-report|get_vdb_inventory_report
+POST|/reporting/vdb-inventory-report/search|search_vdb_inventory_report
+# dSource Reports
+POST|/reporting/dsource-consumption-report|get_dsource_consumption_report
+# Performance Reports
+POST|/reporting/engine-performance-analytic-report|get_engine_performance_report
+POST|/reporting/dataset-performance-analytics|get_dataset_performance_analytics
+# API & Audit Reports
+POST|/reporting/api-usage-report|get_api_usage_report
+POST|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
+# Automated/Scheduled Reports
+POST|/reporting/schedule/search|search_scheduled_reports
+GET|/reporting/schedule/{reportId}|get_scheduled_report
+POST|/reporting/schedule|create_scheduled_report
+PATCH|/reporting/schedule/{reportId}|update_scheduled_report
+DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
+# License Report
+GET|/management/license|get_license
+
+# ----------------------------------------------------------------------------
+# TOOL 12: iam_tool - IAM (Accounts, Access Groups, Roles, Authentication)
+# ----------------------------------------------------------------------------
+# Accounts
+POST|/management/accounts/search|search_accounts
+GET|/management/accounts/{id}|get_account
+POST|/management/accounts|create_account
+PATCH|/management/accounts/{id}|update_account
+DELETE|/management/accounts/{id}|delete_account
+POST|/management/accounts/{id}/enable|enable_account
+POST|/management/accounts/{id}/disable|disable_account
+POST|/management/accounts/{id}/reset_password|reset_password
+# Roles
+POST|/roles/search|search_roles
+GET|/roles/{roleId}|get_role
+POST|/roles|create_role
+PATCH|/roles/{roleId}|update_role
+DELETE|/roles/{roleId}|delete_role
+# Access Groups
+POST|/access-groups/search|search_access_groups
+GET|/access-groups/{accessGroupId}|get_access_group
+POST|/access-groups|create_access_group
+PATCH|/access-groups/{accessGroupId}|update_access_group
+DELETE|/access-groups/{accessGroupId}|delete_access_group
+# Authentication
+GET|/management/api-clients|list_api_clients
+POST|/management/api-clients|create_api_client
+DELETE|/management/api-clients/{id}|delete_api_client
+
+# ----------------------------------------------------------------------------
+# TOOL 13: data_connection_tool - Connections
+# ----------------------------------------------------------------------------
+POST|/data-connections/search|search
+GET|/data-connections/{dataConnectionId}|get
+PATCH|/data-connections/{dataConnectionId}|update
+POST|/data-connections/{dataConnectionId}/tags|add_tags
+DELETE|/data-connections/{dataConnectionId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 14: tag_tool - Tags
+# ----------------------------------------------------------------------------
+POST|/management/tags/search|search
+GET|/management/tags/{tagId}|get
+POST|/management/tags|create
+DELETE|/management/tags/{tagId}|delete
+GET|/management/tags/{tagId}/usages|get_usages
+POST|/management/tags/{tagId}/usages/search|search_usages

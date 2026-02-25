@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
+from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
 import asyncio
 import logging
 import threading
@@ -8,6 +9,38 @@ from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CONFIRMATION INTEGRATION
+# =============================================================================
+# For destructive operations (DELETE, POST .../delete), generated tools should:
+# 1. Call requires_confirmation(method, path) to check if confirmation needed
+# 2. If True, include confirmation_message in the response
+# 3. LLM should use check_operation_confirmation meta-tool before executing
+#
+# Example usage in generated tool:
+#   confirmation = get_confirmation_for_operation("DELETE", "/vdbs/{id}")
+#   if confirmation["level"] != "none":
+#       return {
+#           "requires_confirmation": True,
+#           "confirmation_level": confirmation["level"],
+#           "confirmation_message": confirmation["message"],
+#           "operation": "delete_vdb"
+#       }
+# =============================================================================
+
+def check_confirmation(method: str, api_path: str) -> Optional[Dict[str, Any]]:
+    """Check if operation requires confirmation. Returns confirmation details or None."""
+    confirmation = get_confirmation_for_operation(method, api_path)
+    if confirmation["level"] != "none":
+        return {
+            "requires_confirmation": True,
+            "confirmation_level": confirmation["level"],
+            "confirmation_message": confirmation.get("message", "Please confirm this operation."),
+            "conditional": confirmation.get("conditional", False),
+            "threshold_days": confirmation.get("threshold_days")
+        }
+    return None
 
 def async_to_sync(async_func):
     """Utility decorator to convert async functions to sync with proper event loop handling."""
@@ -49,136 +82,298 @@ def build_params(**kwargs):
     return {k: v for k, v in kwargs.items() if v is not None}
 
 @log_tool_execution
-def search_engines(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
+def engine_tool(
+    action: str,  # One of: search, get, register, update, unregister, add_tags
+    auto_tagging_config: Optional[str] = None,
+    connection_status: Optional[str] = None,
+    connection_status_details: Optional[str] = None,
+    cpu_core_count: Optional[int] = None,
+    cursor: Optional[str] = None,
+    data_storage_capacity: Optional[int] = None,
+    data_storage_used: Optional[int] = None,
+    engine_connection_status: Optional[str] = None,
+    engine_connection_status_details: Optional[str] = None,
+    engine_id: Optional[str] = None,
+    filter_expression: Optional[str] = None,
+    hashicorp_vault_id: Optional[int] = None,
+    hostname: Optional[str] = None,
+    hyperscale_truststore_filename: Optional[str] = None,
+    hyperscale_truststore_password: Optional[str] = None,
+    id: Optional[str] = None,
+    insecure_ssl: Optional[bool] = None,
+    limit: Optional[int] = None,
+    masking_allocated_memory: Optional[int] = None,
+    masking_available_cores: Optional[int] = None,
+    masking_hashicorp_vault_id: Optional[int] = None,
+    masking_jobs_running: Optional[int] = None,
+    masking_max_concurrent_jobs: Optional[int] = None,
+    masking_memory_used: Optional[int] = None,
+    masking_password: Optional[str] = None,
+    masking_username: Optional[str] = None,
+    memory_size: Optional[int] = None,
+    name: Optional[str] = None,
+    password: Optional[str] = None,
+    platform: Optional[str] = None,
+    sort: Optional[str] = None,
+    ssh_public_key: Optional[str] = None,
+    status: Optional[str] = None,
+    type: Optional[str] = None,
+    unsafe_ssl_hostname_check: Optional[bool] = None,
+    username: Optional[str] = None,
+    using_continuous_vault: Optional[bool] = None,
+    using_object_storage: Optional[bool] = None,
+    uuid: Optional[str] = None,
+    version: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Search for engines.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.(optional)
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
-    :param filter_expression: Filter expression string (optional)
-    Filter expression can include the following fields:
-     - id: The Engine object entity ID.
-     - uuid: The unique identifier generated by this engine.
-     - type: The type of this engine.
-     - version: The engine version.
-     - name: The name of this engine.
-     - ssh_public_key: The ssh public key of this engine.
-     - hostname: The hostname of this engine.
-     - cpu_core_count: The total number of CPU cores on this engine.
-     - memory_size: The total amount of memory on this engine, in bytes.
-     - data_storage_capacity: The total amount of storage allocated for engine objects and system metadata, in bytes.
-     - data_storage_used: The amount of storage used by engine objects and system metadata, in bytes.
-     - insecure_ssl: Allow connections to the engine over HTTPs without validating the TLS certificate. Even though
-the connection to the engine might be performed over HTTPs, setting this property eliminates
-the protection against a man-in-the-middle attach for connections to this engine. Instead,
-consider configuring DCT with Certificate Authority certificates.
+    Unified tool for ENGINE operations.
+    
+    This tool supports 6 actions: search, get, register, update, unregister, add_tags
+    
+    ======================================================================
+    ACTION REFERENCE
+    ======================================================================
+    
+    ACTION: search
+    ----------------------------------------
+    Summary: Search for engines.
+    Method: POST
+    Endpoint: /management/engines/search
+    Required Parameters: limit, cursor, sort
+    
+    Filterable Fields:
+        - id: The Engine object entity ID.
+        - uuid: The unique identifier generated by this engine.
+        - type: The type of this engine.
+        - version: The engine version.
+        - name: The name of this engine.
+        - ssh_public_key: The ssh public key of this engine.
+        - hostname: The hostname of this engine.
+        - cpu_core_count: The total number of CPU cores on this engine.
+        - memory_size: The total amount of memory on this engine, in bytes.
+        - data_storage_capacity: The total amount of storage allocated for engine objects ...
+        - data_storage_used: The amount of storage used by engine objects and system m...
+        - insecure_ssl: Allow connections to the engine over HTTPs without valida...
+        - unsafe_ssl_hostname_check: Ignore validation of the name associated to the TLS certi...
+        - status: the status of the engine
 
-     - unsafe_ssl_hostname_check: Ignore validation of the name associated to the TLS certificate when connecting to the engine over HTTPs.
-Setting this value must only be done if the TLS certificate of the engine does not match the hostname,
-and the TLS configuration of the engine cannot be fixed. Setting this property reduces the protection
-against a man-in-the-middle attack for connections to this engine.
-This is ignored if insecure_ssl is set.
+        - connection_status: The status of the connection to the engine. Deprecated; u...
+        - engine_connection_status: The state of the connection to the engine.
+        - connection_status_details: If set, details about the status of the connection to the...
+        - engine_connection_status_details: If set, details about the state of the connection to the ...
+        - username: The virtualization domain admin username.
+        - password: The virtualization domain admin password.
+        - masking_username: The masking admin username.
+        - masking_password: The masking admin password.
+        - hashicorp_vault_username_command_args: Arguments to pass to the Vault CLI tool to retrieve the v...
+        - hashicorp_vault_masking_username_command_args: Arguments to pass to the Vault CLI tool to retrieve the m...
+        - hashicorp_vault_password_command_args: Arguments to pass to the Vault CLI tool to retrieve the v...
+        - hashicorp_vault_masking_password_command_args: Arguments to pass to the Vault CLI tool to retrieve the m...
+        - masking_hashicorp_vault_id: Reference to the Hashicorp vault to use to retrieve maski...
+        - hashicorp_vault_id: Reference to the Hashicorp vault to use to retrieve virtu...
+        - tags: The tags to be created for this engine.
+        - masking_memory_used: The current amount of memory used by running masking jobs...
+        - masking_allocated_memory: The maximum amount of memory available for running maskin...
+        - masking_jobs_running: The number of masking jobs currently running.
+        - masking_max_concurrent_jobs: The maximum number of masking jobs that can be running at...
+        - masking_available_cores: The number of CPU cores available to the masking engine.
+        - hyperscale_instance_ids: List of Hyperscale Instances that this engine is connecte...
+        - hyperscale_truststore_filename: File name of a truststore which can be used to validate t...
+        - hyperscale_truststore_password: Password to read the truststore as expected by associated...
+        - using_object_storage: true if the engine is using an object store (like AWS S3)...
+        - using_continuous_vault: true if the engine is using an object store (like AWS S3)...
+        - platform: The infrastructure or environment where the engine is dep...
+    
+    Filter Syntax:
+        Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
+        Combine: AND, OR
+        Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
+    
+    Example:
+        >>> engine_tool(action='search', limit=..., cursor=..., sort=...)
+    
+    ACTION: get
+    ----------------------------------------
+    Summary: Returns a registered engine by ID.
+    Method: GET
+    Endpoint: /management/engines/{engineId}
+    Required Parameters: engine_id
+    
+    Example:
+        >>> engine_tool(action='get', engine_id='example-engine-123')
+    
+    ACTION: register
+    ----------------------------------------
+    Summary: Register an engine.
+    Method: POST
+    Endpoint: /management/engines
+    Required Parameters: name, hostname
+    
+    Example:
+        >>> engine_tool(action='register', name=..., hostname=...)
+    
+    ACTION: update
+    ----------------------------------------
+    Summary: Update a registered engine.
+    Method: PATCH
+    Endpoint: /management/engines/{engineId}
+    Required Parameters: engine_id
+    
+    Example:
+        >>> engine_tool(action='update', engine_id='example-engine-123')
+    
+    ACTION: unregister
+    ----------------------------------------
+    Summary: Unregister an engine.
+    Method: DELETE
+    Endpoint: /management/engines/{engineId}
+    Required Parameters: engine_id
+    
+    Example:
+        >>> engine_tool(action='unregister', engine_id='example-engine-123')
+    
+    ACTION: add_tags
+    ----------------------------------------
+    Summary: Create tags for an Engine.
+    Method: POST
+    Endpoint: /management/engines/{engineId}/tags
+    Required Parameters: engine_id
+    
+    Example:
+        >>> engine_tool(action='add_tags', engine_id='example-engine-123')
+    
+    ======================================================================
+    PARAMETERS
+    ======================================================================
+    
+    Args:
+        action (str): The operation to perform. One of: search, get, register, update, unregister, add_tags
+        auto_tagging_config (str): Request body parameter
+            [Optional for all actions]
+        connection_status (str): The status of the connection to the engine. Deprecated; use "engine_connectio...
+            [Optional for all actions]
+        connection_status_details (str): If set, details about the status of the connection to the engine. Deprecated;...
+            [Optional for all actions]
+        cpu_core_count (int): The total number of CPU cores on this engine.
+            [Optional for all actions]
+        cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
+            [Required for: search]
+        data_storage_capacity (int): The total amount of storage allocated for engine objects and system metadata,...
+            [Optional for all actions]
+        data_storage_used (int): The amount of storage used by engine objects and system metadata, in bytes.
+            [Optional for all actions]
+        engine_connection_status (str): The state of the connection to the engine.
+            [Optional for all actions]
+        engine_connection_status_details (str): If set, details about the state of the connection to the engine.
+            [Optional for all actions]
+        engine_id (str): The unique identifier for the engine.
+            [Required for: get, update, unregister, add_tags]
+        filter_expression (str): Filter expression to narrow results (e.g., "name CONTAINS 'prod'")
+            [Optional for all actions]
+        hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve virtualization engine cre...
+            [Optional for all actions]
+        hostname (str): Request body parameter
+            [Required for: register]
+        hyperscale_truststore_filename (str): File name of a truststore which can be used to validate the TLS certificate o...
+            [Optional for all actions]
+        hyperscale_truststore_password (str): Password to read the truststore as expected by associated hyperscale instances.
 
-     - status: the status of the engine
+            [Optional for all actions]
+        id (str): The Engine object entity ID.
+            [Optional for all actions]
+        insecure_ssl (bool): Allow connections to the engine over HTTPs without validating the TLS certifi...
+            [Optional for all actions]
+        limit (int): Maximum number of objects to return per query. The value must be between 1 an...
+            [Required for: search]
+        masking_allocated_memory (int): The maximum amount of memory available for running masking jobs in bytes.
+            [Optional for all actions]
+        masking_available_cores (int): The number of CPU cores available to the masking engine.
+            [Optional for all actions]
+        masking_hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve masking engine credentials.
+            [Optional for all actions]
+        masking_jobs_running (int): The number of masking jobs currently running.
+            [Optional for all actions]
+        masking_max_concurrent_jobs (int): The maximum number of masking jobs that can be running at the same time.
+            [Optional for all actions]
+        masking_memory_used (int): The current amount of memory used by running masking jobs in bytes.
+            [Optional for all actions]
+        masking_password (str): The masking admin password.
+            [Optional for all actions]
+        masking_username (str): The masking admin username.
+            [Optional for all actions]
+        memory_size (int): The total amount of memory on this engine, in bytes.
+            [Optional for all actions]
+        name (str): Request body parameter
+            [Required for: register]
+        password (str): The virtualization domain admin password.
+            [Optional for all actions]
+        platform (str): The infrastructure or environment where the engine is deployed or built, incl...
+            [Optional for all actions]
+        sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
+            [Required for: search]
+        ssh_public_key (str): The ssh public key of this engine.
+            [Optional for all actions]
+        status (str): the status of the engine
 
-     - connection_status: The status of the connection to the engine. Deprecated; use "engine_connection_status" instead.
-     - engine_connection_status: The state of the connection to the engine.
-     - connection_status_details: If set, details about the status of the connection to the engine. Deprecated; use "engine_connection_status_details" instead.
-     - engine_connection_status_details: If set, details about the state of the connection to the engine.
-     - username: The virtualization domain admin username.
-     - password: The virtualization domain admin password.
-     - masking_username: The masking admin username.
-     - masking_password: The masking admin password.
-     - hashicorp_vault_username_command_args: Arguments to pass to the Vault CLI tool to retrieve the virtualization username for the engine.
-     - hashicorp_vault_masking_username_command_args: Arguments to pass to the Vault CLI tool to retrieve the masking username for the engine.
-     - hashicorp_vault_password_command_args: Arguments to pass to the Vault CLI tool to retrieve the virtualization password for the engine.
-     - hashicorp_vault_masking_password_command_args: Arguments to pass to the Vault CLI tool to retrieve the masking password for the engine.
-     - masking_hashicorp_vault_id: Reference to the Hashicorp vault to use to retrieve masking engine credentials.
-     - hashicorp_vault_id: Reference to the Hashicorp vault to use to retrieve virtualization engine credentials.
-     - tags: The tags to be created for this engine.
-     - masking_memory_used: The current amount of memory used by running masking jobs in bytes.
-     - masking_allocated_memory: The maximum amount of memory available for running masking jobs in bytes.
-     - masking_jobs_running: The number of masking jobs currently running.
-     - masking_max_concurrent_jobs: The maximum number of masking jobs that can be running at the same time.
-     - masking_available_cores: The number of CPU cores available to the masking engine.
-     - hyperscale_instance_ids: List of Hyperscale Instances that this engine is connected to.
-     - hyperscale_truststore_filename: File name of a truststore which can be used to validate the TLS certificate of the engine as expected by associated hyperscale instances.
-
-     - hyperscale_truststore_password: Password to read the truststore as expected by associated hyperscale instances.
-
-     - using_object_storage: true if the engine is using an object store (like AWS S3) to store data |
-false if the engine is using block storage to store its data |
-null if the engine is not initialized (unlikely) or the engine API version does not provide that information
-
-     - using_continuous_vault: true if the engine is using an object store (like AWS S3) to store data |
-false if the engine is using block storage to store its data |
-null if the engine is not initialized (unlikely) or the engine API version does not provide that information
-
-     - platform: The infrastructure or environment where the engine is deployed or built, including cloud provider and instance type.
-
-    How to use filter_expresssion: 
-    A request body containing a filter expression. This enables searching
-    for items matching arbitrarily complex conditions. The list of
-    attributes which can be used in filter expressions is available
-    in the x-filterable vendor extension.
+            [Optional for all actions]
+        type (str): The type of this engine.
+            [Optional for all actions]
+        unsafe_ssl_hostname_check (bool): Ignore validation of the name associated to the TLS certificate when connecti...
+            [Optional for all actions]
+        username (str): The virtualization domain admin username.
+            [Optional for all actions]
+        using_continuous_vault (bool): true if the engine is using an object store (like AWS S3) to store data |
+fal...
+            [Optional for all actions]
+        using_object_storage (bool): true if the engine is using an object store (like AWS S3) to store data |
+fal...
+            [Optional for all actions]
+        uuid (str): The unique identifier generated by this engine.
+            [Optional for all actions]
+        version (str): The engine version.
+            [Optional for all actions]
     
-    # Filter Expression Overview
-    **Note: All keywords are case-insensitive**
+    Returns:
+        Dict[str, Any]: The API response containing operation results
     
-    ## Comparison Operators
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
-    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
-    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
-    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
-    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
-    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
-    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
-    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
-    
-    ## Search Operator
-    The SEARCH operator filters for items which have any filterable
-    attribute that contains the input string as a substring, comparison
-    is done case-insensitively. This is not restricted to attributes with
-    string values. Specifically `SEARCH '12'` would match an item with an
-    attribute with an integer value of `123`.
-    
-    ## Logical Operators
-    Ordered by precedence.
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
-    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
-    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
-    
-    ## Grouping
-    Parenthesis `()` can be used to override operator precedence.
-    
-    For example:
-    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
-    
-    ## Literal Values
-    | Literal      | Description | Examples |
-    | --- | --- | --- |
-    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
-    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
-    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
-    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
-    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
-    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
-    
-    ## Limitations
-    - A maximum of 8 unique identifiers may be used inside a filter expression.
-    
+    Raises:
+        Returns error dict if required parameters are missing for the action
     """
-    # Build parameters excluding None values
-    params = build_params(limit=limit, cursor=cursor, sort=sort)
-    search_body = {'filter_expression': filter_expression}
-    return make_api_request('POST', '/management/engines/search', params=params, json_body=search_body)
+    # Route to appropriate API based on action
+    if action == 'search':
+        params = build_params(limit=limit, cursor=cursor, sort=sort)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        return make_api_request('POST', '/management/engines/search', params=params, json_body=body)
+    elif action == 'get':
+        if engine_id is None:
+            return {'error': 'Missing required parameter: engine_id for action get'}
+        endpoint = f'/management/engines/{engine_id}'
+        params = build_params()
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'register':
+        params = build_params(name=name, hostname=hostname)
+        body = {k: v for k, v in {'name': name, 'hostname': hostname}.items() if v is not None}
+        return make_api_request('POST', '/management/engines', params=params, json_body=body if body else None)
+    elif action == 'update':
+        if engine_id is None:
+            return {'error': 'Missing required parameter: engine_id for action update'}
+        endpoint = f'/management/engines/{engine_id}'
+        params = build_params()
+        return make_api_request('PATCH', endpoint, params=params)
+    elif action == 'unregister':
+        if engine_id is None:
+            return {'error': 'Missing required parameter: engine_id for action unregister'}
+        endpoint = f'/management/engines/{engine_id}'
+        params = build_params()
+        return make_api_request('DELETE', endpoint, params=params)
+    elif action == 'add_tags':
+        if engine_id is None:
+            return {'error': 'Missing required parameter: engine_id for action add_tags'}
+        endpoint = f'/management/engines/{engine_id}/tags'
+        params = build_params()
+        return make_api_request('POST', endpoint, params=params)
+    else:
+        return {'error': f'Unknown action: {action}. Valid actions: search, get, register, update, unregister, add_tags'}
 
 
 def register_tools(app, dct_client):
@@ -186,8 +381,8 @@ def register_tools(app, dct_client):
     client = dct_client
     logger.info(f'Registering tools for engine_endpoints...')
     try:
-        logger.info(f'  Registering tool function: search_engines')
-        app.add_tool(search_engines, name="search_engines")
+        logger.info(f'  Registering tool function: engine_tool')
+        app.add_tool(engine_tool, name="engine_tool")
     except Exception as e:
         logger.error(f'Error registering tools for engine_endpoints: {e}')
     logger.info(f'Tools registration finished for engine_endpoints.')

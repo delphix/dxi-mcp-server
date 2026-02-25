@@ -1,0 +1,123 @@
+# Reporting and Insights Toolset - 13 Tools
+# Description: Monitor/View/Reporting requirements (read-only)
+# Format: METHOD|/endpoint/path|action_name
+# Target users: Managers, auditors, compliance officers
+
+# ----------------------------------------------------------------------------
+# TOOL 1: data_tool - VDB / VDB Group / dSources (merged, read only)
+# ----------------------------------------------------------------------------
+# VDB Operations (read only)
+POST|/vdbs/search|search_vdbs
+GET|/vdbs/{vdbId}|get_vdb
+GET|/vdbs/{vdbId}/snapshots|list_vdb_snapshots
+# VDB Group Operations (read only)
+POST|/vdb-groups/search|search_vdb_groups
+GET|/vdb-groups/{vdbGroupId}|get_vdb_group
+GET|/vdb-groups/{vdbGroupId}/bookmarks|list_vdb_group_bookmarks
+# dSource Operations (read only)
+POST|/dsources/search|search_dsources
+GET|/dsources/{dsourceId}|get_dsource
+GET|/dsources/{dsourceId}/snapshots|list_dsource_snapshots
+
+# ----------------------------------------------------------------------------
+# TOOL 2: snapshot_bookmark_tool - Snapshots + Bookmarks (merged, read only)
+# ----------------------------------------------------------------------------
+# Snapshot Operations (read only)
+POST|/snapshots/search|search_snapshots
+GET|/snapshots/{snapshotId}|get_snapshot
+POST|/snapshots/capacity|get_snapshot_capacity
+GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
+# Bookmark Operations (read only)
+POST|/bookmarks/search|search_bookmarks
+GET|/bookmarks/{bookmarkId}|get_bookmark
+GET|/bookmarks/{bookmarkId}/vdb-groups|get_bookmark_vdb_groups
+
+# ----------------------------------------------------------------------------
+# TOOL 3: instance_tool - Instances (CDB, vCDB) (read only)
+# ----------------------------------------------------------------------------
+POST|/cdbs/search|search_cdbs
+GET|/cdbs/{cdbId}|get_cdb
+POST|/vcdbs/search|search_vcdbs
+GET|/vcdbs/{vcdbId}|get_vcdb
+
+# ----------------------------------------------------------------------------
+# TOOL 4: database_template_tool - VDB Templates (read only)
+# ----------------------------------------------------------------------------
+POST|/database-templates/search|search
+GET|/database-templates/{databaseTemplateId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 5: hook_template_tool - Hooks (read only)
+# ----------------------------------------------------------------------------
+POST|/hook-templates/search|search
+GET|/hook-templates/{hookTemplateId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 6: virtualization_policy_tool - Policies (read only)
+# ----------------------------------------------------------------------------
+POST|/virtualization-policies/search|search
+GET|/virtualization-policies/{policyId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 7: job_tool - Operations (read only)
+# ----------------------------------------------------------------------------
+POST|/jobs/search|search
+GET|/jobs/{jobId}|get
+GET|/jobs/{jobId}/result|get_result
+
+# ----------------------------------------------------------------------------
+# TOOL 8: engine_tool - CD Engines (read only)
+# ----------------------------------------------------------------------------
+POST|/management/engines/search|search
+GET|/management/engines/{engineId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 9: environment_tool - Environments (read only)
+# ----------------------------------------------------------------------------
+POST|/environments/search|search
+GET|/environments/{environmentId}|get
+GET|/environments/{environmentId}/hosts|list_hosts
+GET|/environments/{environmentId}/listeners|list_listeners
+
+# ----------------------------------------------------------------------------
+# TOOL 10: source_tool - Sources (read only)
+# ----------------------------------------------------------------------------
+POST|/sources/search|search
+GET|/sources/{sourceId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 11: reporting_tool - Insights + License Report + Automated Reports
+# ----------------------------------------------------------------------------
+# Storage Reports
+POST|/reporting/storage-savings-report/search|search_storage_savings_report
+POST|/reporting/storage-capacity-data-report|get_storage_capacity_report
+POST|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
+# VDB Inventory Reports
+POST|/reporting/vdb-inventory-report|get_vdb_inventory_report
+POST|/reporting/vdb-inventory-report/search|search_vdb_inventory_report
+# dSource Reports
+POST|/reporting/dsource-consumption-report|get_dsource_consumption_report
+# Performance Reports
+POST|/reporting/engine-performance-analytic-report|get_engine_performance_report
+POST|/reporting/dataset-performance-analytics|get_dataset_performance_analytics
+# API & Audit Reports
+POST|/reporting/api-usage-report|get_api_usage_report
+POST|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
+# Automated/Scheduled Reports (read only)
+POST|/reporting/schedule/search|search_scheduled_reports
+GET|/reporting/schedule/{reportId}|get_scheduled_report
+# License Report
+GET|/management/license|get_license
+
+# ----------------------------------------------------------------------------
+# TOOL 12: data_connection_tool - Connections (read only)
+# ----------------------------------------------------------------------------
+POST|/data-connections/search|search
+GET|/data-connections/{dataConnectionId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 13: tag_tool - Tags (read only)
+# ----------------------------------------------------------------------------
+POST|/management/tags/search|search
+GET|/management/tags/{tagId}|get
+GET|/management/tags/{tagId}/usages|get_usages
