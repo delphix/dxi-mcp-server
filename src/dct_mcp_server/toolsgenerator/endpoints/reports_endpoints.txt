@@ -1,3 +1,0 @@
-/reporting/storage-capacity-data-report/search
-/reporting/storage-savings-report/search
-/reporting/virtualization-storage-summary-report/search

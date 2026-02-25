@@ -13,6 +13,7 @@ The Delphix DCT API MCP Server provides a robust Model Context Protocol (MCP) in
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
 - [Troubleshooting](#troubleshooting)
@@ -22,6 +23,10 @@ The Delphix DCT API MCP Server provides a robust Model Context Protocol (MCP) in
 
 ## Features
 
+- **Persona-Based Toolsets**: Choose from 5 pre-configured toolsets tailored for different roles (Self-Service, Platform Admin, DBA, Reporting).
+- **Auto Mode**: Dynamic toolset discovery with runtime switching - no server restart required.
+- **Grouped Tools**: Each tool handles multiple related actions via an `action` parameter, reducing tool count while maintaining full functionality.
+- **Confirmation System**: Built-in confirmation checks for destructive operations to prevent accidental data loss.
 - **Comprehensive DCT integration**: Access datasets, environments, engines, compliance, jobs, and reporting through specialized tools.
 - **Security and reliability**: API client includes retry logic, exponential backoff, and SSL configuration.  
 - **Flexible configuration**: Environment-based setup with validation.
@@ -76,6 +81,13 @@ All configuration methods use these environment variables:
 - `DCT_LOG_LEVEL` - Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 - `DCT_TIMEOUT` - Request timeout in seconds (default: `30`)
 - `DCT_MAX_RETRIES` - Maximum retry attempts (default: `3`)
+- `DCT_TOOLSET` - Toolset to load (see [Toolsets](#toolsets) section below)
+  - `auto` (default) - Dynamic discovery with 5 meta-tools for runtime switching
+  - `self_service` - Basic VDB operations (6 tools)
+  - `self_service_provision` - Self-service + provisioning (8 tools)
+  - `continuous_data_admin` - Full DBA operations (14 tools)
+  - `platform_admin` - System administration (10 tools)
+  - `reporting_insights` - Read-only reporting (13 tools)
 - `IS_LOCAL_TELEMETRY_ENABLED` - Enable telemetry (`true`/`false`, default: `false`)
 
 ## MCP Client Configuration
@@ -118,12 +130,15 @@ See below for the full JSON configuration examples for each client.
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "INFO"
+        "DCT_LOG_LEVEL": "INFO",
+        "DCT_TOOLSET": "auto"
       }
     }
   }
 }
 ```
+
+> **Tip**: Use `"DCT_TOOLSET": "auto"` for dynamic toolset discovery, or set a specific toolset like `"continuous_data_admin"` for pre-registered tools.
 
 **Option 2: Using Python directly**
 ```json
@@ -222,6 +237,8 @@ See below for the full JSON configuration examples for each client.
 <details>
 <summary><strong>VS Code, Eclipse, & IntelliJ IDEA</strong></summary>
 
+> **VS Code Copilot Note**: For best experience, use a fixed toolset instead of `auto` mode, as VS Code Copilot doesn't refresh tools mid-session.
+
 **Option 1: Using uvx (Recommended)**
 ```json
 {
@@ -233,7 +250,8 @@ See below for the full JSON configuration examples for each client.
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "INFO"
+        "DCT_LOG_LEVEL": "INFO",
+        "DCT_TOOLSET": "continuous_data_admin"
       }
     }
   }
@@ -400,11 +418,213 @@ To connect your client, you only need to specify this port number. You do not ne
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
 
+## Toolsets
+
+The server organizes tools into **persona-based toolsets** designed for specific roles and use cases. Each toolset provides a curated set of grouped tools.
+
+### Available Toolsets
+
+| Toolset | Tools | Target Users | Description |
+|---------|-------|--------------|-------------|
+| `auto` | 5 meta-tools | All users | Dynamic discovery mode - start minimal, enable toolsets at runtime |
+| `self_service` | 6 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop |
+| `self_service_provision` | 8 tools | Dev leads | Self-service + VDB provisioning capabilities |
+| `continuous_data_admin` | 14 tools | DBAs | Full data management: VDBs, dSources, snapshots, policies |
+| `platform_admin` | 10 tools | Admins | System administration: engines, environments, IAM, reporting |
+| `reporting_insights` | 13 tools | Managers | Read-only reporting and analytics |
+
+### Auto Mode (Recommended)
+
+When `DCT_TOOLSET=auto` (default), the server starts with **5 meta-tools** for dynamic toolset discovery:
+
+| Meta-Tool | Description |
+|-----------|-------------|
+| `list_available_toolsets` | List all toolsets with descriptions and tool counts |
+| `get_toolset_tools` | Get detailed list of tools and actions in a toolset |
+| `enable_toolset` | Enable a toolset at runtime (no restart required) |
+| `disable_toolset` | Return to meta-tools only mode |
+| `check_operation_confirmation` | Check if an operation requires confirmation |
+
+**Example workflow:**
+```
+User: "What toolsets are available?"
+AI: [calls list_available_toolsets] → Shows 5 toolsets
+
+User: "I need to work with VDBs"
+AI: [calls enable_toolset("self_service")] → 6 tools now available
+
+User: "Show me all VDBs"
+AI: [calls vdb_tool(action="search_vdbs")] → Returns VDB list
+```
+
+### Fixed Toolset Mode
+
+For environments where you always need the same toolset, set it directly:
+
+```json
+{
+  "env": {
+    "DCT_TOOLSET": "continuous_data_admin"
+  }
+}
+```
+
+This pre-registers all tools at startup (no runtime switching).
+
+### Agent Compatibility for Auto Mode
+
+Not all MCP clients support dynamic tool registration mid-session:
+
+| Agent | Dynamic Tools | Notes |
+|-------|---------------|-------| 
+| Claude Desktop | ✅ Yes | Fully supports `tools/list_changed` notifications |
+| Cursor | ✅ Yes | Refreshes tool list dynamically |
+| Continue.dev | ✅ Yes | Supports runtime tool changes |
+| VS Code Copilot | ⚠️ Limited | Requires chat restart after `enable_toolset` |
+
+**Recommendation**: For VS Code Copilot, use a fixed toolset (`DCT_TOOLSET=continuous_data_admin`) for the best experience.
+
+### Grouped Tools
+
+Each tool in a toolset handles multiple related **actions** via an `action` parameter:
+
+```python
+# Instead of calling separate tools:
+search_vdbs(filter_expression="...")
+get_vdb(vdbId="...")
+refresh_vdb_by_timestamp(vdbId="...", timestamp="...")
+
+# Call one grouped tool with different actions:
+vdb_tool(action="search_vdbs", filter_expression="...")
+vdb_tool(action="get_vdb", vdbId="...")
+vdb_tool(action="refresh_vdb_by_timestamp", vdbId="...", timestamp="...")
+```
+
+This reduces tool count while maintaining full functionality.
+
+### Confirmation for Destructive Operations
+
+Destructive operations (delete, disable, etc.) require explicit confirmation:
+
+```python
+# First call returns confirmation requirement
+vdb_tool(action="delete_vdb", vdbId="vdb-123")
+# Response: {"status": "confirmation_required", "confirmation_level": "manual", ...}
+
+# Confirm by setting confirmed=True
+vdb_tool(action="delete_vdb", vdbId="vdb-123", confirmed=True)
+# Response: {"status": "success", ...}
+```
+
 ## Available Tools
 
-The server provides specialized tools for interacting with different aspects of the Delphix DCT API:
+The tools available depend on the configured toolset. Below are the grouped tools for each toolset.
 
-### Dataset Management Tools
+### continuous_data_admin Toolset (14 Tools)
+
+<details>
+<summary><strong><code>data_tool</code></strong> - VDB, VDB Group, and dSource operations (41 actions)</summary>
+
+- **Actions**: `search_vdbs`, `get_vdb`, `provision_by_timestamp`, `provision_by_snapshot`, `provision_from_bookmark`, `refresh_vdb_by_timestamp`, `refresh_vdb_by_snapshot`, `rollback_vdb_by_timestamp`, `start_vdb`, `stop_vdb`, `enable_vdb`, `disable_vdb`, `delete_vdb`, `search_vdb_groups`, `get_vdb_group`, `create_vdb_group`, `refresh_vdb_group`, `rollback_vdb_group`, `search_dsources`, `get_dsource`, `list_dsource_snapshots`, and more
+- **Use cases**: VDB lifecycle management, data provisioning, refresh/rollback operations
+</details>
+
+<details>
+<summary><strong><code>snapshot_bookmark_tool</code></strong> - Snapshot and Bookmark operations (18 actions)</summary>
+
+- **Actions**: `search_snapshots`, `get_snapshot`, `delete_snapshot`, `update_snapshot`, `search_bookmarks`, `get_bookmark`, `create_bookmark`, `delete_bookmark`, `find_snapshot_by_timestamp`, `find_snapshot_by_location`
+- **Use cases**: Point-in-time recovery, bookmark management, snapshot retention
+</details>
+
+<details>
+<summary><strong><code>environment_source_tool</code></strong> - Environment and Source operations (17 actions)</summary>
+
+- **Actions**: `search_environments`, `get_environment`, `create_environment`, `enable_environment`, `disable_environment`, `refresh_environment`, `search_sources`, `get_source`, `update_source`
+- **Use cases**: Environment management, source discovery, host configuration
+</details>
+
+<details>
+<summary><strong><code>instance_tool</code></strong> - CDB and vCDB operations (14 actions)</summary>
+
+- **Actions**: `search_cdbs`, `get_cdb`, `search_vcdbs`, `get_vcdb`, `start_vcdb`, `stop_vcdb`, `enable_vcdb`, `disable_vcdb`, `delete_vcdb`
+- **Use cases**: Oracle container database management
+</details>
+
+<details>
+<summary><strong><code>iam_tool</code></strong> - Identity and Access Management (21 actions)</summary>
+
+- **Actions**: `search_accounts`, `get_account`, `create_account`, `enable_account`, `disable_account`, `reset_password`, `search_roles`, `create_role`, `search_access_groups`, `create_access_group`
+- **Use cases**: User management, role-based access control, API client management
+</details>
+
+<details>
+<summary><strong><code>reporting_tool</code></strong> - Reporting and Analytics (16 actions)</summary>
+
+- **Actions**: `get_storage_capacity_report`, `get_vdb_inventory_report`, `get_dsource_consumption_report`, `get_engine_performance_report`, `search_storage_savings_report`, `get_license`, `create_scheduled_report`
+- **Use cases**: Capacity planning, usage reporting, compliance auditing
+</details>
+
+<details>
+<summary><strong><code>virtualization_policy_tool</code></strong> - Policy management (10 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `apply`, `unapply`, `search_targets`
+- **Use cases**: Retention policies, refresh schedules, sync policies
+</details>
+
+<details>
+<summary><strong><code>job_tool</code></strong> - Job monitoring (6 actions)</summary>
+
+- **Actions**: `search`, `get`, `abandon`, `get_result`
+- **Use cases**: Job tracking, error analysis, operation monitoring
+</details>
+
+<details>
+<summary><strong><code>engine_tool</code></strong> - Engine management (5 actions)</summary>
+
+- **Actions**: `search`, `get`, `update`, `add_tags`, `delete_tags`
+- **Use cases**: Engine monitoring, configuration management
+</details>
+
+<details>
+<summary><strong><code>replication_tool</code></strong> - Replication profiles (8 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `execute`
+- **Use cases**: Data replication, disaster recovery
+</details>
+
+<details>
+<summary><strong><code>database_template_tool</code></strong> - VDB templates (7 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`
+- **Use cases**: Standardized VDB provisioning
+</details>
+
+<details>
+<summary><strong><code>hook_template_tool</code></strong> - Hook templates (7 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`
+- **Use cases**: Pre/post operation scripts
+</details>
+
+<details>
+<summary><strong><code>tag_tool</code></strong> - Tag management (6 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `delete`, `search_usages`
+- **Use cases**: Resource tagging, organization
+</details>
+
+<details>
+<summary><strong><code>data_connection_tool</code></strong> - Data connections (5 actions)</summary>
+
+- **Actions**: `search`, `get`, `update`
+- **Use cases**: Connection management
+</details>
+
+### Legacy Tool Reference
+
+The following documents the individual endpoint tools (used in older versions):
+
+#### Dataset Management Tools
 
 <details>
 <summary><strong><code>search_bookmarks</code></strong> - Search for bookmarks and point-in-time markers</summary>
@@ -696,11 +916,24 @@ dxi-mcp-server/
 ├── logs/                       # Runtime logs and telemetry
 │   ├── dct_mcp_server.log      # Main application logs
 │   └── sessions/               # Telemetry session logs
+├── docs/                       # Design documentation
+│   ├── DESIGN_CRUD_TOOLSETS_DOC.txt
+│   └── EXECUTIVE_SUMMARY_CRUD_TOOLSETS.txt
 └── src/
     └── dct_mcp_server/
         ├── main.py             # Application entry point
         ├── config/
-        │   └── config.py       # Configuration management
+        │   ├── config.py       # Configuration management
+        │   ├── loader.py       # Toolset configuration loader
+        │   ├── toolsets/       # Toolset definitions
+        │   │   ├── self_service.txt
+        │   │   ├── self_service_provision.txt
+        │   │   ├── continuous_data_admin.txt
+        │   │   ├── platform_admin.txt
+        │   │   └── reporting_insights.txt
+        │   └── mappings/       # Tool grouping & confirmation rules
+        │       ├── tool_grouping.txt
+        │       └── manual_confirmation.txt
         ├── core/
         │   ├── decorators.py   # Logging and telemetry decorators
         │   ├── exceptions.py   # Custom exception classes
@@ -708,11 +941,13 @@ dxi-mcp-server/
         │   └── session.py      # Session and telemetry management
         ├── dct_client/
         │   └── client.py       # DCT API HTTP client
-        ├── tools/              # MCP tools for DCT endpoints
-        │   ├── dataset_endpoints_tool.py
+        ├── tools/
+        │   ├── core/           # Tool generation framework
+        │   │   ├── meta_tools.py   # Auto mode meta-tools
+        │   │   └── tool_factory.py # Dynamic tool generator
+        │   ├── dataset_endpoints_tool.py   # Legacy endpoint tools
         │   ├── environment_endpoints_tool.py
         │   ├── engine_endpoints_tool.py
-        │   ├── compliance_endpoints_tool.py
         │   ├── job_endpoints_tool.py
         │   └── reports_endpoints_tool.py
         └── icons/

@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
+from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
 import asyncio
 import logging
 import threading
@@ -8,6 +9,38 @@ from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CONFIRMATION INTEGRATION
+# =============================================================================
+# For destructive operations (DELETE, POST .../delete), generated tools should:
+# 1. Call requires_confirmation(method, path) to check if confirmation needed
+# 2. If True, include confirmation_message in the response
+# 3. LLM should use check_operation_confirmation meta-tool before executing
+#
+# Example usage in generated tool:
+#   confirmation = get_confirmation_for_operation("DELETE", "/vdbs/{id}")
+#   if confirmation["level"] != "none":
+#       return {
+#           "requires_confirmation": True,
+#           "confirmation_level": confirmation["level"],
+#           "confirmation_message": confirmation["message"],
+#           "operation": "delete_vdb"
+#       }
+# =============================================================================
+
+def check_confirmation(method: str, api_path: str) -> Optional[Dict[str, Any]]:
+    """Check if operation requires confirmation. Returns confirmation details or None."""
+    confirmation = get_confirmation_for_operation(method, api_path)
+    if confirmation["level"] != "none":
+        return {
+            "requires_confirmation": True,
+            "confirmation_level": confirmation["level"],
+            "confirmation_message": confirmation.get("message", "Please confirm this operation."),
+            "conditional": confirmation.get("conditional", False),
+            "threshold_days": confirmation.get("threshold_days")
+        }
+    return None
 
 def async_to_sync(async_func):
     """Utility decorator to convert async functions to sync with proper event loop handling."""
@@ -49,272 +82,246 @@ def build_params(**kwargs):
     return {k: v for k, v in kwargs.items() if v is not None}
 
 @log_tool_execution
-def search_storage_capacity_data(engine_id: Optional[str] = None, limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
+def reporting_tool(
+    action: str,  # One of: search_storage_savings_report, search_vdb_inventory_report, get_dataset_performance_analytics, search_scheduled_reports, get_scheduled_report, create_scheduled_report, delete_scheduled_report, get_license, change_license
+    cursor: Optional[str] = None,
+    end: Optional[str] = None,
+    filter_expression: Optional[str] = None,
+    interval: Optional[int] = None,
+    limit: Optional[int] = None,
+    report_id: Optional[str] = None,
+    sort: Optional[str] = None,
+    start: Optional[str] = None,
+    tier: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    Search engine storage capacity data.
-    :param engine_id: ID of a registered engine.
-    :param engine_id: ID of a registered engine.(optional)
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.(optional)
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
-    :param filter_expression: Filter expression string (optional)
-    Filter expression can include the following fields:
-     - engine_id: ID of the engine.
-     - dataset_id: ID of the dataset.
-     - captured_timestamp: Time at which this information was sampled.
-     - dataset_type: No description
-     - dataset_name: Name of the dataset.
-     - is_replica: Flag to specify if this object is a replica.
-     - total_size: Actual space used by the dataset.
-     - base_size: Amount of space used for the active copy of the dataset.
-     - snapshot_size: Amount of space used by snapshots.
-     - logs_size: Amount of space used by logs.
-     - unvirtualized_size: Unvirtualized space used by the dataset.
-     - current_timeflow_unvirtualized_size: Unvirtualized space used by the current (active) TimeFlow. This is approximately equal to the space a VDB would take upon a virtual-to-physical (V2P) operation.
-     - timeflow_unvirtualized_size: Unvirtualized space used by the TimeFlow.
-     - descendant_size: Amount of space used for snapshots from which VDBs have been provisioned.
-     - policy_size: Amount of space used for snapshots held by policy settings.
-     - manual_size: Amount of space used for snapshots held by manual retention settings.
-     - unowned_snapshot_size: Amount of space used for snapshots part of held space.
-     - ingested_size: Amount of space ingested by the source.
-     - tags: The tags that are applied to dataset.
-
-    How to use filter_expresssion: 
-    A request body containing a filter expression. This enables searching
-    for items matching arbitrarily complex conditions. The list of
-    attributes which can be used in filter expressions is available
-    in the x-filterable vendor extension.
+    Unified tool for REPORTING operations.
     
-    # Filter Expression Overview
-    **Note: All keywords are case-insensitive**
+    This tool supports 9 actions: search_storage_savings_report, search_vdb_inventory_report, get_dataset_performance_analytics, search_scheduled_reports, get_scheduled_report, create_scheduled_report, delete_scheduled_report, get_license, change_license
     
-    ## Comparison Operators
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
-    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
-    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
-    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
-    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
-    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
-    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
-    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
+    ======================================================================
+    ACTION REFERENCE
+    ======================================================================
     
-    ## Search Operator
-    The SEARCH operator filters for items which have any filterable
-    attribute that contains the input string as a substring, comparison
-    is done case-insensitively. This is not restricted to attributes with
-    string values. Specifically `SEARCH '12'` would match an item with an
-    attribute with an integer value of `123`.
+    ACTION: search_storage_savings_report
+    ----------------------------------------
+    Summary: Search the saving storage summary report for virtualization engines.
+    Method: POST
+    Endpoint: /reporting/storage-savings-report/search
+    Required Parameters: limit, cursor, sort
     
-    ## Logical Operators
-    Ordered by precedence.
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
-    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
-    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
+    Filterable Fields:
+        - dsource_id: Id of the dSource.
+        - dependant_vdbs: The number of VDBs that are dependant on this dSource. Th...
+        - engine_name: The engine name.
+        - unvirtualized_space: The disk space, in bytes, that it would take to store the...
+        - current_timeflows_unvirtualized_space: The disk space, in bytes, that it would take to store the...
+        - virtualized_space: The actual space used by the dSource and its dependant VD...
+        - name: The name of the database on the target environment.
+        - estimated_savings: The disk space that has been saved by using Delphix virtu...
+        - estimated_savings_perc: The disk space that has been saved by using Delphix virtu...
+        - estimated_current_timeflows_savings: The disk space that has been saved by using Delphix virtu...
+        - estimated_current_timeflows_savings_perc: The disk space that has been saved by using Delphix virtu...
+        - is_replica: Indicates if the dSource is a replica
     
-    ## Grouping
-    Parenthesis `()` can be used to override operator precedence.
+    Filter Syntax:
+        Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
+        Combine: AND, OR
+        Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
     
-    For example:
-    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
+    Example:
+        >>> reporting_tool(action='search_storage_savings_report', limit=..., cursor=..., sort=...)
     
-    ## Literal Values
-    | Literal      | Description | Examples |
-    | --- | --- | --- |
-    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
-    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
-    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
-    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
-    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
-    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
+    ACTION: search_vdb_inventory_report
+    ----------------------------------------
+    Summary: Search the inventory report for virtualization engine VDBs.
+    Method: POST
+    Endpoint: /reporting/vdb-inventory-report/search
+    Required Parameters: limit, cursor, sort
     
-    ## Limitations
-    - A maximum of 8 unique identifiers may be used inside a filter expression.
+    Filterable Fields:
+        - vdb_id: The VDB id.
+        - engine_name: The name of the engine the VDB belongs to.
+        - name: The name of the VDB.
+        - type: The database type of the VDB.
+        - version: The database version of the VDB.
+        - parent_name: The name of the VDB's parent dataset.
+        - parent_id: A reference to the parent dataset of the VDB.
+        - creation_date: The date the VDB was created.
+        - last_refreshed_date: The date the VDB was last refreshed.
+        - parent_timeflow_location: The location for the VDB's parent timeflow.
+        - parent_timeflow_timestamp: The timestamp for the VDB's parent timeflow.
+        - parent_timeflow_timezone: The timezone for the VDB's parent timeflow.
+        - enabled: Whether the VDB is enabled
+        - status: The runtime status of the VDB. 'Unknown' if all attempts ...
+        - storage_size: The actual space used by the VDB, in bytes.
     
+    Filter Syntax:
+        Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
+        Combine: AND, OR
+        Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
+    
+    Example:
+        >>> reporting_tool(action='search_vdb_inventory_report', limit=..., cursor=..., sort=...)
+    
+    ACTION: get_dataset_performance_analytics
+    ----------------------------------------
+    Summary: Get Dataset Performance analytics
+    Method: POST
+    Endpoint: /reporting/dataset-performance-analytics
+    Required Parameters: start, end, interval
+    
+    Example:
+        >>> reporting_tool(action='get_dataset_performance_analytics', start=..., end=..., interval=...)
+    
+    ACTION: search_scheduled_reports
+    ----------------------------------------
+    Summary: Search for report schedules.
+    Method: POST
+    Endpoint: /reporting/schedule/search
+    Required Parameters: limit, cursor, sort
+    
+    Filterable Fields:
+        - report_id: 
+        - report_type: 
+        - cron_expression: Standard cron expressions are supported e.g. 0 15 10 L * ...
+        - time_zone: Timezones are specified according to the Olson tzinfo dat...
+        - message: 
+        - file_format: 
+        - enabled: 
+        - recipients: 
+        - tags: 
+        - sort_column: 
+        - row_count: 
+    
+    Filter Syntax:
+        Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
+        Combine: AND, OR
+        Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
+    
+    Example:
+        >>> reporting_tool(action='search_scheduled_reports', limit=..., cursor=..., sort=...)
+    
+    ACTION: get_scheduled_report
+    ----------------------------------------
+    Summary: Returns a report schedule by ID.
+    Method: GET
+    Endpoint: /reporting/schedule/{reportId}
+    Required Parameters: report_id
+    
+    Example:
+        >>> reporting_tool(action='get_scheduled_report', report_id='example-report-123')
+    
+    ACTION: create_scheduled_report
+    ----------------------------------------
+    Summary: Create a new report schedule.
+    Method: POST
+    Endpoint: /reporting/schedule
+    
+    Example:
+        >>> reporting_tool(action='create_scheduled_report')
+    
+    ACTION: delete_scheduled_report
+    ----------------------------------------
+    Summary: Delete report schedule by ID.
+    Method: DELETE
+    Endpoint: /reporting/schedule/{reportId}
+    Required Parameters: report_id
+    
+    Example:
+        >>> reporting_tool(action='delete_scheduled_report', report_id='example-report-123')
+    
+    ACTION: get_license
+    ----------------------------------------
+    Summary: Returns the DCT license information.
+    Method: GET
+    Endpoint: /management/license
+    
+    Example:
+        >>> reporting_tool(action='get_license')
+    
+    ACTION: change_license
+    ----------------------------------------
+    Summary: Change the current DCT license.
+    Method: POST
+    Endpoint: /management/license/change-license
+    Required Parameters: tier
+    
+    Example:
+        >>> reporting_tool(action='change_license', tier=...)
+    
+    ======================================================================
+    PARAMETERS
+    ======================================================================
+    
+    Args:
+        action (str): The operation to perform. One of: search_storage_savings_report, search_vdb_inventory_report, get_dataset_performance_analytics, search_scheduled_reports, get_scheduled_report, create_scheduled_report, delete_scheduled_report, get_license, change_license
+        cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
+            [Required for: search_storage_savings_report, search_vdb_inventory_report, search_scheduled_reports]
+        end (str): End time in UTC up to which analytics data will be fetched.
+            [Required for: get_dataset_performance_analytics]
+        filter_expression (str): Filter expression to narrow results (e.g., "name CONTAINS 'prod'")
+            [Optional for all actions]
+        interval (int): Desired time interval in timestamp format.
+            [Required for: get_dataset_performance_analytics]
+        limit (int): Maximum number of objects to return per query. The value must be between 1 an...
+            [Required for: search_storage_savings_report, search_vdb_inventory_report, search_scheduled_reports]
+        report_id (str): The unique identifier for the report.
+            [Required for: get_scheduled_report, delete_scheduled_report]
+        sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
+            [Required for: search_storage_savings_report, search_vdb_inventory_report, search_scheduled_reports]
+        start (str): Start time in UTC from which to fetch analytics data.
+            [Required for: get_dataset_performance_analytics]
+        tier (str): Request body parameter
+            [Required for: change_license]
+    
+    Returns:
+        Dict[str, Any]: The API response containing operation results
+    
+    Raises:
+        Returns error dict if required parameters are missing for the action
     """
-    # Build parameters excluding None values
-    params = build_params(engine_id=engine_id, limit=limit, cursor=cursor, sort=sort)
-    search_body = {'filter_expression': filter_expression}
-    return make_api_request('POST', '/reporting/storage-capacity-data-report/search', params=params, json_body=search_body)
-
-@log_tool_execution
-def search_storage_savings_summary_report(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Search the saving storage summary report for virtualization engines.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 10000.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 10000.(optional)
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
-    :param filter_expression: Filter expression string (optional)
-    Filter expression can include the following fields:
-     - dsource_id: Id of the dSource.
-     - dependant_vdbs: The number of VDBs that are dependant on this dSource. This includes all VDB descendants that have this dSource as an ancestor.
-     - engine_name: The engine name.
-     - unvirtualized_space: The disk space, in bytes, that it would take to store the dSource and its descendant VDBs without Delphix, counting each of their timeflows as separate copy of the parent source data.
-     - current_timeflows_unvirtualized_space: The disk space, in bytes, that it would take to store the dSource and its descendant VDBs without Delphix, counting only their current (active) timeflows.
-     - virtualized_space: The actual space used by the dSource and its dependant VDBs, in bytes.
-     - name: The name of the database on the target environment.
-     - estimated_savings: The disk space that has been saved by using Delphix virtualizion for all descendant timeflows, in bytes.
-     - estimated_savings_perc: The disk space that has been saved by using Delphix virtualizion for all descendant timeflows, in percentage.
-     - estimated_current_timeflows_savings: The disk space that has been saved by using Delphix virtualizion for only the current (active) timeflows, in bytes.
-     - estimated_current_timeflows_savings_perc: The disk space that has been saved by using Delphix virtualizion for only the current (active) timeflows, in percentage.
-     - is_replica: Indicates if the dSource is a replica
-
-    How to use filter_expresssion: 
-    A request body containing a filter expression. This enables searching
-    for items matching arbitrarily complex conditions. The list of
-    attributes which can be used in filter expressions is available
-    in the x-filterable vendor extension.
-    
-    # Filter Expression Overview
-    **Note: All keywords are case-insensitive**
-    
-    ## Comparison Operators
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
-    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
-    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
-    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
-    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
-    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
-    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
-    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
-    
-    ## Search Operator
-    The SEARCH operator filters for items which have any filterable
-    attribute that contains the input string as a substring, comparison
-    is done case-insensitively. This is not restricted to attributes with
-    string values. Specifically `SEARCH '12'` would match an item with an
-    attribute with an integer value of `123`.
-    
-    ## Logical Operators
-    Ordered by precedence.
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
-    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
-    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
-    
-    ## Grouping
-    Parenthesis `()` can be used to override operator precedence.
-    
-    For example:
-    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
-    
-    ## Literal Values
-    | Literal      | Description | Examples |
-    | --- | --- | --- |
-    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
-    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
-    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
-    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
-    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
-    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
-    
-    ## Limitations
-    - A maximum of 8 unique identifiers may be used inside a filter expression.
-    
-    """
-    # Build parameters excluding None values
-    params = build_params(limit=limit, cursor=cursor, sort=sort)
-    search_body = {'filter_expression': filter_expression}
-    return make_api_request('POST', '/reporting/storage-savings-report/search', params=params, json_body=search_body)
-
-@log_tool_execution
-def search_virtualization_storage_summary_report(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Search the storage summary report for virtualization engines.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 10000.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 10000.(optional)
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
-    :param filter_expression: Filter expression string (optional)
-    Filter expression can include the following fields:
-     - engine_id: A reference to the engine.
-     - engine_name: The engine name.
-     - engine_hostname: The engine hostname.
-     - total_capacity: The total amount of storage allocated for engine objects and system metadata, in bytes.
-     - free_storage: The amount of available storage, in bytes.
-     - used_storage: The amount of storage used by engine objects and system metadata, in bytes.
-     - used_percentage: The percentage of storage used.
-     - dsource_count: The number of dSources on the engine.
-     - vdb_count: The number of VDBs on the engine.
-     - total_object_count: The total number of dSources and VDBs on the engine.
-     - reserved_storage: The amount of storage reversed by the engine as a safety buffer, in bytes.
-     - dsource_used_storage: The amount of storage used by all dSources on the engine, in bytes.
-     - vdb_used_storage: The amount of storage used by all VDBs on the engine, in bytes.
-
-    How to use filter_expresssion: 
-    A request body containing a filter expression. This enables searching
-    for items matching arbitrarily complex conditions. The list of
-    attributes which can be used in filter expressions is available
-    in the x-filterable vendor extension.
-    
-    # Filter Expression Overview
-    **Note: All keywords are case-insensitive**
-    
-    ## Comparison Operators
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
-    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
-    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
-    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
-    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
-    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
-    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
-    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
-    
-    ## Search Operator
-    The SEARCH operator filters for items which have any filterable
-    attribute that contains the input string as a substring, comparison
-    is done case-insensitively. This is not restricted to attributes with
-    string values. Specifically `SEARCH '12'` would match an item with an
-    attribute with an integer value of `123`.
-    
-    ## Logical Operators
-    Ordered by precedence.
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
-    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
-    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
-    
-    ## Grouping
-    Parenthesis `()` can be used to override operator precedence.
-    
-    For example:
-    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
-    
-    ## Literal Values
-    | Literal      | Description | Examples |
-    | --- | --- | --- |
-    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
-    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
-    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
-    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
-    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
-    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
-    
-    ## Limitations
-    - A maximum of 8 unique identifiers may be used inside a filter expression.
-    
-    """
-    # Build parameters excluding None values
-    params = build_params(limit=limit, cursor=cursor, sort=sort)
-    search_body = {'filter_expression': filter_expression}
-    return make_api_request('POST', '/reporting/virtualization-storage-summary-report/search', params=params, json_body=search_body)
+    # Route to appropriate API based on action
+    if action == 'search_storage_savings_report':
+        params = build_params(limit=limit, cursor=cursor, sort=sort)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        return make_api_request('POST', '/reporting/storage-savings-report/search', params=params, json_body=body)
+    elif action == 'search_vdb_inventory_report':
+        params = build_params(limit=limit, cursor=cursor, sort=sort)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        return make_api_request('POST', '/reporting/vdb-inventory-report/search', params=params, json_body=body)
+    elif action == 'get_dataset_performance_analytics':
+        params = build_params(start=start, end=end, interval=interval)
+        body = {k: v for k, v in {'start': start, 'end': end, 'interval': interval}.items() if v is not None}
+        return make_api_request('POST', '/reporting/dataset-performance-analytics', params=params, json_body=body if body else None)
+    elif action == 'search_scheduled_reports':
+        params = build_params(limit=limit, cursor=cursor, sort=sort)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        return make_api_request('POST', '/reporting/schedule/search', params=params, json_body=body)
+    elif action == 'get_scheduled_report':
+        if report_id is None:
+            return {'error': 'Missing required parameter: report_id for action get_scheduled_report'}
+        endpoint = f'/reporting/schedule/{report_id}'
+        params = build_params()
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'create_scheduled_report':
+        params = build_params()
+        return make_api_request('POST', '/reporting/schedule', params=params)
+    elif action == 'delete_scheduled_report':
+        if report_id is None:
+            return {'error': 'Missing required parameter: report_id for action delete_scheduled_report'}
+        endpoint = f'/reporting/schedule/{report_id}'
+        params = build_params()
+        return make_api_request('DELETE', endpoint, params=params)
+    elif action == 'get_license':
+        params = build_params()
+        return make_api_request('GET', '/management/license', params=params)
+    elif action == 'change_license':
+        params = build_params(tier=tier)
+        body = {k: v for k, v in {'tier': tier}.items() if v is not None}
+        return make_api_request('POST', '/management/license/change-license', params=params, json_body=body if body else None)
+    else:
+        return {'error': f'Unknown action: {action}. Valid actions: search_storage_savings_report, search_vdb_inventory_report, get_dataset_performance_analytics, search_scheduled_reports, get_scheduled_report, create_scheduled_report, delete_scheduled_report, get_license, change_license'}
 
 
 def register_tools(app, dct_client):
@@ -322,12 +329,8 @@ def register_tools(app, dct_client):
     client = dct_client
     logger.info(f'Registering tools for reports_endpoints...')
     try:
-        logger.info(f'  Registering tool function: search_storage_capacity_data')
-        app.add_tool(search_storage_capacity_data, name="search_storage_capacity_data")
-        logger.info(f'  Registering tool function: search_storage_savings_summary_report')
-        app.add_tool(search_storage_savings_summary_report, name="search_storage_savings_summary_report")
-        logger.info(f'  Registering tool function: search_virtualization_storage_summary_report')
-        app.add_tool(search_virtualization_storage_summary_report, name="search_virtualization_storage_summary_report")
+        logger.info(f'  Registering tool function: reporting_tool')
+        app.add_tool(reporting_tool, name="reporting_tool")
     except Exception as e:
         logger.error(f'Error registering tools for reports_endpoints: {e}')
     logger.info(f'Tools registration finished for reports_endpoints.')

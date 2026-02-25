@@ -4,6 +4,11 @@ Delphix DCT API MCP Server
 
 This server provides tools for interacting with the Delphix DCT API.
 Each DCT API category has its own dedicated tool for better organization.
+
+Toolset Configuration:
+- DCT_TOOLSET=self_service (default): Basic VDB operations
+- DCT_TOOLSET=auto: Meta-tools for toolset discovery
+- DCT_TOOLSET=<name>: Fixed toolset mode with specific tools
 """
 
 import asyncio
@@ -12,7 +17,14 @@ import signal
 import sys
 from contextlib import asynccontextmanager
 
-from dct_mcp_server.config import get_dct_config, print_config_help
+from dct_mcp_server.config import (
+    get_dct_config,
+    print_config_help,
+    get_configured_toolset,
+    is_auto_mode,
+    get_available_toolsets,
+    validate_all_configs,
+)
 from dct_mcp_server.core import end_session, start_session
 from dct_mcp_server.core.exceptions import MCPError
 from dct_mcp_server.core.logging import get_logger, setup_logging
@@ -98,6 +110,22 @@ async def async_main():
         global dct_client
         dct_client = DCTAPIClient()
         logger.info(f"DCT MCP Server initialized with base URL: {dct_client.base_url}")
+
+        # Log toolset configuration
+        try:
+            toolset = get_configured_toolset()
+            available = get_available_toolsets()
+            if is_auto_mode():
+                logger.info(f"Toolset mode: AUTO (meta-tools only)")
+                logger.info(f"Available toolsets for discovery: {available}")
+            else:
+                logger.info(f"Toolset mode: FIXED ({toolset})")
+                # Validate configuration files
+                validation_errors = validate_all_configs()
+                if validation_errors:
+                    logger.warning(f"Configuration validation warnings: {validation_errors}")
+        except Exception as e:
+            logger.warning(f"Could not determine toolset configuration: {e}")
 
         # Dynamically register all tools
         from .tools import register_all_tools
