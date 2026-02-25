@@ -23,7 +23,7 @@ The Delphix DCT API MCP Server provides a robust Model Context Protocol (MCP) in
 
 ## Features
 
-- **Persona-Based Toolsets**: Choose from 5 pre-configured toolsets tailored for different roles (Self-Service, Platform Admin, DBA, Reporting).
+- **Persona-Based Toolsets**: Choose from 5 pre-configured toolsets tailored for different roles (Self-Service, Self-Service Provisioning, Continuous Data Admin, Platform Admin, Reporting & Insights).
 - **Auto Mode**: Dynamic toolset discovery with runtime switching - no server restart required.
 - **Grouped Tools**: Each tool handles multiple related actions via an `action` parameter, reducing tool count while maintaining full functionality.
 - **Confirmation System**: Built-in confirmation checks for destructive operations to prevent accidental data loss.
@@ -82,9 +82,9 @@ All configuration methods use these environment variables:
 - `DCT_TIMEOUT` - Request timeout in seconds (default: `30`)
 - `DCT_MAX_RETRIES` - Maximum retry attempts (default: `3`)
 - `DCT_TOOLSET` - Toolset to load (see [Toolsets](#toolsets) section below)
-  - `auto` (default) - Dynamic discovery with 5 meta-tools for runtime switching
-  - `self_service` - Basic VDB operations (6 tools)
-  - `self_service_provision` - Self-service + provisioning (8 tools)
+  - `self_service` (default) - Basic VDB operations (6 tools)
+  - `auto` - Dynamic discovery with 5 meta-tools for runtime switching
+  - `self_service_provision` - Self-service + provisioning (12 tools)
   - `continuous_data_admin` - Full DBA operations (14 tools)
   - `platform_admin` - System administration (10 tools)
   - `reporting_insights` - Read-only reporting (13 tools)
@@ -131,14 +131,14 @@ See below for the full JSON configuration examples for each client.
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO",
-        "DCT_TOOLSET": "auto"
+        "DCT_TOOLSET": "self_service"
       }
     }
   }
 }
 ```
 
-> **Tip**: Use `"DCT_TOOLSET": "auto"` for dynamic toolset discovery, or set a specific toolset like `"continuous_data_admin"` for pre-registered tools.
+> **Tip**: Use `"DCT_TOOLSET": "self_service"` (default) for basic VDB operations, or `"auto"` for dynamic toolset discovery, or `"continuous_data_admin"` for full DBA operations.
 
 **Option 2: Using Python directly**
 ```json
@@ -150,7 +150,8 @@ See below for the full JSON configuration examples for each client.
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
+        "DCT_VERIFY_SSL": "true",
+        "DCT_TOOLSET": "self_service"
       }
     }
   }
@@ -166,7 +167,8 @@ See below for the full JSON configuration examples for each client.
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
+        "DCT_VERIFY_SSL": "true",
+        "DCT_TOOLSET": "self_service"
       }
     }
   }
@@ -189,7 +191,8 @@ See below for the full JSON configuration examples for each client.
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
-        "DCT_LOG_LEVEL": "INFO"
+        "DCT_LOG_LEVEL": "INFO",
+        "DCT_TOOLSET": "self_service"
       }
     }
   ]
@@ -207,7 +210,8 @@ See below for the full JSON configuration examples for each client.
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
+        "DCT_VERIFY_SSL": "true",
+        "DCT_TOOLSET": "self_service"
       }
     }
   ]
@@ -224,7 +228,8 @@ See below for the full JSON configuration examples for each client.
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
+        "DCT_VERIFY_SSL": "true",
+        "DCT_TOOLSET": "self_service"
       }
     }
   ]
@@ -251,7 +256,7 @@ See below for the full JSON configuration examples for each client.
         "DCT_BASE_URL": "https://your-dct-host.company.com",
         "DCT_VERIFY_SSL": "true",
         "DCT_LOG_LEVEL": "INFO",
-        "DCT_TOOLSET": "continuous_data_admin"
+        "DCT_TOOLSET": "self_service"
       }
     }
   }
@@ -268,7 +273,8 @@ See below for the full JSON configuration examples for each client.
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
+        "DCT_VERIFY_SSL": "true",
+        "DCT_TOOLSET": "self_service"
       }
     }
   }
@@ -284,7 +290,8 @@ See below for the full JSON configuration examples for each client.
       "env": {
         "DCT_API_KEY": "your-api-key-here",
         "DCT_BASE_URL": "https://your-dct-host.company.com",
-        "DCT_VERIFY_SSL": "true"
+        "DCT_VERIFY_SSL": "true",
+        "DCT_TOOLSET": "self_service"
       }
     }
   }
@@ -296,13 +303,13 @@ See below for the full JSON configuration examples for each client.
 
 ## Advanced Installation
 
-For standalone command-line tool or contribute to development. 
+For running as a standalone command-line tool or contributing to development.
 
-Most use the [MCP Client Configuration](#mcp-client-configuration) above instead.
+Most users should use the [MCP Client Configuration](#mcp-client-configuration) above instead.
 
 ### Setting Environment Variables
 
-For standalone installation, to set the [environment variables](#environment-variables) in your shell before running the server.
+For standalone installation, set the [environment variables](#environment-variables) in your shell before running the server.
 
 <details>
 <summary><strong>Linux/macOS</strong></summary>
@@ -426,16 +433,16 @@ The server organizes tools into **persona-based toolsets** designed for specific
 
 | Toolset | Tools | Target Users | Description |
 |---------|-------|--------------|-------------|
+| `self_service` | 6 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop (default) |
 | `auto` | 5 meta-tools | All users | Dynamic discovery mode - start minimal, enable toolsets at runtime |
-| `self_service` | 6 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop |
-| `self_service_provision` | 8 tools | Dev leads | Self-service + VDB provisioning capabilities |
+| `self_service_provision` | 12 tools | Dev leads | Self-service + VDB provisioning capabilities |
 | `continuous_data_admin` | 14 tools | DBAs | Full data management: VDBs, dSources, snapshots, policies |
 | `platform_admin` | 10 tools | Admins | System administration: engines, environments, IAM, reporting |
 | `reporting_insights` | 13 tools | Managers | Read-only reporting and analytics |
 
-### Auto Mode (Recommended)
+### Auto Mode
 
-When `DCT_TOOLSET=auto` (default), the server starts with **5 meta-tools** for dynamic toolset discovery:
+When `DCT_TOOLSET=auto`, the server starts with **5 meta-tools** for dynamic toolset discovery:
 
 | Meta-Tool | Description |
 |-----------|-------------|
@@ -464,7 +471,7 @@ For environments where you always need the same toolset, set it directly:
 ```json
 {
   "env": {
-    "DCT_TOOLSET": "continuous_data_admin"
+    "DCT_TOOLSET": "self_service"
   }
 }
 ```
@@ -482,7 +489,7 @@ Not all MCP clients support dynamic tool registration mid-session:
 | Continue.dev | ✅ Yes | Supports runtime tool changes |
 | VS Code Copilot | ⚠️ Limited | Requires chat restart after `enable_toolset` |
 
-**Recommendation**: For VS Code Copilot, use a fixed toolset (`DCT_TOOLSET=continuous_data_admin`) for the best experience.
+**Recommendation**: For VS Code Copilot, use a fixed toolset (`DCT_TOOLSET=self_service`) for the best experience.
 
 ### Grouped Tools
 
@@ -618,6 +625,305 @@ The tools available depend on the configured toolset. Below are the grouped tool
 
 - **Actions**: `search`, `get`, `update`
 - **Use cases**: Connection management
+</details>
+
+### self_service Toolset (6 Tools)
+
+<details>
+<summary><strong><code>vdb_tool</code></strong> - VDB operations (14 actions)</summary>
+
+- **Actions**: `search`, `get`, `start`, `stop`, `enable`, `disable`, `refresh_by_timestamp`, `refresh_by_snapshot`, `refresh_from_bookmark`, `rollback_by_timestamp`, `rollback_by_snapshot`, `rollback_from_bookmark`, `list_snapshots`, `list_bookmarks`
+- **Use cases**: VDB lifecycle management, refresh and rollback operations
+</details>
+
+<details>
+<summary><strong><code>vdb_group_tool</code></strong> - VDB Group operations (14 actions)</summary>
+
+- **Actions**: `search`, `get`, `refresh`, `refresh_from_bookmark`, `refresh_by_snapshot`, `refresh_by_timestamp`, `rollback`, `lock`, `unlock`, `start`, `stop`, `enable`, `disable`, `list_bookmarks`
+- **Use cases**: Coordinated VDB group operations, bulk refresh/rollback
+</details>
+
+<details>
+<summary><strong><code>dsource_tool</code></strong> - dSource operations (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `list_snapshots`
+- **Use cases**: dSource discovery, snapshot listing
+</details>
+
+<details>
+<summary><strong><code>snapshot_tool</code></strong> - Snapshot operations (6 actions)</summary>
+
+- **Actions**: `search`, `get`, `get_timeflow_range`, `get_runtime`, `find_by_location`, `find_by_timestamp`
+- **Use cases**: Point-in-time recovery, snapshot discovery
+</details>
+
+<details>
+<summary><strong><code>bookmark_tool</code></strong> - Bookmark operations (6 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `get_vdb_groups`
+- **Use cases**: Bookmark management, point-in-time markers
+</details>
+
+<details>
+<summary><strong><code>job_tool</code></strong> - Job operations (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `abandon`
+- **Use cases**: Job monitoring, operation tracking
+</details>
+
+### self_service_provision Toolset (12 Tools)
+
+> Inherits all tools from `self_service` with extended capabilities, plus additional tools.
+
+<details>
+<summary><strong><code>vdb_tool</code></strong> - VDB operations with provisioning (28 actions)</summary>
+
+- **Actions**: All self_service actions plus: `provision_by_timestamp`, `get_provision_by_timestamp_defaults`, `provision_by_snapshot`, `get_provision_by_snapshot_defaults`, `provision_from_bookmark`, `get_provision_from_bookmark_defaults`, `provision_by_location`, `get_provision_by_location_defaults`, `update`, `delete`, `switch_timeflow`, `undo_refresh`, `get_deletion_dependencies`, `add_tags`, `delete_tags`
+- **Use cases**: VDB provisioning, lifecycle management, tagging
+</details>
+
+<details>
+<summary><strong><code>vdb_group_tool</code></strong> - VDB Group operations with CRUD (21 actions)</summary>
+
+- **Actions**: All self_service actions plus: `create`, `update`, `delete`, `provision_from_bookmark`, `get_latest_snapshots`, `add_tags`, `delete_tags`
+- **Use cases**: VDB group management, provisioning from bookmarks
+</details>
+
+<details>
+<summary><strong><code>dsource_tool</code></strong> - dSource operations (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `list_snapshots`
+- **Use cases**: dSource discovery, snapshot listing
+</details>
+
+<details>
+<summary><strong><code>snapshot_tool</code></strong> - Snapshot operations (6 actions)</summary>
+
+- **Actions**: `search`, `get`, `get_timeflow_range`, `get_runtime`, `find_by_location`, `find_by_timestamp`
+- **Use cases**: Point-in-time recovery, snapshot discovery
+</details>
+
+<details>
+<summary><strong><code>bookmark_tool</code></strong> - Bookmark operations (6 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `get_vdb_groups`
+- **Use cases**: Bookmark management, point-in-time markers
+</details>
+
+<details>
+<summary><strong><code>job_tool</code></strong> - Job operations (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `abandon`
+- **Use cases**: Job monitoring, operation tracking
+</details>
+
+<details>
+<summary><strong><code>instance_tool</code></strong> - CDB/vCDB operations (4 actions)</summary>
+
+- **Actions**: `search_cdbs`, `get_cdb`, `search_vcdbs`, `get_vcdb`
+- **Use cases**: Oracle container database discovery
+</details>
+
+<details>
+<summary><strong><code>database_template_tool</code></strong> - VDB Templates (7 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `add_tags`, `delete_tags`
+- **Use cases**: Standardized VDB provisioning templates
+</details>
+
+<details>
+<summary><strong><code>hook_template_tool</code></strong> - Hook Templates (7 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `add_tags`, `delete_tags`
+- **Use cases**: Pre/post operation script management
+</details>
+
+<details>
+<summary><strong><code>virtualization_policy_tool</code></strong> - Policies (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `search_targets`
+- **Use cases**: Policy discovery and target lookup
+</details>
+
+<details>
+<summary><strong><code>environment_tool</code></strong> - Environments (4 actions)</summary>
+
+- **Actions**: `search`, `get`, `list_hosts`, `list_listeners`
+- **Use cases**: Environment discovery and configuration
+</details>
+
+<details>
+<summary><strong><code>tag_tool</code></strong> - Tags (4 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `delete`
+- **Use cases**: Resource tagging and organization
+</details>
+
+### platform_admin Toolset (10 Tools)
+
+<details>
+<summary><strong><code>job_tool</code></strong> - Job operations (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `abandon`
+- **Use cases**: Job monitoring, operation management
+</details>
+
+<details>
+<summary><strong><code>engine_tool</code></strong> - CD Engine management (7 actions)</summary>
+
+- **Actions**: `search`, `get`, `register`, `update`, `unregister`, `add_tags`, `delete_tags`
+- **Use cases**: Engine registration, configuration, monitoring
+</details>
+
+<details>
+<summary><strong><code>environment_tool</code></strong> - Environment management (12 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `enable`, `disable`, `refresh`, `list_hosts`, `list_listeners`, `add_tags`, `delete_tags`
+- **Use cases**: Full environment lifecycle management
+</details>
+
+<details>
+<summary><strong><code>source_tool</code></strong> - Source management (5 actions)</summary>
+
+- **Actions**: `search`, `get`, `update`, `add_tags`, `delete_tags`
+- **Use cases**: Source configuration and tagging
+</details>
+
+<details>
+<summary><strong><code>replication_tool</code></strong> - Replication profiles (8 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`, `execute`, `add_tags`, `delete_tags`
+- **Use cases**: Data replication, disaster recovery
+</details>
+
+<details>
+<summary><strong><code>reporting_tool</code></strong> - Reports and Analytics (17 actions)</summary>
+
+- **Actions**: `search_storage_savings_report`, `get_storage_capacity_report`, `get_virtualization_storage_summary`, `get_vdb_inventory_report`, `search_vdb_inventory_report`, `get_dsource_consumption_report`, `get_engine_performance_report`, `get_dataset_performance_analytics`, `get_api_usage_report`, `get_audit_logs_summary_report`, `search_scheduled_reports`, `get_scheduled_report`, `create_scheduled_report`, `update_scheduled_report`, `delete_scheduled_report`, `get_license`, `change_license`
+- **Use cases**: Capacity planning, usage reporting, license management
+</details>
+
+<details>
+<summary><strong><code>iam_tool</code></strong> - Identity and Access Management (21 actions)</summary>
+
+- **Actions**: `search_accounts`, `get_account`, `create_account`, `update_account`, `delete_account`, `enable_account`, `disable_account`, `reset_password`, `search_roles`, `get_role`, `create_role`, `update_role`, `delete_role`, `search_access_groups`, `get_access_group`, `create_access_group`, `update_access_group`, `delete_access_group`, `list_api_clients`, `create_api_client`, `delete_api_client`
+- **Use cases**: User management, RBAC, API client management
+</details>
+
+<details>
+<summary><strong><code>data_connection_tool</code></strong> - Data connections (5 actions)</summary>
+
+- **Actions**: `search`, `get`, `update`, `add_tags`, `delete_tags`
+- **Use cases**: Connection management and tagging
+</details>
+
+<details>
+<summary><strong><code>tag_tool</code></strong> - Tag management (5 actions)</summary>
+
+- **Actions**: `search`, `get`, `create`, `delete`, `get_usages`
+- **Use cases**: Resource tagging, usage tracking
+</details>
+
+<details>
+<summary><strong><code>admin_platform_tool</code></strong> - Platform administration (20 actions)</summary>
+
+- **Actions**: `list_llm_models`, `get_llm_model`, `upload_llm_model`, `get_gateway_config`, `update_gateway_config`, `enable_ai`, `get_properties`, `update_properties`, `get_telemetry_config`, `update_telemetry_config`, `get_smtp_config`, `update_smtp_config`, `validate_smtp_config`, `get_ldap_config`, `update_ldap_config`, `validate_ldap_config`, `get_saml_config`, `update_saml_config`, `get_proxy_config`, `update_proxy_config`
+- **Use cases**: AI services, SMTP, LDAP, SAML, proxy configuration
+</details>
+
+### reporting_insights Toolset (13 Tools)
+
+> All tools in this toolset are read-only for monitoring and reporting.
+
+<details>
+<summary><strong><code>data_tool</code></strong> - VDB/VDB Group/dSources read-only (9 actions)</summary>
+
+- **Actions**: `search_vdbs`, `get_vdb`, `list_vdb_snapshots`, `search_vdb_groups`, `get_vdb_group`, `list_vdb_group_bookmarks`, `search_dsources`, `get_dsource`, `list_dsource_snapshots`
+- **Use cases**: Data asset inventory and monitoring
+</details>
+
+<details>
+<summary><strong><code>snapshot_bookmark_tool</code></strong> - Snapshots and Bookmarks read-only (7 actions)</summary>
+
+- **Actions**: `search_snapshots`, `get_snapshot`, `get_snapshot_capacity`, `get_snapshot_timeflow_range`, `search_bookmarks`, `get_bookmark`, `get_bookmark_vdb_groups`
+- **Use cases**: Snapshot and bookmark reporting
+</details>
+
+<details>
+<summary><strong><code>instance_tool</code></strong> - CDB/vCDB read-only (4 actions)</summary>
+
+- **Actions**: `search_cdbs`, `get_cdb`, `search_vcdbs`, `get_vcdb`
+- **Use cases**: Oracle container database inventory
+</details>
+
+<details>
+<summary><strong><code>database_template_tool</code></strong> - VDB Templates read-only (2 actions)</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Template inventory
+</details>
+
+<details>
+<summary><strong><code>hook_template_tool</code></strong> - Hook Templates read-only (2 actions)</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Hook template inventory
+</details>
+
+<details>
+<summary><strong><code>virtualization_policy_tool</code></strong> - Policies read-only (2 actions)</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Policy inventory
+</details>
+
+<details>
+<summary><strong><code>job_tool</code></strong> - Jobs read-only (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `get_result`
+- **Use cases**: Job monitoring and result analysis
+</details>
+
+<details>
+<summary><strong><code>engine_tool</code></strong> - Engines read-only (2 actions)</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Engine inventory and monitoring
+</details>
+
+<details>
+<summary><strong><code>environment_tool</code></strong> - Environments read-only (4 actions)</summary>
+
+- **Actions**: `search`, `get`, `list_hosts`, `list_listeners`
+- **Use cases**: Environment inventory
+</details>
+
+<details>
+<summary><strong><code>source_tool</code></strong> - Sources read-only (2 actions)</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Source inventory
+</details>
+
+<details>
+<summary><strong><code>reporting_tool</code></strong> - Reports and Analytics (13 actions)</summary>
+
+- **Actions**: `search_storage_savings_report`, `get_storage_capacity_report`, `get_virtualization_storage_summary`, `get_vdb_inventory_report`, `search_vdb_inventory_report`, `get_dsource_consumption_report`, `get_engine_performance_report`, `get_dataset_performance_analytics`, `get_api_usage_report`, `get_audit_logs_summary_report`, `search_scheduled_reports`, `get_scheduled_report`, `get_license`
+- **Use cases**: Comprehensive reporting and analytics
+</details>
+
+<details>
+<summary><strong><code>data_connection_tool</code></strong> - Connections read-only (2 actions)</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Connection inventory
+</details>
+
+<details>
+<summary><strong><code>tag_tool</code></strong> - Tags read-only (3 actions)</summary>
+
+- **Actions**: `search`, `get`, `get_usages`
+- **Use cases**: Tag inventory and usage tracking
 </details>
 
 ### Legacy Tool Reference
@@ -916,9 +1222,6 @@ dxi-mcp-server/
 ├── logs/                       # Runtime logs and telemetry
 │   ├── dct_mcp_server.log      # Main application logs
 │   └── sessions/               # Telemetry session logs
-├── docs/                       # Design documentation
-│   ├── DESIGN_CRUD_TOOLSETS_DOC.txt
-│   └── EXECUTIVE_SUMMARY_CRUD_TOOLSETS.txt
 └── src/
     └── dct_mcp_server/
         ├── main.py             # Application entry point
@@ -926,7 +1229,7 @@ dxi-mcp-server/
         │   ├── config.py       # Configuration management
         │   ├── loader.py       # Toolset configuration loader
         │   ├── toolsets/       # Toolset definitions
-        │   │   ├── self_service.txt
+        │   │   ├── self_service.txt          # Default toolset (6 tools)
         │   │   ├── self_service_provision.txt
         │   │   ├── continuous_data_admin.txt
         │   │   ├── platform_admin.txt
@@ -945,11 +1248,8 @@ dxi-mcp-server/
         │   ├── core/           # Tool generation framework
         │   │   ├── meta_tools.py   # Auto mode meta-tools
         │   │   └── tool_factory.py # Dynamic tool generator
-        │   ├── dataset_endpoints_tool.py   # Legacy endpoint tools
-        │   ├── environment_endpoints_tool.py
-        │   ├── engine_endpoints_tool.py
-        │   ├── job_endpoints_tool.py
-        │   └── reports_endpoints_tool.py
+        │   ├── dataset_endpoints_tool.py   # Dataset endpoint tools
+        │   └── job_endpoints_tool.py       # Job endpoint tools
         └── icons/
             └── logo-delphixmcp-reg.png
 ```
