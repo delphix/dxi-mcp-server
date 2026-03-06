@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import tempfile
+from dct_mcp_server.config import get_dct_config
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,12 @@ def register_all_tools(app, dct_client):
     will be automatically imported and executed.
     """
     logger.info("Starting dynamic tool registration...")
+
+    # Get configuration for feature flags
+    config = get_dct_config()
+    enable_synthetic_tools = config.get("enable_synthetic_tools", False)
+    if enable_synthetic_tools:
+        logger.info("Synthetic tools feature flag: enabled")
 
     try:
         package_search_paths = list(__path__)
@@ -40,6 +47,10 @@ def register_all_tools(app, dct_client):
                 
             for module_finder, module_name, ispkg in pkgutil.iter_modules([temp_tools_dir]):
                 if ispkg:
+                    continue
+
+                # Skip synthetic tools if feature flag is disabled
+                if not enable_synthetic_tools and "synthetic" in module_name:
                     continue
 
                 try:
@@ -68,6 +79,10 @@ def register_all_tools(app, dct_client):
                 # Skip if we already successfully registered this module from temp directory
                 if module_name in registered_modules:
                     logger.debug(f"Skipping pre-built '{module_name}' - already loaded from generated tools")
+                    continue
+
+                # Skip synthetic tools if feature flag is disabled
+                if not enable_synthetic_tools and "synthetic" in module_name:
                     continue
 
                 try:
