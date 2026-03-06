@@ -1,0 +1,5 @@
+/synthetic/connectors/search
+/synthetic/applications/search
+/synthetic/datasets/search
+/synthetic/generators/search
+/synthetic/generator-frameworks
