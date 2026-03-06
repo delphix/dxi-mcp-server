@@ -381,6 +381,19 @@ Method for developers who want to modify the code or run it from a local clone.
    
    > **Note**: If you prefer not to use `uv`, scripts for standard Python with `venv` are also provided (`start_mcp_server_python.sh` and `start_mcp_server_windows_python.bat`).
 
+3. **Customize endpoint tools (Only if adding or modifying supported tools):**
+   
+   The server automatically generates fresh tools from your DCT API specification when it starts. This step is only required if you want to add new endpoints or modify existing tool coverage.
+   
+   **Adding new endpoints:**
+   - Edit or create files in `src/dct_mcp_server/toolsgenerator/endpoints/`
+   - Add one endpoint path per line (e.g., `/synthetic/connectors/search`)
+   - Each `*_endpoints.txt` file generates a corresponding `*_endpoints_tool.py` file
+   
+   **Feature flags:**
+   - Use `DCT_ENABLE_SYNTHETIC_TOOLS=true` to enable synthetic data tools (disabled by default)
+   - Add similar flags in `src/dct_mcp_server/config/config.py` for other tool categories behind feature flags
+
 ### Connecting a Client to a Running Server
 
 Once the server is running (either via the command-line tool or from the source), it will print the port it is listening on to the console (e.g., `INFO:     Uvicorn running on http://127.0.0.1:6790 (Press CTRL+C to quit)`). 
