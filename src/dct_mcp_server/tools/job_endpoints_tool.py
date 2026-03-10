@@ -78,8 +78,8 @@ def make_api_request(method: str, endpoint: str, params: dict = None, json_body:
     return _make_request()
 
 def build_params(**kwargs):
-    """Build parameters dictionary excluding None values."""
-    return {k: v for k, v in kwargs.items() if v is not None}
+    """Build parameters dictionary excluding None and empty string values."""
+    return {k: v for k, v in kwargs.items() if v is not None and v != ''}
 
 @log_tool_execution
 def job_tool(

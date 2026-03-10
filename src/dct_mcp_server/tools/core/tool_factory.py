@@ -27,8 +27,6 @@ import requests
 from dct_mcp_server.config import (
     load_toolset_apis,
     load_toolset_grouped_apis,
-    get_tool_for_api,
-    load_tool_grouping,
     get_confirmation_for_operation,
 )
 from dct_mcp_server.config.config import get_dct_config

@@ -1234,8 +1234,7 @@ dxi-mcp-server/
         │   │   ├── continuous_data_admin.txt
         │   │   ├── platform_admin.txt
         │   │   └── reporting_insights.txt
-        │   └── mappings/       # Tool grouping & confirmation rules
-        │       ├── tool_grouping.txt
+        │   └── mappings/       # Confirmation rules
         │       └── manual_confirmation.txt
         ├── core/
         │   ├── decorators.py   # Logging and telemetry decorators

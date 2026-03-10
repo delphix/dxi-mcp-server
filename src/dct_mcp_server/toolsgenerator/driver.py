@@ -5,7 +5,7 @@ Driver code for the MCP server tool generation from Delphix DCT OpenAPI specific
 
 This script downloads the OpenAPI YAML specification from the DCT server,
 parses it, and generates tool files for each API category. API definitions
-are sourced from config/toolsets/*.txt files and grouped using config/tool_grouping.txt.
+are sourced from config/toolsets/*.txt files with inline tool grouping via # TOOL headers.
 
 Generated tool files are saved in the dct_mcp_server/tools directory.
 Each generated function includes:
@@ -14,8 +14,7 @@ Each generated function includes:
 - Implementation using utility functions for making API requests.
 
 Configuration Files Used:
-- config/toolsets/*.txt: Toolset definitions with METHOD|path|action format
-- config/tool_grouping.txt: Maps API paths to tool modules
+- config/toolsets/*.txt: Toolset definitions with METHOD|path|action format and # TOOL headers
 """
 
 

@@ -7,7 +7,6 @@ when adding new APIs or modifying toolsets.
 
 Configuration Files:
 - config/toolsets/*.txt: Toolset definitions (APIs per toolset)
-- config/mappings/tool_grouping.txt: How APIs are grouped into tools
 - config/mappings/manual_confirmation.txt: Confirmation rules for destructive operations
 """
 
@@ -236,73 +235,6 @@ def load_all_toolsets_metadata() -> Dict[str, Dict[str, Any]]:
 
 
 # ============================================================================
-# TOOL GROUPING FUNCTIONS
-# ============================================================================
-
-@lru_cache(maxsize=1)
-def load_tool_grouping() -> Dict[str, Dict[str, Any]]:
-    """
-    Load tool grouping configuration.
-    
-    Format: tool_name|base_path_pattern(s)|description
-    
-    Returns:
-        Dict mapping tool names to their patterns and descriptions
-    """
-    grouping = {}
-    config_file = MAPPINGS_DIR / "tool_grouping.txt"
-    
-    if not config_file.exists():
-        logger.warning(f"Tool grouping file not found: {config_file}")
-        return grouping
-    
-    with open(config_file, 'r') as f:
-        for line in f:
-            line = line.strip()
-            
-            # Skip empty lines and comments
-            if not line or line.startswith('#'):
-                continue
-            
-            parts = line.split('|')
-            if len(parts) >= 2:
-                tool_name = parts[0].strip()
-                patterns = [p.strip() for p in parts[1].split(',')]
-                description = parts[2].strip() if len(parts) > 2 else ""
-                
-                grouping[tool_name] = {
-                    "patterns": patterns,
-                    "description": description
-                }
-    
-    return grouping
-
-
-def get_tool_for_api(api_path: str) -> str:
-    """
-    Determine which tool an API belongs to based on path patterns.
-    
-    Args:
-        api_path: API endpoint path (e.g., "/vdbs/{vdbId}")
-        
-    Returns:
-        Tool name that handles this API, or "unknown_tool" if no match
-    """
-    grouping = load_tool_grouping()
-    
-    for tool_name, config in grouping.items():
-        for pattern in config["patterns"]:
-            # Normalize paths for comparison
-            normalized_path = api_path.split('{')[0].rstrip('/')
-            normalized_pattern = pattern.rstrip('/')
-            
-            if normalized_path.startswith(normalized_pattern):
-                return tool_name
-    
-    return "unknown_tool"
-
-
-# ============================================================================
 # MANUAL CONFIRMATION FUNCTIONS
 # ============================================================================
 
@@ -493,29 +425,6 @@ def get_tools_for_toolset(toolset_name: str) -> List[Dict[str, Any]]:
     return sorted(tools, key=lambda t: t["name"])
 
 
-def get_apis_grouped_by_tool(toolset_name: str) -> Dict[str, List[Dict[str, str]]]:
-    """
-    Get APIs grouped by their owning tool.
-    
-    Args:
-        toolset_name: Name of the toolset
-        
-    Returns:
-        Dict mapping tool names to list of API definitions
-    """
-    apis = load_toolset_apis(toolset_name)
-    
-    grouped: Dict[str, List[Dict[str, str]]] = {}
-    
-    for api in apis:
-        tool_name = get_tool_for_api(api["path"])
-        if tool_name not in grouped:
-            grouped[tool_name] = []
-        grouped[tool_name].append(dict(api))
-    
-    return grouped
-
-
 def get_modules_for_toolset(toolset_name: str) -> List[str]:
     """
     Get the list of tool module names required for a toolset.
@@ -606,7 +515,6 @@ def clear_cache():
     Call this if configuration files change during runtime.
     """
     load_toolset_apis.cache_clear()
-    load_tool_grouping.cache_clear()
     load_manual_confirmation_rules.cache_clear()
     logger.info("Configuration cache cleared")
 
@@ -632,13 +540,6 @@ def validate_toolset_config(toolset_name: str) -> List[str]:
         
         if not apis:
             errors.append(f"Toolset '{toolset_name}' has no APIs defined")
-        
-        # Check for unknown tools
-        grouping = load_tool_grouping()
-        for api in apis:
-            tool = get_tool_for_api(api["path"])
-            if tool == "unknown_tool":
-                errors.append(f"API path '{api['path']}' doesn't match any known tool pattern")
                 
     except ValueError as e:
         errors.append(str(e))
@@ -662,14 +563,6 @@ def validate_all_configs() -> Dict[str, List[str]]:
         errors = validate_toolset_config(toolset_name)
         if errors:
             results[f"toolset:{toolset_name}"] = errors
-    
-    # Validate tool grouping
-    try:
-        grouping = load_tool_grouping()
-        if not grouping:
-            results["tool_grouping.txt"] = ["No tool groupings defined"]
-    except Exception as e:
-        results["tool_grouping.txt"] = [str(e)]
     
     # Validate confirmation rules
     try:
