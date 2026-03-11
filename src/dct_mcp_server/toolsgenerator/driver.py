@@ -477,8 +477,8 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         Generated Python code for the unified tool function
     """
     # Collect all parameters across all actions
-    all_params = {}  # {param_name: {"type": str, "required_for": [actions], "description": str}}
-    action_details = {}  # {action_name: {"method": str, "path": str, "path_params": [], "has_filter": bool}}
+    all_params = {}  # {param_name: {"type": str, "required_for": [actions], "description": str, "param_type": str}}
+    action_details = {}  # {action_name: {"method": str, "path": str, "path_params": [], "has_filter": bool, "body_params": []}}
     
     # Extract resource type from tool name for descriptions
     resource_type = tool_name.replace("_tool", "").replace("_", " ").upper()
@@ -521,7 +521,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     if param_def.get("name") == orig_name:
                         desc = param_def.get("description", desc)
                         break
-                all_params[param_key] = {"type": "str", "required_for": [], "description": desc}
+                all_params[param_key] = {"type": "str", "required_for": [], "description": desc, "param_type": "path"}
             all_params[param_key]["required_for"].append(action)
         
         # Add query parameters
@@ -541,12 +541,13 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
                 
                 if name not in all_params:
-                    all_params[name] = {"type": param_type, "required_for": [], "description": desc}
+                    all_params[name] = {"type": param_type, "required_for": [], "description": desc, "param_type": "query"}
                 all_params[name]["required_for"].append(action)
             except KeyError:
                 continue
         
         # Add request body parameters for POST/PUT/PATCH
+        body_params_for_action = []  # Initialize for all methods
         request_body = operation.get("requestBody", {})
         if request_body and method.upper() in ["POST", "PUT", "PATCH"]:
             content = request_body.get("content", {})
@@ -570,10 +571,17 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     if enum_values:
                         desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
                     
-                    if prop_name not in all_params:
-                        all_params[prop_name] = {"type": python_type, "required_for": [], "description": desc}
+                    # Convert camelCase to snake_case for consistency
+                    snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', prop_name).lower()
+                    body_params_for_action.append((prop_name, snake_name))
+                    
+                    if snake_name not in all_params:
+                        all_params[snake_name] = {"type": python_type, "required_for": [], "description": desc, "param_type": "body"}
                     if prop_name in required_props:
-                        all_params[prop_name]["required_for"].append(action)
+                        all_params[snake_name]["required_for"].append(action)
+        
+        # Store body params for this action
+        action_details[action]["body_params"] = body_params_for_action
         
         # Add filter_expression for search actions
         if has_filter:
@@ -581,7 +589,8 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 all_params["filter_expression"] = {
                     "type": "str",
                     "required_for": [],
-                    "description": "Filter expression to narrow results (e.g., \"name CONTAINS 'prod'\")"
+                    "description": "Filter expression to narrow results (e.g., \"name CONTAINS 'prod'\")",
+                    "param_type": "body"
                 }
     
     # Build function signature
@@ -754,13 +763,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             func_code += "        body = {'filter_expression': filter_expression} if filter_expression else {}\n"
             func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
         elif method in ["POST", "PUT", "PATCH"]:
-            # Collect body params
-            body_params = [p for p, info in all_params.items() 
-                          if action_name in info["required_for"]
-                          and not p.endswith("_id")]
+            # Collect body params - use the body_params stored in action_details
+            body_params = details.get("body_params", [])
             if body_params:
-                body_dict = ", ".join([f"'{p}': {p}" for p in body_params])
-                func_code += f"        body = {{k: v for k, v in {{{body_dict}}}.items() if v is not None}}\n"
+                # Build body dict with original API names as keys and snake_case vars as values
+                body_items = ", ".join([f"'{orig}': {snake}" for orig, snake in body_params])
+                func_code += f"        body = {{k: v for k, v in {{{body_items}}}.items() if v is not None}}\n"
                 func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
             else:
                 func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params)\n"
