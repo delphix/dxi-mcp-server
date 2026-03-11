@@ -314,6 +314,44 @@ def resolve_ref(ref: str, root: dict):
         node = node[part]
     return node
 
+
+def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
+    """
+    Resolve schema properties, handling $ref and allOf composition.
+    
+    Returns:
+        tuple: (properties dict, required list)
+    """
+    # Resolve top-level $ref if present
+    if "$ref" in schema:
+        schema = resolve_ref(schema["$ref"], api_spec)
+    
+    # Handle allOf composition
+    if "allOf" in schema:
+        combined_properties = {}
+        combined_required = []
+        
+        for sub_schema in schema["allOf"]:
+            # Resolve $ref in sub-schema
+            if "$ref" in sub_schema:
+                sub_schema = resolve_ref(sub_schema["$ref"], api_spec)
+            
+            # Recursively handle nested allOf
+            if "allOf" in sub_schema:
+                nested_props, nested_required = resolve_schema_properties(sub_schema, api_spec)
+                combined_properties.update(nested_props)
+                combined_required.extend(nested_required)
+            else:
+                # Merge properties
+                combined_properties.update(sub_schema.get("properties", {}))
+                combined_required.extend(sub_schema.get("required", []))
+        
+        return combined_properties, combined_required
+    
+    # Direct properties (no allOf)
+    return schema.get("properties", {}), schema.get("required", [])
+
+
 def generate_tools_from_openapi():
     """
     Generates UNIFIED tool files from OpenAPI spec based on TOOLS_BY_NAME.
@@ -553,18 +591,24 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # Add request body parameters for POST/PUT/PATCH
         body_params_for_action = []  # Initialize for all methods
         request_body = operation.get("requestBody", {})
+        
+        # Resolve $ref in requestBody if present
+        if "$ref" in request_body:
+            request_body = resolve_ref(request_body["$ref"], api_spec)
+        
         if request_body and method.upper() in ["POST", "PUT", "PATCH"]:
             content = request_body.get("content", {})
             json_content = content.get("application/json", {})
             schema = json_content.get("schema", {})
             
-            if "$ref" in schema:
-                schema = resolve_ref(schema["$ref"], api_spec)
-            
-            properties = schema.get("properties", {})
-            required_props = schema.get("required", [])
+            # Use helper to resolve schema properties (handles $ref and allOf)
+            properties, required_props = resolve_schema_properties(schema, api_spec)
             
             for prop_name, prop_def in properties.items():
+                # Handle nested $ref in property definition
+                if "$ref" in prop_def:
+                    prop_def = resolve_ref(prop_def["$ref"], api_spec)
+                
                 prop_type = prop_def.get("type", "string")
                 if prop_type in translated_dict_for_types:
                     python_type = translated_dict_for_types[prop_type]
