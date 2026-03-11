@@ -535,6 +535,11 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 param_type = translated_dict_for_types.get(param_def['schema']['type'], "str")
                 desc = param_def.get("description", "Query parameter")
                 
+                # Include enum values in description if they exist
+                enum_values = param_def.get('schema', {}).get('enum')
+                if enum_values:
+                    desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
+                
                 if name not in all_params:
                     all_params[name] = {"type": param_type, "required_for": [], "description": desc}
                 all_params[name]["required_for"].append(action)
@@ -559,6 +564,11 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 if prop_type in translated_dict_for_types:
                     python_type = translated_dict_for_types[prop_type]
                     desc = prop_def.get("description", "Request body parameter")
+                    
+                    # Include enum values in description if they exist
+                    enum_values = prop_def.get('enum')
+                    if enum_values:
+                        desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
                     
                     if prop_name not in all_params:
                         all_params[prop_name] = {"type": python_type, "required_for": [], "description": desc}
