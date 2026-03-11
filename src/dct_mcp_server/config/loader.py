@@ -485,8 +485,8 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         # Platform admin merged tool
         "admin_platform_tool": "admin_endpoints_tool",
         
-        # Instance tools
-        "instance_tool": "instance_endpoints_tool",
+        # Instance tools (CDB/vCDB)
+        "instance_tool": "misc_endpoints_tool",
     }
     
     # Get the tools used by this toolset

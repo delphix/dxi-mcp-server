@@ -119,15 +119,13 @@ def _parse_toolset_file(toolset_file):
                 continue
             
             # Check for tool header comments like "# TOOL 1: vdb_tool"
-            if line.startswith('#') and 'TOOL' in line.upper() and ':' in line:
-                # Extract tool name: "# TOOL 1: vdb_tool - VDB" -> "vdb_tool"
-                parts = line.split(':')
-                if len(parts) >= 2:
-                    tool_part = parts[1].strip()
-                    # Get first word (tool name) before any dash or space
-                    current_tool = tool_part.split()[0].strip() if tool_part else None
-                    if current_tool and current_tool not in TOOLS_BY_NAME:
-                        TOOLS_BY_NAME[current_tool] = []
+            # Must start with "# TOOL" followed by number and colon (not "# Inherited: TOOL")
+            tool_header_match = re.match(r'^#\s*TOOL\s+\d+\s*:\s*(\w+)', line, re.IGNORECASE)
+            if tool_header_match:
+                # Extract tool name from regex group
+                current_tool = tool_header_match.group(1).strip()
+                if current_tool and current_tool not in TOOLS_BY_NAME:
+                    TOOLS_BY_NAME[current_tool] = []
                 continue
             
             # Skip other comments
@@ -383,8 +381,14 @@ def generate_tools_from_openapi():
 
         for tool_name, apis in tools.items():
             tool_code = _generate_unified_tool(tool_name, apis, api_spec)
-            tool_file_content += tool_code
-            function_lists.append(tool_name)
+            if tool_code:  # Only add if tool was successfully generated
+                tool_file_content += tool_code
+                function_lists.append(tool_name)
+
+        # Skip generating file if no tools were successfully generated
+        if not function_lists:
+            logger.warning(f"Skipping module {module_name} - no valid tools generated")
+            continue
 
         tool_file_content += create_register_tool_function(module_name, function_lists)
 
@@ -592,6 +596,11 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     "description": "Filter expression to narrow results (e.g., \"name CONTAINS 'prod'\")",
                     "param_type": "body"
                 }
+    
+    # Skip generating tool if no valid actions were found
+    if not action_details:
+        logger.warning(f"Skipping tool '{tool_name}' - no valid API operations found")
+        return ""
     
     # Build function signature
     actions_list = list(action_details.keys())
