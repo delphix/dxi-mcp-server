@@ -1,0 +1,164 @@
+# Delphix Platform Administration Toolset - 10 Tools
+# Description: Perform traditional "System Admin" operations
+# Format: METHOD|/endpoint/path|action_name
+# Target users: Platform administrators, DCT administrators
+
+# ----------------------------------------------------------------------------
+# TOOL 1: job_tool - Operations
+# ----------------------------------------------------------------------------
+POST|/jobs/search|search
+GET|/jobs/{jobId}|get
+POST|/jobs/{jobId}/abandon|abandon
+
+# ----------------------------------------------------------------------------
+# TOOL 2: engine_tool - CD Engines
+# ----------------------------------------------------------------------------
+POST|/management/engines/search|search
+GET|/management/engines/{engineId}|get
+POST|/management/engines|register
+PATCH|/management/engines/{engineId}|update
+DELETE|/management/engines/{engineId}|unregister
+POST|/management/engines/{engineId}/tags|add_tags
+DELETE|/management/engines/{engineId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 3: environment_tool - Environments
+# ----------------------------------------------------------------------------
+POST|/environments/search|search
+GET|/environments/{environmentId}|get
+POST|/environments|create
+PATCH|/environments/{environmentId}|update
+DELETE|/environments/{environmentId}|delete
+POST|/environments/{environmentId}/enable|enable
+POST|/environments/{environmentId}/disable|disable
+POST|/environments/{environmentId}/refresh|refresh
+GET|/environments/{environmentId}/hosts|list_hosts
+GET|/environments/{environmentId}/listeners|list_listeners
+POST|/environments/{environmentId}/tags|add_tags
+DELETE|/environments/{environmentId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 4: source_tool - Sources (Source Configs)
+# ----------------------------------------------------------------------------
+POST|/sources/search|search
+GET|/sources/{sourceId}|get
+PATCH|/sources/{sourceId}|update
+POST|/sources/{sourceId}/tags|add_tags
+DELETE|/sources/{sourceId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 5: replication_tool - Replication & Retention
+# ----------------------------------------------------------------------------
+POST|/replication-profiles/search|search
+GET|/replication-profiles/{replicationProfileId}|get
+POST|/replication-profiles|create
+PATCH|/replication-profiles/{replicationProfileId}|update
+DELETE|/replication-profiles/{replicationProfileId}|delete
+POST|/replication-profiles/{replicationProfileId}/execute|execute
+POST|/replication-profiles/{replicationProfileId}/tags|add_tags
+DELETE|/replication-profiles/{replicationProfileId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 6: reporting_tool - Insights + License Report + Automated Reports
+# ----------------------------------------------------------------------------
+# Storage Reports
+POST|/reporting/storage-savings-report/search|search_storage_savings_report
+POST|/reporting/storage-capacity-data-report|get_storage_capacity_report
+POST|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
+# VDB Inventory Reports
+POST|/reporting/vdb-inventory-report|get_vdb_inventory_report
+POST|/reporting/vdb-inventory-report/search|search_vdb_inventory_report
+# dSource Reports
+POST|/reporting/dsource-consumption-report|get_dsource_consumption_report
+# Performance Reports
+POST|/reporting/engine-performance-analytic-report|get_engine_performance_report
+POST|/reporting/dataset-performance-analytics|get_dataset_performance_analytics
+# API & Audit Reports
+POST|/reporting/api-usage-report|get_api_usage_report
+POST|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
+# Automated/Scheduled Reports
+POST|/reporting/schedule/search|search_scheduled_reports
+GET|/reporting/schedule/{reportId}|get_scheduled_report
+POST|/reporting/schedule|create_scheduled_report
+PATCH|/reporting/schedule/{reportId}|update_scheduled_report
+DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
+# License Report
+GET|/management/license|get_license
+POST|/management/license/change-license|change_license
+
+# ----------------------------------------------------------------------------
+# TOOL 7: iam_tool - IAM (Accounts, Access Groups, Roles, Authentication)
+# ----------------------------------------------------------------------------
+# Accounts
+POST|/management/accounts/search|search_accounts
+GET|/management/accounts/{id}|get_account
+POST|/management/accounts|create_account
+PATCH|/management/accounts/{id}|update_account
+DELETE|/management/accounts/{id}|delete_account
+POST|/management/accounts/{id}/enable|enable_account
+POST|/management/accounts/{id}/disable|disable_account
+POST|/management/accounts/{id}/reset_password|reset_password
+# Roles
+POST|/roles/search|search_roles
+GET|/roles/{roleId}|get_role
+POST|/roles|create_role
+PATCH|/roles/{roleId}|update_role
+DELETE|/roles/{roleId}|delete_role
+# Access Groups
+POST|/access-groups/search|search_access_groups
+GET|/access-groups/{accessGroupId}|get_access_group
+POST|/access-groups|create_access_group
+PATCH|/access-groups/{accessGroupId}|update_access_group
+DELETE|/access-groups/{accessGroupId}|delete_access_group
+# Authentication / API Clients
+GET|/management/api-clients|list_api_clients
+POST|/management/api-clients|create_api_client
+DELETE|/management/api-clients/{id}|delete_api_client
+
+# ----------------------------------------------------------------------------
+# TOOL 8: data_connection_tool - Connections
+# ----------------------------------------------------------------------------
+POST|/data-connections/search|search
+GET|/data-connections/{dataConnectionId}|get
+PATCH|/data-connections/{dataConnectionId}|update
+POST|/data-connections/{dataConnectionId}/tags|add_tags
+DELETE|/data-connections/{dataConnectionId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 9: tag_tool - Tags
+# ----------------------------------------------------------------------------
+POST|/management/tags/search|search
+GET|/management/tags/{tagId}|get
+POST|/management/tags|create
+DELETE|/management/tags/{tagId}|delete
+GET|/management/tags/{tagId}/usages|get_usages
+
+# ----------------------------------------------------------------------------
+# TOOL 10: admin_platform_tool - AI Services + License Tiers + Telemetry + SMTP (merged)
+# ----------------------------------------------------------------------------
+# AI Services
+GET|/ai/management/model|list_llm_models
+GET|/ai/management/model/{modelId}|get_llm_model
+POST|/ai/management/model/upload|upload_llm_model
+GET|/ai/management/gateway|get_gateway_config
+PATCH|/ai/management/gateway|update_gateway_config
+POST|/ai/management/enable|enable_ai
+# Telemetry & Properties
+GET|/management/properties|get_properties
+PATCH|/management/properties|update_properties
+GET|/management/telemetry|get_telemetry_config
+PATCH|/management/telemetry|update_telemetry_config
+# SMTP Configuration
+GET|/management/smtp|get_smtp_config
+PATCH|/management/smtp|update_smtp_config
+POST|/management/smtp/validate|validate_smtp_config
+# LDAP Configuration
+GET|/management/ldap-config|get_ldap_config
+PATCH|/management/ldap-config|update_ldap_config
+POST|/management/ldap-config/validate|validate_ldap_config
+# SAML Configuration
+GET|/management/saml-config|get_saml_config
+PATCH|/management/saml-config|update_saml_config
+# Proxy Configuration
+GET|/management/proxy-configuration|get_proxy_config
+PATCH|/management/proxy-configuration|update_proxy_config

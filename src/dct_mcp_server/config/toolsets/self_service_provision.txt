@@ -1,0 +1,93 @@
+# Self Service + VDB Provision Toolset - 12 Tools
+# Description: Perform Self Service activities + provision new VDBs
+# Format: METHOD|/endpoint/path|action_name
+# Target users: Dev leads, senior developers who need provisioning capability
+@inherit:self_service
+
+# ----------------------------------------------------------------------------
+# TOOL 1: vdb_tool - Extended with provisioning (inherits from self_service)
+# ----------------------------------------------------------------------------
+POST|/vdbs/provision_by_timestamp|provision_by_timestamp
+GET|/vdbs/provision_by_timestamp/defaults|get_provision_by_timestamp_defaults
+POST|/vdbs/provision_by_snapshot|provision_by_snapshot
+GET|/vdbs/provision_by_snapshot/defaults|get_provision_by_snapshot_defaults
+POST|/vdbs/provision_from_bookmark|provision_from_bookmark
+GET|/vdbs/provision_from_bookmark/defaults|get_provision_from_bookmark_defaults
+POST|/vdbs/provision_by_location|provision_by_location
+GET|/vdbs/provision_by_location/defaults|get_provision_by_location_defaults
+PATCH|/vdbs/{vdbId}|update
+POST|/vdbs/{vdbId}/delete|delete
+POST|/vdbs/{vdbId}/switch_timeflow|switch_timeflow
+POST|/vdbs/{vdbId}/undo_refresh|undo_refresh
+GET|/vdbs/{vdbId}/deletion-dependencies|get_deletion_dependencies
+POST|/vdbs/{vdbId}/tags|add_tags
+DELETE|/vdbs/{vdbId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 2: vdb_group_tool - Extended with CRUD (inherits from self_service)
+# ----------------------------------------------------------------------------
+POST|/vdb-groups|create
+PATCH|/vdb-groups/{vdbGroupId}|update
+DELETE|/vdb-groups/{vdbGroupId}|delete
+POST|/vdb-groups/provision_from_bookmark|provision_from_bookmark
+GET|/vdb-groups/{vdbGroupId}/latest-snapshots|get_latest_snapshots
+POST|/vdb-groups/{vdbGroupId}/tags|add_tags
+DELETE|/vdb-groups/{vdbGroupId}/tags/delete|delete_tags
+
+# Inherited: TOOL 3: bookmark_tool (from self_service)
+# Inherited: TOOL 4: snapshot_tool (from self_service)
+# Inherited: TOOL 5: dsource_tool (from self_service)
+# Inherited: TOOL 6: job_tool (from self_service)
+
+# ----------------------------------------------------------------------------
+# TOOL 7: instance_tool - CDB/vCDB Operations
+# ----------------------------------------------------------------------------
+POST|/cdbs/search|search_cdbs
+GET|/cdbs/{cdbId}|get_cdb
+POST|/vcdbs/search|search_vcdbs
+GET|/vcdbs/{vcdbId}|get_vcdb
+
+# ----------------------------------------------------------------------------
+# TOOL 8: database_template_tool - VDB Templates
+# ----------------------------------------------------------------------------
+POST|/database-templates/search|search
+GET|/database-templates/{databaseTemplateId}|get
+POST|/database-templates|create
+PATCH|/database-templates/{databaseTemplateId}|update
+DELETE|/database-templates/{databaseTemplateId}|delete
+POST|/database-templates/{databaseTemplateId}/tags|add_tags
+DELETE|/database-templates/{databaseTemplateId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 9: hook_template_tool - Hook Templates
+# ----------------------------------------------------------------------------
+POST|/hook-templates/search|search
+GET|/hook-templates/{hookTemplateId}|get
+POST|/hook-templates|create
+PATCH|/hook-templates/{hookTemplateId}|update
+DELETE|/hook-templates/{hookTemplateId}|delete
+POST|/hook-templates/{hookTemplateId}/tags|add_tags
+DELETE|/hook-templates/{hookTemplateId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 10: virtualization_policy_tool - Policies (read + apply)
+# ----------------------------------------------------------------------------
+POST|/virtualization-policies/search|search
+GET|/virtualization-policies/{policyId}|get
+POST|/virtualization-policies/targets/search|search_targets
+
+# ----------------------------------------------------------------------------
+# TOOL 11: environment_tool - Environment Operations (read only)
+# ----------------------------------------------------------------------------
+POST|/environments/search|search
+GET|/environments/{environmentId}|get
+GET|/environments/{environmentId}/hosts|list_hosts
+GET|/environments/{environmentId}/listeners|list_listeners
+
+# ----------------------------------------------------------------------------
+# TOOL 12: tag_tool - Tags
+# ----------------------------------------------------------------------------
+POST|/management/tags/search|search
+GET|/management/tags/{tagId}|get
+POST|/management/tags|create
+DELETE|/management/tags/{tagId}|delete

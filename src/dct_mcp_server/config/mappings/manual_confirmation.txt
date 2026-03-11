@@ -1,0 +1,69 @@
+# Manual Confirmation Rules
+# Format: METHOD|path_pattern|confirmation_level|message_template
+# Based on DCT API v3 OpenAPI specification
+#
+# CONFIRMATION LEVELS:
+# - standard: Single confirmation (confirm=true)
+# - elevated: Confirm + type resource name
+# - manual: Confirm + type name + acknowledge impact
+# - retention_check:N: Conditional - triggers if deletion within N days
+# - policy_impact_check:N: Conditional - triggers if policy affects resources
+
+# ============================================
+# RULE 1: All Delete Operations (MANUAL)
+# ============================================
+POST|/vdbs/{vdbId}/delete|manual|Are you sure you want to permanently delete VDB '{name}'? This action cannot be undone.
+DELETE|/bookmarks/{bookmarkId}|manual|Are you sure you want to permanently delete bookmark '{name}'? This action cannot be undone.
+POST|/snapshots/{snapshotId}/delete|manual|Are you sure you want to permanently delete snapshot '{name}'? This action cannot be undone.
+POST|/dsources/delete|manual|Are you sure you want to permanently delete dSource '{name}'? Dependent VDBs will lose their source.
+DELETE|/vdb-groups/{vdbGroupId}|manual|Are you sure you want to permanently delete VDB Group '{name}'?
+DELETE|/environments/{environmentId}|manual|Are you sure you want to permanently delete environment '{name}'?
+DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister engine '{name}'?
+DELETE|/database-templates/{databaseTemplateId}|manual|Are you sure you want to delete database template '{name}'?
+DELETE|/hook-templates/{hookTemplateId}|manual|Are you sure you want to delete hook template '{name}'?
+DELETE|/virtualization-policies/{policyId}|manual|Are you sure you want to delete virtualization policy '{name}'?
+DELETE|/management/accounts/{id}|manual|Are you sure you want to delete user account '{name}'?
+DELETE|/roles/{roleId}|manual|Are you sure you want to delete role '{name}'?
+DELETE|/management/tags/{tagId}|manual|Are you sure you want to delete tag '{name}'?
+DELETE|/replication-profiles/{replicationProfileId}|manual|Are you sure you want to delete replication profile '{name}'?
+DELETE|/access-groups/{accessGroupId}|manual|Are you sure you want to delete access group '{name}'?
+DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete toolkit '{name}'?
+DELETE|/groups/{groupId}|manual|Are you sure you want to delete group '{name}'?
+POST|/cdbs/{cdbId}/delete|manual|Are you sure you want to delete CDB '{name}'?
+POST|/vcdbs/{vcdbId}/delete|manual|Are you sure you want to delete vCDB '{name}'?
+POST|/staging-cdbs/{stagingCdbId}/delete|manual|Are you sure you want to delete staging CDB '{name}'?
+DELETE|/timeflows/{timeflowId}|manual|Are you sure you want to delete timeflow '{name}'?
+DELETE|/management/vaults/hashicorp/{vaultId}|manual|Are you sure you want to delete HashiCorp vault '{name}'?
+DELETE|/password_vaults/{passwordVaultId}|manual|Are you sure you want to delete password vault '{name}'?
+DELETE|/kerberos-configs/{kerberosConfigId}|manual|Are you sure you want to delete Kerberos config '{name}'?
+
+# ============================================
+# RULE 2: Retention Date Updates (CONDITIONAL)
+# Triggers MANUAL if deletion within 7 days
+# ============================================
+PATCH|/bookmarks/{bookmarkId}|retention_check:7|Warning: Updating retention date will cause bookmark '{name}' to be deleted in {days} day(s). Proceed?
+PATCH|/snapshots/{snapshotId}|retention_check:7|Warning: Updating retention date will cause snapshot '{name}' to be deleted in {days} day(s). Proceed?
+POST|/snapshots/{snapshotId}/unset_expiration|retention_check:7|Warning: Unsetting expiration may affect snapshot '{name}' retention. Proceed?
+
+# ============================================
+# RULE 3: Policy Updates (CONDITIONAL)
+# Triggers MANUAL if policy affects resources within 7 days
+# ============================================
+PATCH|/virtualization-policies/{policyId}|policy_impact_check:7|Warning: This policy update will cause {count} snapshot(s)/bookmark(s) to be deleted within 7 days. Proceed?
+POST|/virtualization-policies|policy_impact_check:7|Warning: This new policy will affect {count} existing resource(s) within 7 days. Proceed?
+POST|/virtualization-policies/{policyId}/apply|policy_impact_check:7|Warning: Applying this policy will affect {count} resource(s). Proceed?
+
+# ============================================
+# RULE 4: Standard Confirmation Operations
+# ============================================
+POST|/vdbs/{vdbId}/disable|standard|Disabling VDB will make it unavailable. Confirm?
+POST|/vdbs/{vdbId}/stop|standard|Stopping VDB will terminate all connections. Confirm?
+POST|/vdbs/{vdbId}/rollback_by_timestamp|standard|Rolling back VDB will lose changes since last snapshot. Confirm?
+POST|/vdbs/{vdbId}/rollback_by_snapshot|standard|Rolling back VDB will lose changes since last snapshot. Confirm?
+POST|/vdbs/{vdbId}/rollback_from_bookmark|standard|Rolling back VDB will lose changes since last snapshot. Confirm?
+POST|/vdb-groups/{vdbGroupId}/rollback|standard|Rolling back VDB Group will affect all member VDBs. Confirm?
+POST|/dsources/{dsourceId}/disable|standard|Disabling dSource will stop sync operations. Confirm?
+POST|/environments/{environmentId}/disable|standard|Disabling environment will affect hosted databases. Confirm?
+PATCH|/vdbs/{vdbId}|standard|Updating VDB configuration. Confirm?
+PATCH|/dsources/{dsourceId}|standard|Updating dSource configuration. Confirm?
+PATCH|/environments/{environmentId}|standard|Updating environment configuration. Confirm?

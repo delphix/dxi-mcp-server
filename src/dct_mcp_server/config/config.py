@@ -18,6 +18,7 @@ def get_dct_config() -> Dict[str, Any]:
         "log_level": os.getenv("DCT_LOG_LEVEL", "INFO").upper(),
         "is_local_telemetry_enabled": os.getenv("IS_LOCAL_TELEMETRY_ENABLED", "false").lower()
         == "true",
+        "toolset": os.getenv("DCT_TOOLSET", "self_service").lower().strip(),
     }
 
     # Validate required configuration
@@ -57,10 +58,32 @@ def print_config_help():
     print(
         "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
     )
+    print(
+        "  DCT_TOOLSET      Active toolset (default: self_service). Options:"
+    )
+    print(
+        "                   - auto: Dynamic discovery mode with meta-tools"
+    )
+    print(
+        "                   - self_service: Basic VDB operations for developers/QA"
+    )
+    print(
+        "                   - self_service_provision: Extended self-service with provisioning"
+    )
+    print(
+        "                   - continuous_data_admin: Full DBA/CD admin operations"
+    )
+    print(
+        "                   - platform_admin: System administration tools"
+    )
+    print(
+        "                   - reporting_insights: Read-only reporting and analytics"
+    )
     print()
     print("Example:")
     print("  export DCT_API_KEY=apk1.your-api-key-here")
     print("  export DCT_BASE_URL=https://your-dct-host:8083")
     print("  export DCT_VERIFY_SSL=true")
     print("  export DCT_LOG_LEVEL=DEBUG")
+    print("  export DCT_TOOLSET=self_service")
     print()
