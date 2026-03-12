@@ -18,6 +18,7 @@ def get_dct_config() -> Dict[str, Any]:
         "log_level": os.getenv("DCT_LOG_LEVEL", "INFO").upper(),
         "is_local_telemetry_enabled": os.getenv("IS_LOCAL_TELEMETRY_ENABLED", "false").lower()
         == "true",
+        "enable_synthetic_tools": os.getenv("DCT_ENABLE_SYNTHETIC_TOOLS", "false").lower() == "true",
     }
 
     # Validate required configuration
@@ -56,6 +57,9 @@ def print_config_help():
     )
     print(
         "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
+    )
+    print(
+        "  DCT_ENABLE_SYNTHETIC_TOOLS Enable synthetic data tools registration (default: false)"
     )
     print()
     print("Example:")
