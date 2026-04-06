@@ -10,6 +10,12 @@ from .session import (
     log_tool_call,
     get_current_session_id,
 )
+from .toolkit_schemas import (
+    fetch_and_cache_toolkit_schemas,
+    register_toolkit_resources,
+    get_cached_toolkit_schema,
+    list_cached_toolkit_ids,
+)
 
 __all__ = [
     "get_logger",
@@ -23,4 +29,8 @@ __all__ = [
     "get_session_logger",
     "log_tool_call",
     "get_current_session_id",
+    "fetch_and_cache_toolkit_schemas",
+    "register_toolkit_resources",
+    "get_cached_toolkit_schema",
+    "list_cached_toolkit_ids",
 ]

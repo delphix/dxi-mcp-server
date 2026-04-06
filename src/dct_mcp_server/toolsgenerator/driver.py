@@ -458,6 +458,7 @@ def _get_module_for_path(api_path: str) -> str:
         
         # Environment endpoints
         "/environments": "environment_endpoints",
+        "/toolkits": "environment_endpoints",
         
         # Engine endpoints
         "/management/engines": "engine_endpoints",
@@ -608,23 +609,33 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 # Handle nested $ref in property definition
                 if "$ref" in prop_def:
                     prop_def = resolve_ref(prop_def["$ref"], api_spec)
-                
+
                 prop_type = prop_def.get("type", "string")
-                if prop_type in translated_dict_for_types:
-                    python_type = translated_dict_for_types[prop_type]
+                is_json_param = prop_type in ("object", "array")
+
+                if prop_type in translated_dict_for_types or is_json_param:
+                    if is_json_param:
+                        python_type = "dict" if prop_type == "object" else "list"
+                    else:
+                        python_type = translated_dict_for_types[prop_type]
                     desc = prop_def.get("description", "Request body parameter")
-                    
+
                     # Include enum values in description if they exist
                     enum_values = prop_def.get('enum')
                     if enum_values:
                         desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
-                    
+
+                    # Add JSON hint for object/array params
+                    if is_json_param:
+                        json_kind = "JSON object" if prop_type == "object" else "JSON array"
+                        desc = f"{desc} (Pass as {json_kind})"
+
                     # Convert camelCase to snake_case for consistency
                     snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', prop_name).lower()
-                    body_params_for_action.append((prop_name, snake_name))
-                    
+                    body_params_for_action.append((prop_name, snake_name, is_json_param))
+
                     if snake_name not in all_params:
-                        all_params[snake_name] = {"type": python_type, "required_for": [], "description": desc, "param_type": "body"}
+                        all_params[snake_name] = {"type": python_type, "required_for": [], "description": desc, "param_type": "body", "is_json": is_json_param}
                     if prop_name in required_props:
                         all_params[snake_name]["required_for"].append(action)
         
@@ -820,7 +831,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             body_params = details.get("body_params", [])
             if body_params:
                 # Build body dict with original API names as keys and snake_case vars as values
-                body_items = ", ".join([f"'{orig}': {snake}" for orig, snake in body_params])
+                body_items = ", ".join([
+                    f"'{orig}': {snake}"
+                    for orig, snake, is_json in body_params
+                ])
                 func_code += f"        body = {{k: v for k, v in {{{body_items}}}.items() if v is not None}}\n"
                 func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
             else:

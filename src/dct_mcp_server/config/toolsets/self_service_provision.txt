@@ -1,4 +1,4 @@
-# Self Service + VDB Provision Toolset - 12 Tools
+# Self Service + VDB Provision Toolset - 13 Tools
 # Description: Perform Self Service activities + provision new VDBs
 # Format: METHOD|/endpoint/path|action_name
 # Target users: Dev leads, senior developers who need provisioning capability
@@ -85,7 +85,13 @@ GET|/environments/{environmentId}/hosts|list_hosts
 GET|/environments/{environmentId}/listeners|list_listeners
 
 # ----------------------------------------------------------------------------
-# TOOL 12: tag_tool - Tags
+# TOOL 12: toolkit_tool - Toolkits (AppData plugin schemas)
+# ----------------------------------------------------------------------------
+POST|/toolkits/search|search
+GET|/toolkits/{toolkitId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 13: tag_tool - Tags
 # ----------------------------------------------------------------------------
 POST|/management/tags/search|search
 GET|/management/tags/{tagId}|get

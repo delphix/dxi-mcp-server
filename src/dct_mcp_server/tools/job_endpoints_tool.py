@@ -83,17 +83,18 @@ def build_params(**kwargs):
 
 @log_tool_execution
 def job_tool(
-    action: str,  # One of: search, get, abandon
+    action: str,  # One of: search, get, abandon, get_result, add_tags
     cursor: Optional[str] = None,
     filter_expression: Optional[str] = None,
     job_id: Optional[str] = None,
     limit: Optional[int] = None,
     sort: Optional[str] = None,
+    tags: Optional[list] = None,
 ) -> Dict[str, Any]:
     """
     Unified tool for JOB operations.
     
-    This tool supports 3 actions: search, get, abandon
+    This tool supports 5 actions: search, get, abandon, get_result, add_tags
     
     ======================================================================
     ACTION REFERENCE
@@ -159,22 +160,44 @@ def job_tool(
     Example:
         >>> job_tool(action='abandon', job_id='example-job-123')
     
+    ACTION: get_result
+    ----------------------------------------
+    Summary: Get job result.
+    Method: GET
+    Endpoint: /jobs/{jobId}/result
+    Required Parameters: job_id
+    
+    Example:
+        >>> job_tool(action='get_result', job_id='example-job-123')
+    
+    ACTION: add_tags
+    ----------------------------------------
+    Summary: Create tags for a Job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/tags
+    Required Parameters: job_id, tags
+    
+    Example:
+        >>> job_tool(action='add_tags', job_id='example-job-123', tags=...)
+    
     ======================================================================
     PARAMETERS
     ======================================================================
     
     Args:
-        action (str): The operation to perform. One of: search, get, abandon
+        action (str): The operation to perform. One of: search, get, abandon, get_result, add_tags
         cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
             [Required for: search]
-        filter_expression (str): Filter expression to narrow results (e.g., "name CONTAINS 'prod'")
+        filter_expression (str): Request body parameter
             [Optional for all actions]
         job_id (str): The unique identifier for the job.
-            [Required for: get, abandon]
+            [Required for: get, abandon, get_result, add_tags]
         limit (int): Maximum number of objects to return per query. The value must be between 1 an...
             [Required for: search]
         sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
             [Required for: search]
+        tags (list): Array of tags with key value pairs (Pass as JSON array)
+            [Required for: add_tags]
     
     Returns:
         Dict[str, Any]: The API response containing operation results
@@ -199,8 +222,21 @@ def job_tool(
         endpoint = f'/jobs/{job_id}/abandon'
         params = build_params()
         return make_api_request('POST', endpoint, params=params)
+    elif action == 'get_result':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action get_result'}
+        endpoint = f'/jobs/{job_id}/result'
+        params = build_params()
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'add_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action add_tags'}
+        endpoint = f'/jobs/{job_id}/tags'
+        params = build_params(tags=tags)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon'}
+        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_result, add_tags'}
 
 
 def register_tools(app, dct_client):

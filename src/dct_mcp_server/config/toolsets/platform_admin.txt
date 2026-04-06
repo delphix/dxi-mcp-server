@@ -1,4 +1,4 @@
-# Delphix Platform Administration Toolset - 10 Tools
+# Delphix Platform Administration Toolset - 11 Tools
 # Description: Perform traditional "System Admin" operations
 # Format: METHOD|/endpoint/path|action_name
 # Target users: Platform administrators, DCT administrators
@@ -134,7 +134,13 @@ DELETE|/management/tags/{tagId}|delete
 GET|/management/tags/{tagId}/usages|get_usages
 
 # ----------------------------------------------------------------------------
-# TOOL 10: admin_platform_tool - AI Services + License Tiers + Telemetry + SMTP (merged)
+# TOOL 10: toolkit_tool - Toolkits (AppData plugin schemas)
+# ----------------------------------------------------------------------------
+POST|/toolkits/search|search
+GET|/toolkits/{toolkitId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 11: admin_platform_tool - AI Services + License Tiers + Telemetry + SMTP (merged)
 # ----------------------------------------------------------------------------
 # AI Services
 GET|/ai/management/model|list_llm_models

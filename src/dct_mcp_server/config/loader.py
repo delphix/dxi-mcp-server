@@ -459,6 +459,9 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         "environment_tool": "environment_endpoints_tool",
         "environment_source_tool": "environment_endpoints_tool",  # Merged tool
         
+        # Toolkit operations (AppData plugin schemas)
+        "toolkit_tool": "environment_endpoints_tool",
+
         # Engine operations
         "engine_tool": "engine_endpoints_tool",
         
