@@ -1,4 +1,4 @@
-# Continuous Data Administrator Toolset - 14 Tools
+# Continuous Data Administrator Toolset - 15 Tools
 # Description: Perform traditional Continuous Data "Management App" operations
 # Format: METHOD|/endpoint/path|action_name
 # Target users: DBAs, Data administrators with full data management capability
@@ -7,13 +7,19 @@
 # TOOL 1: data_tool - VDB / VDB Group / dSources (merged)
 # ----------------------------------------------------------------------------
 # VDB Operations
+GET|/vdbs|list_vdbs
 POST|/vdbs/search|search_vdbs
 GET|/vdbs/{vdbId}|get_vdb
-POST|/vdbs/provision_by_timestamp|provision_by_timestamp
-POST|/vdbs/provision_by_snapshot|provision_by_snapshot
-POST|/vdbs/provision_from_bookmark|provision_from_bookmark
-POST|/vdbs/provision_by_location|provision_by_location
 PATCH|/vdbs/{vdbId}|update_vdb
+POST|/vdbs/provision_by_timestamp|provision_by_timestamp
+POST|/vdbs/provision_by_timestamp/defaults|provision_by_timestamp_defaults
+POST|/vdbs/provision_by_snapshot|provision_by_snapshot
+POST|/vdbs/provision_by_snapshot/defaults|provision_by_snapshot_defaults
+POST|/vdbs/provision_from_bookmark|provision_from_bookmark
+POST|/vdbs/provision_from_bookmark/defaults|provision_from_bookmark_defaults
+POST|/vdbs/provision_by_location|provision_by_location
+POST|/vdbs/provision_by_location/defaults|provision_by_location_defaults
+POST|/vdbs/empty_vdb|provision_empty_vdb
 POST|/vdbs/{vdbId}/delete|delete_vdb
 POST|/vdbs/{vdbId}/start|start_vdb
 POST|/vdbs/{vdbId}/stop|stop_vdb
@@ -22,34 +28,117 @@ POST|/vdbs/{vdbId}/disable|disable_vdb
 POST|/vdbs/{vdbId}/refresh_by_timestamp|refresh_vdb_by_timestamp
 POST|/vdbs/{vdbId}/refresh_by_snapshot|refresh_vdb_by_snapshot
 POST|/vdbs/{vdbId}/refresh_from_bookmark|refresh_vdb_from_bookmark
+POST|/vdbs/{vdbId}/refresh_by_location|refresh_vdb_by_location
+POST|/vdbs/{vdbId}/undo_refresh|undo_vdb_refresh
 POST|/vdbs/{vdbId}/rollback_by_timestamp|rollback_vdb_by_timestamp
 POST|/vdbs/{vdbId}/rollback_by_snapshot|rollback_vdb_by_snapshot
 POST|/vdbs/{vdbId}/rollback_from_bookmark|rollback_vdb_from_bookmark
 POST|/vdbs/{vdbId}/switch_timeflow|switch_vdb_timeflow
 POST|/vdbs/{vdbId}/lock|lock_vdb
 POST|/vdbs/{vdbId}/unlock|unlock_vdb
+POST|/vdbs/{vdbId}/migrate|migrate_vdb
+GET|/vdbs/{vdbId}/migrate_compatible_repositories|get_migrate_compatible_repositories
+POST|/vdbs/{vdbId}/upgrade|upgrade_vdb
+POST|/vdbs/oracle/{vdbId}/upgrade|upgrade_oracle_vdb
+GET|/vdbs/{vdbId}/upgrade_compatible_repositories|get_upgrade_compatible_repositories
 GET|/vdbs/{vdbId}/snapshots|list_vdb_snapshots
+POST|/vdbs/{vdbId}/snapshots|snapshot_vdb
+GET|/vdbs/{vdbId}/bookmarks|list_vdb_bookmarks
+POST|/vdbs/{vdbId}/bookmarks/search|search_vdb_bookmarks
+GET|/vdbs/{vdbId}/deletion-dependencies|get_vdb_deletion_dependencies
+POST|/vdbs/{vdbId}/jdbc-check|verify_vdb_jdbc_connection
+GET|/vdbs/{vdbId}/tags|get_vdb_tags
 POST|/vdbs/{vdbId}/tags|add_vdb_tags
 DELETE|/vdbs/{vdbId}/tags/delete|delete_vdb_tags
+POST|/vdbs/{vdbId}/in-place-export|export_vdb_in_place
+POST|/vdbs/{vdbId}/asm-in-place-export|export_vdb_asm_in_place
+POST|/vdbs/{vdbId}/export-by-snapshot|export_vdb_by_snapshot
+POST|/vdbs/{vdbId}/export-by-timestamp|export_vdb_by_timestamp
+POST|/vdbs/{vdbId}/export-by-location|export_vdb_by_location
+POST|/vdbs/{vdbId}/export-from-bookmark|export_vdb_from_bookmark
+POST|/vdbs/{vdbId}/asm-export-by-snapshot|export_vdb_to_asm_by_snapshot
+POST|/vdbs/{vdbId}/asm-export-by-timestamp|export_vdb_to_asm_by_timestamp
+POST|/vdbs/{vdbId}/asm-export-by-location|export_vdb_to_asm_by_location
+POST|/vdbs/{vdbId}/asm-export-from-bookmark|export_vdb_to_asm_from_bookmark
+POST|/vdbs/{vdbId}/export_cleanup|export_cleanup
+POST|/vdbs/{vdbId}/export_finalize|export_finalize
 # VDB Group Operations
+GET|/vdb-groups|list_vdb_groups
 POST|/vdb-groups/search|search_vdb_groups
 GET|/vdb-groups/{vdbGroupId}|get_vdb_group
 POST|/vdb-groups|create_vdb_group
 PATCH|/vdb-groups/{vdbGroupId}|update_vdb_group
 DELETE|/vdb-groups/{vdbGroupId}|delete_vdb_group
+POST|/vdb-groups/provision_from_bookmark|provision_vdb_group_from_bookmark
 POST|/vdb-groups/{vdbGroupId}/refresh|refresh_vdb_group
+POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|refresh_vdb_group_from_bookmark
+POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|refresh_vdb_group_by_snapshot
+POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|refresh_vdb_group_by_timestamp
 POST|/vdb-groups/{vdbGroupId}/rollback|rollback_vdb_group
 POST|/vdb-groups/{vdbGroupId}/lock|lock_vdb_group
 POST|/vdb-groups/{vdbGroupId}/unlock|unlock_vdb_group
 POST|/vdb-groups/{vdbGroupId}/start|start_vdb_group
 POST|/vdb-groups/{vdbGroupId}/stop|stop_vdb_group
-POST|/vdb-groups/provision_from_bookmark|provision_vdb_group_from_bookmark
+POST|/vdb-groups/{vdbGroupId}/enable|enable_vdb_group
+POST|/vdb-groups/{vdbGroupId}/disable|disable_vdb_group
+GET|/vdb-groups/{vdbGroupId}/latest-snapshots|get_vdb_group_latest_snapshots
+POST|/vdb-groups/{vdbGroupId}/timestamp-summary|get_vdb_group_timestamp_summary
+GET|/vdb-groups/{vdbGroupId}/bookmarks|list_vdb_group_bookmarks
+POST|/vdb-groups/{vdbGroupId}/bookmarks/search|search_vdb_group_bookmarks
+GET|/vdb-groups/{vdbGroupId}/tags|get_vdb_group_tags
 POST|/vdb-groups/{vdbGroupId}/tags|add_vdb_group_tags
 DELETE|/vdb-groups/{vdbGroupId}/tags/delete|delete_vdb_group_tags
 # dSource Operations
+GET|/dsources|list_dsources
 POST|/dsources/search|search_dsources
 GET|/dsources/{dsourceId}|get_dsource
+POST|/dsources/delete|delete_dsource
+POST|/dsources/{dsourceId}/enable|enable_dsource
+POST|/dsources/{dsourceId}/disable|disable_dsource
 GET|/dsources/{dsourceId}/snapshots|list_dsource_snapshots
+POST|/dsources/{dsourceId}/snapshots|dsource_create_snapshot
+POST|/dsources/{dsourceId}/upgrade|upgrade_dsource
+GET|/dsources/{dsourceId}/upgrade_compatible_repositories|get_dsource_upgrade_compatible_repositories
+GET|/dsources/{dsourceId}/deletion-dependencies|get_dsource_deletion_dependencies
+GET|/dsources/{dsourceId}/tags|get_dsource_tags
+POST|/dsources/{dsourceId}/tags|add_dsource_tags
+POST|/dsources/{dsourceId}/tags/delete|delete_dsource_tags
+# dSource Linking - Oracle
+POST|/dsources/oracle|dsource_link_oracle
+POST|/dsources/oracle/defaults|dsource_link_oracle_defaults
+POST|/dsources/oracle/staging-push|dsource_link_oracle_staging_push
+POST|/dsources/oracle/staging-push/defaults|dsource_link_oracle_staging_push_defaults
+PATCH|/dsources/oracle/{dsourceId}|update_oracle_dsource
+POST|/dsources/oracle/{dsourceId}/attachSource|attach_oracle_dsource
+POST|/dsources/oracle/{dsourceId}/detachSource|detach_oracle_dsource
+POST|/dsources/oracle/{dsourceId}/upgrade|upgrade_oracle_dsource
+# dSource Linking - ASE
+POST|/dsources/ase|dsource_link_ase
+POST|/dsources/ase/defaults|dsource_link_ase_defaults
+PATCH|/dsources/ase/{dsourceId}|update_ase_dsource
+# dSource Linking - AppData
+POST|/dsources/appdata|dsource_link_appdata
+POST|/dsources/appdata/defaults|dsource_link_appdata_defaults
+PATCH|/dsources/appdata/{dsourceId}|update_appdata_dsource
+# dSource Linking - MSSql
+POST|/dsources/mssql|dsource_link_mssql
+POST|/dsources/mssql/defaults|dsource_link_mssql_defaults
+POST|/dsources/mssql/staging-push|dsource_link_mssql_staging_push
+POST|/dsources/mssql/staging-push/defaults|dsource_link_mssql_staging_push_defaults
+POST|/dsources/mssql/staging-push/{dsourceId}/attachSource|attach_mssql_staging_push_dsource
+PATCH|/dsources/mssql/{dsourceId}|update_mssql_dsource
+POST|/dsources/mssql/{dsourceId}/attachSource|attach_mssql_dsource
+POST|/dsources/mssql/{dsourceId}/detachSource|detach_mssql_dsource
+# dSource Export Operations
+POST|/dsources/{dsourceId}/export-by-snapshot|export_dsource_by_snapshot
+POST|/dsources/{dsourceId}/export-by-timestamp|export_dsource_by_timestamp
+POST|/dsources/{dsourceId}/export-by-location|export_dsource_by_location
+POST|/dsources/{dsourceId}/export-from-bookmark|export_dsource_from_bookmark
+POST|/dsources/{dsourceId}/asm-export-by-snapshot|export_dsource_to_asm_by_snapshot
+POST|/dsources/{dsourceId}/asm-export-by-timestamp|export_dsource_to_asm_by_timestamp
+POST|/dsources/{dsourceId}/asm-export-by-location|export_dsource_to_asm_by_location
+POST|/dsources/{dsourceId}/asm-export-from-bookmark|export_dsource_to_asm_from_bookmark
+
 
 # ----------------------------------------------------------------------------
 # TOOL 2: snapshot_bookmark_tool - Snapshots + Bookmarks (merged)
@@ -240,7 +329,13 @@ POST|/management/api-clients|create_api_client
 DELETE|/management/api-clients/{id}|delete_api_client
 
 # ----------------------------------------------------------------------------
-# TOOL 13: data_connection_tool - Connections
+# TOOL 13: toolkit_tool - Toolkits (AppData plugin schemas)
+# ----------------------------------------------------------------------------
+POST|/toolkits/search|search
+GET|/toolkits/{toolkitId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 14: data_connection_tool - Connections
 # ----------------------------------------------------------------------------
 POST|/data-connections/search|search
 GET|/data-connections/{dataConnectionId}|get
@@ -249,7 +344,7 @@ POST|/data-connections/{dataConnectionId}/tags|add_tags
 DELETE|/data-connections/{dataConnectionId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 14: tag_tool - Tags
+# TOOL 15: tag_tool - Tags
 # ----------------------------------------------------------------------------
 POST|/management/tags/search|search
 GET|/management/tags/{tagId}|get
