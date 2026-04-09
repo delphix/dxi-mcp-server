@@ -260,6 +260,7 @@ POST|/environments/{environmentId}/tags|add_environment_tags
 DELETE|/environments/{environmentId}/tags/delete|delete_environment_tags
 # Source Operations
 POST|/sources/search|search_sources
+POST|/sources/appdata|create_appdata_source
 GET|/sources/{sourceId}|get_source
 PATCH|/sources/{sourceId}|update_source
 POST|/sources/{sourceId}/tags|add_source_tags
