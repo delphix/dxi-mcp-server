@@ -236,6 +236,9 @@ GET|/management/engines/{engineId}|get
 PATCH|/management/engines/{engineId}|update
 POST|/management/engines/{engineId}/tags|add_tags
 DELETE|/management/engines/{engineId}/tags/delete|delete_tags
+POST|/management/engines|register
+DELETE|/management/engines/{engineId}|unregister
+
 
 # ----------------------------------------------------------------------------
 # TOOL 9: environment_source_tool - Environments + Sources (merged)
@@ -333,6 +336,9 @@ DELETE|/management/api-clients/{id}|delete_api_client
 # ----------------------------------------------------------------------------
 POST|/toolkits/search|search
 GET|/toolkits/{toolkitId}|get
+POST|/toolkits/upload|upload_toolkit
+DELETE|/toolkits/{toolkitId}|delete_toolkit
+
 
 # ----------------------------------------------------------------------------
 # TOOL 14: data_connection_tool - Connections
