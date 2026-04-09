@@ -247,6 +247,8 @@ DELETE|/management/engines/{engineId}|unregister
 POST|/environments/search|search_environments
 GET|/environments/{environmentId}|get_environment
 POST|/environments|create_environment
+POST|/environments/{environmentId}/users|add_environment_users
+DELETE|/environments/{environmentId}/users/delete|delete_environment_users
 PATCH|/environments/{environmentId}|update_environment
 DELETE|/environments/{environmentId}|delete_environment
 POST|/environments/{environmentId}/enable|enable_environment
