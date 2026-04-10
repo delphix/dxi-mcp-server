@@ -85,6 +85,9 @@ DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
 # License Report
 GET|/management/license|get_license
 POST|/management/license/change-license|change_license
+# Fault reports
+GET|/virtualization-faults/history|get_fault_history
+GET|/virtualization-alerts/history|get_alert_history
 
 # ----------------------------------------------------------------------------
 # TOOL 7: iam_tool - IAM (Accounts, Access Groups, Roles, Authentication)
