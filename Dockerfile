@@ -11,7 +11,7 @@ RUN groupadd --gid 1000 mcpuser && \
 
 WORKDIR /app
 
-# ── Dependencies (cached layer — only re-runs when pyproject.toml changes) ──
+# ── Copy project files ───────────────────────────────────────────────────────
 COPY pyproject.toml README.md ./
 
 # ── Source ───────────────────────────────────────────────────────────────────
