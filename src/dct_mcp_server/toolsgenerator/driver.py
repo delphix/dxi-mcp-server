@@ -222,16 +222,18 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str) -> Optional[Dict[str, Any]]:
-    \"\"\"Check if operation requires confirmation. Returns confirmation details or None.\"\"\"
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+    \"\"\"Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed.\"\"\"
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none":
+    if confirmation["level"] != "none" and not confirmed:
         return {
-            "requires_confirmation": True,
+            "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
             "confirmation_message": confirmation.get("message", "Please confirm this operation."),
-            "conditional": confirmation.get("conditional", False),
-            "threshold_days": confirmation.get("threshold_days")
+            "action": action,
+            "tool": tool_name,
+            "api_path": api_path,
+            "instructions": "Set confirmed=True to proceed with this operation."
         }
     return None
 
@@ -663,11 +665,14 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     
     func_code = f"@log_tool_execution\ndef {tool_name}(\n"
     func_code += f"    action: str,  # One of: {', '.join(actions_list)}\n"
-    
+
     # Add all parameters as optional (since they depend on action)
     for param_name, param_info in sorted(all_params.items()):
         func_code += f"    {param_name}: Optional[{param_info['type']}] = None,\n"
-    
+
+    # Add confirmed parameter for destructive operation confirmation
+    func_code += f"    confirmed: Optional[bool] = None,\n"
+
     func_code += ") -> Dict[str, Any]:\n"
     
     # Build comprehensive docstring with detailed action documentation
@@ -813,16 +818,21 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # Build params dict
         func_code += "        params = build_params("
         # Add query params that are relevant to this action
-        query_params = [p for p, info in all_params.items() 
-                       if action_name in info["required_for"] 
-                       and not p.endswith("_id") 
+        query_params = [p for p, info in all_params.items()
+                       if action_name in info["required_for"]
+                       and not p.endswith("_id")
                        and p != "filter_expression"]
         if query_params:
             func_code += ", ".join([f"{p}={p}" for p in query_params])
         func_code += ")\n"
-        
-        # Handle request body
+
+        # Add confirmation check before API request
         method = details["method"]
+        func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False)\n"
+        func_code += f"        if conf:\n"
+        func_code += f"            return conf\n"
+
+        # Handle request body
         if details["has_filter"] and method == "POST":
             func_code += "        body = {'filter_expression': filter_expression} if filter_expression else {}\n"
             func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
