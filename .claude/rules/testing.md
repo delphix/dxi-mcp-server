@@ -4,9 +4,35 @@
 
 There is no unit or integration test suite in this repository. Do not create mock-based unit tests — the FastMCP framework and DCT API interactions are too tightly coupled to a live server for mocks to be reliable.
 
-## Testing Is Done via MCP Clients
+## Testing Is Done via Claude Using the dct MCP Server
 
-Test by running the server locally and connecting a real MCP client (Claude Desktop, Cursor, VS Code Copilot) against a live DCT instance.
+Claude can test the server directly by starting it via the test infrastructure (`.claude/test-infra.md`) and calling `mcp__dct__*` tools in the current session. Credentials are read from `.claude/settings.local.json` at runtime — never hardcode them.
+
+The `test-infra-creation` step in `feature-implement` handles server startup automatically before tests run.
+
+### How to Run a Test Scenario
+
+Once the server is running, invoke the relevant `mcp__dct__*` tool directly:
+
+1. Call a read operation (e.g. list VDB groups or bookmarks) — verify the response matches expected DCT output
+2. Call a write operation with `confirmed=False` — verify it returns `confirmation_required: true`
+3. Re-call with `confirmed=True` — verify it executes and returns a success response
+
+If a tool is not visible in the session, the toolset is not enabled — check `DCT_TOOLSET` in `.claude/settings.local.json`.
+
+Manual testing via real MCP clients (Claude Desktop, Cursor, VS Code Copilot) is still valid for verifying client-facing UX.
+
+## Docker vs uv — Choosing the Right Test Path
+
+The server must be tested using the same runtime path as the change being made:
+
+| Change involves | Test using |
+|-----------------|-----------|
+| `Dockerfile`, container startup, image build | **Docker** (Path A in `.claude/test-infra.md`) |
+| Tool configs (`.txt`), Python source, toolset logic | **uv** (Path B in `.claude/test-infra.md`) |
+| Both (e.g. new tool + Dockerfile update) | **Docker** — it covers both paths |
+
+When documenting test evidence, always record which startup path was used (Docker or uv).
 
 ## What to Verify for Each Change
 

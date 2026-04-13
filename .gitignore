@@ -13,6 +13,7 @@ env/
 
 # Environment configuration
 .env
+.claude/settings.local.json
 
 # IDE and editor files
 .vscode/
