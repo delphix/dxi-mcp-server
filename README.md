@@ -365,7 +365,7 @@ By default, logs are written inside the container and lost when it exits. Mount 
 docker run --rm -i \
   -e DCT_API_KEY="your-api-key-here" \
   -e DCT_BASE_URL="https://your-dct-host.company.com" \
-  -v ./logs:/app/logs \
+  -v "$(pwd)/logs:/app/logs" \
   dct-mcp-server
 ```
 
@@ -383,15 +383,13 @@ docker run --rm -i ^
 docker run --rm -i `
   -e DCT_API_KEY="your-api-key-here" `
   -e DCT_BASE_URL="https://your-dct-host.company.com" `
-  -v "${PWD}\logs:/app/logs" `
+  -v "${PWD}/logs:/app/logs" `
   dct-mcp-server
 ```
 
 ### MCP Client Configuration (Docker)
 
 Use `docker run` as the command in your MCP client config instead of `uvx` or `python`.
-
----
 
 <details>
 <summary><strong>Claude Desktop — Docker</strong></summary>
@@ -408,6 +406,7 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
         "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_LOG_LEVEL=INFO",
         "dct-mcp-server"
       ]
     }
@@ -427,6 +426,7 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
         "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_LOG_LEVEL=INFO",
         "dct-mcp-server"
       ]
     }
@@ -436,8 +436,6 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
 
 > The `docker run` argument format is identical on Windows — Docker Desktop handles the platform differences transparently.
 </details>
-
----
 
 <details>
 <summary><strong>Cursor IDE & Windsurf — Docker</strong></summary>
@@ -455,6 +453,7 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
         "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_LOG_LEVEL=INFO",
         "dct-mcp-server"
       ]
     }
@@ -475,6 +474,7 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
         "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_LOG_LEVEL=INFO",
         "dct-mcp-server"
       ]
     }
@@ -482,8 +482,6 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
 }
 ```
 </details>
-
----
 
 <details>
 <summary><strong>VS Code, Eclipse & IntelliJ IDEA — Docker</strong></summary>
@@ -503,6 +501,7 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
         "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_LOG_LEVEL=INFO",
         "dct-mcp-server"
       ]
     }
@@ -523,6 +522,7 @@ Use `docker run` as the command in your MCP client config instead of `uvx` or `p
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
         "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_LOG_LEVEL=INFO",
         "dct-mcp-server"
       ]
     }
