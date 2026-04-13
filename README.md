@@ -417,6 +417,8 @@ docker build -t dct-mcp-server .
 docker buildx build --platform linux/amd64,linux/arm64 -t dct-mcp-server .
 ```
 
+> **Note:** Multi-arch builds cannot be loaded into the local Docker image store directly. Append `--push` to push to a registry, or omit `--platform` to build for the current platform only.
+
 > Requires Docker 20.10+ with `buildx`. On Apple Silicon (M-series), the standard `docker build` produces an `arm64` image automatically.
 
 ### Run the Server
@@ -436,20 +438,20 @@ docker run --rm -i \
 **Windows (Command Prompt):**
 ```cmd
 docker run --rm -i ^
-  -e DCT_API_KEY="your-api-key-here" ^
-  -e DCT_BASE_URL="https://your-dct-host.company.com" ^
-  -e DCT_VERIFY_SSL="true" ^
-  -e DCT_TOOLSET="self_service" ^
+  -e DCT_API_KEY=your-api-key-here ^
+  -e DCT_BASE_URL=https://your-dct-host.company.com ^
+  -e DCT_VERIFY_SSL=true ^
+  -e DCT_TOOLSET=self_service ^
   dct-mcp-server
 ```
 
 **Windows (PowerShell):**
 ```powershell
 docker run --rm -i `
-  -e DCT_API_KEY="your-api-key-here" `
-  -e DCT_BASE_URL="https://your-dct-host.company.com" `
-  -e DCT_VERIFY_SSL="true" `
-  -e DCT_TOOLSET="self_service" `
+  -e DCT_API_KEY=your-api-key-here `
+  -e DCT_BASE_URL=https://your-dct-host.company.com `
+  -e DCT_VERIFY_SSL=true `
+  -e DCT_TOOLSET=self_service `
   dct-mcp-server
 ```
 
@@ -457,7 +459,7 @@ docker run --rm -i `
 
 ### Persist Logs
 
-Container logs are available via `docker logs <container-name>`. To also write logs to a file on your host, mount a directory:
+To write logs to a file on your host, mount a directory:
 
 **Linux / macOS:**
 ```bash
@@ -471,17 +473,17 @@ docker run --rm -i \
 **Windows (Command Prompt):**
 ```cmd
 docker run --rm -i ^
-  -e DCT_API_KEY="your-api-key-here" ^
-  -e DCT_BASE_URL="https://your-dct-host.company.com" ^
-  -v %cd%\logs:/app/logs ^
+  -e DCT_API_KEY=your-api-key-here ^
+  -e DCT_BASE_URL=https://your-dct-host.company.com ^
+  -v %cd%/logs:/app/logs ^
   dct-mcp-server
 ```
 
 **Windows (PowerShell):**
 ```powershell
 docker run --rm -i `
-  -e DCT_API_KEY="your-api-key-here" `
-  -e DCT_BASE_URL="https://your-dct-host.company.com" `
+  -e DCT_API_KEY=your-api-key-here `
+  -e DCT_BASE_URL=https://your-dct-host.company.com `
   -v "${PWD}/logs:/app/logs" `
   dct-mcp-server
 ```
