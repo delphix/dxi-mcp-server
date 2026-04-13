@@ -1,0 +1,29 @@
+# Python artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Secrets and local config
+.env
+.env.*
+.mcp.json
+
+# Logs (ephemeral; mount a volume to persist)
+logs/
+
+# Version control
+.git/
+.github/
+
+# Dev tooling
+.claude/
+docs/
+
+# Startup scripts (not needed inside the image)
+*.sh
+*.bat
