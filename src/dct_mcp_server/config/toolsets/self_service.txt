@@ -20,6 +20,9 @@ POST|/vdbs/{vdbId}/rollback_by_snapshot|rollback_by_snapshot
 POST|/vdbs/{vdbId}/rollback_from_bookmark|rollback_from_bookmark
 GET|/vdbs/{vdbId}/snapshots|list_snapshots
 GET|/vdbs/{vdbId}/bookmarks|list_bookmarks
+GET|/vdbs/{vdbId}/tags|get_tags
+POST|/vdbs/{vdbId}/tags|add_tags
+POST|/vdbs/{vdbId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 2: vdb_group_tool - VDB Group
@@ -38,6 +41,9 @@ POST|/vdb-groups/{vdbGroupId}/stop|stop
 POST|/vdb-groups/{vdbGroupId}/enable|enable
 POST|/vdb-groups/{vdbGroupId}/disable|disable
 GET|/vdb-groups/{vdbGroupId}/bookmarks|list_bookmarks
+GET|/vdb-groups/{vdbGroupId}/tags|get_tags
+POST|/vdb-groups/{vdbGroupId}/tags|add_tags
+POST|/vdb-groups/{vdbGroupId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 3: dsource_tool - dSources
@@ -45,6 +51,7 @@ GET|/vdb-groups/{vdbGroupId}/bookmarks|list_bookmarks
 POST|/dsources/search|search
 GET|/dsources/{dsourceId}|get
 GET|/dsources/{dsourceId}/snapshots|list_snapshots
+GET|/dsources/{dsourceId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 4: snapshot_tool - Snapshots
@@ -55,6 +62,9 @@ GET|/snapshots/{snapshotId}/timeflow_range|get_timeflow_range
 GET|/snapshots/{snapshotId}/runtime|get_runtime
 POST|/snapshots/find_by_location|find_by_location
 POST|/snapshots/find_by_timestamp|find_by_timestamp
+GET|/snapshots/{snapshotId}/tags|get_tags
+POST|/snapshots/{snapshotId}/tags|add_tags
+POST|/snapshots/{snapshotId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 5: bookmark_tool - Bookmarks
@@ -65,6 +75,9 @@ POST|/bookmarks|create
 PATCH|/bookmarks/{bookmarkId}|update
 DELETE|/bookmarks/{bookmarkId}|delete
 GET|/bookmarks/{bookmarkId}/vdb-groups|get_vdb_groups
+GET|/bookmarks/{bookmarkId}/tags|get_tags
+POST|/bookmarks/{bookmarkId}/tags|add_tags
+POST|/bookmarks/{bookmarkId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 6: job_tool - Operations
@@ -72,3 +85,4 @@ GET|/bookmarks/{bookmarkId}/vdb-groups|get_vdb_groups
 POST|/jobs/search|search
 GET|/jobs/{jobId}|get
 POST|/jobs/{jobId}/abandon|abandon
+GET|/jobs/{jobId}/tags|get_tags

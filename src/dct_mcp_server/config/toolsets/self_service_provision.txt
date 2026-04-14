@@ -44,8 +44,10 @@ DELETE|/vdb-groups/{vdbGroupId}/tags/delete|delete_tags
 # ----------------------------------------------------------------------------
 POST|/cdbs/search|search_cdbs
 GET|/cdbs/{cdbId}|get_cdb
+GET|/cdbs/{cdbId}/tags|get_cdb_tags
 POST|/vcdbs/search|search_vcdbs
 GET|/vcdbs/{vcdbId}|get_vcdb
+GET|/vcdbs/{vcdbId}/tags|get_vcdb_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 8: database_template_tool - VDB Templates
@@ -75,6 +77,7 @@ DELETE|/hook-templates/{hookTemplateId}/tags/delete|delete_tags
 POST|/virtualization-policies/search|search
 GET|/virtualization-policies/{policyId}|get
 POST|/virtualization-policies/targets/search|search_targets
+GET|/virtualization-policies/{policyId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 11: environment_tool - Environment Operations (read only)
@@ -83,6 +86,7 @@ POST|/environments/search|search
 GET|/environments/{environmentId}|get
 GET|/environments/{environmentId}/hosts|list_hosts
 GET|/environments/{environmentId}/listeners|list_listeners
+GET|/environments/{environmentId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 12: toolkit_tool - Toolkits (AppData plugin schemas)

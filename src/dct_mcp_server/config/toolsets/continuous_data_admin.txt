@@ -1,4 +1,4 @@
-# Continuous Data Administrator Toolset - 15 Tools
+# Continuous Data Administrator Toolset - 22 Tools
 # Description: Perform traditional Continuous Data "Management App" operations
 # Format: METHOD|/endpoint/path|action_name
 # Target users: DBAs, Data administrators with full data management capability
@@ -152,8 +152,9 @@ POST|/snapshots/{snapshotId}/unset_expiration|unset_snapshot_expiration
 GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
 POST|/snapshots/find_by_location|find_snapshot_by_location
 POST|/snapshots/find_by_timestamp|find_snapshot_by_timestamp
+GET|/snapshots/{snapshotId}/tags|get_snapshot_tags
 POST|/snapshots/{snapshotId}/tags|add_snapshot_tags
-DELETE|/snapshots/{snapshotId}/tags/delete|delete_snapshot_tags
+POST|/snapshots/{snapshotId}/tags/delete|delete_snapshot_tags
 # Bookmark Operations
 POST|/bookmarks/search|search_bookmarks
 GET|/bookmarks/{bookmarkId}|get_bookmark
@@ -161,8 +162,9 @@ POST|/bookmarks|create_bookmark
 PATCH|/bookmarks/{bookmarkId}|update_bookmark
 DELETE|/bookmarks/{bookmarkId}|delete_bookmark
 GET|/bookmarks/{bookmarkId}/vdb-groups|get_bookmark_vdb_groups
+GET|/bookmarks/{bookmarkId}/tags|get_bookmark_tags
 POST|/bookmarks/{bookmarkId}/tags|add_bookmark_tags
-DELETE|/bookmarks/{bookmarkId}/tags/delete|delete_bookmark_tags
+POST|/bookmarks/{bookmarkId}/tags/delete|delete_bookmark_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 3: instance_tool - Instances (CDB, vCDB)
@@ -173,6 +175,9 @@ PATCH|/cdbs/{cdbId}/update|update_cdb
 POST|/cdbs/{cdbId}/delete|delete_cdb
 POST|/cdbs/{cdbId}/enable|enable_cdb
 POST|/cdbs/{cdbId}/disable|disable_cdb
+GET|/cdbs/{cdbId}/tags|get_cdb_tags
+POST|/cdbs/{cdbId}/tags|add_cdb_tags
+POST|/cdbs/{cdbId}/tags/delete|delete_cdb_tags
 POST|/vcdbs/search|search_vcdbs
 GET|/vcdbs/{vcdbId}|get_vcdb
 PATCH|/vcdbs/{vcdbId}/update|update_vcdb
@@ -181,6 +186,9 @@ POST|/vcdbs/{vcdbId}/enable|enable_vcdb
 POST|/vcdbs/{vcdbId}/disable|disable_vcdb
 POST|/vcdbs/{vcdbId}/start|start_vcdb
 POST|/vcdbs/{vcdbId}/stop|stop_vcdb
+GET|/vcdbs/{vcdbId}/tags|get_vcdb_tags
+POST|/vcdbs/{vcdbId}/tags|add_vcdb_tags
+POST|/vcdbs/{vcdbId}/tags/delete|delete_vcdb_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 4: database_template_tool - VDB Templates
@@ -190,8 +198,9 @@ GET|/database-templates/{databaseTemplateId}|get
 POST|/database-templates|create
 PATCH|/database-templates/{databaseTemplateId}|update
 DELETE|/database-templates/{databaseTemplateId}|delete
+GET|/database-templates/{databaseTemplateId}/tags|get_tags
 POST|/database-templates/{databaseTemplateId}/tags|add_tags
-DELETE|/database-templates/{databaseTemplateId}/tags/delete|delete_tags
+POST|/database-templates/{databaseTemplateId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 5: hook_template_tool - Hooks
@@ -201,8 +210,9 @@ GET|/hook-templates/{hookTemplateId}|get
 POST|/hook-templates|create
 PATCH|/hook-templates/{hookTemplateId}|update
 DELETE|/hook-templates/{hookTemplateId}|delete
+GET|/hook-templates/{hookTemplateId}/tags|get_tags
 POST|/hook-templates/{hookTemplateId}/tags|add_tags
-DELETE|/hook-templates/{hookTemplateId}/tags/delete|delete_tags
+POST|/hook-templates/{hookTemplateId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 6: virtualization_policy_tool - Policies
@@ -215,8 +225,9 @@ DELETE|/virtualization-policies/{policyId}|delete
 POST|/virtualization-policies/{policyId}/apply|apply
 POST|/virtualization-policies/{policyId}/unapply|unapply
 POST|/virtualization-policies/targets/search|search_targets
+GET|/virtualization-policies/{policyId}/tags|get_tags
 POST|/virtualization-policies/{policyId}/tags|add_tags
-DELETE|/virtualization-policies/{policyId}/tags/delete|delete_tags
+POST|/virtualization-policies/{policyId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 7: job_tool - Operations
@@ -225,8 +236,9 @@ POST|/jobs/search|search
 GET|/jobs/{jobId}|get
 POST|/jobs/{jobId}/abandon|abandon
 GET|/jobs/{jobId}/result|get_result
+GET|/jobs/{jobId}/tags|get_tags
 POST|/jobs/{jobId}/tags|add_tags
-DELETE|/jobs/{jobId}/tags/delete|delete_tags
+POST|/jobs/{jobId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 8: engine_tool - CD Engines
@@ -234,10 +246,15 @@ DELETE|/jobs/{jobId}/tags/delete|delete_tags
 POST|/management/engines/search|search
 GET|/management/engines/{engineId}|get
 PATCH|/management/engines/{engineId}|update
+GET|/management/engines/{engineId}/tags|get_tags
 POST|/management/engines/{engineId}/tags|add_tags
-DELETE|/management/engines/{engineId}/tags/delete|delete_tags
+POST|/management/engines/{engineId}/tags/delete|delete_tags
 POST|/management/engines|register
 DELETE|/management/engines/{engineId}|unregister
+# Engine Configuration
+GET|/management/engines/{engineId}/auto-tagging|get_auto_tagging
+GET|/management/engines/{engineId}/compliance-application-settings|get_compliance_settings
+POST|/management/engines/{engineId}/compliance-application-settings/search|search_compliance_settings
 
 
 # ----------------------------------------------------------------------------
@@ -256,27 +273,58 @@ POST|/environments/{environmentId}/disable|disable_environment
 POST|/environments/{environmentId}/refresh|refresh_environment
 GET|/environments/{environmentId}/hosts|list_environment_hosts
 GET|/environments/{environmentId}/listeners|list_environment_listeners
+GET|/environments/{environmentId}/tags|get_environment_tags
 POST|/environments/{environmentId}/tags|add_environment_tags
-DELETE|/environments/{environmentId}/tags/delete|delete_environment_tags
+POST|/environments/{environmentId}/tags/delete|delete_environment_tags
 # Source Operations
 POST|/sources/search|search_sources
-POST|/sources/appdata|create_appdata_source
+GET|/sources|list_sources
 GET|/sources/{sourceId}|get_source
 PATCH|/sources/{sourceId}|update_source
+DELETE|/sources/{sourceId}|delete_source
+POST|/sources/{sourceId}/jdbc-check|verify_source_jdbc_connection
+GET|/sources/{sourceId}/staging_compatible_repositories|get_source_compatible_repositories
+GET|/sources/{sourceId}/tags|get_source_tags
 POST|/sources/{sourceId}/tags|add_source_tags
-DELETE|/sources/{sourceId}/tags/delete|delete_source_tags
+POST|/sources/{sourceId}/tags/delete|delete_source_tags
+# Source Type-Specific Operations
+POST|/sources/oracle|create_oracle_source
+PATCH|/sources/oracle/{sourceId}|update_oracle_source
+POST|/sources/postgres|create_postgres_source
+PATCH|/sources/postgres/{sourceId}|update_postgres_source
+POST|/sources/ase|create_ase_source
+PATCH|/sources/ase/{sourceId}|update_ase_source
+POST|/sources/appdata|create_appdata_source
+PATCH|/sources/appdata/{sourceId}|update_appdata_source
 
 # ----------------------------------------------------------------------------
-# TOOL 10: replication_tool - Replication & Retention
+# TOOL 10: replication_tool - Replication, Namespaces & Retention
 # ----------------------------------------------------------------------------
+# Replication Profiles
 POST|/replication-profiles/search|search
 GET|/replication-profiles/{replicationProfileId}|get
 POST|/replication-profiles|create
 PATCH|/replication-profiles/{replicationProfileId}|update
 DELETE|/replication-profiles/{replicationProfileId}|delete
 POST|/replication-profiles/{replicationProfileId}/execute|execute
+POST|/replication-profiles/{replicationProfileId}/enable-tag-replication|enable_tag_replication
+POST|/replication-profiles/{replicationProfileId}/disable-tag-replication|disable_tag_replication
+GET|/replication-profiles/{replicationProfileId}/tags|get_tags
 POST|/replication-profiles/{replicationProfileId}/tags|add_tags
-DELETE|/replication-profiles/{replicationProfileId}/tags/delete|delete_tags
+POST|/replication-profiles/{replicationProfileId}/tags/delete|delete_tags
+# Namespace Operations (DR)
+GET|/namespaces|list_namespaces
+POST|/namespaces/search|search_namespaces
+GET|/namespace/{namespaceId}|get_namespace
+PATCH|/namespace/{namespaceId}|update_namespace
+DELETE|/namespace/{namespaceId}|delete_namespace
+POST|/namespace/{namespaceId}/failover|failover_namespace
+POST|/namespace/{namespaceId}/commitFailover|commit_failover_namespace
+POST|/namespace/{namespaceId}/failback|failback_namespace
+POST|/namespace/{namespaceId}/discard|discard_namespace
+# Held Space
+GET|/heldspace/{heldspaceId}/deletion-dependencies|get_heldspace_deletion_dependencies
+POST|/heldspace/{heldspaceId}/delete|delete_heldspace
 
 # ----------------------------------------------------------------------------
 # TOOL 11: reporting_tool - Insights + License Report + Automated Reports
@@ -304,6 +352,18 @@ PATCH|/reporting/schedule/{reportId}|update_scheduled_report
 DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
 # License Report
 GET|/management/license|get_license
+# Virtualization History & Operational Visibility
+GET|/virtualization-jobs/history|get_virtualization_jobs_history
+POST|/virtualization-jobs/history/search|search_virtualization_jobs_history
+GET|/virtualization-actions/history|get_virtualization_actions_history
+POST|/virtualization-actions/history/search|search_virtualization_actions_history
+GET|/virtualization-faults/history|get_virtualization_faults_history
+POST|/virtualization-faults/history/search|search_virtualization_faults_history
+POST|/virtualization-faults/resolveOrIgnore|resolve_or_ignore_faults
+POST|/virtualization-faults/{engineId}/resolveAll|resolve_all_engine_faults
+POST|/virtualization-fault/{faultId}/resolve|resolve_fault
+GET|/virtualization-alerts/history|get_virtualization_alerts_history
+POST|/virtualization-alerts/history/search|search_virtualization_alerts_history
 
 # ----------------------------------------------------------------------------
 # TOOL 12: iam_tool - IAM (Accounts, Access Groups, Roles, Authentication)
@@ -317,18 +377,45 @@ DELETE|/management/accounts/{id}|delete_account
 POST|/management/accounts/{id}/enable|enable_account
 POST|/management/accounts/{id}/disable|disable_account
 POST|/management/accounts/{id}/reset_password|reset_password
+GET|/management/accounts/{id}/tags|get_account_tags
+POST|/management/accounts/{id}/tags|add_account_tags
+POST|/management/accounts/{id}/tags/delete|delete_account_tags
+GET|/management/accounts/{id}/ui-profiles|get_account_ui_profiles
+# Password Policies
+GET|/management/accounts/password-policies|get_password_policies
+PATCH|/management/accounts/password-policies|update_password_policies
 # Roles
 POST|/roles/search|search_roles
 GET|/roles/{roleId}|get_role
 POST|/roles|create_role
 PATCH|/roles/{roleId}|update_role
 DELETE|/roles/{roleId}|delete_role
+POST|/roles/{roleId}/permissions|add_role_permissions
+POST|/roles/{roleId}/permissions/delete|delete_role_permissions
+GET|/roles/{roleId}/tags|get_role_tags
+POST|/roles/{roleId}/tags|add_role_tags
+POST|/roles/{roleId}/tags/delete|delete_role_tags
+POST|/roles/{roleId}/ui-profiles|add_role_ui_profiles
+POST|/roles/{roleId}/ui-profiles/delete|delete_role_ui_profiles
 # Access Groups
 POST|/access-groups/search|search_access_groups
 GET|/access-groups/{accessGroupId}|get_access_group
 POST|/access-groups|create_access_group
 PATCH|/access-groups/{accessGroupId}|update_access_group
 DELETE|/access-groups/{accessGroupId}|delete_access_group
+POST|/access-groups/{accessGroupId}/tags|add_access_group_tags
+POST|/access-groups/{accessGroupId}/tags/delete|delete_access_group_tags
+# Access Group Scopes
+POST|/access-groups/{accessGroupId}/scopes|add_access_group_scopes
+GET|/access-groups/{accessGroupId}/scopes/{scopeId}|get_access_group_scope
+PATCH|/access-groups/{accessGroupId}/scopes/{scopeId}|update_access_group_scope
+DELETE|/access-groups/{accessGroupId}/scopes/{scopeId}|delete_access_group_scope
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/object-tags|add_scope_object_tags
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/object-tags/delete|delete_scope_object_tags
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects|add_scope_objects
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects/delete|delete_scope_objects
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions|add_scope_always_allowed_permissions
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions/delete|delete_scope_always_allowed_permissions
 # Authentication
 GET|/management/api-clients|list_api_clients
 POST|/management/api-clients|create_api_client
@@ -341,6 +428,9 @@ POST|/toolkits/search|search
 GET|/toolkits/{toolkitId}|get
 POST|/toolkits/upload|upload_toolkit
 DELETE|/toolkits/{toolkitId}|delete_toolkit
+GET|/toolkits/{toolkitId}/tags|get_tags
+POST|/toolkits/{toolkitId}/tags|add_tags
+POST|/toolkits/{toolkitId}/tags/delete|delete_tags
 
 
 # ----------------------------------------------------------------------------
@@ -349,8 +439,9 @@ DELETE|/toolkits/{toolkitId}|delete_toolkit
 POST|/data-connections/search|search
 GET|/data-connections/{dataConnectionId}|get
 PATCH|/data-connections/{dataConnectionId}|update
+GET|/data-connections/{dataConnectionId}/tags|get_tags
 POST|/data-connections/{dataConnectionId}/tags|add_tags
-DELETE|/data-connections/{dataConnectionId}/tags/delete|delete_tags
+POST|/data-connections/{dataConnectionId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 15: tag_tool - Tags
@@ -361,3 +452,101 @@ POST|/management/tags|create
 DELETE|/management/tags/{tagId}|delete
 GET|/management/tags/{tagId}/usages|get_usages
 POST|/management/tags/{tagId}/usages/search|search_usages
+
+# ----------------------------------------------------------------------------
+# TOOL 16: staging_source_tool - Staging Sources
+# ----------------------------------------------------------------------------
+GET|/staging-sources|list
+POST|/staging-sources/search|search
+GET|/staging-sources/{stagingSourceId}|get
+PATCH|/staging-sources/{stagingSourceId}/update|update
+GET|/staging-sources/{stagingSourceId}/tags|get_tags
+POST|/staging-sources/{stagingSourceId}/tags|add_tags
+POST|/staging-sources/{stagingSourceId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 17: staging_cdb_tool - Staging CDBs
+# ----------------------------------------------------------------------------
+GET|/staging-cdbs|list
+POST|/staging-cdbs/search|search
+GET|/staging-cdbs/{stagingCdbId}|get
+PATCH|/staging-cdbs/{stagingCdbId}|update
+POST|/staging-cdbs/{stagingCdbId}/delete|delete
+POST|/staging-cdbs/{stagingCdbId}/enable|enable
+POST|/staging-cdbs/{stagingCdbId}/disable|disable
+POST|/staging-cdbs/{stagingCdbId}/upgrade|upgrade
+GET|/staging-cdbs/{stagingCdbId}/tags|get_tags
+POST|/staging-cdbs/{stagingCdbId}/tags|add_tags
+POST|/staging-cdbs/{stagingCdbId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 18: cdb_dsource_tool - CDB dSources (Oracle)
+# ----------------------------------------------------------------------------
+GET|/cdb-dsources|list
+POST|/cdb-dsources/search|search
+GET|/cdb-dsources/{cdbDSourceId}|get
+POST|/cdb-dsources/{cdbDSourceId}/attach-cdb|attach_cdb
+POST|/cdb-dsources/{cdbDSourceId}/detach-cdb|detach_cdb
+POST|/cdb-dsources/{cdbDSourceId}/enable|enable
+POST|/cdb-dsources/{cdbDSourceId}/disable|disable
+POST|/cdb-dsources/{cdbDSourceId}/delete|delete
+POST|/cdb-dsources/{cdbDSourceId}/upgrade|upgrade
+
+# ----------------------------------------------------------------------------
+# TOOL 19: group_tool - Dataset Groups
+# ----------------------------------------------------------------------------
+GET|/groups|list
+POST|/groups/search|search
+GET|/groups/{groupId}|get
+
+# ----------------------------------------------------------------------------
+# TOOL 20: timeflow_tool - Timeflows
+# ----------------------------------------------------------------------------
+GET|/timeflows|list
+POST|/timeflows/search|search
+GET|/timeflows/{timeflowId}|get
+PATCH|/timeflows/{timeflowId}|update
+DELETE|/timeflows/{timeflowId}|delete
+GET|/timeflows/{timeflowId}/timeflowSnapshotDayRange|get_snapshot_day_range
+POST|/timeflows/{timeflowId}/repair|repair
+GET|/timeflows/{timeflowId}/tags|get_tags
+POST|/timeflows/{timeflowId}/tags|add_tags
+POST|/timeflows/{timeflowId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 21: vault_tool - Hashicorp Vaults & Kerberos Configs
+# ----------------------------------------------------------------------------
+# Hashicorp Vaults
+GET|/management/vaults/hashicorp|list_hashicorp_vaults
+POST|/management/vaults/hashicorp|create_hashicorp_vault
+POST|/management/vaults/hashicorp/search|search_hashicorp_vaults
+GET|/management/vaults/hashicorp/{vaultId}|get_hashicorp_vault
+DELETE|/management/vaults/hashicorp/{vaultId}|delete_hashicorp_vault
+GET|/management/vaults/hashicorp/{vaultId}/tags|get_hashicorp_vault_tags
+POST|/management/vaults/hashicorp/{vaultId}/tags|add_hashicorp_vault_tags
+POST|/management/vaults/hashicorp/{vaultId}/tags/delete|delete_hashicorp_vault_tags
+# Kerberos Configs
+GET|/kerberos-configs|list_kerberos_configs
+POST|/kerberos-configs/search|search_kerberos_configs
+GET|/kerberos-configs/{kerberosConfigId}|get_kerberos_config
+
+# ----------------------------------------------------------------------------
+# TOOL 22: diagnostic_tool - Connectivity, Network Tests & File Mapping
+# ----------------------------------------------------------------------------
+# Connectivity Checks
+POST|/connectivity/check|check_engine_connectivity
+POST|/database/connectivity/check|check_database_connectivity
+POST|/netbackup/connectivity/check|check_netbackup_connectivity
+POST|/commvault/connectivity/check|check_commvault_connectivity
+# Network Performance Tests
+POST|/network-performance/test/latency|test_network_latency
+GET|/network-performance/test/latency/{jobId}|get_network_latency_result
+POST|/network-performance/test/dsp|test_network_dsp
+GET|/network-performance/test/dsp/{jobId}|get_network_dsp_result
+POST|/network-performance/test/throughput|test_network_throughput
+GET|/network-performance/test/throughput/{jobId}|get_network_throughput_result
+# File Mapping Validation
+POST|/file-mapping/validate-file-mapping-by-snapshot|validate_file_mapping_by_snapshot
+POST|/file-mapping/validate-file-mapping-by-location|validate_file_mapping_by_location
+POST|/file-mapping/validate-file-mapping-by-timestamp|validate_file_mapping_by_timestamp
+POST|/file-mapping/validate-file-mapping-by-bookmark|validate_file_mapping_by_bookmark

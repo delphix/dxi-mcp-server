@@ -1,4 +1,4 @@
-# Delphix Platform Administration Toolset - 11 Tools
+# Delphix Platform Administration Toolset - 13 Tools
 # Description: Perform traditional "System Admin" operations
 # Format: METHOD|/endpoint/path|action_name
 # Target users: Platform administrators, DCT administrators
@@ -9,6 +9,10 @@
 POST|/jobs/search|search
 GET|/jobs/{jobId}|get
 POST|/jobs/{jobId}/abandon|abandon
+GET|/jobs/{jobId}/result|get_result
+GET|/jobs/{jobId}/tags|get_tags
+POST|/jobs/{jobId}/tags|add_tags
+POST|/jobs/{jobId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 2: engine_tool - CD Engines
@@ -18,8 +22,9 @@ GET|/management/engines/{engineId}|get
 POST|/management/engines|register
 PATCH|/management/engines/{engineId}|update
 DELETE|/management/engines/{engineId}|unregister
+GET|/management/engines/{engineId}/tags|get_tags
 POST|/management/engines/{engineId}/tags|add_tags
-DELETE|/management/engines/{engineId}/tags/delete|delete_tags
+POST|/management/engines/{engineId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 3: environment_tool - Environments
@@ -34,8 +39,9 @@ POST|/environments/{environmentId}/disable|disable
 POST|/environments/{environmentId}/refresh|refresh
 GET|/environments/{environmentId}/hosts|list_hosts
 GET|/environments/{environmentId}/listeners|list_listeners
+GET|/environments/{environmentId}/tags|get_tags
 POST|/environments/{environmentId}/tags|add_tags
-DELETE|/environments/{environmentId}/tags/delete|delete_tags
+POST|/environments/{environmentId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 4: source_tool - Sources (Source Configs)
@@ -43,20 +49,38 @@ DELETE|/environments/{environmentId}/tags/delete|delete_tags
 POST|/sources/search|search
 GET|/sources/{sourceId}|get
 PATCH|/sources/{sourceId}|update
+GET|/sources/{sourceId}/tags|get_tags
 POST|/sources/{sourceId}/tags|add_tags
-DELETE|/sources/{sourceId}/tags/delete|delete_tags
+POST|/sources/{sourceId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 5: replication_tool - Replication & Retention
+# TOOL 5: replication_tool - Replication, Namespaces & Retention
 # ----------------------------------------------------------------------------
+# Replication Profiles
 POST|/replication-profiles/search|search
 GET|/replication-profiles/{replicationProfileId}|get
 POST|/replication-profiles|create
 PATCH|/replication-profiles/{replicationProfileId}|update
 DELETE|/replication-profiles/{replicationProfileId}|delete
 POST|/replication-profiles/{replicationProfileId}/execute|execute
+POST|/replication-profiles/{replicationProfileId}/enable-tag-replication|enable_tag_replication
+POST|/replication-profiles/{replicationProfileId}/disable-tag-replication|disable_tag_replication
+GET|/replication-profiles/{replicationProfileId}/tags|get_tags
 POST|/replication-profiles/{replicationProfileId}/tags|add_tags
-DELETE|/replication-profiles/{replicationProfileId}/tags/delete|delete_tags
+POST|/replication-profiles/{replicationProfileId}/tags/delete|delete_tags
+# Namespace Operations (DR)
+GET|/namespaces|list_namespaces
+POST|/namespaces/search|search_namespaces
+GET|/namespace/{namespaceId}|get_namespace
+PATCH|/namespace/{namespaceId}|update_namespace
+DELETE|/namespace/{namespaceId}|delete_namespace
+POST|/namespace/{namespaceId}/failover|failover_namespace
+POST|/namespace/{namespaceId}/commitFailover|commit_failover_namespace
+POST|/namespace/{namespaceId}/failback|failback_namespace
+POST|/namespace/{namespaceId}/discard|discard_namespace
+# Held Space
+GET|/heldspace/{heldspaceId}/deletion-dependencies|get_heldspace_deletion_dependencies
+POST|/heldspace/{heldspaceId}/delete|delete_heldspace
 
 # ----------------------------------------------------------------------------
 # TOOL 6: reporting_tool - Insights + License Report + Automated Reports
@@ -85,9 +109,18 @@ DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
 # License Report
 GET|/management/license|get_license
 POST|/management/license/change-license|change_license
-# Fault reports
-GET|/virtualization-faults/history|get_fault_history
-GET|/virtualization-alerts/history|get_alert_history
+# Virtualization History & Operational Visibility
+GET|/virtualization-jobs/history|get_virtualization_jobs_history
+POST|/virtualization-jobs/history/search|search_virtualization_jobs_history
+GET|/virtualization-actions/history|get_virtualization_actions_history
+POST|/virtualization-actions/history/search|search_virtualization_actions_history
+GET|/virtualization-faults/history|get_virtualization_faults_history
+POST|/virtualization-faults/history/search|search_virtualization_faults_history
+POST|/virtualization-faults/resolveOrIgnore|resolve_or_ignore_faults
+POST|/virtualization-faults/{engineId}/resolveAll|resolve_all_engine_faults
+POST|/virtualization-fault/{faultId}/resolve|resolve_fault
+GET|/virtualization-alerts/history|get_virtualization_alerts_history
+POST|/virtualization-alerts/history/search|search_virtualization_alerts_history
 
 # ----------------------------------------------------------------------------
 # TOOL 7: iam_tool - IAM (Accounts, Access Groups, Roles, Authentication)
@@ -101,18 +134,45 @@ DELETE|/management/accounts/{id}|delete_account
 POST|/management/accounts/{id}/enable|enable_account
 POST|/management/accounts/{id}/disable|disable_account
 POST|/management/accounts/{id}/reset_password|reset_password
+GET|/management/accounts/{id}/tags|get_account_tags
+POST|/management/accounts/{id}/tags|add_account_tags
+POST|/management/accounts/{id}/tags/delete|delete_account_tags
+GET|/management/accounts/{id}/ui-profiles|get_account_ui_profiles
+# Password Policies
+GET|/management/accounts/password-policies|get_password_policies
+PATCH|/management/accounts/password-policies|update_password_policies
 # Roles
 POST|/roles/search|search_roles
 GET|/roles/{roleId}|get_role
 POST|/roles|create_role
 PATCH|/roles/{roleId}|update_role
 DELETE|/roles/{roleId}|delete_role
+POST|/roles/{roleId}/permissions|add_role_permissions
+POST|/roles/{roleId}/permissions/delete|delete_role_permissions
+GET|/roles/{roleId}/tags|get_role_tags
+POST|/roles/{roleId}/tags|add_role_tags
+POST|/roles/{roleId}/tags/delete|delete_role_tags
+POST|/roles/{roleId}/ui-profiles|add_role_ui_profiles
+POST|/roles/{roleId}/ui-profiles/delete|delete_role_ui_profiles
 # Access Groups
 POST|/access-groups/search|search_access_groups
 GET|/access-groups/{accessGroupId}|get_access_group
 POST|/access-groups|create_access_group
 PATCH|/access-groups/{accessGroupId}|update_access_group
 DELETE|/access-groups/{accessGroupId}|delete_access_group
+POST|/access-groups/{accessGroupId}/tags|add_access_group_tags
+POST|/access-groups/{accessGroupId}/tags/delete|delete_access_group_tags
+# Access Group Scopes
+POST|/access-groups/{accessGroupId}/scopes|add_access_group_scopes
+GET|/access-groups/{accessGroupId}/scopes/{scopeId}|get_access_group_scope
+PATCH|/access-groups/{accessGroupId}/scopes/{scopeId}|update_access_group_scope
+DELETE|/access-groups/{accessGroupId}/scopes/{scopeId}|delete_access_group_scope
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/object-tags|add_scope_object_tags
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/object-tags/delete|delete_scope_object_tags
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects|add_scope_objects
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects/delete|delete_scope_objects
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions|add_scope_always_allowed_permissions
+POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions/delete|delete_scope_always_allowed_permissions
 # Authentication / API Clients
 GET|/management/api-clients|list_api_clients
 POST|/management/api-clients|create_api_client
@@ -124,8 +184,9 @@ DELETE|/management/api-clients/{id}|delete_api_client
 POST|/data-connections/search|search
 GET|/data-connections/{dataConnectionId}|get
 PATCH|/data-connections/{dataConnectionId}|update
+GET|/data-connections/{dataConnectionId}/tags|get_tags
 POST|/data-connections/{dataConnectionId}/tags|add_tags
-DELETE|/data-connections/{dataConnectionId}/tags/delete|delete_tags
+POST|/data-connections/{dataConnectionId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 9: tag_tool - Tags
@@ -135,12 +196,18 @@ GET|/management/tags/{tagId}|get
 POST|/management/tags|create
 DELETE|/management/tags/{tagId}|delete
 GET|/management/tags/{tagId}/usages|get_usages
+POST|/management/tags/{tagId}/usages/search|search_usages
 
 # ----------------------------------------------------------------------------
 # TOOL 10: toolkit_tool - Toolkits (AppData plugin schemas)
 # ----------------------------------------------------------------------------
 POST|/toolkits/search|search
 GET|/toolkits/{toolkitId}|get
+POST|/toolkits/upload|upload_toolkit
+DELETE|/toolkits/{toolkitId}|delete_toolkit
+GET|/toolkits/{toolkitId}/tags|get_tags
+POST|/toolkits/{toolkitId}/tags|add_tags
+POST|/toolkits/{toolkitId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 11: admin_platform_tool - AI Services + License Tiers + Telemetry + SMTP (merged)
@@ -171,3 +238,41 @@ PATCH|/management/saml-config|update_saml_config
 # Proxy Configuration
 GET|/management/proxy-configuration|get_proxy_config
 PATCH|/management/proxy-configuration|update_proxy_config
+
+# ----------------------------------------------------------------------------
+# TOOL 12: vault_tool - Hashicorp Vaults & Kerberos Configs
+# ----------------------------------------------------------------------------
+# Hashicorp Vaults
+GET|/management/vaults/hashicorp|list_hashicorp_vaults
+POST|/management/vaults/hashicorp|create_hashicorp_vault
+POST|/management/vaults/hashicorp/search|search_hashicorp_vaults
+GET|/management/vaults/hashicorp/{vaultId}|get_hashicorp_vault
+DELETE|/management/vaults/hashicorp/{vaultId}|delete_hashicorp_vault
+GET|/management/vaults/hashicorp/{vaultId}/tags|get_hashicorp_vault_tags
+POST|/management/vaults/hashicorp/{vaultId}/tags|add_hashicorp_vault_tags
+POST|/management/vaults/hashicorp/{vaultId}/tags/delete|delete_hashicorp_vault_tags
+# Kerberos Configs
+GET|/kerberos-configs|list_kerberos_configs
+POST|/kerberos-configs/search|search_kerberos_configs
+GET|/kerberos-configs/{kerberosConfigId}|get_kerberos_config
+
+# ----------------------------------------------------------------------------
+# TOOL 13: diagnostic_tool - Connectivity, Network Tests & File Mapping
+# ----------------------------------------------------------------------------
+# Connectivity Checks
+POST|/connectivity/check|check_engine_connectivity
+POST|/database/connectivity/check|check_database_connectivity
+POST|/netbackup/connectivity/check|check_netbackup_connectivity
+POST|/commvault/connectivity/check|check_commvault_connectivity
+# Network Performance Tests
+POST|/network-performance/test/latency|test_network_latency
+GET|/network-performance/test/latency/{jobId}|get_network_latency_result
+POST|/network-performance/test/dsp|test_network_dsp
+GET|/network-performance/test/dsp/{jobId}|get_network_dsp_result
+POST|/network-performance/test/throughput|test_network_throughput
+GET|/network-performance/test/throughput/{jobId}|get_network_throughput_result
+# File Mapping Validation
+POST|/file-mapping/validate-file-mapping-by-snapshot|validate_file_mapping_by_snapshot
+POST|/file-mapping/validate-file-mapping-by-location|validate_file_mapping_by_location
+POST|/file-mapping/validate-file-mapping-by-timestamp|validate_file_mapping_by_timestamp
+POST|/file-mapping/validate-file-mapping-by-bookmark|validate_file_mapping_by_bookmark

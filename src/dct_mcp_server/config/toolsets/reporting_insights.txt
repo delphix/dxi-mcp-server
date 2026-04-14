@@ -10,14 +10,17 @@
 POST|/vdbs/search|search_vdbs
 GET|/vdbs/{vdbId}|get_vdb
 GET|/vdbs/{vdbId}/snapshots|list_vdb_snapshots
+GET|/vdbs/{vdbId}/tags|get_vdb_tags
 # VDB Group Operations (read only)
 POST|/vdb-groups/search|search_vdb_groups
 GET|/vdb-groups/{vdbGroupId}|get_vdb_group
 GET|/vdb-groups/{vdbGroupId}/bookmarks|list_vdb_group_bookmarks
+GET|/vdb-groups/{vdbGroupId}/tags|get_vdb_group_tags
 # dSource Operations (read only)
 POST|/dsources/search|search_dsources
 GET|/dsources/{dsourceId}|get_dsource
 GET|/dsources/{dsourceId}/snapshots|list_dsource_snapshots
+GET|/dsources/{dsourceId}/tags|get_dsource_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 2: snapshot_bookmark_tool - Snapshots + Bookmarks (merged, read only)
@@ -27,36 +30,43 @@ POST|/snapshots/search|search_snapshots
 GET|/snapshots/{snapshotId}|get_snapshot
 POST|/snapshots/capacity|get_snapshot_capacity
 GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
+GET|/snapshots/{snapshotId}/tags|get_snapshot_tags
 # Bookmark Operations (read only)
 POST|/bookmarks/search|search_bookmarks
 GET|/bookmarks/{bookmarkId}|get_bookmark
 GET|/bookmarks/{bookmarkId}/vdb-groups|get_bookmark_vdb_groups
+GET|/bookmarks/{bookmarkId}/tags|get_bookmark_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 3: instance_tool - Instances (CDB, vCDB) (read only)
 # ----------------------------------------------------------------------------
 POST|/cdbs/search|search_cdbs
 GET|/cdbs/{cdbId}|get_cdb
+GET|/cdbs/{cdbId}/tags|get_cdb_tags
 POST|/vcdbs/search|search_vcdbs
 GET|/vcdbs/{vcdbId}|get_vcdb
+GET|/vcdbs/{vcdbId}/tags|get_vcdb_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 4: database_template_tool - VDB Templates (read only)
 # ----------------------------------------------------------------------------
 POST|/database-templates/search|search
 GET|/database-templates/{databaseTemplateId}|get
+GET|/database-templates/{databaseTemplateId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 5: hook_template_tool - Hooks (read only)
 # ----------------------------------------------------------------------------
 POST|/hook-templates/search|search
 GET|/hook-templates/{hookTemplateId}|get
+GET|/hook-templates/{hookTemplateId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 6: virtualization_policy_tool - Policies (read only)
 # ----------------------------------------------------------------------------
 POST|/virtualization-policies/search|search
 GET|/virtualization-policies/{policyId}|get
+GET|/virtualization-policies/{policyId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 7: job_tool - Operations (read only)
@@ -64,12 +74,14 @@ GET|/virtualization-policies/{policyId}|get
 POST|/jobs/search|search
 GET|/jobs/{jobId}|get
 GET|/jobs/{jobId}/result|get_result
+GET|/jobs/{jobId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 8: engine_tool - CD Engines (read only)
 # ----------------------------------------------------------------------------
 POST|/management/engines/search|search
 GET|/management/engines/{engineId}|get
+GET|/management/engines/{engineId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 9: environment_tool - Environments (read only)
@@ -78,12 +90,14 @@ POST|/environments/search|search
 GET|/environments/{environmentId}|get
 GET|/environments/{environmentId}/hosts|list_hosts
 GET|/environments/{environmentId}/listeners|list_listeners
+GET|/environments/{environmentId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 10: source_tool - Sources (read only)
 # ----------------------------------------------------------------------------
 POST|/sources/search|search
 GET|/sources/{sourceId}|get
+GET|/sources/{sourceId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 11: reporting_tool - Insights + License Report + Automated Reports
@@ -108,12 +122,22 @@ POST|/reporting/schedule/search|search_scheduled_reports
 GET|/reporting/schedule/{reportId}|get_scheduled_report
 # License Report
 GET|/management/license|get_license
+# Virtualization History & Operational Visibility (read only)
+GET|/virtualization-jobs/history|get_virtualization_jobs_history
+POST|/virtualization-jobs/history/search|search_virtualization_jobs_history
+GET|/virtualization-actions/history|get_virtualization_actions_history
+POST|/virtualization-actions/history/search|search_virtualization_actions_history
+GET|/virtualization-faults/history|get_virtualization_faults_history
+POST|/virtualization-faults/history/search|search_virtualization_faults_history
+GET|/virtualization-alerts/history|get_virtualization_alerts_history
+POST|/virtualization-alerts/history/search|search_virtualization_alerts_history
 
 # ----------------------------------------------------------------------------
 # TOOL 12: data_connection_tool - Connections (read only)
 # ----------------------------------------------------------------------------
 POST|/data-connections/search|search
 GET|/data-connections/{dataConnectionId}|get
+GET|/data-connections/{dataConnectionId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 13: tag_tool - Tags (read only)
@@ -121,3 +145,4 @@ GET|/data-connections/{dataConnectionId}|get
 POST|/management/tags/search|search
 GET|/management/tags/{tagId}|get
 GET|/management/tags/{tagId}/usages|get_usages
+POST|/management/tags/{tagId}/usages/search|search_usages

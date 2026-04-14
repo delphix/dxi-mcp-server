@@ -261,7 +261,7 @@ def _create_tool_function(
                 "confirmation_message": confirmation.get("message", "Please confirm this operation."),
                 "operation": operation_id,
                 "api_path": api_path,
-                "instructions": "Set confirmed=True to proceed with this operation."
+                "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
             }
         
         # Build request parameters
@@ -407,7 +407,7 @@ Returns:
                 "action": action,
                 "tool": tool_name,
                 "api_path": path,
-                "instructions": "Set confirmed=True to proceed with this operation."
+                "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
             }
         
         # Build request - extract path params from kwargs

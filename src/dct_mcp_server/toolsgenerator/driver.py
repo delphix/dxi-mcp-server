@@ -233,7 +233,7 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "Set confirmed=True to proceed with this operation."
+            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
         }
     return None
 
@@ -320,38 +320,55 @@ def resolve_ref(ref: str, root: dict):
 def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
     """
     Resolve schema properties, handling $ref and allOf composition.
-    
+
     Returns:
-        tuple: (properties dict, required list)
+        tuple: (properties dict, required list, key_properties set)
+               key_properties contains property names from action-specific
+               sub-schemas (inline objects and small $ref'd schemas), as
+               opposed to large inherited base schemas.
     """
     # Resolve top-level $ref if present
     if "$ref" in schema:
         schema = resolve_ref(schema["$ref"], api_spec)
-    
+
     # Handle allOf composition
     if "allOf" in schema:
         combined_properties = {}
         combined_required = []
-        
+        key_properties = set()
+
         for sub_schema in schema["allOf"]:
+            is_ref = "$ref" in sub_schema
+            ref_name = sub_schema.get("$ref", "").split("/")[-1] if is_ref else ""
+
             # Resolve $ref in sub-schema
-            if "$ref" in sub_schema:
+            if is_ref:
                 sub_schema = resolve_ref(sub_schema["$ref"], api_spec)
-            
+
             # Recursively handle nested allOf
             if "allOf" in sub_schema:
-                nested_props, nested_required = resolve_schema_properties(sub_schema, api_spec)
+                nested_props, nested_required, nested_key = resolve_schema_properties(sub_schema, api_spec)
                 combined_properties.update(nested_props)
                 combined_required.extend(nested_required)
+                # Don't propagate key_properties from base schemas
             else:
-                # Merge properties
-                combined_properties.update(sub_schema.get("properties", {}))
+                props = sub_schema.get("properties", {})
+                combined_properties.update(props)
                 combined_required.extend(sub_schema.get("required", []))
-        
-        return combined_properties, combined_required
-    
-    # Direct properties (no allOf)
-    return schema.get("properties", {}), schema.get("required", [])
+
+                # Determine if this sub-schema is action-specific or a large base.
+                # Inline objects (not $ref) and small $ref'd schemas (<=5 props)
+                # are considered action-specific — their properties are "key".
+                # Large $ref'd schemas (e.g. BaseProvisionVDBParameters with 60+
+                # props via nested allOf) are inherited base schemas.
+                if not is_ref or len(props) <= 5:
+                    key_properties.update(props.keys())
+
+        return combined_properties, combined_required, key_properties
+
+    # Direct properties (no allOf) — all are key
+    props = schema.get("properties", {})
+    return props, schema.get("required", []), set(props.keys())
 
 
 def generate_tools_from_openapi():
@@ -574,19 +591,27 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             param_def = resolve_ref(param["$ref"], api_spec) if "$ref" in param else param
             if param_def.get("in") == "path":
                 continue
-            
+
             name = param_def.get("name", "unknown")
             try:
                 param_type = translated_dict_for_types.get(param_def['schema']['type'], "str")
                 desc = param_def.get("description", "Query parameter")
-                
+
                 # Include enum values in description if they exist
                 enum_values = param_def.get('schema', {}).get('enum')
                 if enum_values:
                     desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
-                
+
+                # Capture default value from the spec if present
+                default_value = param_def.get('schema', {}).get('default')
+                if default_value is not None:
+                    desc = f"{desc} (Default: {default_value})"
+
                 if name not in all_params:
-                    all_params[name] = {"type": param_type, "required_for": [], "description": desc, "param_type": "query"}
+                    all_params[name] = {"type": param_type, "required_for": [], "description": desc, "param_type": "query", "default": default_value}
+                elif default_value is not None and all_params[name].get("default") is None:
+                    all_params[name]["default"] = default_value
+                    all_params[name]["description"] = desc
                 all_params[name]["required_for"].append(action)
             except KeyError:
                 continue
@@ -605,7 +630,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             schema = json_content.get("schema", {})
             
             # Use helper to resolve schema properties (handles $ref and allOf)
-            properties, required_props = resolve_schema_properties(schema, api_spec)
+            properties, required_props, key_props = resolve_schema_properties(schema, api_spec)
             
             for prop_name, prop_def in properties.items():
                 # Handle nested $ref in property definition
@@ -632,14 +657,40 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                         json_kind = "JSON object" if prop_type == "object" else "JSON array"
                         desc = f"{desc} (Pass as {json_kind})"
 
+                    # Read x-dct-toolkit-subcommand to tag database-type-specific params
+                    toolkit_subcommand = prop_def.get("x-dct-toolkit-subcommand")
+                    if toolkit_subcommand:
+                        subcommand_labels = {
+                            "oracle": "Oracle only",
+                            "mssql": "MSSql only",
+                            "sybase": "ASE/Sybase only",
+                            "appdata": "AppData only",
+                            "postgres": "Postgres only",
+                        }
+                        label = subcommand_labels.get(toolkit_subcommand, f"{toolkit_subcommand} only")
+                        desc = f"[{label}] {desc}"
+
                     # Convert camelCase to snake_case for consistency
                     snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', prop_name).lower()
                     body_params_for_action.append((prop_name, snake_name, is_json_param))
 
+                    # Capture default value from the spec if present
+                    default_value = prop_def.get("default")
+                    if default_value is not None:
+                        desc = f"{desc} (Default: {default_value})"
+
                     if snake_name not in all_params:
-                        all_params[snake_name] = {"type": python_type, "required_for": [], "description": desc, "param_type": "body", "is_json": is_json_param}
+                        all_params[snake_name] = {"type": python_type, "required_for": [], "key_for": [], "description": desc, "param_type": "body", "is_json": is_json_param, "default": default_value, "toolkit_subcommand": toolkit_subcommand}
+                    elif default_value is not None and all_params[snake_name].get("default") is None:
+                        # Update default if this action provides one and we didn't have one yet
+                        all_params[snake_name]["default"] = default_value
+                        all_params[snake_name]["description"] = desc
                     if prop_name in required_props:
                         all_params[snake_name]["required_for"].append(action)
+                    elif prop_name in key_props:
+                        # Key parameter: action-specific but not in the required list.
+                        # Surface these so the LLM knows they are the primary inputs.
+                        all_params[snake_name].setdefault("key_for", []).append(action)
         
         # Store body params for this action
         action_details[action]["body_params"] = body_params_for_action
@@ -668,7 +719,18 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
 
     # Add all parameters as optional (since they depend on action)
     for param_name, param_info in sorted(all_params.items()):
-        func_code += f"    {param_name}: Optional[{param_info['type']}] = None,\n"
+        default_value = param_info.get("default")
+        if default_value is not None:
+            # Use the spec default in the signature so the tool behaves correctly even if the LLM omits it
+            if isinstance(default_value, bool):
+                default_repr = repr(default_value)
+            elif isinstance(default_value, str):
+                default_repr = repr(default_value)
+            else:
+                default_repr = repr(default_value)
+            func_code += f"    {param_name}: Optional[{param_info['type']}] = {default_repr},\n"
+        else:
+            func_code += f"    {param_name}: Optional[{param_info['type']}] = None,\n"
 
     # Add confirmed parameter for destructive operation confirmation
     func_code += f"    confirmed: Optional[bool] = None,\n"
@@ -701,6 +763,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         required_params = [p for p, info in all_params.items() if action_name in info["required_for"]]
         if required_params:
             docstring_lines.append(f"Required Parameters: {', '.join(required_params)}")
+
+        # Key parameters: action-specific but not strictly required (e.g. provide at least one of these)
+        key_params = [p for p, info in all_params.items()
+                      if action_name in info.get("key_for", []) and p not in required_params]
+        if key_params:
+            docstring_lines.append(f"Key Parameters (provide as applicable): {', '.join(key_params)}")
         
         # Get full operation details from api_spec for filterable fields
         path_item = api_spec.get("paths", {}).get(details["path"], {})
@@ -735,12 +803,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             docstring_lines.append("    Combine: AND, OR")
             docstring_lines.append("    Example: \"name CONTAINS 'prod' AND status EQ 'RUNNING'\"")
         
-        # Example for this action
+        # Example for this action (include both required and key params)
         docstring_lines.append("")
         docstring_lines.append("Example:")
         example_params = [f"action='{action_name}'"]
         for param, info in all_params.items():
-            if action_name in info["required_for"]:
+            if action_name in info["required_for"] or action_name in info.get("key_for", []):
                 if param.endswith("_id"):
                     example_params.append(f"{param}='example-{param.replace('_id', '')}-123'")
                 elif param == "filter_expression":
@@ -750,7 +818,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         docstring_lines.append(f"    >>> {tool_name}({', '.join(example_params)})")
     
     # =========================================================================
-    # PARAMETERS SECTION
+    # PARAMETERS SECTION (grouped by database type)
     # =========================================================================
     docstring_lines.append("")
     docstring_lines.append("=" * 70)
@@ -759,8 +827,18 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     docstring_lines.append("")
     docstring_lines.append("Args:")
     docstring_lines.append(f"    action (str): The operation to perform. One of: {', '.join(actions_list)}")
-    
+
+    # Separate params into general vs database-type-specific groups
+    general_params = {}
+    typed_params = {}  # {subcommand: {param_name: param_info}}
     for param_name, param_info in sorted(all_params.items()):
+        subcommand = param_info.get("toolkit_subcommand")
+        if subcommand:
+            typed_params.setdefault(subcommand, {})[param_name] = param_info
+        else:
+            general_params[param_name] = param_info
+
+    def _format_param_line(param_name, param_info):
         required_actions = param_info["required_for"]
         if required_actions:
             req_note = f"Required for: {', '.join(required_actions)}"
@@ -769,8 +847,31 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         desc = param_info['description']
         if len(desc) > 80:
             desc = desc[:77] + "..."
-        docstring_lines.append(f"    {param_name} ({param_info['type']}): {desc}")
-        docstring_lines.append(f"        [{req_note}]")
+        return [
+            f"    {param_name} ({param_info['type']}): {desc}",
+            f"        [{req_note}]",
+        ]
+
+    # General parameters (applicable to all database types)
+    docstring_lines.append("")
+    docstring_lines.append("  -- General parameters (all database types) --")
+    for param_name, param_info in general_params.items():
+        docstring_lines.extend(_format_param_line(param_name, param_info))
+
+    # Database-type-specific parameter groups
+    subcommand_group_labels = {
+        "oracle": "Oracle-specific parameters",
+        "mssql": "MSSql-specific parameters",
+        "sybase": "ASE/Sybase-specific parameters",
+        "appdata": "AppData-specific parameters",
+        "postgres": "Postgres-specific parameters",
+    }
+    for subcommand, params in sorted(typed_params.items()):
+        group_label = subcommand_group_labels.get(subcommand, f"{subcommand}-specific parameters")
+        docstring_lines.append("")
+        docstring_lines.append(f"  -- {group_label} (SKIP if not provisioning {subcommand}) --")
+        for param_name, param_info in params.items():
+            docstring_lines.extend(_format_param_line(param_name, param_info))
     
     docstring_lines.append("")
     docstring_lines.append("Returns:")
