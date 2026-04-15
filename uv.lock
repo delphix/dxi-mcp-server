@@ -356,7 +356,7 @@ wheels = [
 
 [[package]]
 name = "dct-mcp-server"
-version = "2026.1.0"
+version = "2026.0.1.0-preview"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
