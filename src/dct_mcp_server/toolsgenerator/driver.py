@@ -67,6 +67,31 @@ TOOL_DOMAIN_HINTS = {
     ),
 }
 
+# Actions whose request payload depends on a toolkit schema (e.g. AppData
+# link/provision).  When generating docstrings for these actions, we append
+# a hint telling the AI to read the pre-cached MCP resource instead of
+# calling toolkit_tool.
+ACTIONS_REQUIRING_TOOLKIT_SCHEMA = {
+    "dsource_link_appdata",
+    "dsource_link_appdata_defaults",
+    "update_appdata_dsource",
+    "provision_by_timestamp",
+    "provision_by_snapshot",
+    "provision_from_bookmark",
+    "provision_by_location",
+    "provision_empty_vdb",
+}
+
+TOOLKIT_SCHEMA_RESOURCE_HINT = (
+    "IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', "
+    "'appdata_source_params', and 'appdata_config_params' fields follow a "
+    "DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to "
+    "fetch the schema — it is already pre-cached as an MCP resource. "
+    "Use resources/read on toolkit://{toolkit_id}/schema to get the full "
+    "schema definition. Identify the toolkit_id from the source or "
+    "environment first, then read the resource."
+)
+
 
 def load_api_endpoints_from_toolsets():
     """
@@ -840,7 +865,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 else:
                     example_params.append(f"{param}=...")
         docstring_lines.append(f"    >>> {tool_name}({', '.join(example_params)})")
-    
+
+        # Inject toolkit-schema resource hint for AppData-related actions
+        if action_name in ACTIONS_REQUIRING_TOOLKIT_SCHEMA:
+            docstring_lines.append("")
+            docstring_lines.append(f"    {TOOLKIT_SCHEMA_RESOURCE_HINT}")
+
     # =========================================================================
     # PARAMETERS SECTION (grouped by database type)
     # =========================================================================

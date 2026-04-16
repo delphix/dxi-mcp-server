@@ -85,7 +85,8 @@ def build_params(**kwargs):
 
 @log_tool_execution
 def environment_source_tool(
-    action: str,  # One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+    action: str,  # One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+    allow_provisioning: Optional[bool] = None,
     ase_db_azure_vault_name: Optional[str] = None,
     ase_db_azure_vault_secret_key: Optional[str] = None,
     ase_db_azure_vault_username_key: Optional[str] = None,
@@ -104,6 +105,7 @@ def environment_source_tool(
     azure_vault_name: Optional[str] = None,
     azure_vault_secret_key: Optional[str] = None,
     azure_vault_username_key: Optional[str] = None,
+    bits: Optional[int] = None,
     cluster_address: Optional[str] = None,
     cluster_home: Optional[str] = None,
     cluster_user: Optional[str] = None,
@@ -122,6 +124,7 @@ def environment_source_tool(
     dsp_keystore_path: Optional[str] = None,
     dsp_truststore_password: Optional[str] = None,
     dsp_truststore_path: Optional[str] = None,
+    dump_history_file: Optional[str] = None,
     encryption_enabled: Optional[bool] = None,
     engine_id: Optional[str] = None,
     environment_id: Optional[str] = None,
@@ -133,38 +136,54 @@ def environment_source_tool(
     hashicorp_vault_username_key: Optional[str] = None,
     host_id: Optional[str] = None,
     hostname: Optional[str] = None,
+    installation_path: Optional[str] = None,
     instance_name: Optional[str] = None,
+    instance_owner: Optional[str] = None,
     instances: Optional[list] = None,
     is_cluster: Optional[bool] = False,
+    is_staging: Optional[bool] = None,
     is_target: Optional[bool] = None,
+    isql_path: Optional[str] = None,
     java_home: Optional[str] = None,
     jdbc_connection_string: Optional[str] = None,
     key: Optional[str] = None,
     limit: Optional[int] = 100,
     linking_enabled: Optional[bool] = True,
+    location: Optional[str] = None,
     make_current_account_owner: Optional[bool] = True,
     name: Optional[str] = None,
     nfs_addresses: Optional[list] = None,
+    oracle_base: Optional[str] = None,
+    oracle_cluster_node_enabled: Optional[bool] = None,
+    oracle_cluster_node_name: Optional[str] = None,
     oracle_cluster_node_virtual_ips: Optional[list] = None,
     oracle_config_type: Optional[str] = None,
     oracle_jdbc_keystore_password: Optional[str] = None,
     oracle_services: Optional[list] = None,
+    oracle_tde_external_key_manager_credential: Optional[str] = None,
     oracle_tde_keystores_root_path: Optional[str] = None,
+    oracle_tde_okv_home_path: Optional[str] = None,
     os_name: Optional[str] = None,
     parameters: Optional[dict] = None,
     password: Optional[str] = None,
     path: Optional[str] = None,
+    port: Optional[int] = None,
     privilege_elevation_profile_reference: Optional[str] = None,
     protocol_addresses: Optional[list] = None,
     remote_listener: Optional[str] = None,
     repository_id: Optional[str] = None,
     scan: Optional[str] = None,
+    service_principal_name: Optional[str] = None,
+    snapshot_id: Optional[str] = None,
     sort: Optional[str] = None,
+    source_data_id: Optional[str] = None,
     source_id: Optional[str] = None,
     ssh_port: Optional[int] = 22,
     ssh_verification_strategy: Optional[str] = None,
     staging_environment: Optional[str] = None,
     tags: Optional[list] = None,
+    timeflow_id: Optional[str] = None,
+    timestamp: Optional[str] = None,
     toolkit_path: Optional[str] = None,
     type: Optional[str] = 'DIRECT',
     unique_name: Optional[str] = None,
@@ -177,12 +196,13 @@ def environment_source_tool(
     value: Optional[str] = None,
     vault: Optional[str] = None,
     vault_username: Optional[str] = None,
+    version: Optional[str] = None,
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Unified tool for ENVIRONMENT SOURCE operations.
     
-    This tool supports 34 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+    This tool supports 41 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
     
     ======================================================================
     ACTION REFERENCE
@@ -360,16 +380,37 @@ def environment_source_tool(
     Example:
         >>> environment_source_tool(action='list_environment_hosts', environment_id='example-environment-123', name=..., hostname=..., ssh_port=..., toolkit_path=..., nfs_addresses=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., privilege_elevation_profile_reference=..., oracle_jdbc_keystore_password=..., oracle_tde_keystores_root_path=..., ssh_verification_strategy=..., oracle_cluster_node_virtual_ips=...)
     
+    ACTION: update_environment_host
+    ----------------------------------------
+    Summary: Update a Host.
+    Method: PATCH
+    Endpoint: /environments/{environmentId}/hosts/{hostId}
+    Required Parameters: environment_id, host_id
+    Key Parameters (provide as applicable): hostname, connector_port, connector_authentication_key, ssh_port, toolkit_path, nfs_addresses, java_home, dsp_keystore_path, dsp_keystore_password, dsp_keystore_alias, dsp_truststore_path, dsp_truststore_password, oracle_jdbc_keystore_password, oracle_tde_keystores_root_path, ssh_verification_strategy, oracle_cluster_node_virtual_ips, oracle_cluster_node_name, oracle_cluster_node_enabled, oracle_tde_okv_home_path, oracle_tde_external_key_manager_credential
+    
+    Example:
+        >>> environment_source_tool(action='update_environment_host', environment_id='example-environment-123', hostname=..., connector_port=..., connector_authentication_key=..., ssh_port=..., toolkit_path=..., nfs_addresses=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., oracle_jdbc_keystore_password=..., oracle_tde_keystores_root_path=..., ssh_verification_strategy=..., oracle_cluster_node_virtual_ips=..., host_id='example-host-123', oracle_cluster_node_name=..., oracle_cluster_node_enabled=..., oracle_tde_okv_home_path=..., oracle_tde_external_key_manager_credential=...)
+    
+    ACTION: delete_environment_host
+    ----------------------------------------
+    Summary: Delete a Host.
+    Method: DELETE
+    Endpoint: /environments/{environmentId}/hosts/{hostId}
+    Required Parameters: environment_id, host_id
+    
+    Example:
+        >>> environment_source_tool(action='delete_environment_host', environment_id='example-environment-123', host_id='example-host-123')
+    
     ACTION: list_environment_listeners
     ----------------------------------------
     Summary: Create Oracle listener.
     Method: POST
     Endpoint: /environments/{environmentId}/listeners
     Required Parameters: environment_id, type
-    Key Parameters (provide as applicable): name, protocol_addresses, host_id
+    Key Parameters (provide as applicable): name, host_id, protocol_addresses
     
     Example:
-        >>> environment_source_tool(action='list_environment_listeners', environment_id='example-environment-123', name=..., type=..., protocol_addresses=..., host_id='example-host-123')
+        >>> environment_source_tool(action='list_environment_listeners', environment_id='example-environment-123', name=..., host_id='example-host-123', type=..., protocol_addresses=...)
     
     ACTION: get_environment_tags
     ----------------------------------------
@@ -401,6 +442,57 @@ def environment_source_tool(
     
     Example:
         >>> environment_source_tool(action='delete_environment_tags', environment_id='example-environment-123', tags=..., key=..., value=...)
+    
+    ACTION: get_environment_compatible_repositories_by_snapshot
+    ----------------------------------------
+    Summary: Get compatible repositories corresponding to the snapshot.
+    Method: POST
+    Endpoint: /environments/compatible_repositories_by_snapshot
+    Key Parameters (provide as applicable): environment_id, engine_id, source_data_id, snapshot_id
+    
+    Example:
+        >>> environment_source_tool(action='get_environment_compatible_repositories_by_snapshot', environment_id='example-environment-123', engine_id='example-engine-123', source_data_id='example-source_data-123', snapshot_id='example-snapshot-123')
+    
+    ACTION: get_environment_compatible_repositories_by_timestamp
+    ----------------------------------------
+    Summary: Get compatible repositories corresponding to the timestamp.
+    Method: POST
+    Endpoint: /environments/compatible_repositories_by_timestamp
+    Key Parameters (provide as applicable): environment_id, engine_id, source_data_id, timestamp, timeflow_id
+    
+    Example:
+        >>> environment_source_tool(action='get_environment_compatible_repositories_by_timestamp', environment_id='example-environment-123', engine_id='example-engine-123', source_data_id='example-source_data-123', timestamp=..., timeflow_id='example-timeflow-123')
+    
+    ACTION: get_environment_compatible_repositories_by_location
+    ----------------------------------------
+    Summary: Get compatible repositories corresponding to the location.
+    Method: POST
+    Endpoint: /environments/compatible_repositories_by_location
+    Key Parameters (provide as applicable): environment_id, engine_id, source_data_id, timeflow_id, location
+    
+    Example:
+        >>> environment_source_tool(action='get_environment_compatible_repositories_by_location', environment_id='example-environment-123', engine_id='example-engine-123', source_data_id='example-source_data-123', timeflow_id='example-timeflow-123', location=...)
+    
+    ACTION: update_environment_repository
+    ----------------------------------------
+    Summary: Update a Repository.
+    Method: PATCH
+    Endpoint: /environments/{environmentId}/repository/{repositoryId}
+    Required Parameters: environment_id, repository_id
+    Key Parameters (provide as applicable): allow_provisioning, is_staging, version, oracle_base, bits, port, instance_owner, installation_path, dump_history_file, database_username, database_password, service_principal_name, isql_path
+    
+    Example:
+        >>> environment_source_tool(action='update_environment_repository', environment_id='example-environment-123', repository_id='example-repository-123', allow_provisioning=..., is_staging=..., version=..., oracle_base=..., bits=..., port=..., instance_owner=..., installation_path=..., dump_history_file=..., database_username=..., database_password=..., service_principal_name=..., isql_path=...)
+    
+    ACTION: delete_environment_repository
+    ----------------------------------------
+    Summary: Delete a repository.
+    Method: DELETE
+    Endpoint: /environments/{environmentId}/repository/{repositoryId}
+    Required Parameters: environment_id, repository_id
+    
+    Example:
+        >>> environment_source_tool(action='delete_environment_repository', environment_id='example-environment-123', repository_id='example-repository-123')
     
     ACTION: search_sources
     ----------------------------------------
@@ -492,10 +584,10 @@ def environment_source_tool(
     Summary: Verify JDBC connection string for a source.
     Method: POST
     Endpoint: /sources/{sourceId}/jdbc-check
-    Required Parameters: source_id, database_username, database_password, jdbc_connection_string
+    Required Parameters: database_username, database_password, source_id, jdbc_connection_string
     
     Example:
-        >>> environment_source_tool(action='verify_source_jdbc_connection', source_id='example-source-123', database_username=..., database_password=..., jdbc_connection_string=...)
+        >>> environment_source_tool(action='verify_source_jdbc_connection', database_username=..., database_password=..., source_id='example-source-123', jdbc_connection_string=...)
     
     ACTION: get_source_compatible_repositories
     ----------------------------------------
@@ -543,11 +635,11 @@ def environment_source_tool(
     Summary: Create an Oracle Source.
     Method: POST
     Endpoint: /sources/oracle
-    Required Parameters: oracle_config_type, repository_id
+    Required Parameters: repository_id, oracle_config_type
     Key Parameters (provide as applicable): environment_id, engine_id, database_name, instances, unique_name, instance_name, oracle_services
     
     Example:
-        >>> environment_source_tool(action='create_oracle_source', environment_id='example-environment-123', engine_id='example-engine-123', oracle_config_type=..., database_name=..., repository_id='example-repository-123', instances=..., unique_name=..., instance_name=..., oracle_services=...)
+        >>> environment_source_tool(action='create_oracle_source', environment_id='example-environment-123', engine_id='example-engine-123', repository_id='example-repository-123', oracle_config_type=..., database_name=..., instances=..., unique_name=..., instance_name=..., oracle_services=...)
     
     ACTION: update_oracle_source
     ----------------------------------------
@@ -587,11 +679,11 @@ def environment_source_tool(
     Summary: Create an ASE source.
     Method: POST
     Endpoint: /sources/ase
-    Required Parameters: database_name, repository_id
+    Required Parameters: repository_id, database_name
     Key Parameters (provide as applicable): environment_id, engine_id, linking_enabled, environment_user
     
     Example:
-        >>> environment_source_tool(action='create_ase_source', environment_id='example-environment-123', engine_id='example-engine-123', database_name=..., repository_id='example-repository-123', linking_enabled=..., environment_user=...)
+        >>> environment_source_tool(action='create_ase_source', environment_id='example-environment-123', engine_id='example-engine-123', repository_id='example-repository-123', database_name=..., linking_enabled=..., environment_user=...)
     
     ACTION: update_ase_source
     ----------------------------------------
@@ -599,10 +691,10 @@ def environment_source_tool(
     Method: PATCH
     Endpoint: /sources/ase/{sourceId}
     Required Parameters: source_id
-    Key Parameters (provide as applicable): environment_id, database_username, database_password, database_name, repository_id, linking_enabled, environment_user
+    Key Parameters (provide as applicable): environment_id, repository_id, database_username, database_password, database_name, linking_enabled, environment_user
     
     Example:
-        >>> environment_source_tool(action='update_ase_source', environment_id='example-environment-123', source_id='example-source-123', database_username=..., database_password=..., database_name=..., repository_id='example-repository-123', linking_enabled=..., environment_user=...)
+        >>> environment_source_tool(action='update_ase_source', environment_id='example-environment-123', repository_id='example-repository-123', database_username=..., database_password=..., source_id='example-source-123', database_name=..., linking_enabled=..., environment_user=...)
     
     ACTION: create_appdata_source
     ----------------------------------------
@@ -624,16 +716,18 @@ def environment_source_tool(
     Key Parameters (provide as applicable): environment_id, name, repository_id, linking_enabled, environment_user, parameters, path
     
     Example:
-        >>> environment_source_tool(action='update_appdata_source', environment_id='example-environment-123', name=..., source_id='example-source-123', repository_id='example-repository-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
+        >>> environment_source_tool(action='update_appdata_source', environment_id='example-environment-123', name=..., repository_id='example-repository-123', source_id='example-source-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
     
     ======================================================================
     PARAMETERS
     ======================================================================
     
     Args:
-        action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+        action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
     
       -- General parameters (all database types) --
+        allow_provisioning (bool): Flag indicating whether the repository should be used for provisioning.
+            [Optional for all actions]
         ase_db_azure_vault_name (str): Azure key vault name.
             [Optional for all actions]
         ase_db_azure_vault_secret_key (str): Azure vault key for the password in the key-value store.
@@ -670,6 +764,8 @@ def environment_source_tool(
             [Optional for all actions]
         azure_vault_username_key (str): Azure vault key for the username in the key-value store.
             [Optional for all actions]
+        bits (int): 32 or 64 bits.
+            [Optional for all actions]
         cluster_address (str): Address of the cluster. This property can be modified for Windows cluster only.
             [Optional for all actions]
         cluster_home (str): Absolute path to cluster home drectory. This parameter is mandatory for UNIX ...
@@ -690,9 +786,9 @@ def environment_source_tool(
             [Optional for all actions]
         database_name (str): The name of the database.
             [Required for: create_ase_source]
-        database_password (str): oracle database password.
+        database_password (str): The credentials of the ASE instance database user.
             [Required for: verify_source_jdbc_connection]
-        database_username (str): oracle database username.
+        database_username (str): The username of the ASE instance database.
             [Required for: verify_source_jdbc_connection]
         description (str): The environment description.
             [Optional for all actions]
@@ -706,12 +802,14 @@ def environment_source_tool(
             [Optional for all actions]
         dsp_truststore_path (str): DSP truststore path.
             [Optional for all actions]
+        dump_history_file (str): Fully qualified name of the dump history file.
+            [Optional for all actions]
         encryption_enabled (bool): Flag indicating whether the data transfer is encrypted or not.
             [Optional for all actions]
         engine_id (str): The ID of the Engine onto which to create the environment.
             [Required for: create_environment]
         environment_id (str): The unique identifier for the environment.
-            [Required for: get_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags]
+            [Required for: get_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, update_environment_repository, delete_environment_repository]
         environment_user (str): The environment user reference.
             [Optional for all actions]
         filter_expression (str): Request body parameter
@@ -724,17 +822,25 @@ def environment_source_tool(
             [Optional for all actions]
         hashicorp_vault_username_key (str): Key for the username in the key-value store.
             [Optional for all actions]
-        host_id (str): The id of the host on which the Oracle listener runs.
-            [Optional for all actions]
+        host_id (str): The unique identifier for the host.
+            [Required for: update_environment_host, delete_environment_host]
         hostname (str): host address of the machine.
             [Required for: create_environment]
+        installation_path (str): The SAP ASE instance home.
+            [Optional for all actions]
         instance_name (str): The instance name of this single instance database.
+            [Optional for all actions]
+        instance_owner (str): The username of the account the SAP ASE or SQL Server instance is running as.
             [Optional for all actions]
         instances (list): The instances of this RAC database. (Pass as JSON array)
             [Optional for all actions]
         is_cluster (bool): Whether the environment to be created is a cluster. (Default: False)
             [Optional for all actions]
+        is_staging (bool): Flag indicating whether this repository can be used by the Delphix Engine for...
+            [Optional for all actions]
         is_target (bool): Whether the environment to be created is a target cluster environment. This p...
+            [Optional for all actions]
+        isql_path (str): The path to the isql binary to use for this SAP ASE instance.
             [Optional for all actions]
         java_home (str): The path to the user managed Java Development Kit (JDK). If not specified, th...
             [Optional for all actions]
@@ -746,11 +852,19 @@ def environment_source_tool(
             [Required for: search_environments, search_sources, list_sources]
         linking_enabled (bool): Whether this source should be used for linking. (Default: True)
             [Optional for all actions]
+        location (str): location from where compatible repo to be fetched.
+            [Optional for all actions]
         make_current_account_owner (bool): Whether the account creating this environment must be configured as owner of ...
             [Optional for all actions]
         name (str): The name of the environment.
             [Required for: create_postgres_source, create_appdata_source]
         nfs_addresses (list): array of ip address or hostnames (Pass as JSON array)
+            [Optional for all actions]
+        oracle_base (str): The Oracle base where database binaries are located.
+            [Optional for all actions]
+        oracle_cluster_node_enabled (bool): Whether the associated OracleClusterNode is enabled.
+            [Optional for all actions]
+        oracle_cluster_node_name (str): The name of the associated OracleClusterNode.
             [Optional for all actions]
         oracle_cluster_node_virtual_ips (list): The Virtual IP addresses associated with the OracleClusterNode. (Pass as JSON...
             [Optional for all actions]
@@ -760,7 +874,11 @@ def environment_source_tool(
             [Optional for all actions]
         oracle_services (list): List of jdbc connection strings which are used to connect with the database. ...
             [Optional for all actions]
+        oracle_tde_external_key_manager_credential (str): The credential of the tde keystore external keys management system like Oracl...
+            [Optional for all actions]
         oracle_tde_keystores_root_path (str): The path to the root of the Oracle TDE keystores artifact directories.
+            [Optional for all actions]
+        oracle_tde_okv_home_path (str): The path to the Oracle Key Vault library installation on the database node.
             [Optional for all actions]
         os_name (str): Operating system type of the environment. Valid values: UNIX, WINDOWS.
             [Required for: create_environment]
@@ -770,18 +888,26 @@ def environment_source_tool(
             [Optional for all actions]
         path (str): The path to the data to be synced. This should only be passed for type=DIRECT.
             [Optional for all actions]
+        port (int): The network port for connecting to the SAP ASE or SQL Server instance.
+            [Optional for all actions]
         privilege_elevation_profile_reference (str): Reference to a profile for escalating user privileges.
             [Optional for all actions]
         protocol_addresses (list): The protocol addresses of the Oracle listener. (Pass as JSON array)
             [Optional for all actions]
         remote_listener (str): Request body parameter
             [Optional for all actions]
-        repository_id (str): The id of the containing repository where this database is created.
-            [Required for: create_oracle_source, create_ase_source, create_appdata_source]
+        repository_id (str): The unique identifier for the repository.
+            [Required for: update_environment_repository, delete_environment_repository, create_oracle_source, create_ase_source, create_appdata_source]
         scan (str): Request body parameter
+            [Optional for all actions]
+        service_principal_name (str): The Kerberos Service Principal Name (SPN) of the database.
+            [Optional for all actions]
+        snapshot_id (str): The ID of the snapshot from which to execute the operation.
             [Optional for all actions]
         sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
             [Required for: search_environments, search_sources, list_sources]
+        source_data_id (str): The ID of the source object (dSource or VDB) to get the compatible repos. All...
+            [Optional for all actions]
         source_id (str): The unique identifier for the source.
             [Required for: get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, update_oracle_source, update_postgres_source, update_ase_source, update_appdata_source]
         ssh_port (int): ssh port of the host. (Default: 22)
@@ -792,6 +918,10 @@ def environment_source_tool(
             [Optional for all actions]
         tags (list): The tags to be created for this environment. (Pass as JSON array)
             [Required for: add_environment_tags, add_source_tags]
+        timeflow_id (str): ID of the timeflow from which compatible repos need to be fetched, mutually e...
+            [Optional for all actions]
+        timestamp (str): The point in time from which to execute the operation. If the timestamp is no...
+            [Optional for all actions]
         toolkit_path (str): The path for the toolkit that resides on the host.
             [Optional for all actions]
         type (str): The type of source to create. Default is DIRECT. Valid values: DIRECT, STAGED...
@@ -815,6 +945,8 @@ def environment_source_tool(
         vault (str): The name or reference of the vault from which to read the host credentials.
             [Optional for all actions]
         vault_username (str): Delphix display name for the vault user
+            [Optional for all actions]
+        version (str): Version of the repository.
             [Optional for all actions]
     
     Returns:
@@ -947,6 +1079,29 @@ def environment_source_tool(
             return conf
         body = {k: v for k, v in {'name': name, 'hostname': hostname, 'nfs_addresses': nfs_addresses, 'ssh_port': ssh_port, 'privilege_elevation_profile_reference': privilege_elevation_profile_reference, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_path': dsp_keystore_path, 'dsp_truststore_password': dsp_truststore_password, 'dsp_truststore_path': dsp_truststore_path, 'java_home': java_home, 'toolkit_path': toolkit_path, 'oracle_jdbc_keystore_password': oracle_jdbc_keystore_password, 'oracle_tde_keystores_root_path': oracle_tde_keystores_root_path, 'ssh_verification_strategy': ssh_verification_strategy, 'oracle_cluster_node_virtual_ips': oracle_cluster_node_virtual_ips}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    elif action == 'update_environment_host':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action update_environment_host'}
+        if host_id is None:
+            return {'error': 'Missing required parameter: host_id for action update_environment_host'}
+        endpoint = f'/environments/{environment_id}/hosts/{host_id}'
+        params = build_params()
+        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'hostname': hostname, 'oracle_cluster_node_name': oracle_cluster_node_name, 'oracle_cluster_node_enabled': oracle_cluster_node_enabled, 'oracle_cluster_node_virtual_ips': oracle_cluster_node_virtual_ips, 'nfs_addresses': nfs_addresses, 'ssh_port': ssh_port, 'toolkit_path': toolkit_path, 'java_home': java_home, 'dsp_keystore_path': dsp_keystore_path, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_truststore_path': dsp_truststore_path, 'dsp_truststore_password': dsp_truststore_password, 'connector_port': connector_port, 'oracle_jdbc_keystore_password': oracle_jdbc_keystore_password, 'oracle_tde_keystores_root_path': oracle_tde_keystores_root_path, 'ssh_verification_strategy': ssh_verification_strategy, 'connector_authentication_key': connector_authentication_key, 'oracle_tde_okv_home_path': oracle_tde_okv_home_path, 'oracle_tde_external_key_manager_credential': oracle_tde_external_key_manager_credential}.items() if v is not None}
+        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
+    elif action == 'delete_environment_host':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action delete_environment_host'}
+        if host_id is None:
+            return {'error': 'Missing required parameter: host_id for action delete_environment_host'}
+        endpoint = f'/environments/{environment_id}/hosts/{host_id}'
+        params = build_params()
+        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        return make_api_request('DELETE', endpoint, params=params)
     elif action == 'list_environment_listeners':
         if environment_id is None:
             return {'error': 'Missing required parameter: environment_id for action list_environment_listeners'}
@@ -986,6 +1141,50 @@ def environment_source_tool(
             return conf
         body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    elif action == 'get_environment_compatible_repositories_by_snapshot':
+        params = build_params()
+        conf = check_confirmation('POST', '/environments/compatible_repositories_by_snapshot', action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'snapshot_id': snapshot_id, 'environment_id': environment_id}.items() if v is not None}
+        return make_api_request('POST', '/environments/compatible_repositories_by_snapshot', params=params, json_body=body if body else None)
+    elif action == 'get_environment_compatible_repositories_by_timestamp':
+        params = build_params()
+        conf = check_confirmation('POST', '/environments/compatible_repositories_by_timestamp', action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'timestamp': timestamp, 'timeflow_id': timeflow_id, 'environment_id': environment_id}.items() if v is not None}
+        return make_api_request('POST', '/environments/compatible_repositories_by_timestamp', params=params, json_body=body if body else None)
+    elif action == 'get_environment_compatible_repositories_by_location':
+        params = build_params()
+        conf = check_confirmation('POST', '/environments/compatible_repositories_by_location', action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'location': location, 'timeflow_id': timeflow_id, 'environment_id': environment_id}.items() if v is not None}
+        return make_api_request('POST', '/environments/compatible_repositories_by_location', params=params, json_body=body if body else None)
+    elif action == 'update_environment_repository':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action update_environment_repository'}
+        if repository_id is None:
+            return {'error': 'Missing required parameter: repository_id for action update_environment_repository'}
+        endpoint = f'/environments/{environment_id}/repository/{repository_id}'
+        params = build_params()
+        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'allow_provisioning': allow_provisioning, 'is_staging': is_staging, 'version': version, 'oracle_base': oracle_base, 'bits': bits, 'port': port, 'instance_owner': instance_owner, 'installation_path': installation_path, 'dump_history_file': dump_history_file, 'database_username': database_username, 'database_password': database_password, 'service_principal_name': service_principal_name, 'isql_path': isql_path}.items() if v is not None}
+        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
+    elif action == 'delete_environment_repository':
+        if environment_id is None:
+            return {'error': 'Missing required parameter: environment_id for action delete_environment_repository'}
+        if repository_id is None:
+            return {'error': 'Missing required parameter: repository_id for action delete_environment_repository'}
+        endpoint = f'/environments/{environment_id}/repository/{repository_id}'
+        params = build_params()
+        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False)
+        if conf:
+            return conf
+        return make_api_request('DELETE', endpoint, params=params)
     elif action == 'search_sources':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
         conf = check_confirmation('POST', '/sources/search', action, 'environment_source_tool', confirmed or False)
@@ -1134,7 +1333,7 @@ def environment_source_tool(
         body = {k: v for k, v in {'name': name, 'repository_id': repository_id, 'environment_id': environment_id, 'linking_enabled': linking_enabled, 'environment_user': environment_user, 'parameters': parameters, 'path': path}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source'}
+        return {'error': f'Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source'}
 
 @log_tool_execution
 def toolkit_tool(

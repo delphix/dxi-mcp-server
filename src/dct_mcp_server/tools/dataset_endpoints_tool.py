@@ -565,6 +565,8 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_by_timestamp', timestamp=..., timestamp_in_database_timezone=..., timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=...)
     
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+    
     ACTION: provision_by_timestamp_defaults
     ----------------------------------------
     Summary: Get default provision parameters for provisioning a new VDB by timestamp.
@@ -585,6 +587,8 @@ def data_tool(
     
     Example:
         >>> data_tool(action='provision_by_snapshot', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., snapshot_id='example-snapshot-123')
+    
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
     
     ACTION: provision_by_snapshot_defaults
     ----------------------------------------
@@ -607,6 +611,8 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_from_bookmark', make_current_account_owner=..., bookmark_id='example-bookmark-123')
     
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+    
     ACTION: provision_from_bookmark_defaults
     ----------------------------------------
     Summary: Get default provision parameters for provisioning a new VDB from a bookmark.
@@ -627,6 +633,8 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_by_location', timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., location=...)
     
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+    
     ACTION: provision_by_location_defaults
     ----------------------------------------
     Summary: Get default provision parameters for provisioning a new VDB by location.
@@ -646,6 +654,8 @@ def data_tool(
     
     Example:
         >>> data_tool(action='provision_empty_vdb', repository_id='example-repository-123', engine_id='example-engine-123')
+    
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
     
     ACTION: delete_vdb
     ----------------------------------------
@@ -1806,6 +1816,8 @@ def data_tool(
     Example:
         >>> data_tool(action='dsource_link_appdata', environment_user=..., link_type=..., staging_mount_base=..., staging_environment=..., staging_environment_user=..., excludes=..., follow_symlinks=..., parameters=..., sync_parameters=...)
     
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+    
     ACTION: dsource_link_appdata_defaults
     ----------------------------------------
     Summary: Get defaults for an AppData dSource linking.
@@ -1815,6 +1827,8 @@ def data_tool(
     
     Example:
         >>> data_tool(action='dsource_link_appdata_defaults', source_id='example-source-123')
+    
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
     
     ACTION: update_appdata_dsource
     ----------------------------------------
@@ -1826,6 +1840,8 @@ def data_tool(
     
     Example:
         >>> data_tool(action='update_appdata_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., parameters=...)
+    
+        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
     
     ACTION: dsource_link_mssql
     ----------------------------------------
@@ -3758,7 +3774,7 @@ def data_tool(
 
 @log_tool_execution
 def snapshot_bookmark_tool(
-    action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+    action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
     bookmark_id: Optional[str] = None,
     bookmark_type: Optional[str] = 'PRIVATE',
     cursor: Optional[str] = None,
@@ -3792,7 +3808,7 @@ def snapshot_bookmark_tool(
     """
     Unified tool for SNAPSHOT BOOKMARK operations.
     
-    This tool supports 18 actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+    This tool supports 19 actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
     
     ======================================================================
     ACTION REFERENCE
@@ -3903,6 +3919,16 @@ def snapshot_bookmark_tool(
     
     Example:
         >>> snapshot_bookmark_tool(action='get_snapshot_timeflow_range', snapshot_id='example-snapshot-123')
+    
+    ACTION: get_runtime
+    ----------------------------------------
+    Summary: Get a runtime object of a snapshot by id
+    Method: GET
+    Endpoint: /snapshots/{snapshotId}/runtime
+    Required Parameters: snapshot_id
+    
+    Example:
+        >>> snapshot_bookmark_tool(action='get_runtime', snapshot_id='example-snapshot-123')
     
     ACTION: get_snapshot_tags
     ----------------------------------------
@@ -4074,7 +4100,7 @@ def snapshot_bookmark_tool(
     ======================================================================
     
     Args:
-        action (str): The operation to perform. One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+        action (str): The operation to perform. One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
     
       -- General parameters (all database types) --
         bookmark_id (str): The unique identifier for the bookmark.
@@ -4114,7 +4140,7 @@ def snapshot_bookmark_tool(
         retention (int): The retention policy for this bookmark, in days. A value of -1 indicates the ...
             [Optional for all actions]
         snapshot_id (str): The unique identifier for the snapshot.
-            [Required for: get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags]
+            [Required for: get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags]
         snapshot_ids (list): The IDs of the snapshots that will be part of the Bookmark. This parameter is...
             [Optional for all actions]
         sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
@@ -4190,6 +4216,15 @@ def snapshot_bookmark_tool(
         if snapshot_id is None:
             return {'error': 'Missing required parameter: snapshot_id for action get_snapshot_timeflow_range'}
         endpoint = f'/snapshots/{snapshot_id}/timeflow_range'
+        params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        if conf:
+            return conf
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'get_runtime':
+        if snapshot_id is None:
+            return {'error': 'Missing required parameter: snapshot_id for action get_runtime'}
+        endpoint = f'/snapshots/{snapshot_id}/runtime'
         params = build_params()
         conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
         if conf:
@@ -4305,7 +4340,7 @@ def snapshot_bookmark_tool(
         body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags'}
+        return {'error': f'Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags'}
 
 @log_tool_execution
 def data_connection_tool(
