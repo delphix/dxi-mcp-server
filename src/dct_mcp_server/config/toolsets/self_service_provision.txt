@@ -101,3 +101,17 @@ POST|/management/tags/search|search
 GET|/management/tags/{tagId}|get
 POST|/management/tags|create
 DELETE|/management/tags/{tagId}|delete
+
+# ----------------------------------------------------------------------------
+# TOOL 14: timeflow_tool - Timeflows
+# ----------------------------------------------------------------------------
+GET|/timeflows|list
+POST|/timeflows/search|search
+GET|/timeflows/{timeflowId}|get
+PATCH|/timeflows/{timeflowId}|update
+DELETE|/timeflows/{timeflowId}|delete
+GET|/timeflows/{timeflowId}/timeflowSnapshotDayRange|get_snapshot_day_range
+POST|/timeflows/{timeflowId}/repair|repair
+GET|/timeflows/{timeflowId}/tags|get_tags
+POST|/timeflows/{timeflowId}/tags|add_tags
+POST|/timeflows/{timeflowId}/tags/delete|delete_tags

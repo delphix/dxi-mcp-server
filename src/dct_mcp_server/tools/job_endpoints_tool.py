@@ -29,16 +29,18 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str) -> Optional[Dict[str, Any]]:
-    """Check if operation requires confirmation. Returns confirmation details or None."""
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+    """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none":
+    if confirmation["level"] != "none" and not confirmed:
         return {
-            "requires_confirmation": True,
+            "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
             "confirmation_message": confirmation.get("message", "Please confirm this operation."),
-            "conditional": confirmation.get("conditional", False),
-            "threshold_days": confirmation.get("threshold_days")
+            "action": action,
+            "tool": tool_name,
+            "api_path": api_path,
+            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
         }
     return None
 
@@ -83,18 +85,21 @@ def build_params(**kwargs):
 
 @log_tool_execution
 def job_tool(
-    action: str,  # One of: search, get, abandon, get_result, add_tags
+    action: str,  # One of: search, get, abandon, get_result, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     filter_expression: Optional[str] = None,
     job_id: Optional[str] = None,
-    limit: Optional[int] = None,
-    sort: Optional[str] = None,
+    key: Optional[str] = None,
+    limit: Optional[int] = 100,
+    sort: Optional[str] = '-start_time',
     tags: Optional[list] = None,
+    value: Optional[str] = None,
+    confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Unified tool for JOB operations.
     
-    This tool supports 5 actions: search, get, abandon, get_result, add_tags
+    This tool supports 7 actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags
     
     ======================================================================
     ACTION REFERENCE
@@ -106,6 +111,7 @@ def job_tool(
     Method: POST
     Endpoint: /jobs/search
     Required Parameters: limit, cursor, sort
+    Key Parameters (provide as applicable): filter_expression
     
     Filterable Fields:
         - id: The Job entity ID.
@@ -138,7 +144,7 @@ def job_tool(
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
     
     Example:
-        >>> job_tool(action='search', limit=..., cursor=..., sort=...)
+        >>> job_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
     
     ACTION: get
     ----------------------------------------
@@ -170,6 +176,16 @@ def job_tool(
     Example:
         >>> job_tool(action='get_result', job_id='example-job-123')
     
+    ACTION: get_tags
+    ----------------------------------------
+    Summary: Get tags for a Job.
+    Method: GET
+    Endpoint: /jobs/{jobId}/tags
+    Required Parameters: job_id
+    
+    Example:
+        >>> job_tool(action='get_tags', job_id='example-job-123')
+    
     ACTION: add_tags
     ----------------------------------------
     Summary: Create tags for a Job.
@@ -180,24 +196,41 @@ def job_tool(
     Example:
         >>> job_tool(action='add_tags', job_id='example-job-123', tags=...)
     
+    ACTION: delete_tags
+    ----------------------------------------
+    Summary: Delete tags for a Job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/tags/delete
+    Required Parameters: job_id
+    Key Parameters (provide as applicable): tags, key, value
+    
+    Example:
+        >>> job_tool(action='delete_tags', job_id='example-job-123', tags=..., key=..., value=...)
+    
     ======================================================================
     PARAMETERS
     ======================================================================
     
     Args:
-        action (str): The operation to perform. One of: search, get, abandon, get_result, add_tags
+        action (str): The operation to perform. One of: search, get, abandon, get_result, get_tags, add_tags, delete_tags
+    
+      -- General parameters (all database types) --
         cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
             [Required for: search]
         filter_expression (str): Request body parameter
             [Optional for all actions]
         job_id (str): The unique identifier for the job.
-            [Required for: get, abandon, get_result, add_tags]
+            [Required for: get, abandon, get_result, get_tags, add_tags, delete_tags]
+        key (str): Key of the tag
+            [Optional for all actions]
         limit (int): Maximum number of objects to return per query. The value must be between 1 an...
             [Required for: search]
         sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
             [Required for: search]
         tags (list): Array of tags with key value pairs (Pass as JSON array)
             [Required for: add_tags]
+        value (str): Value of the tag
+            [Optional for all actions]
     
     Returns:
         Dict[str, Any]: The API response containing operation results
@@ -208,6 +241,9 @@ def job_tool(
     # Route to appropriate API based on action
     if action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        conf = check_confirmation('POST', '/jobs/search', action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
         body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/jobs/search', params=params, json_body=body)
     elif action == 'get':
@@ -215,28 +251,59 @@ def job_tool(
             return {'error': 'Missing required parameter: job_id for action get'}
         endpoint = f'/jobs/{job_id}'
         params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'abandon':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action abandon'}
         endpoint = f'/jobs/{job_id}/abandon'
         params = build_params()
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params)
     elif action == 'get_result':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action get_result'}
         endpoint = f'/jobs/{job_id}/result'
         params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'get_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action get_tags'}
+        endpoint = f'/jobs/{job_id}/tags'
+        params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'add_tags':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action add_tags'}
         endpoint = f'/jobs/{job_id}/tags'
         params = build_params(tags=tags)
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
         body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    elif action == 'delete_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action delete_tags'}
+        endpoint = f'/jobs/{job_id}/tags/delete'
+        params = build_params()
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_result, add_tags'}
+        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags'}
 
 
 def register_tools(app, dct_client):

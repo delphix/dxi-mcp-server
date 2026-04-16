@@ -150,6 +150,7 @@ PATCH|/snapshots/{snapshotId}|update_snapshot
 POST|/snapshots/{snapshotId}/delete|delete_snapshot
 POST|/snapshots/{snapshotId}/unset_expiration|unset_snapshot_expiration
 GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
+GET|/snapshots/{snapshotId}/runtime|get_runtime
 POST|/snapshots/find_by_location|find_snapshot_by_location
 POST|/snapshots/find_by_timestamp|find_snapshot_by_timestamp
 GET|/snapshots/{snapshotId}/tags|get_snapshot_tags
@@ -274,10 +275,18 @@ POST|/environments/{environmentId}/enable|enable_environment
 POST|/environments/{environmentId}/disable|disable_environment
 POST|/environments/{environmentId}/refresh|refresh_environment
 POST|/environments/{environmentId}/hosts|list_environment_hosts
+POST|/environments/{environmentId}/hosts/{hostId}|get_environment_host
+PATCH|/environments/{environmentId}/hosts/{hostId}|update_environment_host
+DELETE|/environments/{environmentId}/hosts/{hostId}|delete_environment_host
 POST|/environments/{environmentId}/listeners|list_environment_listeners
 GET|/environments/{environmentId}/tags|get_environment_tags
 POST|/environments/{environmentId}/tags|add_environment_tags
 POST|/environments/{environmentId}/tags/delete|delete_environment_tags
+POST|/environments/compatible_repositories_by_snapshot|get_environment_compatible_repositories_by_snapshot
+POST|/environments/compatible_repositories_by_timestamp|get_environment_compatible_repositories_by_timestamp
+POST|/environments/compatible_repositories_by_location|get_environment_compatible_repositories_by_location
+PATCH|/environments/{environmentId}/repository/{repositoryId}|update_environment_repository
+DELETE|/environments/{environmentId}/repository/{repositoryId}|delete_environment_repository
 # Source Operations
 POST|/sources/search|search_sources
 GET|/sources|list_sources

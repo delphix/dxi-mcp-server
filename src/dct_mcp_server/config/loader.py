@@ -451,6 +451,7 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         "data_connection_tool": "dataset_endpoints_tool",
         "data_tool": "dataset_endpoints_tool",  # Merged tool
         "snapshot_bookmark_tool": "dataset_endpoints_tool",  # Merged tool
+        "timeflow_tool": "dataset_endpoints_tool",
         
         # Job operations
         "job_tool": "job_endpoints_tool",
