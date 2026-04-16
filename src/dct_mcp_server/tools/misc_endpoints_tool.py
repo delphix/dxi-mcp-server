@@ -601,6 +601,8 @@ def instance_tool(
         conf = check_confirmation('PATCH', endpoint, action, 'instance_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'oracle_services': oracle_services, 'logsync_enabled': logsync_enabled, 'logsync_mode': logsync_mode, 'logsync_interval': logsync_interval, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'tde_kms_pkcs11_config_path': tde_kms_pkcs11_config_path, 'description': description, 'diagnose_no_logging_faults': diagnose_no_logging_faults, 'environment_user_id': environment_user_id, 'rman_channels': rman_channels, 'files_per_set': files_per_set, 'encrypted_linking_enabled': encrypted_linking_enabled, 'compressed_linking_enabled': compressed_linking_enabled, 'bandwidth_limit': bandwidth_limit, 'number_of_connections': number_of_connections, 'backup_level_enabled': backup_level_enabled, 'check_logical': check_logical, 'db_username': db_username, 'db_password': db_password, 'non_sys_username': non_sys_username, 'non_sys_password': non_sys_password, 'okv_client_id': okv_client_id, 'instance_name': instance_name, 'instance_number': instance_number, 'instances': instances}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_cdb':
@@ -686,6 +688,8 @@ def instance_tool(
         conf = check_confirmation('PATCH', endpoint, action, 'instance_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'oracle_services': oracle_services, 'okv_client_id': okv_client_id, 'instance_name': instance_name, 'instance_number': instance_number, 'instances': instances, 'node_listeners': node_listeners, 'invoke_datapatch': invoke_datapatch, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'tde_key_identifier': tde_key_identifier, 'db_username': db_username, 'db_password': db_password, 'auto_restart': auto_restart, 'environment_user_id': environment_user_id, 'config_params': config_params, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'description': description, 'db_template_id': db_template_id}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_vcdb':
@@ -1317,6 +1321,8 @@ def staging_cdb_tool(
         conf = check_confirmation('PATCH', endpoint, action, 'staging_cdb_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'oracle_services': oracle_services, 'logsync_enabled': logsync_enabled, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'tde_kms_pkcs11_config_path': tde_kms_pkcs11_config_path, 'allow_auto_staging_restart_on_host_reboot': allow_auto_staging_restart_on_host_reboot, 'physical_standby': physical_standby, 'validate_snapshot_by_opening_db_in_read_mode': validate_snapshot_by_opening_db_in_read_mode, 'custom_env_variables_pairs': custom_env_variables_pairs, 'custom_env_variables_paths': custom_env_variables_paths, 'environment_id': environment_id, 'repository_id': repository_id, 'environment_user_id': environment_user_id, 'description': description, 'config_params': config_params, 'db_template_id': db_template_id, 'okv_client_id': okv_client_id, 'instance_name': instance_name, 'instance_number': instance_number}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete':
@@ -1357,6 +1363,8 @@ def staging_cdb_tool(
         conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_tags':
@@ -1708,6 +1716,8 @@ def cdb_dsource_tool(
         conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
@@ -2490,6 +2500,8 @@ def diagnostic_tool(
         conf = check_confirmation('POST', '/netbackup/connectivity/check', action, 'diagnostic_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'environment_id': environment_id, 'environment_user_id': environment_user_id, 'master_server_name': master_server_name, 'source_client_name': source_client_name}.items() if v is not None}
         return make_api_request('POST', '/netbackup/connectivity/check', params=params, json_body=body if body else None)
     elif action == 'check_commvault_connectivity':
@@ -2497,6 +2509,8 @@ def diagnostic_tool(
         conf = check_confirmation('POST', '/commvault/connectivity/check', action, 'diagnostic_tool', confirmed or False)
         if conf:
             return conf
+        if not environment_user_id:
+            environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'environment_id': environment_id, 'environment_user_id': environment_user_id, 'commserve_host_name': commserve_host_name, 'source_client_name': source_client_name, 'staging_client_name': staging_client_name}.items() if v is not None}
         return make_api_request('POST', '/commvault/connectivity/check', params=params, json_body=body if body else None)
     elif action == 'test_network_latency':

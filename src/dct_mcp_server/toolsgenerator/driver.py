@@ -1004,6 +1004,14 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     f"'{orig}': {snake}"
                     for orig, snake, is_json in body_params
                 ])
+                # If this action expects environment_user_id in its body, add
+                # a fallback: the AI frequently passes environment_user or
+                # environment_user_ref instead (both exist on this tool from
+                # other schemas).  Remap so the correct field reaches the API.
+                body_param_names = {snake for _, snake, _ in body_params}
+                if "environment_user_id" in body_param_names:
+                    func_code += "        if not environment_user_id:\n"
+                    func_code += "            environment_user_id = environment_user_ref or environment_user\n"
                 func_code += f"        body = {{k: v for k, v in {{{body_items}}}.items() if v is not None}}\n"
                 func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
             else:
