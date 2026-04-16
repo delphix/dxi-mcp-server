@@ -48,6 +48,25 @@ logger = logging.getLogger(__name__)
 # Format: {"vdb_tool": [{"method": "POST", "path": "/vdbs/search", "action": "search"}, ...]}
 TOOLS_BY_NAME = {}
 
+# Domain terminology hints injected into tool docstrings so the AI agent
+# correctly interprets Delphix-specific jargon used as verbs in user prompts.
+TOOL_DOMAIN_HINTS = {
+    "data_tool": (
+        "IMPORTANT — Delphix domain terminology:\n"
+        "  • \"dSource\" is often used as a VERB meaning \"create/link a dSource\" "
+        "(i.e. ingest a source database). When a user says "
+        "\"dSource database X\", they want to LINK a new dSource for database X, "
+        "NOT look up an existing dSource named X. Use the appropriate "
+        "dsource_link_* action (dsource_link_oracle, dsource_link_mssql, "
+        "dsource_link_ase, dsource_link_appdata) depending on the database type.\n"
+        "  • \"provision\" or \"spin up\" a VDB or \"create a golden image of a "
+        "VDB\" means creating a virtual database from a dSource or bookmark  —"
+        " use provision_by_timestamp, provision_by_snapshot, etc.\n"
+        "  • \"refresh\" a VDB means updating it with newer data from its parent — "
+        "use refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, etc."
+    ),
+}
+
 
 def load_api_endpoints_from_toolsets():
     """
@@ -743,7 +762,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     docstring_lines.append("")
     docstring_lines.append(f"This tool supports {len(actions_list)} actions: {', '.join(actions_list)}")
     docstring_lines.append("")
-    
+
+    # Inject domain terminology hints for tools that need them
+    if tool_name in TOOL_DOMAIN_HINTS:
+        docstring_lines.append(TOOL_DOMAIN_HINTS[tool_name])
+        docstring_lines.append("")
+
     # =========================================================================
     # DETAILED ACTION DOCUMENTATION
     # =========================================================================
