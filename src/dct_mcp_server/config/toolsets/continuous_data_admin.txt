@@ -266,14 +266,14 @@ GET|/environments/{environmentId}|get_environment
 POST|/environments|create_environment
 POST|/environments/{environmentId}/users|add_environment_users
 POST|/environments/{environmentId}/users/{userRef}/primary|set_environment_primary_user
-DELETE|/environments/{environmentId}/users/delete|delete_environment_users
+DELETE|/environments/{environmentId}/users/{userRef}|delete_environment_users
 PATCH|/environments/{environmentId}|update_environment
 DELETE|/environments/{environmentId}|delete_environment
 POST|/environments/{environmentId}/enable|enable_environment
 POST|/environments/{environmentId}/disable|disable_environment
 POST|/environments/{environmentId}/refresh|refresh_environment
-GET|/environments/{environmentId}/hosts|list_environment_hosts
-GET|/environments/{environmentId}/listeners|list_environment_listeners
+POST|/environments/{environmentId}/hosts|list_environment_hosts
+POST|/environments/{environmentId}/listeners|list_environment_listeners
 GET|/environments/{environmentId}/tags|get_environment_tags
 POST|/environments/{environmentId}/tags|add_environment_tags
 POST|/environments/{environmentId}/tags/delete|delete_environment_tags
@@ -281,7 +281,6 @@ POST|/environments/{environmentId}/tags/delete|delete_environment_tags
 POST|/sources/search|search_sources
 GET|/sources|list_sources
 GET|/sources/{sourceId}|get_source
-PATCH|/sources/{sourceId}|update_source
 DELETE|/sources/{sourceId}|delete_source
 POST|/sources/{sourceId}/jdbc-check|verify_source_jdbc_connection
 GET|/sources/{sourceId}/staging_compatible_repositories|get_source_compatible_repositories
