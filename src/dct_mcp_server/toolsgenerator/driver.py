@@ -764,6 +764,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     # Add all parameters as optional (since they depend on action)
     for param_name, param_info in sorted(all_params.items()):
         default_value = param_info.get("default")
+        # Database-type-specific params (e.g. recovery_model for MSSQL) must
+        # default to None so they are never sent for unrelated database types.
+        if param_info.get("toolkit_subcommand"):
+            default_value = None
         if default_value is not None:
             # Use the spec default in the signature so the tool behaves correctly even if the LLM omits it
             if isinstance(default_value, bool):

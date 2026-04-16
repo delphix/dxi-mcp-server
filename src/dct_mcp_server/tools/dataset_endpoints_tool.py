@@ -324,7 +324,7 @@ def data_tool(
     provision_parameters: Optional[dict] = None,
     rac_max_instance_lag: Optional[int] = None,
     recover_database: Optional[bool] = True,
-    recovery_model: Optional[str] = 'FULL',
+    recovery_model: Optional[str] = None,
     redo_diskgroup: Optional[str] = None,
     refresh_immediately: Optional[bool] = False,
     repository: Optional[str] = None,
