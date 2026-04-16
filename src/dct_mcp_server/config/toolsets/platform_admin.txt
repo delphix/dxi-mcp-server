@@ -34,6 +34,10 @@ GET|/environments/{environmentId}|get
 POST|/environments|create
 PATCH|/environments/{environmentId}|update
 DELETE|/environments/{environmentId}|delete
+POST|/environments/{environmentId}/users|add_environment_users
+POST|/environments/{environmentId}/users/{userRef}/primary|set_environment_primary_user
+PUT|/environments/{environmentId}/users/{userRef}|update_environment_users
+DELETE|/environments/{environmentId}/users/{userRef}|delete_environment_users
 POST|/environments/{environmentId}/enable|enable
 POST|/environments/{environmentId}/disable|disable
 POST|/environments/{environmentId}/refresh|refresh

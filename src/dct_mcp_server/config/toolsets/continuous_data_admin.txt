@@ -266,6 +266,7 @@ GET|/environments/{environmentId}|get_environment
 POST|/environments|create_environment
 POST|/environments/{environmentId}/users|add_environment_users
 POST|/environments/{environmentId}/users/{userRef}/primary|set_environment_primary_user
+PUT|/environments/{environmentId}/users/{userRef}|update_environment_users
 DELETE|/environments/{environmentId}/users/{userRef}|delete_environment_users
 PATCH|/environments/{environmentId}|update_environment
 DELETE|/environments/{environmentId}|delete_environment
