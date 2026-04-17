@@ -24,6 +24,9 @@ logger = get_logger(__name__)
 
 TOOLKIT_SCHEMAS_DIR = os.path.join(tempfile.gettempdir(), "dct_toolkit_schemas")
 
+_registered_display_name_uris: set[str] = set()
+_refresh_state: dict = {}
+
 
 # ---------------------------------------------------------------------------
 # Fetch & cache
@@ -74,8 +77,10 @@ async def fetch_and_cache_toolkit_schemas(dct_client) -> tuple[list[dict], dict[
                 or toolkit.get("name")
                 or toolkit_id
             )
-            display_name_to_id[display_name] = toolkit_id
-            logger.debug(f"Cached toolkit schema: {toolkit_id} (display_name={display_name})")
+            version = toolkit.get("version", "")
+            key = f"{display_name}@{version}" if version else display_name
+            display_name_to_id[key] = toolkit_id
+            logger.debug(f"Cached toolkit schema: {toolkit_id} (key={key})")
 
         response_metadata = response.get("response_metadata", {})
         cursor = response_metadata.get("next_cursor")
@@ -125,6 +130,24 @@ def list_cached_toolkit_ids() -> List[str]:
     ]
 
 
+def register_refresh_hook(app, dct_client) -> None:
+    """Store app and dct_client for use by refresh_toolkit_cache."""
+    _refresh_state['app'] = app
+    _refresh_state['dct_client'] = dct_client
+
+
+async def refresh_toolkit_cache() -> None:
+    """Re-fetch all toolkit schemas and re-register MCP resources. Non-fatal."""
+    if not _refresh_state.get('app') or not _refresh_state.get('dct_client'):
+        return
+    try:
+        _, new_map = await fetch_and_cache_toolkit_schemas(_refresh_state['dct_client'])
+        register_toolkit_resources(_refresh_state['app'], new_map)
+        logger.info("Toolkit cache refreshed successfully")
+    except Exception as e:
+        logger.warning(f"Toolkit cache refresh failed: {e}")
+
+
 # ---------------------------------------------------------------------------
 # MCP resource registration
 # ---------------------------------------------------------------------------
@@ -165,10 +188,28 @@ def register_toolkit_resources(
             return json.dumps({"error": f"Toolkit '{toolkit_id}' not found in cache."})
         return json.dumps(schema, indent=2)
 
-    # -- concrete resources keyed by display_name for prompt-driven discovery --
+    # -- concrete resources keyed by display_name@version for prompt-driven discovery --
     registered = 0
-    for display_name, toolkit_id in display_name_to_id.items():
-        safe_name = urllib.parse.quote(display_name, safe="-_.")
+    for key, toolkit_id in display_name_to_id.items():
+        if "@" in key:
+            display_part, version_part = key.rsplit("@", 1)
+            safe_display = urllib.parse.quote(display_part, safe="-_.")
+            safe_version = urllib.parse.quote(version_part, safe="-_.")
+            uri_str = f"toolkit://{safe_display}@{safe_version}/schema"
+            resource_name = (
+                f"toolkit_schema_{safe_display}_{safe_version}"
+                .replace(".", "_").replace("-", "_")
+            )
+            title_str = f"Toolkit: {display_part} v{version_part}"
+        else:
+            safe_name = urllib.parse.quote(key, safe="-_.")
+            uri_str = f"toolkit://{safe_name}/schema"
+            resource_name = f"toolkit_schema_{safe_name}"
+            title_str = f"Toolkit: {key}"
+
+        if uri_str in _registered_display_name_uris:
+            logger.debug(f"Skipping already-registered MCP resource: {uri_str}")
+            continue
 
         def _make_reader(tid: str):
             def _read() -> str:
@@ -179,11 +220,11 @@ def register_toolkit_resources(
             return _read
 
         resource = FunctionResource(
-            uri=AnyUrl(f"toolkit://{safe_name}/schema"),
-            name=f"toolkit_schema_{safe_name}",
-            title=f"Toolkit: {display_name}",
+            uri=AnyUrl(uri_str),
+            name=resource_name,
+            title=title_str,
             description=(
-                f"Schema for toolkit '{display_name}'. Contains "
+                f"Schema for toolkit '{key}'. Contains "
                 f"virtual_source_definition, linked_source_definition, "
                 f"discovery_definition, snapshot_parameters_definition, etc. "
                 f"Read this before AppData link or provision operations when "
@@ -193,8 +234,9 @@ def register_toolkit_resources(
             fn=_make_reader(toolkit_id),
         )
         app.add_resource(resource)
+        _registered_display_name_uris.add(uri_str)
         registered += 1
-        logger.debug(f"Registered MCP resource: toolkit://{safe_name}/schema -> {toolkit_id}")
+        logger.debug(f"Registered MCP resource: {uri_str} -> {toolkit_id}")
 
     logger.info(f"Registered {registered} toolkit schema MCP resource(s) by display_name")
     return registered
