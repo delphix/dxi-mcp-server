@@ -67,10 +67,9 @@ TOOL_DOMAIN_HINTS = {
     ),
 }
 
-# Actions whose request payload depends on a toolkit schema (e.g. AppData
-# link/provision).  When generating docstrings for these actions, we append
-# a hint telling the AI to read the pre-cached MCP resource instead of
-# calling toolkit_tool.
+# Actions whose request payload depends on a toolkit schema (AppData link/provision).
+# When generating docstrings for these actions, we append a hint telling the AI to
+# call toolkit_tool(action='search') to find the right toolkit before filling params.
 # Maps action name -> hint group.
 # "dsource" group: payload field is 'parameters' (and 'sync_parameters').
 # "provision" group: payload fields are 'appdata_source_params' and 'appdata_config_params'.
@@ -99,10 +98,13 @@ TOOLKIT_SCHEMA_HINT_DSOURCE = (
 )
 
 TOOLKIT_SCHEMA_HINT_PROVISION = (
-    _TOOLKIT_SCHEMA_HINT_COMMON
-    + "    Use the matching toolkit's 'virtual_source_definition.parameters' schema "
-    "to populate 'appdata_source_params', and 'source_config_definition.parameters' "
-    "for 'appdata_config_params'."
+    "IMPORTANT — AppData VDB only: "
+    "If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' "
+    "or 'appdata_config_params'), call toolkit_tool(action='search') first and filter "
+    "by the engine_id of the target environment. "
+    "Use the matching toolkit's 'virtual_source_definition.parameters' schema for "
+    "'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. "
+    "For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step."
 )
 
 
