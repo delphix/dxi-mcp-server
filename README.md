@@ -82,11 +82,11 @@ All configuration methods use these environment variables:
 - `DCT_TIMEOUT` - Request timeout in seconds (default: `30`)
 - `DCT_MAX_RETRIES` - Maximum retry attempts (default: `3`)
 - `DCT_TOOLSET` - Toolset to load (see [Toolsets](#toolsets) section below)
-  - `self_service` (default) - Basic VDB operations (6 tools)
+  - `self_service` (default) - Basic VDB operations (7 tools)
   - `auto` - Dynamic discovery with 5 meta-tools for runtime switching
-  - `self_service_provision` - Self-service + provisioning (12 tools)
-  - `continuous_data_admin` - Full DBA operations (14 tools)
-  - `platform_admin` - System administration (10 tools)
+  - `self_service_provision` - Self-service + provisioning (14 tools)
+  - `continuous_data_admin` - Full DBA operations (22 tools)
+  - `platform_admin` - System administration (13 tools)
   - `reporting_insights` - Read-only reporting (13 tools)
 - `IS_LOCAL_TELEMETRY_ENABLED` - Enable telemetry (`true`/`false`, default: `false`)
 
@@ -433,11 +433,11 @@ The server organizes tools into **persona-based toolsets** designed for specific
 
 | Toolset | Tools | Target Users | Description |
 |---------|-------|--------------|-------------|
-| `self_service` | 6 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop (default) |
+| `self_service` | 7 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop, timeflows (default) |
 | `auto` | 5 meta-tools | All users | Dynamic discovery mode - start minimal, enable toolsets at runtime |
-| `self_service_provision` | 12 tools | Dev leads | Self-service + VDB provisioning capabilities |
-| `continuous_data_admin` | 14 tools | DBAs | Full data management: VDBs, dSources, snapshots, policies |
-| `platform_admin` | 10 tools | Admins | System administration: engines, environments, IAM, reporting |
+| `self_service_provision` | 14 tools | Dev leads | Self-service + VDB provisioning, toolkits, templates, policies |
+| `continuous_data_admin` | 22 tools | DBAs | Full data management: VDBs, dSources, snapshots, policies, staging, toolkits, vaults, diagnostics |
+| `platform_admin` | 13 tools | Admins | System administration: engines, environments, IAM, toolkits, vaults, diagnostics, reporting |
 | `reporting_insights` | 13 tools | Managers | Read-only reporting and analytics |
 
 ### Auto Mode
@@ -527,7 +527,7 @@ vdb_tool(action="delete_vdb", vdbId="vdb-123", confirmed=True)
 
 The tools available depend on the configured toolset. Below are the grouped tools for each toolset.
 
-### continuous_data_admin Toolset (14 Tools)
+### continuous_data_admin Toolset (22 Tools)
 
 <details>
 <summary><strong><code>data_tool</code></strong> - VDB, VDB Group, and dSource operations (41 actions)</summary>
@@ -627,7 +627,63 @@ The tools available depend on the configured toolset. Below are the grouped tool
 - **Use cases**: Connection management
 </details>
 
-### self_service Toolset (6 Tools)
+<details>
+<summary><strong><code>toolkit_tool</code></strong> - AppData plugin toolkits</summary>
+
+- **Actions**: `search`, `get`, `upload`, `update`, `delete`
+- **Use cases**: AppData plugin schema discovery for dSource linking and VDB provisioning
+</details>
+
+<details>
+<summary><strong><code>staging_source_tool</code></strong> - Staging sources</summary>
+
+- **Actions**: `search`, `get`, `enable`, `disable`
+- **Use cases**: Staging source lifecycle
+</details>
+
+<details>
+<summary><strong><code>staging_cdb_tool</code></strong> - Staging CDBs</summary>
+
+- **Actions**: `search`, `get`, `delete`
+- **Use cases**: Oracle staging container database management
+</details>
+
+<details>
+<summary><strong><code>cdb_dsource_tool</code></strong> - Oracle CDB dSources</summary>
+
+- **Actions**: `search`, `get`, `link_cdb`, `detach`, `attach`
+- **Use cases**: Oracle multitenant CDB dSource operations
+</details>
+
+<details>
+<summary><strong><code>group_tool</code></strong> - Dataset groups</summary>
+
+- **Actions**: `search`, `get`, `create`, `update`, `delete`
+- **Use cases**: Dataset group organization
+</details>
+
+<details>
+<summary><strong><code>timeflow_tool</code></strong> - Timeflows</summary>
+
+- **Actions**: `search`, `get`, `delete`, `get_ranges`
+- **Use cases**: Timeline management and recovery points
+</details>
+
+<details>
+<summary><strong><code>vault_tool</code></strong> - HashiCorp vaults & Kerberos configs</summary>
+
+- **Actions**: `search_vaults`, `get_vault`, `create_vault`, `delete_vault`, `search_kerberos`, `get_kerberos`
+- **Use cases**: Credential vault and Kerberos authentication configuration
+</details>
+
+<details>
+<summary><strong><code>diagnostic_tool</code></strong> - Connectivity and diagnostic tests</summary>
+
+- **Actions**: `network_test`, `connectivity_check`, `file_mapping`
+- **Use cases**: Engine connectivity validation, network diagnostics, file mapping inspection
+</details>
+
+### self_service Toolset (7 Tools)
 
 <details>
 <summary><strong><code>vdb_tool</code></strong> - VDB operations (14 actions)</summary>
@@ -671,7 +727,14 @@ The tools available depend on the configured toolset. Below are the grouped tool
 - **Use cases**: Job monitoring, operation tracking
 </details>
 
-### self_service_provision Toolset (12 Tools)
+<details>
+<summary><strong><code>timeflow_tool</code></strong> - Timeflows (read-only)</summary>
+
+- **Actions**: `search`, `get`, `get_ranges`
+- **Use cases**: Timeline discovery, recovery point inspection
+</details>
+
+### self_service_provision Toolset (14 Tools)
 
 > Inherits all tools from `self_service` with extended capabilities, plus additional tools.
 
@@ -759,7 +822,21 @@ The tools available depend on the configured toolset. Below are the grouped tool
 - **Use cases**: Resource tagging and organization
 </details>
 
-### platform_admin Toolset (10 Tools)
+<details>
+<summary><strong><code>toolkit_tool</code></strong> - AppData plugin toolkits</summary>
+
+- **Actions**: `search`, `get`
+- **Use cases**: Schema discovery for AppData provisioning
+</details>
+
+<details>
+<summary><strong><code>timeflow_tool</code></strong> - Timeflows</summary>
+
+- **Actions**: `search`, `get`, `get_ranges`
+- **Use cases**: Timeline management, recovery point discovery
+</details>
+
+### platform_admin Toolset (13 Tools)
 
 <details>
 <summary><strong><code>job_tool</code></strong> - Job operations (3 actions)</summary>
@@ -829,6 +906,27 @@ The tools available depend on the configured toolset. Below are the grouped tool
 
 - **Actions**: `list_llm_models`, `get_llm_model`, `upload_llm_model`, `get_gateway_config`, `update_gateway_config`, `enable_ai`, `get_properties`, `update_properties`, `get_telemetry_config`, `update_telemetry_config`, `get_smtp_config`, `update_smtp_config`, `validate_smtp_config`, `get_ldap_config`, `update_ldap_config`, `validate_ldap_config`, `get_saml_config`, `update_saml_config`, `get_proxy_config`, `update_proxy_config`
 - **Use cases**: AI services, SMTP, LDAP, SAML, proxy configuration
+</details>
+
+<details>
+<summary><strong><code>toolkit_tool</code></strong> - AppData plugin toolkits</summary>
+
+- **Actions**: `search`, `get`, `upload`, `update`, `delete`
+- **Use cases**: AppData plugin lifecycle management
+</details>
+
+<details>
+<summary><strong><code>vault_tool</code></strong> - HashiCorp vaults & Kerberos configs</summary>
+
+- **Actions**: `search_vaults`, `get_vault`, `create_vault`, `delete_vault`, `search_kerberos`, `get_kerberos`
+- **Use cases**: Credential vault and Kerberos authentication configuration
+</details>
+
+<details>
+<summary><strong><code>diagnostic_tool</code></strong> - Connectivity and diagnostic tests</summary>
+
+- **Actions**: `network_test`, `connectivity_check`, `file_mapping`
+- **Use cases**: Engine connectivity validation, network diagnostics
 </details>
 
 ### reporting_insights Toolset (13 Tools)
@@ -1247,8 +1345,17 @@ dxi-mcp-server/
         │   ├── core/           # Tool generation framework
         │   │   ├── meta_tools.py   # Auto mode meta-tools
         │   │   └── tool_factory.py # Dynamic tool generator
-        │   ├── dataset_endpoints_tool.py   # Dataset endpoint tools
-        │   └── job_endpoints_tool.py       # Job endpoint tools
+        │   ├── dataset_endpoints_tool.py   # VDBs, VDB groups, dSources, snapshots, bookmarks
+        │   ├── engine_endpoints_tool.py    # Engine management
+        │   ├── environment_endpoints_tool.py  # Environments, sources, toolkits
+        │   ├── iam_endpoints_tool.py       # Accounts, roles, access-groups, tags
+        │   ├── job_endpoints_tool.py       # Job monitoring
+        │   ├── misc_endpoints_tool.py      # Admin/platform, vaults, diagnostics
+        │   ├── policy_endpoints_tool.py    # Replication and virtualization policies
+        │   ├── reports_endpoints_tool.py   # Reporting and analytics
+        │   └── template_endpoints_tool.py  # Database and hook templates
+        ├── toolsgenerator/
+        │   └── driver.py       # OpenAPI-driven tool code generator
         └── icons/
             └── logo-delphixmcp-reg.png
 ```
