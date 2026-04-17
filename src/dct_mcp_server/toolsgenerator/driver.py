@@ -101,7 +101,7 @@ TOOLKIT_SCHEMA_HINT_PROVISION = (
     "IMPORTANT — AppData VDB only: "
     "If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' "
     "or 'appdata_config_params'), call toolkit_tool(action='search') first and filter "
-    "by the engine_id of the target environment. "
+    "by the engine_id of the target environment, and use environment_user_id. "
     "Use the matching toolkit's 'virtual_source_definition.parameters' schema for "
     "'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. "
     "For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step."
@@ -281,10 +281,30 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     \"\"\"Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed.\"\"\"
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
@@ -292,7 +312,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
         }
     return None
 
@@ -785,6 +807,13 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # default to None so they are never sent for unrelated database types.
         if param_info.get("toolkit_subcommand"):
             default_value = None
+        # Body params must default to None in the signature — baking the spec
+        # default in would send the field for every call, even when the caller
+        # omits it, which breaks DB-type-gated fields like
+        # availability_group_backup_policy (MSSql-only). The spec default is
+        # still surfaced in the docstring description.
+        if param_info.get("param_type") == "body":
+            default_value = None
         if default_value is not None:
             # Use the spec default in the signature so the tool behaves correctly even if the LLM omits it
             if isinstance(default_value, bool):
@@ -1006,21 +1035,16 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             func_code += ", ".join([f"{p}={p}" for p in query_params])
         func_code += ")\n"
 
-        # Add confirmation check before API request
+        # Build request body BEFORE confirmation check so the review payload
+        # can surface the exact values that will be sent to DCT.
         method = details["method"]
-        func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False)\n"
-        func_code += f"        if conf:\n"
-        func_code += f"            return conf\n"
-
-        # Handle request body
+        body_var = "None"
         if details["has_filter"] and method == "POST":
             func_code += "        body = {'filter_expression': filter_expression} if filter_expression else {}\n"
-            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
+            body_var = "body"
         elif method in ["POST", "PUT", "PATCH"]:
-            # Collect body params - use the body_params stored in action_details
             body_params = details.get("body_params", [])
             if body_params:
-                # Build body dict with original API names as keys and snake_case vars as values
                 body_items = ", ".join([
                     f"'{orig}': {snake}"
                     for orig, snake, is_json in body_params
@@ -1030,9 +1054,19 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     func_code += "        if not environment_user_id:\n"
                     func_code += "            environment_user_id = environment_user_ref or environment_user\n"
                 func_code += f"        body = {{k: v for k, v in {{{body_items}}}.items() if v is not None}}\n"
-                func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
-            else:
-                func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params)\n"
+                body_var = "body"
+
+        # Confirmation check — include params + body so the LLM can render a
+        # review table for provisioning / linking / snapshot workflows.
+        func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False, request_params=params, request_body={body_var})\n"
+        func_code += f"        if conf:\n"
+        func_code += f"            return conf\n"
+
+        # Dispatch the request
+        if details["has_filter"] and method == "POST":
+            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
+        elif method in ["POST", "PUT", "PATCH"] and body_var == "body":
+            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
         else:
             func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params)\n"
     

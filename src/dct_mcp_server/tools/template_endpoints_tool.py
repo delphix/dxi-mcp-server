@@ -29,10 +29,30 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
@@ -40,7 +60,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
         }
     return None
 
@@ -92,7 +114,7 @@ def database_template_tool(
     filter_expression: Optional[str] = None,
     key: Optional[str] = None,
     limit: Optional[int] = 100,
-    make_current_account_owner: Optional[bool] = True,
+    make_current_account_owner: Optional[bool] = None,
     name: Optional[str] = None,
     parameters: Optional[dict] = None,
     sort: Optional[str] = None,
@@ -251,43 +273,43 @@ def database_template_tool(
     # Route to appropriate API based on action
     if action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/database-templates/search', action, 'database_template_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/database-templates/search', action, 'database_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/database-templates/search', params=params, json_body=body)
     elif action == 'get':
         if database_template_id is None:
             return {'error': 'Missing required parameter: database_template_id for action get'}
         endpoint = f'/database-templates/{database_template_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'database_template_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'database_template_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'create':
         params = build_params(name=name, source_type=source_type)
-        conf = check_confirmation('POST', '/database-templates', action, 'database_template_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'description': description, 'source_type': source_type, 'parameters': parameters, 'make_current_account_owner': make_current_account_owner, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', '/database-templates', action, 'database_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'description': description, 'source_type': source_type, 'parameters': parameters, 'make_current_account_owner': make_current_account_owner, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', '/database-templates', params=params, json_body=body if body else None)
     elif action == 'update':
         if database_template_id is None:
             return {'error': 'Missing required parameter: database_template_id for action update'}
         endpoint = f'/database-templates/{database_template_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'database_template_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'description': description, 'source_type': source_type, 'parameters': parameters}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'database_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'description': description, 'source_type': source_type, 'parameters': parameters}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete':
         if database_template_id is None:
             return {'error': 'Missing required parameter: database_template_id for action delete'}
         endpoint = f'/database-templates/{database_template_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'database_template_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'database_template_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
@@ -296,7 +318,7 @@ def database_template_tool(
             return {'error': 'Missing required parameter: database_template_id for action get_tags'}
         endpoint = f'/database-templates/{database_template_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'database_template_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'database_template_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -305,20 +327,20 @@ def database_template_tool(
             return {'error': 'Missing required parameter: database_template_id for action add_tags'}
         endpoint = f'/database-templates/{database_template_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'database_template_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'database_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if database_template_id is None:
             return {'error': 'Missing required parameter: database_template_id for action delete_tags'}
         endpoint = f'/database-templates/{database_template_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'database_template_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'database_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search, get, create, update, delete, get_tags, add_tags, delete_tags'}
@@ -335,7 +357,7 @@ def hook_template_tool(
     key: Optional[str] = None,
     limit: Optional[int] = 100,
     name: Optional[str] = None,
-    shell: Optional[str] = 'bash',
+    shell: Optional[str] = None,
     sort: Optional[str] = None,
     tags: Optional[list] = None,
     value: Optional[str] = None,
@@ -495,43 +517,43 @@ def hook_template_tool(
     # Route to appropriate API based on action
     if action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/hook-templates/search', action, 'hook_template_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/hook-templates/search', action, 'hook_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/hook-templates/search', params=params, json_body=body)
     elif action == 'get':
         if hook_template_id is None:
             return {'error': 'Missing required parameter: hook_template_id for action get'}
         endpoint = f'/hook-templates/{hook_template_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'hook_template_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'hook_template_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'create':
         params = build_params(name=name, command=command)
-        conf = check_confirmation('POST', '/hook-templates', action, 'hook_template_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'description': description, 'shell': shell, 'command': command, 'credentials_env_vars': credentials_env_vars, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', '/hook-templates', action, 'hook_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'description': description, 'shell': shell, 'command': command, 'credentials_env_vars': credentials_env_vars, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', '/hook-templates', params=params, json_body=body if body else None)
     elif action == 'update':
         if hook_template_id is None:
             return {'error': 'Missing required parameter: hook_template_id for action update'}
         endpoint = f'/hook-templates/{hook_template_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'hook_template_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'description': description, 'shell': shell, 'command': command, 'credentials_env_vars': credentials_env_vars}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'hook_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'description': description, 'shell': shell, 'command': command, 'credentials_env_vars': credentials_env_vars}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete':
         if hook_template_id is None:
             return {'error': 'Missing required parameter: hook_template_id for action delete'}
         endpoint = f'/hook-templates/{hook_template_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'hook_template_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'hook_template_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
@@ -540,7 +562,7 @@ def hook_template_tool(
             return {'error': 'Missing required parameter: hook_template_id for action get_tags'}
         endpoint = f'/hook-templates/{hook_template_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'hook_template_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'hook_template_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -549,20 +571,20 @@ def hook_template_tool(
             return {'error': 'Missing required parameter: hook_template_id for action add_tags'}
         endpoint = f'/hook-templates/{hook_template_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'hook_template_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'hook_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if hook_template_id is None:
             return {'error': 'Missing required parameter: hook_template_id for action delete_tags'}
         endpoint = f'/hook-templates/{hook_template_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'hook_template_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'hook_template_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search, get, create, update, delete, get_tags, add_tags, delete_tags'}

@@ -29,10 +29,30 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
@@ -40,7 +60,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
         }
     return None
 
@@ -89,17 +111,17 @@ def reporting_tool(
     cron_expression: Optional[str] = None,
     cursor: Optional[str] = None,
     dataset_ids: Optional[list] = None,
-    enabled: Optional[bool] = True,
+    enabled: Optional[bool] = None,
     end: Optional[str] = None,
     engine_id: Optional[str] = None,
     fault_id: Optional[str] = None,
     fault_ids: Optional[list] = None,
     file_format: Optional[str] = None,
     filter_expression: Optional[str] = None,
-    ignore: Optional[bool] = False,
+    ignore: Optional[bool] = None,
     interval: Optional[int] = None,
     limit: Optional[int] = 10000,
-    make_current_account_owner: Optional[bool] = True,
+    make_current_account_owner: Optional[bool] = None,
     message: Optional[str] = None,
     object_id: Optional[str] = None,
     recipients: Optional[list] = None,
@@ -539,115 +561,115 @@ def reporting_tool(
     # Route to appropriate API based on action
     if action == 'search_storage_savings_report':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/reporting/storage-savings-report/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/reporting/storage-savings-report/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/reporting/storage-savings-report/search', params=params, json_body=body)
     elif action == 'search_vdb_inventory_report':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/reporting/vdb-inventory-report/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/reporting/vdb-inventory-report/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/reporting/vdb-inventory-report/search', params=params, json_body=body)
     elif action == 'get_dataset_performance_analytics':
         params = build_params(dataset_ids=dataset_ids, start=start, end=end, interval=interval)
-        conf = check_confirmation('POST', '/reporting/dataset-performance-analytics', action, 'reporting_tool', confirmed or False)
+        body = {k: v for k, v in {'dataset_ids': dataset_ids, 'start': start, 'end': end, 'interval': interval}.items() if v is not None}
+        conf = check_confirmation('POST', '/reporting/dataset-performance-analytics', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'dataset_ids': dataset_ids, 'start': start, 'end': end, 'interval': interval}.items() if v is not None}
         return make_api_request('POST', '/reporting/dataset-performance-analytics', params=params, json_body=body if body else None)
     elif action == 'search_scheduled_reports':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/reporting/schedule/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/reporting/schedule/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/reporting/schedule/search', params=params, json_body=body)
     elif action == 'get_scheduled_report':
         if report_id is None:
             return {'error': 'Missing required parameter: report_id for action get_scheduled_report'}
         endpoint = f'/reporting/schedule/{report_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'create_scheduled_report':
         params = build_params(report_type=report_type, cron_expression=cron_expression, message=message, file_format=file_format, enabled=enabled, recipients=recipients)
-        conf = check_confirmation('POST', '/reporting/schedule', action, 'reporting_tool', confirmed or False)
+        body = {k: v for k, v in {'report_type': report_type, 'cron_expression': cron_expression, 'time_zone': time_zone, 'message': message, 'file_format': file_format, 'enabled': enabled, 'recipients': recipients, 'sort_column': sort_column, 'row_count': row_count, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        conf = check_confirmation('POST', '/reporting/schedule', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'report_type': report_type, 'cron_expression': cron_expression, 'time_zone': time_zone, 'message': message, 'file_format': file_format, 'enabled': enabled, 'recipients': recipients, 'sort_column': sort_column, 'row_count': row_count, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
         return make_api_request('POST', '/reporting/schedule', params=params, json_body=body if body else None)
     elif action == 'delete_scheduled_report':
         if report_id is None:
             return {'error': 'Missing required parameter: report_id for action delete_scheduled_report'}
         endpoint = f'/reporting/schedule/{report_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
     elif action == 'get_license':
         params = build_params()
-        conf = check_confirmation('GET', '/management/license', action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('GET', '/management/license', action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/management/license', params=params)
     elif action == 'get_virtualization_jobs_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/virtualization-jobs/history', action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('GET', '/virtualization-jobs/history', action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/virtualization-jobs/history', params=params)
     elif action == 'search_virtualization_jobs_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/virtualization-jobs/history/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/virtualization-jobs/history/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/virtualization-jobs/history/search', params=params, json_body=body)
     elif action == 'get_virtualization_actions_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/virtualization-actions/history', action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('GET', '/virtualization-actions/history', action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/virtualization-actions/history', params=params)
     elif action == 'search_virtualization_actions_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/virtualization-actions/history/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/virtualization-actions/history/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/virtualization-actions/history/search', params=params, json_body=body)
     elif action == 'get_virtualization_faults_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/virtualization-faults/history', action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('GET', '/virtualization-faults/history', action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/virtualization-faults/history', params=params)
     elif action == 'search_virtualization_faults_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/virtualization-faults/history/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/virtualization-faults/history/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/virtualization-faults/history/search', params=params, json_body=body)
     elif action == 'resolve_or_ignore_faults':
         params = build_params()
-        conf = check_confirmation('POST', '/virtualization-faults/resolveOrIgnore', action, 'reporting_tool', confirmed or False)
+        body = {k: v for k, v in {'engine_id': engine_id, 'ignore': ignore, 'fault_ids': fault_ids}.items() if v is not None}
+        conf = check_confirmation('POST', '/virtualization-faults/resolveOrIgnore', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'engine_id': engine_id, 'ignore': ignore, 'fault_ids': fault_ids}.items() if v is not None}
         return make_api_request('POST', '/virtualization-faults/resolveOrIgnore', params=params, json_body=body if body else None)
     elif action == 'resolve_all_engine_faults':
         if engine_id is None:
             return {'error': 'Missing required parameter: engine_id for action resolve_all_engine_faults'}
         endpoint = f'/virtualization-faults/{engine_id}/resolveAll'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -656,23 +678,23 @@ def reporting_tool(
             return {'error': 'Missing required parameter: fault_id for action resolve_fault'}
         endpoint = f'/virtualization-fault/{fault_id}/resolve'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'reporting_tool', confirmed or False)
+        body = {k: v for k, v in {'ignore': ignore, 'resolution_comments': resolution_comments}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'ignore': ignore, 'resolution_comments': resolution_comments}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_virtualization_alerts_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/virtualization-alerts/history', action, 'reporting_tool', confirmed or False)
+        conf = check_confirmation('GET', '/virtualization-alerts/history', action, 'reporting_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/virtualization-alerts/history', params=params)
     elif action == 'search_virtualization_alerts_history':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/virtualization-alerts/history/search', action, 'reporting_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/virtualization-alerts/history/search', action, 'reporting_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/virtualization-alerts/history/search', params=params, json_body=body)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search_storage_savings_report, search_vdb_inventory_report, get_dataset_performance_analytics, search_scheduled_reports, get_scheduled_report, create_scheduled_report, delete_scheduled_report, get_license, get_virtualization_jobs_history, search_virtualization_jobs_history, get_virtualization_actions_history, search_virtualization_actions_history, get_virtualization_faults_history, search_virtualization_faults_history, resolve_or_ignore_faults, resolve_all_engine_faults, resolve_fault, get_virtualization_alerts_history, search_virtualization_alerts_history'}

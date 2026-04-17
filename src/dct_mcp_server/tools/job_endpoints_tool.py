@@ -29,10 +29,30 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
@@ -40,7 +60,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
         }
     return None
 
@@ -241,17 +263,17 @@ def job_tool(
     # Route to appropriate API based on action
     if action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/jobs/search', action, 'job_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/jobs/search', action, 'job_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/jobs/search', params=params, json_body=body)
     elif action == 'get':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action get'}
         endpoint = f'/jobs/{job_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -260,7 +282,7 @@ def job_tool(
             return {'error': 'Missing required parameter: job_id for action abandon'}
         endpoint = f'/jobs/{job_id}/abandon'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -269,7 +291,7 @@ def job_tool(
             return {'error': 'Missing required parameter: job_id for action get_result'}
         endpoint = f'/jobs/{job_id}/result'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -278,7 +300,7 @@ def job_tool(
             return {'error': 'Missing required parameter: job_id for action get_tags'}
         endpoint = f'/jobs/{job_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -287,20 +309,20 @@ def job_tool(
             return {'error': 'Missing required parameter: job_id for action add_tags'}
         endpoint = f'/jobs/{job_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action delete_tags'}
         endpoint = f'/jobs/{job_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags'}

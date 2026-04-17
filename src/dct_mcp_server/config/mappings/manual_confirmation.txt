@@ -67,3 +67,29 @@ POST|/environments/{environmentId}/disable|standard|Disabling environment will a
 PATCH|/vdbs/{vdbId}|standard|Updating VDB configuration. Confirm?
 PATCH|/dsources/{dsourceId}|standard|Updating dSource configuration. Confirm?
 PATCH|/environments/{environmentId}|standard|Updating environment configuration. Confirm?
+
+# ============================================
+# RULE 5: Provisioning Workflows (REVIEW & SUBMIT)
+# Elevated — review parameters as a table before submitting
+# ============================================
+POST|/vdbs/provision_by_timestamp|elevated|Review parameters below. Proceed with provisioning VDB by timestamp?
+POST|/vdbs/provision_by_snapshot|elevated|Review parameters below. Proceed with provisioning VDB by snapshot?
+POST|/vdbs/provision_from_bookmark|elevated|Review parameters below. Proceed with provisioning VDB from bookmark?
+POST|/vdbs/provision_by_location|elevated|Review parameters below. Proceed with provisioning VDB by location?
+POST|/vdbs/empty_vdb|elevated|Review parameters below. Proceed with provisioning an empty VDB?
+POST|/vdb-groups/provision_from_bookmark|elevated|Review parameters below. Proceed with provisioning VDB group from bookmark?
+
+# ============================================
+# RULE 6: dSource Linking Workflows (REVIEW & SUBMIT)
+# ============================================
+POST|/dsources/oracle|elevated|Review parameters below. Proceed with linking Oracle dSource?
+POST|/dsources/oracle/staging-push|elevated|Review parameters below. Proceed with linking Oracle staging-push dSource?
+POST|/dsources/mssql|elevated|Review parameters below. Proceed with linking MSSql dSource?
+POST|/dsources/mssql/staging-push|elevated|Review parameters below. Proceed with linking MSSql staging-push dSource?
+POST|/dsources/ase|elevated|Review parameters below. Proceed with linking ASE/Sybase dSource?
+POST|/dsources/appdata|elevated|Review parameters below. Proceed with linking AppData dSource?
+
+# ============================================
+# RULE 7: dSource Snapshot Creation (STANDARD)
+# ============================================
+POST|/dsources/{dsourceId}/snapshots|standard|Review parameters below. Proceed with creating a snapshot of dSource?

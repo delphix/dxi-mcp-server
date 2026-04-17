@@ -29,10 +29,30 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
@@ -40,7 +60,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
         }
     return None
 
@@ -86,7 +108,7 @@ def build_params(**kwargs):
 @log_tool_execution
 def data_tool(
     action: str,  # One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
-    abort: Optional[bool] = False,
+    abort: Optional[bool] = None,
     account_id: Optional[int] = None,
     additional_mount_points: Optional[list] = None,
     allow_auto_staging_restart_on_host_reboot: Optional[bool] = None,
@@ -96,31 +118,31 @@ def data_tool(
     archive_directory: Optional[str] = None,
     archive_log: Optional[bool] = None,
     ase_backup_files: Optional[list] = None,
-    attempt_cleanup: Optional[bool] = True,
-    attempt_start: Optional[bool] = True,
+    attempt_cleanup: Optional[bool] = None,
+    attempt_start: Optional[bool] = None,
     auto_restart: Optional[bool] = None,
     auto_select_repository: Optional[bool] = None,
-    auto_staging_restart: Optional[bool] = False,
+    auto_staging_restart: Optional[bool] = None,
     auxiliary_template_id: Optional[str] = None,
-    availability_group_backup_policy: Optional[str] = 'primary',
-    backup_frequency_minutes: Optional[int] = 30,
+    availability_group_backup_policy: Optional[str] = None,
+    backup_frequency_minutes: Optional[int] = None,
     backup_host: Optional[str] = None,
     backup_host_user: Optional[str] = None,
     backup_level_enabled: Optional[bool] = None,
     backup_server_name: Optional[str] = None,
-    bandwidth_limit: Optional[int] = 0,
+    bandwidth_limit: Optional[int] = None,
     bookmark_id: Optional[str] = None,
     cache_priority: Optional[str] = None,
     cdb_id: Optional[str] = None,
     cdb_tde_keystore_password: Optional[str] = None,
     cdc_on_provision: Optional[bool] = None,
-    check_logical: Optional[bool] = False,
-    cleanup_target_container: Optional[bool] = False,
-    cleanup_target_physical_files: Optional[bool] = False,
+    check_logical: Optional[bool] = None,
+    cleanup_target_container: Optional[bool] = None,
+    cleanup_target_physical_files: Optional[bool] = None,
     cluster_node_ids: Optional[list] = None,
     cluster_node_instances: Optional[list] = None,
-    compressed_linking_enabled: Optional[bool] = True,
-    compression_enabled: Optional[bool] = False,
+    compressed_linking_enabled: Optional[bool] = None,
+    compression_enabled: Optional[bool] = None,
     config_params: Optional[dict] = None,
     config_settings_stg: Optional[list] = None,
     configure_clone: Optional[list] = None,
@@ -147,28 +169,28 @@ def data_tool(
     db_hashicorp_vault_secret_path: Optional[str] = None,
     db_hashicorp_vault_username_key: Optional[str] = None,
     db_password: Optional[str] = None,
-    db_state: Optional[str] = 'RESTORING',
+    db_state: Optional[str] = None,
     db_unique_name: Optional[str] = None,
     db_user: Optional[str] = None,
     db_username: Optional[str] = None,
     db_vault: Optional[str] = None,
     db_vault_username: Optional[str] = None,
     default_data_diskgroup: Optional[str] = None,
-    delete_all_dependent_vdbs: Optional[bool] = False,
-    delphix_managed_backup_compression_enabled: Optional[bool] = False,
-    delphix_managed_backup_policy: Optional[str] = 'primary',
+    delete_all_dependent_vdbs: Optional[bool] = None,
+    delphix_managed_backup_compression_enabled: Optional[bool] = None,
+    delphix_managed_backup_policy: Optional[str] = None,
     description: Optional[str] = None,
-    diagnose_no_logging_faults: Optional[bool] = True,
+    diagnose_no_logging_faults: Optional[bool] = None,
     disable_commvault_config: Optional[bool] = None,
     disable_netbackup_config: Optional[bool] = None,
-    do_not_resume: Optional[bool] = False,
-    double_sync: Optional[bool] = False,
-    drop_and_recreate_devices: Optional[bool] = False,
+    do_not_resume: Optional[bool] = None,
+    double_sync: Optional[bool] = None,
+    drop_and_recreate_devices: Optional[bool] = None,
     dsource_id: Optional[str] = None,
     dump_credentials: Optional[str] = None,
-    dump_history_file_enabled: Optional[bool] = False,
-    enable_cdc: Optional[bool] = False,
-    encrypted_linking_enabled: Optional[bool] = False,
+    dump_history_file_enabled: Optional[bool] = None,
+    enable_cdc: Optional[bool] = None,
+    encrypted_linking_enabled: Optional[bool] = None,
     encryption_key: Optional[str] = None,
     engine_id: Optional[str] = None,
     environment_id: Optional[str] = None,
@@ -184,7 +206,7 @@ def data_tool(
     external_directory: Optional[str] = None,
     external_file_path: Optional[str] = None,
     external_managed_shared_backup_locations: Optional[list] = None,
-    external_managed_validate_sync_mode: Optional[str] = 'TRANSACTION_LOG',
+    external_managed_validate_sync_mode: Optional[str] = None,
     external_netbackup_config_master_name: Optional[str] = None,
     external_netbackup_config_params: Optional[dict] = None,
     external_netbackup_config_source_client_name: Optional[str] = None,
@@ -204,36 +226,36 @@ def data_tool(
     file_mapping_rules: Optional[str] = None,
     files_for_full_backup: Optional[list] = None,
     files_for_partial_full_backup: Optional[list] = None,
-    files_per_set: Optional[int] = 5,
+    files_per_set: Optional[int] = None,
     filter_expression: Optional[str] = None,
     follow_symlinks: Optional[list] = None,
-    force: Optional[bool] = False,
-    force_full_backup: Optional[bool] = False,
+    force: Optional[bool] = None,
+    force_full_backup: Optional[bool] = None,
     group_id: Optional[str] = None,
     hooks: Optional[dict] = None,
     instance_number: Optional[int] = None,
     instances: Optional[list] = None,
     invoke_datapatch: Optional[bool] = None,
     is_incremental_v2p: Optional[bool] = None,
-    is_refresh_to_nearest: Optional[bool] = False,
+    is_refresh_to_nearest: Optional[bool] = None,
     jdbc_connection_string: Optional[str] = None,
     key: Optional[str] = None,
     limit: Optional[int] = 100,
-    link_now: Optional[bool] = False,
-    link_type: Optional[str] = 'AppDataDirect',
+    link_now: Optional[bool] = None,
+    link_type: Optional[str] = None,
     listener_ids: Optional[list] = None,
     load_backup_path: Optional[str] = None,
     location: Optional[str] = None,
-    log_sync_enabled: Optional[bool] = False,
-    log_sync_interval: Optional[int] = 5,
-    log_sync_mode: Optional[str] = 'UNDEFINED',
+    log_sync_enabled: Optional[bool] = None,
+    log_sync_interval: Optional[int] = None,
+    log_sync_mode: Optional[str] = None,
     logsync_enabled: Optional[bool] = None,
     logsync_interval: Optional[int] = None,
     logsync_mode: Optional[str] = None,
-    make_current_account_owner: Optional[bool] = True,
+    make_current_account_owner: Optional[bool] = None,
     masked: Optional[bool] = None,
-    max_allowed_backups_pending_restore: Optional[int] = 5,
-    mirroring_state: Optional[str] = 'NONE',
+    max_allowed_backups_pending_restore: Optional[int] = None,
+    mirroring_state: Optional[str] = None,
     mode: Optional[str] = None,
     mount_base: Optional[str] = None,
     mount_point: Optional[str] = None,
@@ -271,13 +293,13 @@ def data_tool(
     non_sys_username: Optional[str] = None,
     non_sys_vault: Optional[str] = None,
     non_sys_vault_username: Optional[str] = None,
-    number_of_connections: Optional[int] = 1,
+    number_of_connections: Optional[int] = None,
     okv_client_id: Optional[str] = None,
     online_log_groups: Optional[int] = None,
     online_log_size: Optional[int] = None,
     open_reset_logs: Optional[bool] = None,
     operations: Optional[list] = None,
-    operations_post_v2_p: Optional[bool] = False,
+    operations_post_v2_p: Optional[bool] = None,
     ops_post_sync: Optional[list] = None,
     ops_pre_log_sync: Optional[list] = None,
     ops_pre_sync: Optional[list] = None,
@@ -299,7 +321,7 @@ def data_tool(
     parent_tde_keystore_path: Optional[str] = None,
     pdb_name: Optional[str] = None,
     permission: Optional[str] = None,
-    physical_standby: Optional[bool] = False,
+    physical_standby: Optional[bool] = None,
     post_refresh: Optional[list] = None,
     post_rollback: Optional[list] = None,
     post_script: Optional[str] = None,
@@ -311,7 +333,7 @@ def data_tool(
     postgres_port: Optional[int] = None,
     ppt_host_user: Optional[str] = None,
     ppt_repository: Optional[str] = None,
-    pre_provisioning_enabled: Optional[bool] = False,
+    pre_provisioning_enabled: Optional[bool] = None,
     pre_refresh: Optional[list] = None,
     pre_rollback: Optional[list] = None,
     pre_script: Optional[str] = None,
@@ -323,22 +345,22 @@ def data_tool(
     privileged_os_user: Optional[str] = None,
     provision_parameters: Optional[dict] = None,
     rac_max_instance_lag: Optional[int] = None,
-    recover_database: Optional[bool] = True,
+    recover_database: Optional[bool] = None,
     recovery_model: Optional[str] = None,
     redo_diskgroup: Optional[str] = None,
-    refresh_immediately: Optional[bool] = False,
+    refresh_immediately: Optional[bool] = None,
     repository: Optional[str] = None,
     repository_id: Optional[str] = None,
     retention_policy_id: Optional[str] = None,
-    rman_channels: Optional[int] = 8,
-    rman_channels_for_incremental_backup: Optional[int] = 8,
-    rman_file_section_size_in_gb: Optional[int] = 0,
-    rman_file_section_size_in_gb_for_incremental_backup: Optional[int] = 0,
-    rman_files_per_set_for_incremental_backup: Optional[int] = 5,
-    rman_rate_in__m_b: Optional[int] = 0,
+    rman_channels: Optional[int] = None,
+    rman_channels_for_incremental_backup: Optional[int] = None,
+    rman_file_section_size_in_gb: Optional[int] = None,
+    rman_file_section_size_in_gb_for_incremental_backup: Optional[int] = None,
+    rman_files_per_set_for_incremental_backup: Optional[int] = None,
+    rman_rate_in__m_b: Optional[int] = None,
     script_directory: Optional[str] = None,
     sid: Optional[str] = None,
-    skip_space_check: Optional[bool] = False,
+    skip_space_check: Optional[bool] = None,
     snapshot_id: Optional[str] = None,
     snapshot_policy_id: Optional[str] = None,
     sort: Optional[str] = None,
@@ -358,8 +380,8 @@ def data_tool(
     staging_repository: Optional[str] = None,
     sync_parameters: Optional[dict] = None,
     sync_policy_id: Optional[str] = None,
-    sync_strategy: Optional[str] = 'new_backup',
-    sync_strategy_managed_type: Optional[str] = 'external',
+    sync_strategy: Optional[str] = None,
+    sync_strategy_managed_type: Optional[str] = None,
     tags: Optional[list] = None,
     target_directory: Optional[str] = None,
     target_group_id: Optional[str] = None,
@@ -379,9 +401,9 @@ def data_tool(
     unique_name: Optional[str] = None,
     use_absolute_path_for_data_files: Optional[bool] = None,
     validate_by_opening_db_in_read_only_mode: Optional[bool] = None,
-    validate_db_credentials: Optional[bool] = True,
-    validate_snapshot_in_readonly: Optional[bool] = False,
-    validated_sync_mode: Optional[str] = 'ENABLED',
+    validate_db_credentials: Optional[bool] = None,
+    validate_snapshot_in_readonly: Optional[bool] = None,
+    validated_sync_mode: Optional[str] = None,
     value: Optional[str] = None,
     vcdb_database_name: Optional[str] = None,
     vcdb_name: Optional[str] = None,
@@ -565,7 +587,7 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_by_timestamp', timestamp=..., timestamp_in_database_timezone=..., timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=...)
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
     
     ACTION: provision_by_timestamp_defaults
     ----------------------------------------
@@ -588,7 +610,7 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_by_snapshot', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., snapshot_id='example-snapshot-123')
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
     
     ACTION: provision_by_snapshot_defaults
     ----------------------------------------
@@ -611,7 +633,7 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_from_bookmark', make_current_account_owner=..., bookmark_id='example-bookmark-123')
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
     
     ACTION: provision_from_bookmark_defaults
     ----------------------------------------
@@ -633,7 +655,7 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_by_location', timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., location=...)
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
     
     ACTION: provision_by_location_defaults
     ----------------------------------------
@@ -655,7 +677,7 @@ def data_tool(
     Example:
         >>> data_tool(action='provision_empty_vdb', repository_id='example-repository-123', engine_id='example-engine-123')
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
     
     ACTION: delete_vdb
     ----------------------------------------
@@ -1816,7 +1838,8 @@ def data_tool(
     Example:
         >>> data_tool(action='dsource_link_appdata', environment_user=..., link_type=..., staging_mount_base=..., staging_environment=..., staging_environment_user=..., excludes=..., follow_symlinks=..., parameters=..., sync_parameters=...)
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
+    Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
     
     ACTION: dsource_link_appdata_defaults
     ----------------------------------------
@@ -1828,7 +1851,8 @@ def data_tool(
     Example:
         >>> data_tool(action='dsource_link_appdata_defaults', source_id='example-source-123')
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
+    Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
     
     ACTION: update_appdata_dsource
     ----------------------------------------
@@ -1841,7 +1865,8 @@ def data_tool(
     Example:
         >>> data_tool(action='update_appdata_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., parameters=...)
     
-        IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', 'appdata_source_params', and 'appdata_config_params' fields follow a DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as an MCP resource. Use resources/read on toolkit://{toolkit_id}/schema to get the full schema definition. Identify the toolkit_id from the source or environment first, then read the resource.
+        IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
+    Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
     
     ACTION: dsource_link_mssql
     ----------------------------------------
@@ -2667,23 +2692,23 @@ def data_tool(
     # Route to appropriate API based on action
     if action == 'list_vdbs':
         params = build_params(limit=limit, cursor=cursor, sort=sort, permission=permission)
-        conf = check_confirmation('GET', '/vdbs', action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', '/vdbs', action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/vdbs', params=params)
     elif action == 'search_vdbs':
         params = build_params(limit=limit, cursor=cursor, sort=sort, permission=permission)
-        conf = check_confirmation('POST', '/vdbs/search', action, 'data_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/vdbs/search', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/vdbs/search', params=params, json_body=body)
     elif action == 'get_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action get_vdb'}
         endpoint = f'/vdbs/{vdb_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2692,182 +2717,182 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action update_vdb'}
         endpoint = f'/vdbs/{vdb_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'name': name, 'description': description, 'db_username': db_username, 'db_password': db_password, 'validate_db_credentials': validate_db_credentials, 'auto_restart': auto_restart, 'environment_user_id': environment_user_id, 'template_id': template_id, 'listener_ids': listener_ids, 'new_dbid': new_dbid, 'cdc_on_provision': cdc_on_provision, 'pre_script': pre_script, 'post_script': post_script, 'hooks': hooks, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_key_identifier': tde_key_identifier, 'target_vcdb_tde_keystore_path': target_vcdb_tde_keystore_path, 'cdb_tde_keystore_password': cdb_tde_keystore_password, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'appdata_source_params': appdata_source_params, 'additional_mount_points': additional_mount_points, 'appdata_config_params': appdata_config_params, 'config_params': config_params, 'mount_point': mount_point, 'oracle_services': oracle_services, 'instances': instances, 'invoke_datapatch': invoke_datapatch, 'mssql_ag_backup_location': mssql_ag_backup_location, 'mssql_ag_backup_based': mssql_ag_backup_based, 'cache_priority': cache_priority, 'mssql_incremental_export_backup_frequency_minutes': mssql_incremental_export_backup_frequency_minutes, 'database_name': database_name}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'provision_by_timestamp':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_by_timestamp', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'pre_refresh': pre_refresh, 'post_refresh': post_refresh, 'pre_self_refresh': pre_self_refresh, 'post_self_refresh': post_self_refresh, 'pre_rollback': pre_rollback, 'post_rollback': post_rollback, 'configure_clone': configure_clone, 'pre_snapshot': pre_snapshot, 'post_snapshot': post_snapshot, 'pre_start': pre_start, 'post_start': post_start, 'pre_stop': pre_stop, 'post_stop': post_stop, 'target_group_id': target_group_id, 'name': name, 'database_name': database_name, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances, 'truncate_log_on_checkpoint': truncate_log_on_checkpoint, 'os_username': os_username, 'os_password': os_password, 'environment_id': environment_id, 'environment_user_id': environment_user_id, 'repository_id': repository_id, 'auto_select_repository': auto_select_repository, 'vdb_restart': vdb_restart, 'template_id': template_id, 'auxiliary_template_id': auxiliary_template_id, 'file_mapping_rules': file_mapping_rules, 'oracle_instance_name': oracle_instance_name, 'unique_name': unique_name, 'vcdb_name': vcdb_name, 'vcdb_database_name': vcdb_database_name, 'mount_point': mount_point, 'open_reset_logs': open_reset_logs, 'snapshot_policy_id': snapshot_policy_id, 'retention_policy_id': retention_policy_id, 'recovery_model': recovery_model, 'pre_script': pre_script, 'post_script': post_script, 'cdc_on_provision': cdc_on_provision, 'online_log_size': online_log_size, 'online_log_groups': online_log_groups, 'archive_log': archive_log, 'new_dbid': new_dbid, 'masked': masked, 'listener_ids': listener_ids, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'parentTdeKeystorePath': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'tde_exported_key_file_secret': tde_exported_key_file_secret, 'tde_key_identifier': tde_key_identifier, 'target_vcdb_tde_keystore_path': target_vcdb_tde_keystore_path, 'cdb_tde_keystore_password': cdb_tde_keystore_password, 'vcdb_tde_key_identifier': vcdb_tde_key_identifier, 'tde_keystore_config_type': tde_keystore_config_type, 'okv_client_id': okv_client_id, 'appdata_source_params': appdata_source_params, 'additional_mount_points': additional_mount_points, 'appdata_config_params': appdata_config_params, 'config_params': config_params, 'privileged_os_user': privileged_os_user, 'postgres_port': postgres_port, 'config_settings_stg': config_settings_stg, 'vcdb_restart': vcdb_restart, 'mssql_failover_drive_letter': mssql_failover_drive_letter, 'tags': tags, 'invoke_datapatch': invoke_datapatch, 'container_mode': container_mode, 'mssql_ag_backup_location': mssql_ag_backup_location, 'mssql_ag_backup_based': mssql_ag_backup_based, 'cache_priority': cache_priority, 'mssql_incremental_export_backup_frequency_minutes': mssql_incremental_export_backup_frequency_minutes, 'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'timeflow_id': timeflow_id, 'engine_id': engine_id, 'source_data_id': source_data_id, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_by_timestamp', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/vdbs/provision_by_timestamp', params=params, json_body=body if body else None)
     elif action == 'provision_by_timestamp_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_by_timestamp/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'engine_id': engine_id, 'source_data_id': source_data_id, 'timeflow_id': timeflow_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_by_timestamp/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'engine_id': engine_id, 'source_data_id': source_data_id, 'timeflow_id': timeflow_id}.items() if v is not None}
         return make_api_request('POST', '/vdbs/provision_by_timestamp/defaults', params=params, json_body=body if body else None)
     elif action == 'provision_by_snapshot':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_by_snapshot', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'pre_refresh': pre_refresh, 'post_refresh': post_refresh, 'pre_self_refresh': pre_self_refresh, 'post_self_refresh': post_self_refresh, 'pre_rollback': pre_rollback, 'post_rollback': post_rollback, 'configure_clone': configure_clone, 'pre_snapshot': pre_snapshot, 'post_snapshot': post_snapshot, 'pre_start': pre_start, 'post_start': post_start, 'pre_stop': pre_stop, 'post_stop': post_stop, 'target_group_id': target_group_id, 'name': name, 'database_name': database_name, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances, 'truncate_log_on_checkpoint': truncate_log_on_checkpoint, 'os_username': os_username, 'os_password': os_password, 'environment_id': environment_id, 'environment_user_id': environment_user_id, 'repository_id': repository_id, 'auto_select_repository': auto_select_repository, 'vdb_restart': vdb_restart, 'template_id': template_id, 'auxiliary_template_id': auxiliary_template_id, 'file_mapping_rules': file_mapping_rules, 'oracle_instance_name': oracle_instance_name, 'unique_name': unique_name, 'vcdb_name': vcdb_name, 'vcdb_database_name': vcdb_database_name, 'mount_point': mount_point, 'open_reset_logs': open_reset_logs, 'snapshot_policy_id': snapshot_policy_id, 'retention_policy_id': retention_policy_id, 'recovery_model': recovery_model, 'pre_script': pre_script, 'post_script': post_script, 'cdc_on_provision': cdc_on_provision, 'online_log_size': online_log_size, 'online_log_groups': online_log_groups, 'archive_log': archive_log, 'new_dbid': new_dbid, 'masked': masked, 'listener_ids': listener_ids, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'parentTdeKeystorePath': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'tde_exported_key_file_secret': tde_exported_key_file_secret, 'tde_key_identifier': tde_key_identifier, 'target_vcdb_tde_keystore_path': target_vcdb_tde_keystore_path, 'cdb_tde_keystore_password': cdb_tde_keystore_password, 'vcdb_tde_key_identifier': vcdb_tde_key_identifier, 'tde_keystore_config_type': tde_keystore_config_type, 'okv_client_id': okv_client_id, 'appdata_source_params': appdata_source_params, 'additional_mount_points': additional_mount_points, 'appdata_config_params': appdata_config_params, 'config_params': config_params, 'privileged_os_user': privileged_os_user, 'postgres_port': postgres_port, 'config_settings_stg': config_settings_stg, 'vcdb_restart': vcdb_restart, 'mssql_failover_drive_letter': mssql_failover_drive_letter, 'tags': tags, 'invoke_datapatch': invoke_datapatch, 'container_mode': container_mode, 'mssql_ag_backup_location': mssql_ag_backup_location, 'mssql_ag_backup_based': mssql_ag_backup_based, 'cache_priority': cache_priority, 'mssql_incremental_export_backup_frequency_minutes': mssql_incremental_export_backup_frequency_minutes, 'snapshot_id': snapshot_id, 'engine_id': engine_id, 'source_data_id': source_data_id, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_by_snapshot', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/vdbs/provision_by_snapshot', params=params, json_body=body if body else None)
     elif action == 'provision_by_snapshot_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_by_snapshot/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'snapshot_id': snapshot_id, 'engine_id': engine_id, 'source_data_id': source_data_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_by_snapshot/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'snapshot_id': snapshot_id, 'engine_id': engine_id, 'source_data_id': source_data_id}.items() if v is not None}
         return make_api_request('POST', '/vdbs/provision_by_snapshot/defaults', params=params, json_body=body if body else None)
     elif action == 'provision_from_bookmark':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_from_bookmark', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'pre_refresh': pre_refresh, 'post_refresh': post_refresh, 'pre_self_refresh': pre_self_refresh, 'post_self_refresh': post_self_refresh, 'pre_rollback': pre_rollback, 'post_rollback': post_rollback, 'configure_clone': configure_clone, 'pre_snapshot': pre_snapshot, 'post_snapshot': post_snapshot, 'pre_start': pre_start, 'post_start': post_start, 'pre_stop': pre_stop, 'post_stop': post_stop, 'target_group_id': target_group_id, 'name': name, 'database_name': database_name, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances, 'truncate_log_on_checkpoint': truncate_log_on_checkpoint, 'os_username': os_username, 'os_password': os_password, 'environment_id': environment_id, 'environment_user_id': environment_user_id, 'repository_id': repository_id, 'auto_select_repository': auto_select_repository, 'vdb_restart': vdb_restart, 'template_id': template_id, 'auxiliary_template_id': auxiliary_template_id, 'file_mapping_rules': file_mapping_rules, 'oracle_instance_name': oracle_instance_name, 'unique_name': unique_name, 'vcdb_name': vcdb_name, 'vcdb_database_name': vcdb_database_name, 'mount_point': mount_point, 'open_reset_logs': open_reset_logs, 'snapshot_policy_id': snapshot_policy_id, 'retention_policy_id': retention_policy_id, 'recovery_model': recovery_model, 'pre_script': pre_script, 'post_script': post_script, 'cdc_on_provision': cdc_on_provision, 'online_log_size': online_log_size, 'online_log_groups': online_log_groups, 'archive_log': archive_log, 'new_dbid': new_dbid, 'masked': masked, 'listener_ids': listener_ids, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'parentTdeKeystorePath': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'tde_exported_key_file_secret': tde_exported_key_file_secret, 'tde_key_identifier': tde_key_identifier, 'target_vcdb_tde_keystore_path': target_vcdb_tde_keystore_path, 'cdb_tde_keystore_password': cdb_tde_keystore_password, 'vcdb_tde_key_identifier': vcdb_tde_key_identifier, 'tde_keystore_config_type': tde_keystore_config_type, 'okv_client_id': okv_client_id, 'appdata_source_params': appdata_source_params, 'additional_mount_points': additional_mount_points, 'appdata_config_params': appdata_config_params, 'config_params': config_params, 'privileged_os_user': privileged_os_user, 'postgres_port': postgres_port, 'config_settings_stg': config_settings_stg, 'vcdb_restart': vcdb_restart, 'mssql_failover_drive_letter': mssql_failover_drive_letter, 'tags': tags, 'invoke_datapatch': invoke_datapatch, 'container_mode': container_mode, 'mssql_ag_backup_location': mssql_ag_backup_location, 'mssql_ag_backup_based': mssql_ag_backup_based, 'cache_priority': cache_priority, 'mssql_incremental_export_backup_frequency_minutes': mssql_incremental_export_backup_frequency_minutes, 'bookmark_id': bookmark_id, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_from_bookmark', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/vdbs/provision_from_bookmark', params=params, json_body=body if body else None)
     elif action == 'provision_from_bookmark_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_from_bookmark/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_from_bookmark/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', '/vdbs/provision_from_bookmark/defaults', params=params, json_body=body if body else None)
     elif action == 'provision_by_location':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_by_location', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'pre_refresh': pre_refresh, 'post_refresh': post_refresh, 'pre_self_refresh': pre_self_refresh, 'post_self_refresh': post_self_refresh, 'pre_rollback': pre_rollback, 'post_rollback': post_rollback, 'configure_clone': configure_clone, 'pre_snapshot': pre_snapshot, 'post_snapshot': post_snapshot, 'pre_start': pre_start, 'post_start': post_start, 'pre_stop': pre_stop, 'post_stop': post_stop, 'target_group_id': target_group_id, 'name': name, 'database_name': database_name, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances, 'truncate_log_on_checkpoint': truncate_log_on_checkpoint, 'os_username': os_username, 'os_password': os_password, 'environment_id': environment_id, 'environment_user_id': environment_user_id, 'repository_id': repository_id, 'auto_select_repository': auto_select_repository, 'vdb_restart': vdb_restart, 'template_id': template_id, 'auxiliary_template_id': auxiliary_template_id, 'file_mapping_rules': file_mapping_rules, 'oracle_instance_name': oracle_instance_name, 'unique_name': unique_name, 'vcdb_name': vcdb_name, 'vcdb_database_name': vcdb_database_name, 'mount_point': mount_point, 'open_reset_logs': open_reset_logs, 'snapshot_policy_id': snapshot_policy_id, 'retention_policy_id': retention_policy_id, 'recovery_model': recovery_model, 'pre_script': pre_script, 'post_script': post_script, 'cdc_on_provision': cdc_on_provision, 'online_log_size': online_log_size, 'online_log_groups': online_log_groups, 'archive_log': archive_log, 'new_dbid': new_dbid, 'masked': masked, 'listener_ids': listener_ids, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'parentTdeKeystorePath': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'tde_exported_key_file_secret': tde_exported_key_file_secret, 'tde_key_identifier': tde_key_identifier, 'target_vcdb_tde_keystore_path': target_vcdb_tde_keystore_path, 'cdb_tde_keystore_password': cdb_tde_keystore_password, 'vcdb_tde_key_identifier': vcdb_tde_key_identifier, 'tde_keystore_config_type': tde_keystore_config_type, 'okv_client_id': okv_client_id, 'appdata_source_params': appdata_source_params, 'additional_mount_points': additional_mount_points, 'appdata_config_params': appdata_config_params, 'config_params': config_params, 'privileged_os_user': privileged_os_user, 'postgres_port': postgres_port, 'config_settings_stg': config_settings_stg, 'vcdb_restart': vcdb_restart, 'mssql_failover_drive_letter': mssql_failover_drive_letter, 'tags': tags, 'invoke_datapatch': invoke_datapatch, 'container_mode': container_mode, 'mssql_ag_backup_location': mssql_ag_backup_location, 'mssql_ag_backup_based': mssql_ag_backup_based, 'cache_priority': cache_priority, 'mssql_incremental_export_backup_frequency_minutes': mssql_incremental_export_backup_frequency_minutes, 'location': location, 'timeflow_id': timeflow_id, 'engine_id': engine_id, 'source_data_id': source_data_id, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_by_location', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/vdbs/provision_by_location', params=params, json_body=body if body else None)
     elif action == 'provision_by_location_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/provision_by_location/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'location': location, 'timeflow_id': timeflow_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/provision_by_location/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'location': location, 'timeflow_id': timeflow_id}.items() if v is not None}
         return make_api_request('POST', '/vdbs/provision_by_location/defaults', params=params, json_body=body if body else None)
     elif action == 'provision_empty_vdb':
         params = build_params()
-        conf = check_confirmation('POST', '/vdbs/empty_vdb', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'pre_refresh': pre_refresh, 'post_refresh': post_refresh, 'pre_self_refresh': pre_self_refresh, 'post_self_refresh': post_self_refresh, 'pre_rollback': pre_rollback, 'post_rollback': post_rollback, 'configure_clone': configure_clone, 'pre_snapshot': pre_snapshot, 'post_snapshot': post_snapshot, 'pre_start': pre_start, 'post_start': post_start, 'pre_stop': pre_stop, 'post_stop': post_stop, 'target_group_id': target_group_id, 'name': name, 'database_name': database_name, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances, 'truncate_log_on_checkpoint': truncate_log_on_checkpoint, 'os_username': os_username, 'os_password': os_password, 'environment_id': environment_id, 'environment_user_id': environment_user_id, 'repository_id': repository_id, 'auto_select_repository': auto_select_repository, 'vdb_restart': vdb_restart, 'template_id': template_id, 'auxiliary_template_id': auxiliary_template_id, 'file_mapping_rules': file_mapping_rules, 'oracle_instance_name': oracle_instance_name, 'unique_name': unique_name, 'vcdb_name': vcdb_name, 'vcdb_database_name': vcdb_database_name, 'mount_point': mount_point, 'open_reset_logs': open_reset_logs, 'snapshot_policy_id': snapshot_policy_id, 'retention_policy_id': retention_policy_id, 'recovery_model': recovery_model, 'pre_script': pre_script, 'post_script': post_script, 'cdc_on_provision': cdc_on_provision, 'online_log_size': online_log_size, 'online_log_groups': online_log_groups, 'archive_log': archive_log, 'new_dbid': new_dbid, 'masked': masked, 'listener_ids': listener_ids, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'parentTdeKeystorePath': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'tde_exported_key_file_secret': tde_exported_key_file_secret, 'tde_key_identifier': tde_key_identifier, 'target_vcdb_tde_keystore_path': target_vcdb_tde_keystore_path, 'cdb_tde_keystore_password': cdb_tde_keystore_password, 'vcdb_tde_key_identifier': vcdb_tde_key_identifier, 'tde_keystore_config_type': tde_keystore_config_type, 'okv_client_id': okv_client_id, 'appdata_source_params': appdata_source_params, 'additional_mount_points': additional_mount_points, 'appdata_config_params': appdata_config_params, 'config_params': config_params, 'privileged_os_user': privileged_os_user, 'postgres_port': postgres_port, 'config_settings_stg': config_settings_stg, 'vcdb_restart': vcdb_restart, 'mssql_failover_drive_letter': mssql_failover_drive_letter, 'tags': tags, 'invoke_datapatch': invoke_datapatch, 'container_mode': container_mode, 'mssql_ag_backup_location': mssql_ag_backup_location, 'mssql_ag_backup_based': mssql_ag_backup_based, 'cache_priority': cache_priority, 'mssql_incremental_export_backup_frequency_minutes': mssql_incremental_export_backup_frequency_minutes, 'engine_id': engine_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdbs/empty_vdb', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/vdbs/empty_vdb', params=params, json_body=body if body else None)
     elif action == 'delete_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action delete_vdb'}
         endpoint = f'/vdbs/{vdb_id}/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'force': force, 'delete_all_dependent_vdbs': delete_all_dependent_vdbs}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'force': force, 'delete_all_dependent_vdbs': delete_all_dependent_vdbs}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'start_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action start_vdb'}
         endpoint = f'/vdbs/{vdb_id}/start'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'instances': instances}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'instances': instances}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'stop_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action stop_vdb'}
         endpoint = f'/vdbs/{vdb_id}/stop'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'instances': instances, 'abort': abort}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'instances': instances, 'abort': abort}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'enable_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action enable_vdb'}
         endpoint = f'/vdbs/{vdb_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_start': attempt_start, 'container_mode': container_mode, 'ownership_spec': ownership_spec}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_start': attempt_start, 'container_mode': container_mode, 'ownership_spec': ownership_spec}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action disable_vdb'}
         endpoint = f'/vdbs/{vdb_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup, 'container_mode': container_mode}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup, 'container_mode': container_mode}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_by_timestamp':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action refresh_vdb_by_timestamp'}
         endpoint = f'/vdbs/{vdb_id}/refresh_by_timestamp'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'timeflow_id': timeflow_id, 'dataset_id': dataset_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'timeflow_id': timeflow_id, 'dataset_id': dataset_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_by_snapshot':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action refresh_vdb_by_snapshot'}
         endpoint = f'/vdbs/{vdb_id}/refresh_by_snapshot'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'snapshot_id': snapshot_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'snapshot_id': snapshot_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_from_bookmark':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action refresh_vdb_from_bookmark'}
         endpoint = f'/vdbs/{vdb_id}/refresh_from_bookmark'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_by_location':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action refresh_vdb_by_location'}
         endpoint = f'/vdbs/{vdb_id}/refresh_by_location'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'location': location, 'dataset_id': dataset_id, 'timeflow_id': timeflow_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'location': location, 'dataset_id': dataset_id, 'timeflow_id': timeflow_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'undo_vdb_refresh':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action undo_vdb_refresh'}
         endpoint = f'/vdbs/{vdb_id}/undo_refresh'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -2876,57 +2901,57 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action rollback_vdb_by_timestamp'}
         endpoint = f'/vdbs/{vdb_id}/rollback_by_timestamp'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'timeflow_id': timeflow_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'timeflow_id': timeflow_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'rollback_vdb_by_snapshot':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action rollback_vdb_by_snapshot'}
         endpoint = f'/vdbs/{vdb_id}/rollback_by_snapshot'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'snapshot_id': snapshot_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'snapshot_id': snapshot_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'rollback_vdb_from_bookmark':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action rollback_vdb_from_bookmark'}
         endpoint = f'/vdbs/{vdb_id}/rollback_from_bookmark'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'switch_vdb_timeflow':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action switch_vdb_timeflow'}
         endpoint = f'/vdbs/{vdb_id}/switch_timeflow'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'timeflow_id': timeflow_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'timeflow_id': timeflow_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'lock_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action lock_vdb'}
         endpoint = f'/vdbs/{vdb_id}/lock'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'account_id': account_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'account_id': account_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'unlock_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action unlock_vdb'}
         endpoint = f'/vdbs/{vdb_id}/unlock'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -2935,17 +2960,17 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action migrate_vdb'}
         endpoint = f'/vdbs/{vdb_id}/migrate'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'environment_id': environment_id, 'environment_user_ref': environment_user_ref, 'repository_id': repository_id, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'environment_id': environment_id, 'environment_user_ref': environment_user_ref, 'repository_id': repository_id, 'cdb_id': cdb_id, 'cluster_node_ids': cluster_node_ids, 'cluster_node_instances': cluster_node_instances}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_migrate_compatible_repositories':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action get_migrate_compatible_repositories'}
         endpoint = f'/vdbs/{vdb_id}/migrate_compatible_repositories'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2954,31 +2979,31 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action upgrade_vdb'}
         endpoint = f'/vdbs/{vdb_id}/upgrade'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id, 'ppt_repository': ppt_repository}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'upgrade_oracle_vdb':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action upgrade_oracle_vdb'}
         endpoint = f'/vdbs/oracle/{vdb_id}/upgrade'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_upgrade_compatible_repositories':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action get_upgrade_compatible_repositories'}
         endpoint = f'/vdbs/{vdb_id}/upgrade_compatible_repositories'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2987,7 +3012,7 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action list_vdb_snapshots'}
         endpoint = f'/vdbs/{vdb_id}/snapshots'
         params = build_params(limit=limit, cursor=cursor)
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2996,7 +3021,7 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action snapshot_vdb'}
         endpoint = f'/vdbs/{vdb_id}/snapshots'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -3005,7 +3030,7 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action list_vdb_bookmarks'}
         endpoint = f'/vdbs/{vdb_id}/bookmarks'
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3014,17 +3039,17 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action search_vdb_bookmarks'}
         endpoint = f'/vdbs/{vdb_id}/bookmarks/search'
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', endpoint, params=params, json_body=body)
     elif action == 'get_vdb_deletion_dependencies':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action get_vdb_deletion_dependencies'}
         endpoint = f'/vdbs/{vdb_id}/deletion-dependencies'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3033,17 +3058,17 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action verify_vdb_jdbc_connection'}
         endpoint = f'/vdbs/{vdb_id}/jdbc-check'
         params = build_params(database_username=database_username, database_password=database_password, jdbc_connection_string=jdbc_connection_string)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'database_username': database_username, 'database_password': database_password, 'jdbc_connection_string': jdbc_connection_string}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'database_username': database_username, 'database_password': database_password, 'jdbc_connection_string': jdbc_connection_string}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_vdb_tags':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action get_vdb_tags'}
         endpoint = f'/vdbs/{vdb_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3052,252 +3077,252 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_id for action add_vdb_tags'}
         endpoint = f'/vdbs/{vdb_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_in_place':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_in_place'}
         endpoint = f'/vdbs/{vdb_id}/in-place-export'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'db_unique_name': db_unique_name, 'pdb_name': pdb_name, 'operations_postV2P': operations_post_v2_p}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'db_unique_name': db_unique_name, 'pdb_name': pdb_name, 'operations_postV2P': operations_post_v2_p}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_asm_in_place':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_asm_in_place'}
         endpoint = f'/vdbs/{vdb_id}/asm-in-place-export'
         params = build_params(default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'db_unique_name': db_unique_name, 'pdb_name': pdb_name, 'operations_postV2P': operations_post_v2_p}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'db_unique_name': db_unique_name, 'pdb_name': pdb_name, 'operations_postV2P': operations_post_v2_p}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_by_snapshot':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_by_snapshot'}
         endpoint = f'/vdbs/{vdb_id}/export-by-snapshot'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_by_timestamp':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_by_timestamp'}
         endpoint = f'/vdbs/{vdb_id}/export-by-timestamp'
         params = build_params(timestamp=timestamp)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_by_location':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_by_location'}
         endpoint = f'/vdbs/{vdb_id}/export-by-location'
         params = build_params(location=location)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_from_bookmark':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_from_bookmark'}
         endpoint = f'/vdbs/{vdb_id}/export-from-bookmark'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_to_asm_by_snapshot':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_to_asm_by_snapshot'}
         endpoint = f'/vdbs/{vdb_id}/asm-export-by-snapshot'
         params = build_params(default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_to_asm_by_timestamp':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_to_asm_by_timestamp'}
         endpoint = f'/vdbs/{vdb_id}/asm-export-by-timestamp'
         params = build_params(timestamp=timestamp, default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_to_asm_by_location':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_to_asm_by_location'}
         endpoint = f'/vdbs/{vdb_id}/asm-export-by-location'
         params = build_params(location=location, default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_vdb_to_asm_from_bookmark':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_vdb_to_asm_from_bookmark'}
         endpoint = f'/vdbs/{vdb_id}/asm-export-from-bookmark'
         params = build_params(default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_cleanup':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_cleanup'}
         endpoint = f'/vdbs/{vdb_id}/export_cleanup'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'cleanup_target_physical_files': cleanup_target_physical_files, 'cleanup_target_container': cleanup_target_container}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'cleanup_target_physical_files': cleanup_target_physical_files, 'cleanup_target_container': cleanup_target_container}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_finalize':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action export_finalize'}
         endpoint = f'/vdbs/{vdb_id}/export_finalize'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'force': force, 'max_allowed_backups_pending_restore': max_allowed_backups_pending_restore}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'force': force, 'max_allowed_backups_pending_restore': max_allowed_backups_pending_restore}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'list_vdb_groups':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/vdb-groups', action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', '/vdb-groups', action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/vdb-groups', params=params)
     elif action == 'search_vdb_groups':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/vdb-groups/search', action, 'data_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/vdb-groups/search', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/vdb-groups/search', params=params, json_body=body)
     elif action == 'get_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action get_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'create_vdb_group':
         params = build_params(name=name)
-        conf = check_confirmation('POST', '/vdb-groups', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'vdb_ids': vdb_ids, 'vdbs': vdbs, 'tags': tags, 'make_current_account_owner': make_current_account_owner, 'refresh_immediately': refresh_immediately}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdb-groups', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'vdb_ids': vdb_ids, 'vdbs': vdbs, 'tags': tags, 'make_current_account_owner': make_current_account_owner, 'refresh_immediately': refresh_immediately}.items() if v is not None}
         return make_api_request('POST', '/vdb-groups', params=params, json_body=body if body else None)
     elif action == 'update_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action update_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'vdb_ids': vdb_ids, 'vdbs': vdbs, 'refresh_immediately': refresh_immediately}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'vdb_ids': vdb_ids, 'vdbs': vdbs, 'refresh_immediately': refresh_immediately}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action delete_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
     elif action == 'provision_vdb_group_from_bookmark':
         params = build_params(name=name, provision_parameters=provision_parameters)
-        conf = check_confirmation('POST', '/vdb-groups/provision_from_bookmark', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'bookmark_id': bookmark_id, 'provision_parameters': provision_parameters, 'tags': tags, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        conf = check_confirmation('POST', '/vdb-groups/provision_from_bookmark', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'bookmark_id': bookmark_id, 'provision_parameters': provision_parameters, 'tags': tags, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
         return make_api_request('POST', '/vdb-groups/provision_from_bookmark', params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action refresh_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/refresh'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_group_from_bookmark':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action refresh_vdb_group_from_bookmark'}
         endpoint = f'/vdb-groups/{vdb_group_id}/refresh_from_bookmark'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_group_by_snapshot':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action refresh_vdb_group_by_snapshot'}
         endpoint = f'/vdb-groups/{vdb_group_id}/refresh_by_snapshot'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'vdb_snapshot_mappings': vdb_snapshot_mappings}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'vdb_snapshot_mappings': vdb_snapshot_mappings}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'refresh_vdb_group_by_timestamp':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action refresh_vdb_group_by_timestamp'}
         endpoint = f'/vdb-groups/{vdb_group_id}/refresh_by_timestamp'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'vdb_timestamp_mappings': vdb_timestamp_mappings, 'is_refresh_to_nearest': is_refresh_to_nearest}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'vdb_timestamp_mappings': vdb_timestamp_mappings, 'is_refresh_to_nearest': is_refresh_to_nearest}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'rollback_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action rollback_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/rollback'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'lock_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action lock_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/lock'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'account_id': account_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'account_id': account_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'unlock_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action unlock_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/unlock'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -3306,47 +3331,47 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_group_id for action start_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/start'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'vdb_start_param_mappings': vdb_start_param_mappings}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'vdb_start_param_mappings': vdb_start_param_mappings}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'stop_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action stop_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/stop'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'vdb_stop_param_mappings': vdb_stop_param_mappings}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'vdb_stop_param_mappings': vdb_stop_param_mappings}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'enable_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action enable_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'vdb_enable_param_mappings': vdb_enable_param_mappings}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'vdb_enable_param_mappings': vdb_enable_param_mappings}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable_vdb_group':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action disable_vdb_group'}
         endpoint = f'/vdb-groups/{vdb_group_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'vdb_disable_param_mappings': vdb_disable_param_mappings}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'vdb_disable_param_mappings': vdb_disable_param_mappings}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_vdb_group_latest_snapshots':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action get_vdb_group_latest_snapshots'}
         endpoint = f'/vdb-groups/{vdb_group_id}/latest-snapshots'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3355,17 +3380,17 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_group_id for action get_vdb_group_timestamp_summary'}
         endpoint = f'/vdb-groups/{vdb_group_id}/timestamp-summary'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'timestamp': timestamp, 'vdb_ids': vdb_ids, 'mode': mode}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'timestamp': timestamp, 'vdb_ids': vdb_ids, 'mode': mode}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'list_vdb_group_bookmarks':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action list_vdb_group_bookmarks'}
         endpoint = f'/vdb-groups/{vdb_group_id}/bookmarks'
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3374,17 +3399,17 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_group_id for action search_vdb_group_bookmarks'}
         endpoint = f'/vdb-groups/{vdb_group_id}/bookmarks/search'
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', endpoint, params=params, json_body=body)
     elif action == 'get_vdb_group_tags':
         if vdb_group_id is None:
             return {'error': 'Missing required parameter: vdb_group_id for action get_vdb_group_tags'}
         endpoint = f'/vdb-groups/{vdb_group_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3393,66 +3418,66 @@ def data_tool(
             return {'error': 'Missing required parameter: vdb_group_id for action add_vdb_group_tags'}
         endpoint = f'/vdb-groups/{vdb_group_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'list_dsources':
         params = build_params(limit=limit, cursor=cursor, sort=sort, permission=permission)
-        conf = check_confirmation('GET', '/dsources', action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', '/dsources', action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/dsources', params=params)
     elif action == 'search_dsources':
         params = build_params(limit=limit, cursor=cursor, sort=sort, permission=permission)
-        conf = check_confirmation('POST', '/dsources/search', action, 'data_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/dsources/search', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/dsources/search', params=params, json_body=body)
     elif action == 'get_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action get_dsource'}
         endpoint = f'/dsources/{dsource_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'delete_dsource':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/delete', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'dsource_id': dsource_id, 'force': force, 'oracle_username': oracle_username, 'oracle_password': oracle_password, 'delete_all_dependent_vdbs': delete_all_dependent_vdbs}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/delete', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'dsource_id': dsource_id, 'force': force, 'oracle_username': oracle_username, 'oracle_password': oracle_password, 'delete_all_dependent_vdbs': delete_all_dependent_vdbs}.items() if v is not None}
         return make_api_request('POST', '/dsources/delete', params=params, json_body=body if body else None)
     elif action == 'enable_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action enable_dsource'}
         endpoint = f'/dsources/{dsource_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action disable_dsource'}
         endpoint = f'/dsources/{dsource_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'list_dsource_snapshots':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action list_dsource_snapshots'}
         endpoint = f'/dsources/{dsource_id}/snapshots'
         params = build_params(limit=limit, cursor=cursor)
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3461,29 +3486,29 @@ def data_tool(
             return {'error': 'Missing required parameter: dsource_id for action dsource_create_snapshot'}
         endpoint = f'/dsources/{dsource_id}/snapshots'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'drop_and_recreate_devices': drop_and_recreate_devices, 'sync_strategy': sync_strategy, 'ase_backup_files': ase_backup_files, 'mssql_backup_uuid': mssql_backup_uuid, 'compression_enabled': compression_enabled, 'availability_group_backup_policy': availability_group_backup_policy, 'do_not_resume': do_not_resume, 'double_sync': double_sync, 'force_full_backup': force_full_backup, 'skip_space_check': skip_space_check, 'files_for_partial_full_backup': files_for_partial_full_backup, 'appdata_parameters': appdata_parameters, 'rman_rate_in_MB': rman_rate_in__m_b}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'drop_and_recreate_devices': drop_and_recreate_devices, 'sync_strategy': sync_strategy, 'ase_backup_files': ase_backup_files, 'mssql_backup_uuid': mssql_backup_uuid, 'compression_enabled': compression_enabled, 'availability_group_backup_policy': availability_group_backup_policy, 'do_not_resume': do_not_resume, 'double_sync': double_sync, 'force_full_backup': force_full_backup, 'skip_space_check': skip_space_check, 'files_for_partial_full_backup': files_for_partial_full_backup, 'appdata_parameters': appdata_parameters, 'rman_rate_in_MB': rman_rate_in__m_b}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'upgrade_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action upgrade_dsource'}
         endpoint = f'/dsources/{dsource_id}/upgrade'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id, 'ppt_repository': ppt_repository}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_dsource_upgrade_compatible_repositories':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action get_dsource_upgrade_compatible_repositories'}
         endpoint = f'/dsources/{dsource_id}/upgrade_compatible_repositories'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3492,7 +3517,7 @@ def data_tool(
             return {'error': 'Missing required parameter: dsource_id for action get_dsource_deletion_dependencies'}
         endpoint = f'/dsources/{dsource_id}/deletion-dependencies'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3501,7 +3526,7 @@ def data_tool(
             return {'error': 'Missing required parameter: dsource_id for action get_dsource_tags'}
         endpoint = f'/dsources/{dsource_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -3510,81 +3535,81 @@ def data_tool(
             return {'error': 'Missing required parameter: dsource_id for action add_dsource_tags'}
         endpoint = f'/dsources/{dsource_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_dsource_tags':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action delete_dsource_tags'}
         endpoint = f'/dsources/{dsource_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'dsource_link_oracle':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/oracle', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'external_file_path': external_file_path, 'environment_user_id': environment_user_id, 'backup_level_enabled': backup_level_enabled, 'rman_channels': rman_channels, 'files_per_set': files_per_set, 'check_logical': check_logical, 'encrypted_linking_enabled': encrypted_linking_enabled, 'compressed_linking_enabled': compressed_linking_enabled, 'bandwidth_limit': bandwidth_limit, 'number_of_connections': number_of_connections, 'diagnose_no_logging_faults': diagnose_no_logging_faults, 'pre_provisioning_enabled': pre_provisioning_enabled, 'link_now': link_now, 'force_full_backup': force_full_backup, 'double_sync': double_sync, 'rman_rate_in_MB': rman_rate_in__m_b, 'skip_space_check': skip_space_check, 'do_not_resume': do_not_resume, 'files_for_full_backup': files_for_full_backup, 'log_sync_mode': log_sync_mode, 'log_sync_interval': log_sync_interval, 'non_sys_username': non_sys_username, 'non_sys_password': non_sys_password, 'non_sys_vault_username': non_sys_vault_username, 'non_sys_vault': non_sys_vault, 'non_sys_hashicorp_vault_engine': non_sys_hashicorp_vault_engine, 'non_sys_hashicorp_vault_secret_path': non_sys_hashicorp_vault_secret_path, 'non_sys_hashicorp_vault_username_key': non_sys_hashicorp_vault_username_key, 'non_sys_hashicorp_vault_secret_key': non_sys_hashicorp_vault_secret_key, 'non_sys_azure_vault_name': non_sys_azure_vault_name, 'non_sys_azure_vault_username_key': non_sys_azure_vault_username_key, 'non_sys_azure_vault_secret_key': non_sys_azure_vault_secret_key, 'non_sys_cyberark_vault_query_string': non_sys_cyberark_vault_query_string, 'fallback_username': fallback_username, 'fallback_password': fallback_password, 'fallback_vault_username': fallback_vault_username, 'fallback_vault': fallback_vault, 'fallback_hashicorp_vault_engine': fallback_hashicorp_vault_engine, 'fallback_hashicorp_vault_secret_path': fallback_hashicorp_vault_secret_path, 'fallback_hashicorp_vault_username_key': fallback_hashicorp_vault_username_key, 'fallback_hashicorp_vault_secret_key': fallback_hashicorp_vault_secret_key, 'fallback_azure_vault_name': fallback_azure_vault_name, 'fallback_azure_vault_username_key': fallback_azure_vault_username_key, 'fallback_azure_vault_secret_key': fallback_azure_vault_secret_key, 'fallback_cyberark_vault_query_string': fallback_cyberark_vault_query_string, 'ops_pre_log_sync': ops_pre_log_sync}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/oracle', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/dsources/oracle', params=params, json_body=body if body else None)
     elif action == 'dsource_link_oracle_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/oracle/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/oracle/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
         return make_api_request('POST', '/dsources/oracle/defaults', params=params, json_body=body if body else None)
     elif action == 'dsource_link_oracle_staging_push':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/oracle/staging-push', action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'engine_id': engine_id, 'container_type': container_type, 'environment_user_id': environment_user_id, 'repository': repository, 'database_name': database_name, 'database_unique_name': database_unique_name, 'sid': sid, 'mount_base': mount_base, 'custom_env_variables_pairs': custom_env_variables_pairs, 'custom_env_variables_paths': custom_env_variables_paths, 'auto_staging_restart': auto_staging_restart, 'allow_auto_staging_restart_on_host_reboot': allow_auto_staging_restart_on_host_reboot, 'physical_standby': physical_standby, 'validate_snapshot_in_readonly': validate_snapshot_in_readonly, 'validate_by_opening_db_in_read_only_mode': validate_by_opening_db_in_read_only_mode, 'staging_database_templates': staging_database_templates, 'staging_database_config_params': staging_database_config_params, 'staging_container_database_reference': staging_container_database_reference, 'ops_pre_log_sync': ops_pre_log_sync, 'tde_keystore_config_type': tde_keystore_config_type, 'template_id': template_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/oracle/staging-push', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/dsources/oracle/staging-push', params=params, json_body=body if body else None)
     elif action == 'dsource_link_oracle_staging_push_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/oracle/staging-push/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'environment_id': environment_id, 'container_type': container_type}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/oracle/staging-push/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'environment_id': environment_id, 'container_type': container_type}.items() if v is not None}
         return make_api_request('POST', '/dsources/oracle/staging-push/defaults', params=params, json_body=body if body else None)
     elif action == 'update_oracle_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action update_oracle_dsource'}
         endpoint = f'/dsources/oracle/{dsource_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'name': name, 'description': description, 'db_username': db_username, 'db_password': db_password, 'non_sys_username': non_sys_username, 'non_sys_password': non_sys_password, 'validate_db_credentials': validate_db_credentials, 'environment_user_id': environment_user_id, 'backup_level_enabled': backup_level_enabled, 'rman_channels': rman_channels, 'files_per_set': files_per_set, 'check_logical': check_logical, 'encrypted_linking_enabled': encrypted_linking_enabled, 'compressed_linking_enabled': compressed_linking_enabled, 'bandwidth_limit': bandwidth_limit, 'number_of_connections': number_of_connections, 'validate_by_opening_db_in_read_only_mode': validate_by_opening_db_in_read_only_mode, 'pre_provisioning_enabled': pre_provisioning_enabled, 'diagnose_no_logging_faults': diagnose_no_logging_faults, 'rac_max_instance_lag': rac_max_instance_lag, 'allow_auto_staging_restart_on_host_reboot': allow_auto_staging_restart_on_host_reboot, 'physical_standby': physical_standby, 'external_file_path': external_file_path, 'hooks': hooks, 'custom_env_variables_pairs': custom_env_variables_pairs, 'custom_env_variables_paths': custom_env_variables_paths, 'staging_database_config_params': staging_database_config_params, 'template_id': template_id, 'logsync_enabled': logsync_enabled, 'logsync_mode': logsync_mode, 'logsync_interval': logsync_interval, 'repository': repository}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'attach_oracle_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action attach_oracle_dsource'}
         endpoint = f'/dsources/oracle/{dsource_id}/attachSource'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'backup_level_enabled': backup_level_enabled, 'bandwidth_limit': bandwidth_limit, 'check_logical': check_logical, 'compressed_linking_enabled': compressed_linking_enabled, 'double_sync': double_sync, 'encrypted_linking_enabled': encrypted_linking_enabled, 'environment_user': environment_user, 'external_file_path': external_file_path, 'files_per_set': files_per_set, 'force': force, 'link_now': link_now, 'number_of_connections': number_of_connections, 'operations': operations, 'oracle_fallback_user': oracle_fallback_user, 'oracle_fallback_credentials': oracle_fallback_credentials, 'rman_channels': rman_channels, 'source_id': source_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'backup_level_enabled': backup_level_enabled, 'bandwidth_limit': bandwidth_limit, 'check_logical': check_logical, 'compressed_linking_enabled': compressed_linking_enabled, 'double_sync': double_sync, 'encrypted_linking_enabled': encrypted_linking_enabled, 'environment_user': environment_user, 'external_file_path': external_file_path, 'files_per_set': files_per_set, 'force': force, 'link_now': link_now, 'number_of_connections': number_of_connections, 'operations': operations, 'oracle_fallback_user': oracle_fallback_user, 'oracle_fallback_credentials': oracle_fallback_credentials, 'rman_channels': rman_channels, 'source_id': source_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'detach_oracle_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action detach_oracle_dsource'}
         endpoint = f'/dsources/oracle/{dsource_id}/detachSource'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -3593,125 +3618,125 @@ def data_tool(
             return {'error': 'Missing required parameter: dsource_id for action upgrade_oracle_dsource'}
         endpoint = f'/dsources/oracle/{dsource_id}/upgrade'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'dsource_link_ase':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/ase', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'external_file_path': external_file_path, 'mount_base': mount_base, 'load_backup_path': load_backup_path, 'backup_server_name': backup_server_name, 'backup_host_user': backup_host_user, 'backup_host': backup_host, 'dump_credentials': dump_credentials, 'source_host_user': source_host_user, 'db_user': db_user, 'db_password': db_password, 'db_vault_username': db_vault_username, 'db_vault': db_vault, 'db_hashicorp_vault_engine': db_hashicorp_vault_engine, 'db_hashicorp_vault_secret_path': db_hashicorp_vault_secret_path, 'db_hashicorp_vault_username_key': db_hashicorp_vault_username_key, 'db_hashicorp_vault_secret_key': db_hashicorp_vault_secret_key, 'db_azure_vault_name': db_azure_vault_name, 'db_azure_vault_username_key': db_azure_vault_username_key, 'db_azure_vault_secret_key': db_azure_vault_secret_key, 'db_cyberark_vault_query_string': db_cyberark_vault_query_string, 'staging_repository': staging_repository, 'staging_host_user': staging_host_user, 'validated_sync_mode': validated_sync_mode, 'dump_history_file_enabled': dump_history_file_enabled, 'drop_and_recreate_devices': drop_and_recreate_devices, 'sync_strategy': sync_strategy, 'ase_backup_files': ase_backup_files, 'pre_validated_sync': pre_validated_sync, 'post_validated_sync': post_validated_sync}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/ase', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'external_file_path': external_file_path, 'mount_base': mount_base, 'load_backup_path': load_backup_path, 'backup_server_name': backup_server_name, 'backup_host_user': backup_host_user, 'backup_host': backup_host, 'dump_credentials': dump_credentials, 'source_host_user': source_host_user, 'db_user': db_user, 'db_password': db_password, 'db_vault_username': db_vault_username, 'db_vault': db_vault, 'db_hashicorp_vault_engine': db_hashicorp_vault_engine, 'db_hashicorp_vault_secret_path': db_hashicorp_vault_secret_path, 'db_hashicorp_vault_username_key': db_hashicorp_vault_username_key, 'db_hashicorp_vault_secret_key': db_hashicorp_vault_secret_key, 'db_azure_vault_name': db_azure_vault_name, 'db_azure_vault_username_key': db_azure_vault_username_key, 'db_azure_vault_secret_key': db_azure_vault_secret_key, 'db_cyberark_vault_query_string': db_cyberark_vault_query_string, 'staging_repository': staging_repository, 'staging_host_user': staging_host_user, 'validated_sync_mode': validated_sync_mode, 'dump_history_file_enabled': dump_history_file_enabled, 'drop_and_recreate_devices': drop_and_recreate_devices, 'sync_strategy': sync_strategy, 'ase_backup_files': ase_backup_files, 'pre_validated_sync': pre_validated_sync, 'post_validated_sync': post_validated_sync}.items() if v is not None}
         return make_api_request('POST', '/dsources/ase', params=params, json_body=body if body else None)
     elif action == 'dsource_link_ase_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/ase/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/ase/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
         return make_api_request('POST', '/dsources/ase/defaults', params=params, json_body=body if body else None)
     elif action == 'update_ase_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action update_ase_dsource'}
         endpoint = f'/dsources/ase/{dsource_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'description': description, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'hooks': hooks}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'description': description, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'hooks': hooks}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'dsource_link_appdata':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/appdata', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'link_type': link_type, 'staging_mount_base': staging_mount_base, 'staging_environment': staging_environment, 'staging_environment_user': staging_environment_user, 'environment_user': environment_user, 'excludes': excludes, 'follow_symlinks': follow_symlinks, 'parameters': parameters, 'sync_parameters': sync_parameters}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/appdata', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'link_type': link_type, 'staging_mount_base': staging_mount_base, 'staging_environment': staging_environment, 'staging_environment_user': staging_environment_user, 'environment_user': environment_user, 'excludes': excludes, 'follow_symlinks': follow_symlinks, 'parameters': parameters, 'sync_parameters': sync_parameters}.items() if v is not None}
         return make_api_request('POST', '/dsources/appdata', params=params, json_body=body if body else None)
     elif action == 'dsource_link_appdata_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/appdata/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/appdata/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
         return make_api_request('POST', '/dsources/appdata/defaults', params=params, json_body=body if body else None)
     elif action == 'update_appdata_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action update_appdata_dsource'}
         endpoint = f'/dsources/appdata/{dsource_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'description': description, 'staging_environment': staging_environment, 'staging_environment_user': staging_environment_user, 'environment_user': environment_user, 'parameters': parameters, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'hooks': hooks}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'description': description, 'staging_environment': staging_environment, 'staging_environment_user': staging_environment_user, 'environment_user': environment_user, 'parameters': parameters, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'hooks': hooks}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'dsource_link_mssql':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/mssql', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'encryption_key': encryption_key, 'sync_strategy': sync_strategy, 'mssql_backup_uuid': mssql_backup_uuid, 'compression_enabled': compression_enabled, 'availability_group_backup_policy': availability_group_backup_policy, 'source_host_user': source_host_user, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'sync_strategy_managed_type': sync_strategy_managed_type, 'mssql_user_environment_reference': mssql_user_environment_reference, 'mssql_user_domain_username': mssql_user_domain_username, 'mssql_user_domain_password': mssql_user_domain_password, 'mssql_user_domain_vault_username': mssql_user_domain_vault_username, 'mssql_user_domain_vault': mssql_user_domain_vault, 'mssql_user_domain_hashicorp_vault_engine': mssql_user_domain_hashicorp_vault_engine, 'mssql_user_domain_hashicorp_vault_secret_path': mssql_user_domain_hashicorp_vault_secret_path, 'mssql_user_domain_hashicorp_vault_username_key': mssql_user_domain_hashicorp_vault_username_key, 'mssql_user_domain_hashicorp_vault_secret_key': mssql_user_domain_hashicorp_vault_secret_key, 'mssql_user_domain_azure_vault_name': mssql_user_domain_azure_vault_name, 'mssql_user_domain_azure_vault_username_key': mssql_user_domain_azure_vault_username_key, 'mssql_user_domain_azure_vault_secret_key': mssql_user_domain_azure_vault_secret_key, 'mssql_user_domain_cyberark_vault_query_string': mssql_user_domain_cyberark_vault_query_string, 'mssql_database_username': mssql_database_username, 'mssql_database_password': mssql_database_password, 'delphix_managed_backup_compression_enabled': delphix_managed_backup_compression_enabled, 'delphix_managed_backup_policy': delphix_managed_backup_policy, 'external_managed_validate_sync_mode': external_managed_validate_sync_mode, 'external_managed_shared_backup_locations': external_managed_shared_backup_locations, 'external_netbackup_config_master_name': external_netbackup_config_master_name, 'external_netbackup_config_source_client_name': external_netbackup_config_source_client_name, 'external_netbackup_config_params': external_netbackup_config_params, 'external_netbackup_config_templates': external_netbackup_config_templates, 'external_commserve_host_name': external_commserve_host_name, 'external_commvault_config_source_client_name': external_commvault_config_source_client_name, 'external_commvault_config_staging_client_name': external_commvault_config_staging_client_name, 'external_commvault_config_params': external_commvault_config_params, 'external_commvault_config_templates': external_commvault_config_templates}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/mssql', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'encryption_key': encryption_key, 'sync_strategy': sync_strategy, 'mssql_backup_uuid': mssql_backup_uuid, 'compression_enabled': compression_enabled, 'availability_group_backup_policy': availability_group_backup_policy, 'source_host_user': source_host_user, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'sync_strategy_managed_type': sync_strategy_managed_type, 'mssql_user_environment_reference': mssql_user_environment_reference, 'mssql_user_domain_username': mssql_user_domain_username, 'mssql_user_domain_password': mssql_user_domain_password, 'mssql_user_domain_vault_username': mssql_user_domain_vault_username, 'mssql_user_domain_vault': mssql_user_domain_vault, 'mssql_user_domain_hashicorp_vault_engine': mssql_user_domain_hashicorp_vault_engine, 'mssql_user_domain_hashicorp_vault_secret_path': mssql_user_domain_hashicorp_vault_secret_path, 'mssql_user_domain_hashicorp_vault_username_key': mssql_user_domain_hashicorp_vault_username_key, 'mssql_user_domain_hashicorp_vault_secret_key': mssql_user_domain_hashicorp_vault_secret_key, 'mssql_user_domain_azure_vault_name': mssql_user_domain_azure_vault_name, 'mssql_user_domain_azure_vault_username_key': mssql_user_domain_azure_vault_username_key, 'mssql_user_domain_azure_vault_secret_key': mssql_user_domain_azure_vault_secret_key, 'mssql_user_domain_cyberark_vault_query_string': mssql_user_domain_cyberark_vault_query_string, 'mssql_database_username': mssql_database_username, 'mssql_database_password': mssql_database_password, 'delphix_managed_backup_compression_enabled': delphix_managed_backup_compression_enabled, 'delphix_managed_backup_policy': delphix_managed_backup_policy, 'external_managed_validate_sync_mode': external_managed_validate_sync_mode, 'external_managed_shared_backup_locations': external_managed_shared_backup_locations, 'external_netbackup_config_master_name': external_netbackup_config_master_name, 'external_netbackup_config_source_client_name': external_netbackup_config_source_client_name, 'external_netbackup_config_params': external_netbackup_config_params, 'external_netbackup_config_templates': external_netbackup_config_templates, 'external_commserve_host_name': external_commserve_host_name, 'external_commvault_config_source_client_name': external_commvault_config_source_client_name, 'external_commvault_config_staging_client_name': external_commvault_config_staging_client_name, 'external_commvault_config_params': external_commvault_config_params, 'external_commvault_config_templates': external_commvault_config_templates}.items() if v is not None}
         return make_api_request('POST', '/dsources/mssql', params=params, json_body=body if body else None)
     elif action == 'dsource_link_mssql_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/mssql/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/mssql/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_id': source_id}.items() if v is not None}
         return make_api_request('POST', '/dsources/mssql/defaults', params=params, json_body=body if body else None)
     elif action == 'dsource_link_mssql_staging_push':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/mssql/staging-push', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'engine_id': engine_id, 'encryption_key': encryption_key, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'staging_database_name': staging_database_name, 'db_state': db_state}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/mssql/staging-push', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'source_id': source_id, 'group_id': group_id, 'description': description, 'log_sync_enabled': log_sync_enabled, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id, 'make_current_account_owner': make_current_account_owner, 'tags': tags, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync, 'engine_id': engine_id, 'encryption_key': encryption_key, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'staging_database_name': staging_database_name, 'db_state': db_state}.items() if v is not None}
         return make_api_request('POST', '/dsources/mssql/staging-push', params=params, json_body=body if body else None)
     elif action == 'dsource_link_mssql_staging_push_defaults':
         params = build_params()
-        conf = check_confirmation('POST', '/dsources/mssql/staging-push/defaults', action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'environment_id': environment_id}.items() if v is not None}
+        conf = check_confirmation('POST', '/dsources/mssql/staging-push/defaults', action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'environment_id': environment_id}.items() if v is not None}
         return make_api_request('POST', '/dsources/mssql/staging-push/defaults', params=params, json_body=body if body else None)
     elif action == 'attach_mssql_staging_push_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action attach_mssql_staging_push_dsource'}
         endpoint = f'/dsources/mssql/staging-push/{dsource_id}/attachSource'
         params = build_params(ppt_repository=ppt_repository, staging_database_name=staging_database_name)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'encryption_key': encryption_key, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'staging_database_name': staging_database_name, 'db_state': db_state, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'encryption_key': encryption_key, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'staging_database_name': staging_database_name, 'db_state': db_state, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'update_mssql_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action update_mssql_dsource'}
         endpoint = f'/dsources/mssql/{dsource_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'logsync_enabled': logsync_enabled, 'encryption_key': encryption_key, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'sync_strategy_managed_type': sync_strategy_managed_type, 'source_host_user': source_host_user, 'mssql_user_environment_reference': mssql_user_environment_reference, 'mssql_user_domain_username': mssql_user_domain_username, 'mssql_user_domain_password': mssql_user_domain_password, 'mssql_user_domain_vault_username': mssql_user_domain_vault_username, 'mssql_user_domain_vault': mssql_user_domain_vault, 'mssql_user_domain_hashicorp_vault_engine': mssql_user_domain_hashicorp_vault_engine, 'mssql_user_domain_hashicorp_vault_secret_path': mssql_user_domain_hashicorp_vault_secret_path, 'mssql_user_domain_hashicorp_vault_username_key': mssql_user_domain_hashicorp_vault_username_key, 'mssql_user_domain_hashicorp_vault_secret_key': mssql_user_domain_hashicorp_vault_secret_key, 'mssql_user_domain_azure_vault_name': mssql_user_domain_azure_vault_name, 'mssql_user_domain_azure_vault_username_key': mssql_user_domain_azure_vault_username_key, 'mssql_user_domain_azure_vault_secret_key': mssql_user_domain_azure_vault_secret_key, 'mssql_user_domain_cyberark_vault_query_string': mssql_user_domain_cyberark_vault_query_string, 'mssql_database_username': mssql_database_username, 'mssql_database_password': mssql_database_password, 'delphix_managed_backup_compression_enabled': delphix_managed_backup_compression_enabled, 'delphix_managed_backup_policy': delphix_managed_backup_policy, 'external_managed_validate_sync_mode': external_managed_validate_sync_mode, 'external_managed_shared_backup_locations': external_managed_shared_backup_locations, 'disable_netbackup_config': disable_netbackup_config, 'external_netbackup_config_master_name': external_netbackup_config_master_name, 'external_netbackup_config_source_client_name': external_netbackup_config_source_client_name, 'external_netbackup_config_params': external_netbackup_config_params, 'external_netbackup_config_templates': external_netbackup_config_templates, 'disable_commvault_config': disable_commvault_config, 'external_commserve_host_name': external_commserve_host_name, 'external_commvault_config_source_client_name': external_commvault_config_source_client_name, 'external_commvault_config_staging_client_name': external_commvault_config_staging_client_name, 'external_commvault_config_params': external_commvault_config_params, 'external_commvault_config_templates': external_commvault_config_templates, 'hooks': hooks, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'logsync_enabled': logsync_enabled, 'encryption_key': encryption_key, 'ppt_repository': ppt_repository, 'ppt_host_user': ppt_host_user, 'sync_strategy_managed_type': sync_strategy_managed_type, 'source_host_user': source_host_user, 'mssql_user_environment_reference': mssql_user_environment_reference, 'mssql_user_domain_username': mssql_user_domain_username, 'mssql_user_domain_password': mssql_user_domain_password, 'mssql_user_domain_vault_username': mssql_user_domain_vault_username, 'mssql_user_domain_vault': mssql_user_domain_vault, 'mssql_user_domain_hashicorp_vault_engine': mssql_user_domain_hashicorp_vault_engine, 'mssql_user_domain_hashicorp_vault_secret_path': mssql_user_domain_hashicorp_vault_secret_path, 'mssql_user_domain_hashicorp_vault_username_key': mssql_user_domain_hashicorp_vault_username_key, 'mssql_user_domain_hashicorp_vault_secret_key': mssql_user_domain_hashicorp_vault_secret_key, 'mssql_user_domain_azure_vault_name': mssql_user_domain_azure_vault_name, 'mssql_user_domain_azure_vault_username_key': mssql_user_domain_azure_vault_username_key, 'mssql_user_domain_azure_vault_secret_key': mssql_user_domain_azure_vault_secret_key, 'mssql_user_domain_cyberark_vault_query_string': mssql_user_domain_cyberark_vault_query_string, 'mssql_database_username': mssql_database_username, 'mssql_database_password': mssql_database_password, 'delphix_managed_backup_compression_enabled': delphix_managed_backup_compression_enabled, 'delphix_managed_backup_policy': delphix_managed_backup_policy, 'external_managed_validate_sync_mode': external_managed_validate_sync_mode, 'external_managed_shared_backup_locations': external_managed_shared_backup_locations, 'disable_netbackup_config': disable_netbackup_config, 'external_netbackup_config_master_name': external_netbackup_config_master_name, 'external_netbackup_config_source_client_name': external_netbackup_config_source_client_name, 'external_netbackup_config_params': external_netbackup_config_params, 'external_netbackup_config_templates': external_netbackup_config_templates, 'disable_commvault_config': disable_commvault_config, 'external_commserve_host_name': external_commserve_host_name, 'external_commvault_config_source_client_name': external_commvault_config_source_client_name, 'external_commvault_config_staging_client_name': external_commvault_config_staging_client_name, 'external_commvault_config_params': external_commvault_config_params, 'external_commvault_config_templates': external_commvault_config_templates, 'hooks': hooks, 'sync_policy_id': sync_policy_id, 'retention_policy_id': retention_policy_id}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'attach_mssql_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action attach_mssql_dsource'}
         endpoint = f'/dsources/mssql/{dsource_id}/attachSource'
         params = build_params(ppt_repository=ppt_repository)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'source_id': source_id, 'ppt_repository': ppt_repository, 'sync_strategy_managed_type': sync_strategy_managed_type, 'mssql_user_environment_reference': mssql_user_environment_reference, 'mssql_user_domain_username': mssql_user_domain_username, 'mssql_user_domain_password': mssql_user_domain_password, 'mssql_user_domain_vault_username': mssql_user_domain_vault_username, 'mssql_user_domain_vault': mssql_user_domain_vault, 'mssql_user_domain_hashicorp_vault_engine': mssql_user_domain_hashicorp_vault_engine, 'mssql_user_domain_hashicorp_vault_secret_path': mssql_user_domain_hashicorp_vault_secret_path, 'mssql_user_domain_hashicorp_vault_username_key': mssql_user_domain_hashicorp_vault_username_key, 'mssql_user_domain_hashicorp_vault_secret_key': mssql_user_domain_hashicorp_vault_secret_key, 'mssql_user_domain_azure_vault_name': mssql_user_domain_azure_vault_name, 'mssql_user_domain_azure_vault_username_key': mssql_user_domain_azure_vault_username_key, 'mssql_user_domain_azure_vault_secret_key': mssql_user_domain_azure_vault_secret_key, 'mssql_user_domain_cyberark_vault_query_string': mssql_user_domain_cyberark_vault_query_string, 'mssql_database_username': mssql_database_username, 'mssql_database_password': mssql_database_password, 'delphix_managed_backup_compression_enabled': delphix_managed_backup_compression_enabled, 'delphix_managed_backup_policy': delphix_managed_backup_policy, 'external_managed_validate_sync_mode': external_managed_validate_sync_mode, 'external_managed_shared_backup_locations': external_managed_shared_backup_locations, 'external_netbackup_config_master_name': external_netbackup_config_master_name, 'external_netbackup_config_source_client_name': external_netbackup_config_source_client_name, 'external_netbackup_config_params': external_netbackup_config_params, 'external_netbackup_config_templates': external_netbackup_config_templates, 'external_commserve_host_name': external_commserve_host_name, 'external_commvault_config_source_client_name': external_commvault_config_source_client_name, 'external_commvault_config_staging_client_name': external_commvault_config_staging_client_name, 'external_commvault_config_params': external_commvault_config_params, 'external_commvault_config_templates': external_commvault_config_templates, 'encryption_key': encryption_key, 'source_host_user': source_host_user, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_id': source_id, 'ppt_repository': ppt_repository, 'sync_strategy_managed_type': sync_strategy_managed_type, 'mssql_user_environment_reference': mssql_user_environment_reference, 'mssql_user_domain_username': mssql_user_domain_username, 'mssql_user_domain_password': mssql_user_domain_password, 'mssql_user_domain_vault_username': mssql_user_domain_vault_username, 'mssql_user_domain_vault': mssql_user_domain_vault, 'mssql_user_domain_hashicorp_vault_engine': mssql_user_domain_hashicorp_vault_engine, 'mssql_user_domain_hashicorp_vault_secret_path': mssql_user_domain_hashicorp_vault_secret_path, 'mssql_user_domain_hashicorp_vault_username_key': mssql_user_domain_hashicorp_vault_username_key, 'mssql_user_domain_hashicorp_vault_secret_key': mssql_user_domain_hashicorp_vault_secret_key, 'mssql_user_domain_azure_vault_name': mssql_user_domain_azure_vault_name, 'mssql_user_domain_azure_vault_username_key': mssql_user_domain_azure_vault_username_key, 'mssql_user_domain_azure_vault_secret_key': mssql_user_domain_azure_vault_secret_key, 'mssql_user_domain_cyberark_vault_query_string': mssql_user_domain_cyberark_vault_query_string, 'mssql_database_username': mssql_database_username, 'mssql_database_password': mssql_database_password, 'delphix_managed_backup_compression_enabled': delphix_managed_backup_compression_enabled, 'delphix_managed_backup_policy': delphix_managed_backup_policy, 'external_managed_validate_sync_mode': external_managed_validate_sync_mode, 'external_managed_shared_backup_locations': external_managed_shared_backup_locations, 'external_netbackup_config_master_name': external_netbackup_config_master_name, 'external_netbackup_config_source_client_name': external_netbackup_config_source_client_name, 'external_netbackup_config_params': external_netbackup_config_params, 'external_netbackup_config_templates': external_netbackup_config_templates, 'external_commserve_host_name': external_commserve_host_name, 'external_commvault_config_source_client_name': external_commvault_config_source_client_name, 'external_commvault_config_staging_client_name': external_commvault_config_staging_client_name, 'external_commvault_config_params': external_commvault_config_params, 'external_commvault_config_templates': external_commvault_config_templates, 'encryption_key': encryption_key, 'source_host_user': source_host_user, 'ppt_host_user': ppt_host_user, 'staging_pre_script': staging_pre_script, 'staging_post_script': staging_post_script, 'ops_pre_sync': ops_pre_sync, 'ops_post_sync': ops_post_sync}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'detach_mssql_dsource':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action detach_mssql_dsource'}
         endpoint = f'/dsources/mssql/{dsource_id}/detachSource'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -3720,80 +3745,80 @@ def data_tool(
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_by_snapshot'}
         endpoint = f'/dsources/{dsource_id}/export-by-snapshot'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_by_timestamp':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_by_timestamp'}
         endpoint = f'/dsources/{dsource_id}/export-by-timestamp'
         params = build_params(timestamp=timestamp)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_by_location':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_by_location'}
         endpoint = f'/dsources/{dsource_id}/export-by-location'
         params = build_params(location=location)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_from_bookmark':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_from_bookmark'}
         endpoint = f'/dsources/{dsource_id}/export-from-bookmark'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'targetDirectory': target_directory, 'dataDirectory': data_directory, 'archiveDirectory': archive_directory, 'externalDirectory': external_directory, 'tempDirectory': temp_directory, 'scriptDirectory': script_directory, 'useAbsolutePathForDataFiles': use_absolute_path_for_data_files, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_to_asm_by_snapshot':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_to_asm_by_snapshot'}
         endpoint = f'/dsources/{dsource_id}/asm-export-by-snapshot'
         params = build_params(default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'snapshot_id': snapshot_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_to_asm_by_timestamp':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_to_asm_by_timestamp'}
         endpoint = f'/dsources/{dsource_id}/asm-export-by-timestamp'
         params = build_params(timestamp=timestamp, default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'timeflow_id': timeflow_id, 'timestamp': timestamp}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_to_asm_by_location':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_to_asm_by_location'}
         endpoint = f'/dsources/{dsource_id}/asm-export-by-location'
         params = build_params(location=location, default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'location': location}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'export_dsource_to_asm_from_bookmark':
         if dsource_id is None:
             return {'error': 'Missing required parameter: dsource_id for action export_dsource_to_asm_from_bookmark'}
         endpoint = f'/dsources/{dsource_id}/asm-export-from-bookmark'
         params = build_params(default_data_diskgroup=default_data_diskgroup)
-        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False)
+        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'unique_name': unique_name, 'database_name': database_name, 'repository_id': repository_id, 'environment_user_ref': environment_user_ref, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'oracle_instance_name': oracle_instance_name, 'instance_number': instance_number, 'instances': instances, 'mount_base': mount_base, 'config_params': config_params, 'cdb_id': cdb_id, 'parent_tde_keystore_path': parent_tde_keystore_path, 'parent_tde_keystore_password': parent_tde_keystore_password, 'tde_exported_keyfile_secret': tde_exported_keyfile_secret, 'tde_key_identifier': tde_key_identifier, 'parent_pdb_tde_keystore_path': parent_pdb_tde_keystore_path, 'parent_pdb_tde_keystore_password': parent_pdb_tde_keystore_password, 'target_pdb_tde_keystore_password': target_pdb_tde_keystore_password, 'crs_database_name': crs_database_name, 'recover_database': recover_database, 'file_mapping_rules': file_mapping_rules, 'enable_cdc': enable_cdc, 'recovery_model': recovery_model, 'mirroring_state': mirroring_state, 'is_incremental_v2p': is_incremental_v2p, 'backup_frequency_minutes': backup_frequency_minutes, 'rman_channels_for_incremental_backup': rman_channels_for_incremental_backup, 'rman_files_per_set_for_incremental_backup': rman_files_per_set_for_incremental_backup, 'rman_file_section_size_in_gb_for_incremental_backup': rman_file_section_size_in_gb_for_incremental_backup, 'default_data_diskgroup': default_data_diskgroup, 'redo_diskgroup': redo_diskgroup, 'rman_channels': rman_channels, 'rman_file_section_size_in_gb': rman_file_section_size_in_gb, 'bookmark_id': bookmark_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark'}
@@ -3802,17 +3827,17 @@ def data_tool(
 def snapshot_bookmark_tool(
     action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
     bookmark_id: Optional[str] = None,
-    bookmark_type: Optional[str] = 'PRIVATE',
+    bookmark_type: Optional[str] = None,
     cursor: Optional[str] = None,
-    delete_all_dependencies: Optional[bool] = False,
+    delete_all_dependencies: Optional[bool] = None,
     expiration: Optional[str] = None,
     filter_expression: Optional[str] = None,
-    inherit_parent_tags: Optional[bool] = False,
-    inherit_parent_vdb_tags: Optional[bool] = False,
+    inherit_parent_tags: Optional[bool] = None,
+    inherit_parent_vdb_tags: Optional[bool] = None,
     key: Optional[str] = None,
     limit: Optional[int] = 100,
     location: Optional[str] = None,
-    make_current_account_owner: Optional[bool] = True,
+    make_current_account_owner: Optional[bool] = None,
     name: Optional[str] = None,
     paas_database_ids: Optional[list] = None,
     paas_instance_ids: Optional[list] = None,
@@ -4195,17 +4220,17 @@ def snapshot_bookmark_tool(
     # Route to appropriate API based on action
     if action == 'search_snapshots':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/snapshots/search', action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/snapshots/search', action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/snapshots/search', params=params, json_body=body)
     elif action == 'get_snapshot':
         if snapshot_id is None:
             return {'error': 'Missing required parameter: snapshot_id for action get_snapshot'}
         endpoint = f'/snapshots/{snapshot_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4214,27 +4239,27 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: snapshot_id for action update_snapshot'}
         endpoint = f'/snapshots/{snapshot_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'expiration': expiration, 'retain_forever': retain_forever}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'expiration': expiration, 'retain_forever': retain_forever}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_snapshot':
         if snapshot_id is None:
             return {'error': 'Missing required parameter: snapshot_id for action delete_snapshot'}
         endpoint = f'/snapshots/{snapshot_id}/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'delete_all_dependencies': delete_all_dependencies}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'delete_all_dependencies': delete_all_dependencies}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'unset_snapshot_expiration':
         if snapshot_id is None:
             return {'error': 'Missing required parameter: snapshot_id for action unset_snapshot_expiration'}
         endpoint = f'/snapshots/{snapshot_id}/unset_expiration'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -4243,7 +4268,7 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: snapshot_id for action get_snapshot_timeflow_range'}
         endpoint = f'/snapshots/{snapshot_id}/timeflow_range'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4252,7 +4277,7 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: snapshot_id for action get_runtime'}
         endpoint = f'/snapshots/{snapshot_id}/runtime'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4261,7 +4286,7 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: snapshot_id for action get_snapshot_tags'}
         endpoint = f'/snapshots/{snapshot_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4270,60 +4295,60 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: snapshot_id for action add_snapshot_tags'}
         endpoint = f'/snapshots/{snapshot_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_snapshot_tags':
         if snapshot_id is None:
             return {'error': 'Missing required parameter: snapshot_id for action delete_snapshot_tags'}
         endpoint = f'/snapshots/{snapshot_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'search_bookmarks':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/bookmarks/search', action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/bookmarks/search', action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/bookmarks/search', params=params, json_body=body)
     elif action == 'get_bookmark':
         if bookmark_id is None:
             return {'error': 'Missing required parameter: bookmark_id for action get_bookmark'}
         endpoint = f'/bookmarks/{bookmark_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'create_bookmark':
         params = build_params(name=name)
-        conf = check_confirmation('POST', '/bookmarks', action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'vdb_ids': vdb_ids, 'vdb_group_id': vdb_group_id, 'snapshot_ids': snapshot_ids, 'timeflow_ids': timeflow_ids, 'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'location': location, 'paas_snapshot_ids': paas_snapshot_ids, 'paas_database_ids': paas_database_ids, 'paas_instance_ids': paas_instance_ids, 'retention': retention, 'expiration': expiration, 'retain_forever': retain_forever, 'tags': tags, 'bookmark_type': bookmark_type, 'make_current_account_owner': make_current_account_owner, 'inherit_parent_vdb_tags': inherit_parent_vdb_tags, 'inherit_parent_tags': inherit_parent_tags}.items() if v is not None}
+        conf = check_confirmation('POST', '/bookmarks', action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'vdb_ids': vdb_ids, 'vdb_group_id': vdb_group_id, 'snapshot_ids': snapshot_ids, 'timeflow_ids': timeflow_ids, 'timestamp': timestamp, 'timestamp_in_database_timezone': timestamp_in_database_timezone, 'location': location, 'paas_snapshot_ids': paas_snapshot_ids, 'paas_database_ids': paas_database_ids, 'paas_instance_ids': paas_instance_ids, 'retention': retention, 'expiration': expiration, 'retain_forever': retain_forever, 'tags': tags, 'bookmark_type': bookmark_type, 'make_current_account_owner': make_current_account_owner, 'inherit_parent_vdb_tags': inherit_parent_vdb_tags, 'inherit_parent_tags': inherit_parent_tags}.items() if v is not None}
         return make_api_request('POST', '/bookmarks', params=params, json_body=body if body else None)
     elif action == 'update_bookmark':
         if bookmark_id is None:
             return {'error': 'Missing required parameter: bookmark_id for action update_bookmark'}
         endpoint = f'/bookmarks/{bookmark_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name, 'expiration': expiration, 'retain_forever': retain_forever, 'bookmark_type': bookmark_type}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'expiration': expiration, 'retain_forever': retain_forever, 'bookmark_type': bookmark_type}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_bookmark':
         if bookmark_id is None:
             return {'error': 'Missing required parameter: bookmark_id for action delete_bookmark'}
         endpoint = f'/bookmarks/{bookmark_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
@@ -4332,7 +4357,7 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: bookmark_id for action get_bookmark_vdb_groups'}
         endpoint = f'/bookmarks/{bookmark_id}/vdb-groups'
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4341,7 +4366,7 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: bookmark_id for action get_bookmark_tags'}
         endpoint = f'/bookmarks/{bookmark_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4350,20 +4375,20 @@ def snapshot_bookmark_tool(
             return {'error': 'Missing required parameter: bookmark_id for action add_bookmark_tags'}
         endpoint = f'/bookmarks/{bookmark_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_bookmark_tags':
         if bookmark_id is None:
             return {'error': 'Missing required parameter: bookmark_id for action delete_bookmark_tags'}
         endpoint = f'/bookmarks/{bookmark_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'snapshot_bookmark_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags'}
@@ -4510,17 +4535,17 @@ def data_connection_tool(
     # Route to appropriate API based on action
     if action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/data-connections/search', action, 'data_connection_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/data-connections/search', action, 'data_connection_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/data-connections/search', params=params, json_body=body)
     elif action == 'get':
         if data_connection_id is None:
             return {'error': 'Missing required parameter: data_connection_id for action get'}
         endpoint = f'/data-connections/{data_connection_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_connection_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_connection_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4529,17 +4554,17 @@ def data_connection_tool(
             return {'error': 'Missing required parameter: data_connection_id for action update'}
         endpoint = f'/data-connections/{data_connection_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'data_connection_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'data_connection_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_tags':
         if data_connection_id is None:
             return {'error': 'Missing required parameter: data_connection_id for action get_tags'}
         endpoint = f'/data-connections/{data_connection_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'data_connection_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'data_connection_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4548,20 +4573,20 @@ def data_connection_tool(
             return {'error': 'Missing required parameter: data_connection_id for action add_tags'}
         endpoint = f'/data-connections/{data_connection_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'data_connection_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_connection_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if data_connection_id is None:
             return {'error': 'Missing required parameter: data_connection_id for action delete_tags'}
         endpoint = f'/data-connections/{data_connection_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'data_connection_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'data_connection_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search, get, update, get_tags, add_tags, delete_tags'}
@@ -4588,7 +4613,7 @@ def timeflow_tool(
     limit: Optional[int] = 100,
     name: Optional[str] = None,
     password: Optional[str] = None,
-    port: Optional[int] = 22,
+    port: Optional[int] = None,
     sort: Optional[str] = None,
     ssh_verification_strategy: Optional[str] = None,
     start_location: Optional[str] = None,
@@ -4825,23 +4850,23 @@ def timeflow_tool(
     # Route to appropriate API based on action
     if action == 'list':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/timeflows', action, 'timeflow_tool', confirmed or False)
+        conf = check_confirmation('GET', '/timeflows', action, 'timeflow_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/timeflows', params=params)
     elif action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/timeflows/search', action, 'timeflow_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/timeflows/search', action, 'timeflow_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/timeflows/search', params=params, json_body=body)
     elif action == 'get':
         if timeflow_id is None:
             return {'error': 'Missing required parameter: timeflow_id for action get'}
         endpoint = f'/timeflows/{timeflow_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'timeflow_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4850,17 +4875,17 @@ def timeflow_tool(
             return {'error': 'Missing required parameter: timeflow_id for action update'}
         endpoint = f'/timeflows/{timeflow_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'timeflow_tool', confirmed or False)
+        body = {k: v for k, v in {'name': name}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete':
         if timeflow_id is None:
             return {'error': 'Missing required parameter: timeflow_id for action delete'}
         endpoint = f'/timeflows/{timeflow_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'timeflow_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
@@ -4869,7 +4894,7 @@ def timeflow_tool(
             return {'error': 'Missing required parameter: timeflow_id for action get_snapshot_day_range'}
         endpoint = f'/timeflows/{timeflow_id}/timeflowSnapshotDayRange'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'timeflow_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4878,17 +4903,17 @@ def timeflow_tool(
             return {'error': 'Missing required parameter: timeflow_id for action repair'}
         endpoint = f'/timeflows/{timeflow_id}/repair'
         params = build_params(host=host, username=username, directory=directory, start_location=start_location, end_location=end_location)
-        conf = check_confirmation('POST', endpoint, action, 'timeflow_tool', confirmed or False)
+        body = {k: v for k, v in {'host': host, 'port': port, 'username': username, 'directory': directory, 'start_location': start_location, 'end_location': end_location, 'use_engine_public_key': use_engine_public_key, 'password': password, 'key_pair_private_key': key_pair_private_key, 'key_pair_public_key': key_pair_public_key, 'vault_id': vault_id, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'use_kerberos_authentication': use_kerberos_authentication, 'sshVerificationStrategy': ssh_verification_strategy}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'host': host, 'port': port, 'username': username, 'directory': directory, 'start_location': start_location, 'end_location': end_location, 'use_engine_public_key': use_engine_public_key, 'password': password, 'key_pair_private_key': key_pair_private_key, 'key_pair_public_key': key_pair_public_key, 'vault_id': vault_id, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'use_kerberos_authentication': use_kerberos_authentication, 'sshVerificationStrategy': ssh_verification_strategy}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_tags':
         if timeflow_id is None:
             return {'error': 'Missing required parameter: timeflow_id for action get_tags'}
         endpoint = f'/timeflows/{timeflow_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'timeflow_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -4897,20 +4922,20 @@ def timeflow_tool(
             return {'error': 'Missing required parameter: timeflow_id for action add_tags'}
         endpoint = f'/timeflows/{timeflow_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'timeflow_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if timeflow_id is None:
             return {'error': 'Missing required parameter: timeflow_id for action delete_tags'}
         endpoint = f'/timeflows/{timeflow_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'timeflow_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'timeflow_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: list, search, get, update, delete, get_snapshot_day_range, repair, get_tags, add_tags, delete_tags'}

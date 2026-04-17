@@ -29,10 +29,30 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
@@ -40,7 +60,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
-            "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
         }
     return None
 
@@ -86,9 +108,9 @@ def build_params(**kwargs):
 @log_tool_execution
 def instance_tool(
     action: str,  # One of: search_cdbs, get_cdb, update_cdb, delete_cdb, enable_cdb, disable_cdb, get_cdb_tags, add_cdb_tags, delete_cdb_tags, search_vcdbs, get_vcdb, update_vcdb, delete_vcdb, enable_vcdb, disable_vcdb, start_vcdb, stop_vcdb, get_vcdb_tags, add_vcdb_tags, delete_vcdb_tags
-    abort: Optional[bool] = False,
-    attempt_cleanup: Optional[bool] = True,
-    attempt_start: Optional[bool] = True,
+    abort: Optional[bool] = None,
+    attempt_cleanup: Optional[bool] = None,
+    attempt_start: Optional[bool] = None,
     auto_restart: Optional[bool] = None,
     backup_level_enabled: Optional[bool] = None,
     bandwidth_limit: Optional[int] = None,
@@ -102,14 +124,14 @@ def instance_tool(
     db_password: Optional[str] = None,
     db_template_id: Optional[str] = None,
     db_username: Optional[str] = None,
-    delete_all_dependent_datasets: Optional[bool] = False,
+    delete_all_dependent_datasets: Optional[bool] = None,
     description: Optional[str] = None,
     diagnose_no_logging_faults: Optional[bool] = None,
     encrypted_linking_enabled: Optional[bool] = None,
     environment_user_id: Optional[str] = None,
     files_per_set: Optional[int] = None,
     filter_expression: Optional[str] = None,
-    force: Optional[bool] = False,
+    force: Optional[bool] = None,
     instance_name: Optional[str] = None,
     instance_number: Optional[int] = None,
     instances: Optional[list] = None,
@@ -579,17 +601,17 @@ def instance_tool(
     # Route to appropriate API based on action
     if action == 'search_cdbs':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/cdbs/search', action, 'instance_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/cdbs/search', action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/cdbs/search', params=params, json_body=body)
     elif action == 'get_cdb':
         if cdb_id is None:
             return {'error': 'Missing required parameter: cdb_id for action get_cdb'}
         endpoint = f'/cdbs/{cdb_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -598,49 +620,49 @@ def instance_tool(
             return {'error': 'Missing required parameter: cdb_id for action update_cdb'}
         endpoint = f'/cdbs/{cdb_id}/update'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'instance_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'oracle_services': oracle_services, 'logsync_enabled': logsync_enabled, 'logsync_mode': logsync_mode, 'logsync_interval': logsync_interval, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'tde_kms_pkcs11_config_path': tde_kms_pkcs11_config_path, 'description': description, 'diagnose_no_logging_faults': diagnose_no_logging_faults, 'environment_user_id': environment_user_id, 'rman_channels': rman_channels, 'files_per_set': files_per_set, 'encrypted_linking_enabled': encrypted_linking_enabled, 'compressed_linking_enabled': compressed_linking_enabled, 'bandwidth_limit': bandwidth_limit, 'number_of_connections': number_of_connections, 'backup_level_enabled': backup_level_enabled, 'check_logical': check_logical, 'db_username': db_username, 'db_password': db_password, 'non_sys_username': non_sys_username, 'non_sys_password': non_sys_password, 'okv_client_id': okv_client_id, 'instance_name': instance_name, 'instance_number': instance_number, 'instances': instances}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_cdb':
         if cdb_id is None:
             return {'error': 'Missing required parameter: cdb_id for action delete_cdb'}
         endpoint = f'/cdbs/{cdb_id}/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'enable_cdb':
         if cdb_id is None:
             return {'error': 'Missing required parameter: cdb_id for action enable_cdb'}
         endpoint = f'/cdbs/{cdb_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable_cdb':
         if cdb_id is None:
             return {'error': 'Missing required parameter: cdb_id for action disable_cdb'}
         endpoint = f'/cdbs/{cdb_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_cdb_tags':
         if cdb_id is None:
             return {'error': 'Missing required parameter: cdb_id for action get_cdb_tags'}
         endpoint = f'/cdbs/{cdb_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -649,34 +671,34 @@ def instance_tool(
             return {'error': 'Missing required parameter: cdb_id for action add_cdb_tags'}
         endpoint = f'/cdbs/{cdb_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_cdb_tags':
         if cdb_id is None:
             return {'error': 'Missing required parameter: cdb_id for action delete_cdb_tags'}
         endpoint = f'/cdbs/{cdb_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'search_vcdbs':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/vcdbs/search', action, 'instance_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/vcdbs/search', action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/vcdbs/search', params=params, json_body=body)
     elif action == 'get_vcdb':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action get_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -685,69 +707,69 @@ def instance_tool(
             return {'error': 'Missing required parameter: vcdb_id for action update_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}/update'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'instance_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'oracle_services': oracle_services, 'okv_client_id': okv_client_id, 'instance_name': instance_name, 'instance_number': instance_number, 'instances': instances, 'node_listeners': node_listeners, 'invoke_datapatch': invoke_datapatch, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'tde_key_identifier': tde_key_identifier, 'db_username': db_username, 'db_password': db_password, 'auto_restart': auto_restart, 'environment_user_id': environment_user_id, 'config_params': config_params, 'custom_env_vars': custom_env_vars, 'custom_env_files': custom_env_files, 'oracle_rac_custom_env_files': oracle_rac_custom_env_files, 'oracle_rac_custom_env_vars': oracle_rac_custom_env_vars, 'description': description, 'db_template_id': db_template_id}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_vcdb':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action delete_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'enable_vcdb':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action enable_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable_vcdb':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action disable_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'start_vcdb':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action start_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}/start'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'instances': instances}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'instances': instances}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'stop_vcdb':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action stop_vcdb'}
         endpoint = f'/vcdbs/{vcdb_id}/stop'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'instances': instances, 'abort': abort}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'instances': instances, 'abort': abort}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_vcdb_tags':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action get_vcdb_tags'}
         endpoint = f'/vcdbs/{vcdb_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -756,20 +778,20 @@ def instance_tool(
             return {'error': 'Missing required parameter: vcdb_id for action add_vcdb_tags'}
         endpoint = f'/vcdbs/{vcdb_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_vcdb_tags':
         if vcdb_id is None:
             return {'error': 'Missing required parameter: vcdb_id for action delete_vcdb_tags'}
         endpoint = f'/vcdbs/{vcdb_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'instance_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: search_cdbs, get_cdb, update_cdb, delete_cdb, enable_cdb, disable_cdb, get_cdb_tags, add_cdb_tags, delete_cdb_tags, search_vcdbs, get_vcdb, update_vcdb, delete_vcdb, enable_vcdb, disable_vcdb, start_vcdb, stop_vcdb, get_vcdb_tags, add_vcdb_tags, delete_vcdb_tags'}
@@ -942,23 +964,23 @@ def staging_source_tool(
     # Route to appropriate API based on action
     if action == 'list':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/staging-sources', action, 'staging_source_tool', confirmed or False)
+        conf = check_confirmation('GET', '/staging-sources', action, 'staging_source_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/staging-sources', params=params)
     elif action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/staging-sources/search', action, 'staging_source_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/staging-sources/search', action, 'staging_source_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/staging-sources/search', params=params, json_body=body)
     elif action == 'get':
         if staging_source_id is None:
             return {'error': 'Missing required parameter: staging_source_id for action get'}
         endpoint = f'/staging-sources/{staging_source_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'staging_source_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'staging_source_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -967,17 +989,17 @@ def staging_source_tool(
             return {'error': 'Missing required parameter: staging_source_id for action update'}
         endpoint = f'/staging-sources/{staging_source_id}/update'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'staging_source_tool', confirmed or False)
+        body = {k: v for k, v in {'oracle_services': oracle_services}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'staging_source_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'oracle_services': oracle_services}.items() if v is not None}
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_tags':
         if staging_source_id is None:
             return {'error': 'Missing required parameter: staging_source_id for action get_tags'}
         endpoint = f'/staging-sources/{staging_source_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'staging_source_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'staging_source_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -986,20 +1008,20 @@ def staging_source_tool(
             return {'error': 'Missing required parameter: staging_source_id for action add_tags'}
         endpoint = f'/staging-sources/{staging_source_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'staging_source_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_source_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if staging_source_id is None:
             return {'error': 'Missing required parameter: staging_source_id for action delete_tags'}
         endpoint = f'/staging-sources/{staging_source_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'staging_source_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_source_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: list, search, get, update, get_tags, add_tags, delete_tags'}
@@ -1008,19 +1030,19 @@ def staging_source_tool(
 def staging_cdb_tool(
     action: str,  # One of: list, search, get, update, delete, enable, disable, upgrade, get_tags, add_tags, delete_tags
     allow_auto_staging_restart_on_host_reboot: Optional[bool] = None,
-    attempt_cleanup: Optional[bool] = True,
-    attempt_start: Optional[bool] = True,
+    attempt_cleanup: Optional[bool] = None,
+    attempt_start: Optional[bool] = None,
     config_params: Optional[dict] = None,
     cursor: Optional[str] = None,
     custom_env_variables_pairs: Optional[list] = None,
     custom_env_variables_paths: Optional[list] = None,
     db_template_id: Optional[str] = None,
-    delete_all_dependent_datasets: Optional[bool] = False,
+    delete_all_dependent_datasets: Optional[bool] = None,
     description: Optional[str] = None,
     environment_id: Optional[str] = None,
     environment_user_id: Optional[str] = None,
     filter_expression: Optional[str] = None,
-    force: Optional[bool] = False,
+    force: Optional[bool] = None,
     instance_name: Optional[str] = None,
     instance_number: Optional[int] = None,
     key: Optional[str] = None,
@@ -1293,23 +1315,23 @@ def staging_cdb_tool(
     # Route to appropriate API based on action
     if action == 'list':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/staging-cdbs', action, 'staging_cdb_tool', confirmed or False)
+        conf = check_confirmation('GET', '/staging-cdbs', action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/staging-cdbs', params=params)
     elif action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/staging-cdbs/search', action, 'staging_cdb_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/staging-cdbs/search', action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/staging-cdbs/search', params=params, json_body=body)
     elif action == 'get':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action get'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -1318,61 +1340,61 @@ def staging_cdb_tool(
             return {'error': 'Missing required parameter: staging_cdb_id for action update'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}'
         params = build_params()
-        conf = check_confirmation('PATCH', endpoint, action, 'staging_cdb_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'oracle_services': oracle_services, 'logsync_enabled': logsync_enabled, 'tde_keystore_password': tde_keystore_password, 'tde_keystore_config_type': tde_keystore_config_type, 'tde_kms_pkcs11_config_path': tde_kms_pkcs11_config_path, 'allow_auto_staging_restart_on_host_reboot': allow_auto_staging_restart_on_host_reboot, 'physical_standby': physical_standby, 'validate_snapshot_by_opening_db_in_read_mode': validate_snapshot_by_opening_db_in_read_mode, 'custom_env_variables_pairs': custom_env_variables_pairs, 'custom_env_variables_paths': custom_env_variables_paths, 'environment_id': environment_id, 'repository_id': repository_id, 'environment_user_id': environment_user_id, 'description': description, 'config_params': config_params, 'db_template_id': db_template_id, 'okv_client_id': okv_client_id, 'instance_name': instance_name, 'instance_number': instance_number}.items() if v is not None}
+        conf = check_confirmation('PATCH', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action delete'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'enable':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action enable'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action disable'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'upgrade':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action upgrade'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/upgrade'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'get_tags':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action get_tags'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -1381,20 +1403,20 @@ def staging_cdb_tool(
             return {'error': 'Missing required parameter: staging_cdb_id for action add_tags'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_tags':
         if staging_cdb_id is None:
             return {'error': 'Missing required parameter: staging_cdb_id for action delete_tags'}
         endpoint = f'/staging-cdbs/{staging_cdb_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'staging_cdb_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: list, search, get, update, delete, enable, disable, upgrade, get_tags, add_tags, delete_tags'}
@@ -1402,31 +1424,31 @@ def staging_cdb_tool(
 @log_tool_execution
 def cdb_dsource_tool(
     action: str,  # One of: list, search, get, attach_cdb, detach_cdb, enable, disable, delete, upgrade
-    attempt_cleanup: Optional[bool] = True,
-    attempt_start: Optional[bool] = True,
+    attempt_cleanup: Optional[bool] = None,
+    attempt_start: Optional[bool] = None,
     backup_level_enabled: Optional[bool] = None,
-    bandwidth_limit: Optional[int] = 0,
+    bandwidth_limit: Optional[int] = None,
     cdb_d_source_id: Optional[str] = None,
-    check_logical: Optional[bool] = False,
-    compressed_linking_enabled: Optional[bool] = True,
+    check_logical: Optional[bool] = None,
+    compressed_linking_enabled: Optional[bool] = None,
     cursor: Optional[str] = None,
-    delete_all_dependent_datasets: Optional[bool] = False,
-    double_sync: Optional[bool] = False,
-    encrypted_linking_enabled: Optional[bool] = False,
+    delete_all_dependent_datasets: Optional[bool] = None,
+    double_sync: Optional[bool] = None,
+    encrypted_linking_enabled: Optional[bool] = None,
     environment_user: Optional[str] = None,
     environment_user_id: Optional[str] = None,
     external_file_path: Optional[str] = None,
-    files_per_set: Optional[int] = 5,
+    files_per_set: Optional[int] = None,
     filter_expression: Optional[str] = None,
-    force: Optional[bool] = False,
+    force: Optional[bool] = None,
     limit: Optional[int] = 100,
-    link_now: Optional[bool] = False,
-    number_of_connections: Optional[int] = 1,
+    link_now: Optional[bool] = None,
+    number_of_connections: Optional[int] = None,
     operations: Optional[list] = None,
     oracle_fallback_credentials: Optional[str] = None,
     oracle_fallback_user: Optional[str] = None,
     repository_id: Optional[str] = None,
-    rman_channels: Optional[int] = 2,
+    rman_channels: Optional[int] = None,
     sort: Optional[str] = None,
     source_id: Optional[str] = None,
     confirmed: Optional[bool] = None,
@@ -1639,23 +1661,23 @@ def cdb_dsource_tool(
     # Route to appropriate API based on action
     if action == 'list':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/cdb-dsources', action, 'cdb_dsource_tool', confirmed or False)
+        conf = check_confirmation('GET', '/cdb-dsources', action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/cdb-dsources', params=params)
     elif action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/cdb-dsources/search', action, 'cdb_dsource_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/cdb-dsources/search', action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/cdb-dsources/search', params=params, json_body=body)
     elif action == 'get':
         if cdb_d_source_id is None:
             return {'error': 'Missing required parameter: cdb_d_source_id for action get'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'cdb_dsource_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -1664,17 +1686,17 @@ def cdb_dsource_tool(
             return {'error': 'Missing required parameter: cdb_d_source_id for action attach_cdb'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}/attach-cdb'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
+        body = {k: v for k, v in {'backup_level_enabled': backup_level_enabled, 'bandwidth_limit': bandwidth_limit, 'check_logical': check_logical, 'compressed_linking_enabled': compressed_linking_enabled, 'double_sync': double_sync, 'encrypted_linking_enabled': encrypted_linking_enabled, 'environment_user': environment_user, 'external_file_path': external_file_path, 'files_per_set': files_per_set, 'force': force, 'link_now': link_now, 'number_of_connections': number_of_connections, 'operations': operations, 'oracle_fallback_user': oracle_fallback_user, 'oracle_fallback_credentials': oracle_fallback_credentials, 'rman_channels': rman_channels, 'source_id': source_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'backup_level_enabled': backup_level_enabled, 'bandwidth_limit': bandwidth_limit, 'check_logical': check_logical, 'compressed_linking_enabled': compressed_linking_enabled, 'double_sync': double_sync, 'encrypted_linking_enabled': encrypted_linking_enabled, 'environment_user': environment_user, 'external_file_path': external_file_path, 'files_per_set': files_per_set, 'force': force, 'link_now': link_now, 'number_of_connections': number_of_connections, 'operations': operations, 'oracle_fallback_user': oracle_fallback_user, 'oracle_fallback_credentials': oracle_fallback_credentials, 'rman_channels': rman_channels, 'source_id': source_id}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'detach_cdb':
         if cdb_d_source_id is None:
             return {'error': 'Missing required parameter: cdb_d_source_id for action detach_cdb'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}/detach-cdb'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
+        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params)
@@ -1683,42 +1705,42 @@ def cdb_dsource_tool(
             return {'error': 'Missing required parameter: cdb_d_source_id for action enable'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}/enable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_start': attempt_start}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'disable':
         if cdb_d_source_id is None:
             return {'error': 'Missing required parameter: cdb_d_source_id for action disable'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}/disable'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
+        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete':
         if cdb_d_source_id is None:
             return {'error': 'Missing required parameter: cdb_d_source_id for action delete'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
+        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'force': force, 'delete_all_dependent_datasets': delete_all_dependent_datasets}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'upgrade':
         if cdb_d_source_id is None:
             return {'error': 'Missing required parameter: cdb_d_source_id for action upgrade'}
         endpoint = f'/cdb-dsources/{cdb_d_source_id}/upgrade'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'repository_id': repository_id, 'environment_user_id': environment_user_id}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'cdb_dsource_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: list, search, get, attach_cdb, detach_cdb, enable, disable, delete, upgrade'}
@@ -1816,23 +1838,23 @@ def group_tool(
     # Route to appropriate API based on action
     if action == 'list':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/groups', action, 'group_tool', confirmed or False)
+        conf = check_confirmation('GET', '/groups', action, 'group_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/groups', params=params)
     elif action == 'search':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/groups/search', action, 'group_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/groups/search', action, 'group_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/groups/search', params=params, json_body=body)
     elif action == 'get':
         if group_id is None:
             return {'error': 'Missing required parameter: group_id for action get'}
         endpoint = f'/groups/{group_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'group_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'group_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2050,30 +2072,30 @@ def vault_tool(
     # Route to appropriate API based on action
     if action == 'list_hashicorp_vaults':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/management/vaults/hashicorp', action, 'vault_tool', confirmed or False)
+        conf = check_confirmation('GET', '/management/vaults/hashicorp', action, 'vault_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/management/vaults/hashicorp', params=params)
     elif action == 'create_hashicorp_vault':
         params = build_params()
-        conf = check_confirmation('POST', '/management/vaults/hashicorp', action, 'vault_tool', confirmed or False)
+        body = {k: v for k, v in {'id': id, 'env_variables': env_variables, 'login_command_args': login_command_args, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', '/management/vaults/hashicorp', action, 'vault_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'id': id, 'env_variables': env_variables, 'login_command_args': login_command_args, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', '/management/vaults/hashicorp', params=params, json_body=body if body else None)
     elif action == 'search_hashicorp_vaults':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/management/vaults/hashicorp/search', action, 'vault_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/management/vaults/hashicorp/search', action, 'vault_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/management/vaults/hashicorp/search', params=params, json_body=body)
     elif action == 'get_hashicorp_vault':
         if vault_id is None:
             return {'error': 'Missing required parameter: vault_id for action get_hashicorp_vault'}
         endpoint = f'/management/vaults/hashicorp/{vault_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'vault_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'vault_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2082,7 +2104,7 @@ def vault_tool(
             return {'error': 'Missing required parameter: vault_id for action delete_hashicorp_vault'}
         endpoint = f'/management/vaults/hashicorp/{vault_id}'
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'vault_tool', confirmed or False)
+        conf = check_confirmation('DELETE', endpoint, action, 'vault_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('DELETE', endpoint, params=params)
@@ -2091,7 +2113,7 @@ def vault_tool(
             return {'error': 'Missing required parameter: vault_id for action get_hashicorp_vault_tags'}
         endpoint = f'/management/vaults/hashicorp/{vault_id}/tags'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'vault_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'vault_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2100,40 +2122,40 @@ def vault_tool(
             return {'error': 'Missing required parameter: vault_id for action add_hashicorp_vault_tags'}
         endpoint = f'/management/vaults/hashicorp/{vault_id}/tags'
         params = build_params(tags=tags)
-        conf = check_confirmation('POST', endpoint, action, 'vault_tool', confirmed or False)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'vault_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_hashicorp_vault_tags':
         if vault_id is None:
             return {'error': 'Missing required parameter: vault_id for action delete_hashicorp_vault_tags'}
         endpoint = f'/management/vaults/hashicorp/{vault_id}/tags/delete'
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'vault_tool', confirmed or False)
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'vault_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'list_kerberos_configs':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/kerberos-configs', action, 'vault_tool', confirmed or False)
+        conf = check_confirmation('GET', '/kerberos-configs', action, 'vault_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', '/kerberos-configs', params=params)
     elif action == 'search_kerberos_configs':
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('POST', '/kerberos-configs/search', action, 'vault_tool', confirmed or False)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/kerberos-configs/search', action, 'vault_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {'filter_expression': filter_expression} if filter_expression else {}
         return make_api_request('POST', '/kerberos-configs/search', params=params, json_body=body)
     elif action == 'get_kerberos_config':
         if kerberos_config_id is None:
             return {'error': 'Missing required parameter: kerberos_config_id for action get_kerberos_config'}
         endpoint = f'/kerberos-configs/{kerberos_config_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'vault_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'vault_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
@@ -2146,16 +2168,16 @@ def diagnostic_tool(
     azure_vault_name: Optional[str] = None,
     azure_vault_secret_key: Optional[str] = None,
     azure_vault_username_key: Optional[str] = None,
-    block_size: Optional[int] = 1048576,
+    block_size: Optional[int] = None,
     bookmark_ids: Optional[list] = None,
     commserve_host_name: Optional[str] = None,
-    compression: Optional[bool] = False,
+    compression: Optional[bool] = None,
     credentials_type: Optional[str] = None,
     cyberark_vault_query_string: Optional[str] = None,
-    destination_type: Optional[str] = 'REMOTE_HOST',
-    direction: Optional[str] = 'TRANSMIT',
-    duration: Optional[int] = 30,
-    encryption: Optional[bool] = False,
+    destination_type: Optional[str] = None,
+    direction: Optional[str] = None,
+    duration: Optional[int] = None,
+    encryption: Optional[bool] = None,
     engine_id: Optional[str] = None,
     environment_id: Optional[str] = None,
     environment_user: Optional[str] = None,
@@ -2171,15 +2193,15 @@ def diagnostic_tool(
     job_id: Optional[str] = None,
     locations: Optional[list] = None,
     master_server_name: Optional[str] = None,
-    num_connections: Optional[int] = 0,
+    num_connections: Optional[int] = None,
     os_name: Optional[str] = None,
     password: Optional[str] = None,
     port: Optional[int] = None,
-    queue_depth: Optional[int] = 64,
-    receive_socket_buffer: Optional[int] = 1048576,
-    request_count: Optional[int] = 20,
-    request_size: Optional[int] = 16,
-    send_socket_buffer: Optional[int] = 1048576,
+    queue_depth: Optional[int] = None,
+    receive_socket_buffer: Optional[int] = None,
+    request_count: Optional[int] = None,
+    request_size: Optional[int] = None,
+    send_socket_buffer: Optional[int] = None,
     snapshot_ids: Optional[list] = None,
     source_client_name: Optional[str] = None,
     source_data_id: Optional[str] = None,
@@ -2196,7 +2218,7 @@ def diagnostic_tool(
     username: Optional[str] = None,
     vault: Optional[str] = None,
     vault_id: Optional[str] = None,
-    xport_scheduler: Optional[str] = 'ROUND_ROBIN',
+    xport_scheduler: Optional[str] = None,
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
@@ -2483,111 +2505,111 @@ def diagnostic_tool(
     # Route to appropriate API based on action
     if action == 'check_engine_connectivity':
         params = build_params(host=host, port=port)
-        conf = check_confirmation('POST', '/connectivity/check', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'engine_id': engine_id, 'use_engine_public_key': use_engine_public_key, 'os_name': os_name, 'staging_environment': staging_environment, 'host': host, 'port': port, 'username': username, 'password': password, 'vault_id': vault_id, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'use_kerberos_authentication': use_kerberos_authentication}.items() if v is not None}
+        conf = check_confirmation('POST', '/connectivity/check', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'engine_id': engine_id, 'use_engine_public_key': use_engine_public_key, 'os_name': os_name, 'staging_environment': staging_environment, 'host': host, 'port': port, 'username': username, 'password': password, 'vault_id': vault_id, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'use_kerberos_authentication': use_kerberos_authentication}.items() if v is not None}
         return make_api_request('POST', '/connectivity/check', params=params, json_body=body if body else None)
     elif action == 'check_database_connectivity':
         params = build_params(credentials_type=credentials_type)
-        conf = check_confirmation('POST', '/database/connectivity/check', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'credentials_type': credentials_type, 'source_id': source_id, 'username': username, 'password': password, 'vault': vault, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'environment_id': environment_id, 'environment_user': environment_user}.items() if v is not None}
+        conf = check_confirmation('POST', '/database/connectivity/check', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'credentials_type': credentials_type, 'source_id': source_id, 'username': username, 'password': password, 'vault': vault, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'environment_id': environment_id, 'environment_user': environment_user}.items() if v is not None}
         return make_api_request('POST', '/database/connectivity/check', params=params, json_body=body if body else None)
     elif action == 'check_netbackup_connectivity':
         params = build_params(master_server_name=master_server_name, source_client_name=source_client_name)
-        conf = check_confirmation('POST', '/netbackup/connectivity/check', action, 'diagnostic_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'environment_id': environment_id, 'environment_user_id': environment_user_id, 'master_server_name': master_server_name, 'source_client_name': source_client_name}.items() if v is not None}
+        conf = check_confirmation('POST', '/netbackup/connectivity/check', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/netbackup/connectivity/check', params=params, json_body=body if body else None)
     elif action == 'check_commvault_connectivity':
         params = build_params(source_client_name=source_client_name, commserve_host_name=commserve_host_name, staging_client_name=staging_client_name)
-        conf = check_confirmation('POST', '/commvault/connectivity/check', action, 'diagnostic_tool', confirmed or False)
-        if conf:
-            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {k: v for k, v in {'environment_id': environment_id, 'environment_user_id': environment_user_id, 'commserve_host_name': commserve_host_name, 'source_client_name': source_client_name, 'staging_client_name': staging_client_name}.items() if v is not None}
+        conf = check_confirmation('POST', '/commvault/connectivity/check', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
         return make_api_request('POST', '/commvault/connectivity/check', params=params, json_body=body if body else None)
     elif action == 'test_network_latency':
         params = build_params()
-        conf = check_confirmation('POST', '/network-performance/test/latency', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'engine_id': engine_id, 'host_id': host_id, 'request_count': request_count, 'request_size': request_size}.items() if v is not None}
+        conf = check_confirmation('POST', '/network-performance/test/latency', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'engine_id': engine_id, 'host_id': host_id, 'request_count': request_count, 'request_size': request_size}.items() if v is not None}
         return make_api_request('POST', '/network-performance/test/latency', params=params, json_body=body if body else None)
     elif action == 'get_network_latency_result':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action get_network_latency_result'}
         endpoint = f'/network-performance/test/latency/{job_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'diagnostic_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'test_network_dsp':
         params = build_params()
-        conf = check_confirmation('POST', '/network-performance/test/dsp', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'engine_id': engine_id, 'host_id': host_id, 'direction': direction, 'num_connections': num_connections, 'duration': duration, 'destination_type': destination_type, 'compression': compression, 'encryption': encryption, 'queue_depth': queue_depth, 'block_size': block_size, 'send_socket_buffer': send_socket_buffer, 'receive_socket_buffer': receive_socket_buffer, 'xport_scheduler': xport_scheduler, 'target_engine_id': target_engine_id, 'target_engine_address': target_engine_address, 'target_engine_user': target_engine_user, 'target_engine_password': target_engine_password}.items() if v is not None}
+        conf = check_confirmation('POST', '/network-performance/test/dsp', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'engine_id': engine_id, 'host_id': host_id, 'direction': direction, 'num_connections': num_connections, 'duration': duration, 'destination_type': destination_type, 'compression': compression, 'encryption': encryption, 'queue_depth': queue_depth, 'block_size': block_size, 'send_socket_buffer': send_socket_buffer, 'receive_socket_buffer': receive_socket_buffer, 'xport_scheduler': xport_scheduler, 'target_engine_id': target_engine_id, 'target_engine_address': target_engine_address, 'target_engine_user': target_engine_user, 'target_engine_password': target_engine_password}.items() if v is not None}
         return make_api_request('POST', '/network-performance/test/dsp', params=params, json_body=body if body else None)
     elif action == 'get_network_dsp_result':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action get_network_dsp_result'}
         endpoint = f'/network-performance/test/dsp/{job_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'diagnostic_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'test_network_throughput':
         params = build_params()
-        conf = check_confirmation('POST', '/network-performance/test/throughput', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'engine_id': engine_id, 'host_id': host_id, 'direction': direction, 'num_connections': num_connections, 'duration': duration, 'port': port, 'block_size': block_size, 'send_socket_buffer': send_socket_buffer}.items() if v is not None}
+        conf = check_confirmation('POST', '/network-performance/test/throughput', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'engine_id': engine_id, 'host_id': host_id, 'direction': direction, 'num_connections': num_connections, 'duration': duration, 'port': port, 'block_size': block_size, 'send_socket_buffer': send_socket_buffer}.items() if v is not None}
         return make_api_request('POST', '/network-performance/test/throughput', params=params, json_body=body if body else None)
     elif action == 'get_network_throughput_result':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action get_network_throughput_result'}
         endpoint = f'/network-performance/test/throughput/{job_id}'
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'diagnostic_tool', confirmed or False)
+        conf = check_confirmation('GET', endpoint, action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=None)
         if conf:
             return conf
         return make_api_request('GET', endpoint, params=params)
     elif action == 'validate_file_mapping_by_snapshot':
         params = build_params(snapshot_ids=snapshot_ids, file_mapping_rules=file_mapping_rules)
-        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-snapshot', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'snapshot_ids': snapshot_ids, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
+        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-snapshot', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'snapshot_ids': snapshot_ids, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
         return make_api_request('POST', '/file-mapping/validate-file-mapping-by-snapshot', params=params, json_body=body if body else None)
     elif action == 'validate_file_mapping_by_location':
         params = build_params(file_mapping_rules=file_mapping_rules, locations=locations)
-        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-location', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'source_data_id': source_data_id, 'locations': locations, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
+        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-location', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_data_id': source_data_id, 'locations': locations, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
         return make_api_request('POST', '/file-mapping/validate-file-mapping-by-location', params=params, json_body=body if body else None)
     elif action == 'validate_file_mapping_by_timestamp':
         params = build_params(file_mapping_rules=file_mapping_rules, timestamps=timestamps)
-        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-timestamp', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'source_data_id': source_data_id, 'timestamps': timestamps, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
+        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-timestamp', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'source_data_id': source_data_id, 'timestamps': timestamps, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
         return make_api_request('POST', '/file-mapping/validate-file-mapping-by-timestamp', params=params, json_body=body if body else None)
     elif action == 'validate_file_mapping_by_bookmark':
         params = build_params(file_mapping_rules=file_mapping_rules, bookmark_ids=bookmark_ids)
-        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-bookmark', action, 'diagnostic_tool', confirmed or False)
+        body = {k: v for k, v in {'bookmark_ids': bookmark_ids, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
+        conf = check_confirmation('POST', '/file-mapping/validate-file-mapping-by-bookmark', action, 'diagnostic_tool', confirmed or False, request_params=params, request_body=body)
         if conf:
             return conf
-        body = {k: v for k, v in {'bookmark_ids': bookmark_ids, 'file_mapping_rules': file_mapping_rules, 'file_system_layout': file_system_layout}.items() if v is not None}
         return make_api_request('POST', '/file-mapping/validate-file-mapping-by-bookmark', params=params, json_body=body if body else None)
     else:
         return {'error': f'Unknown action: {action}. Valid actions: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark'}
