@@ -1,5 +1,7 @@
 # Python
 .venv/
+venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
@@ -17,6 +19,11 @@ logs/
 .claude/
 .vscode/
 docs/
+.whitesource
+.mcp.json
+
+# macOS metadata
+.DS_Store
 
 # Windows scripts (not needed in Linux container)
 *.bat
