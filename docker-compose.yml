@@ -1,0 +1,10 @@
+services:
+  dct-mcp-server:
+    build: .
+    image: dct-mcp-server:local
+    stdin_open: true
+    tty: false
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
