@@ -25,21 +25,24 @@ TOOLKIT_SCHEMAS_DIR = os.path.join(tempfile.gettempdir(), "dct_toolkit_schemas")
 # Fetch & cache
 # ---------------------------------------------------------------------------
 
-async def fetch_and_cache_toolkit_schemas(dct_client) -> List[Dict[str, Any]]:
+async def fetch_and_cache_toolkit_schemas(dct_client) -> tuple[list[dict], dict[str, str]]:
     """
     Fetch all toolkits from the DCT instance and persist each one as a
     JSON file under *TOOLKIT_SCHEMAS_DIR*.
 
-    Returns the list of toolkit dicts that were cached (used by the
-    resource-registration step).
+    Returns a tuple of:
+    - list of toolkit dicts that were cached
+    - dict mapping display_name -> toolkit_id for resource registration
     """
     os.makedirs(TOOLKIT_SCHEMAS_DIR, exist_ok=True)
 
-    all_toolkits: List[Dict[str, Any]] = []
+    all_toolkits: list[dict] = []
+    seen_ids: set[str] = set()
+    display_name_to_id: dict[str, str] = {}
     cursor = None
 
     while True:
-        params: Dict[str, Any] = {"limit": 50}
+        params: dict = {"limit": 50}
         if cursor:
             params["cursor"] = cursor
 
@@ -59,17 +62,35 @@ async def fetch_and_cache_toolkit_schemas(dct_client) -> List[Dict[str, Any]]:
             with open(file_path, "w") as f:
                 json.dump(toolkit, f, indent=2)
             all_toolkits.append(toolkit)
-            logger.debug(f"Cached toolkit schema: {toolkit_id}")
+            seen_ids.add(toolkit_id)
+
+            display_name = (
+                toolkit.get("display_name")
+                or toolkit.get("pretty_name")
+                or toolkit.get("name")
+                or toolkit_id
+            )
+            display_name_to_id[display_name] = toolkit_id
+            logger.debug(f"Cached toolkit schema: {toolkit_id} (display_name={display_name})")
 
         response_metadata = response.get("response_metadata", {})
         cursor = response_metadata.get("next_cursor")
         if not cursor:
             break
 
+    # Remove stale files for toolkits no longer in DCT
+    if os.path.isdir(TOOLKIT_SCHEMAS_DIR):
+        for fn in os.listdir(TOOLKIT_SCHEMAS_DIR):
+            if fn.endswith(".json"):
+                stale_id = fn.removesuffix(".json")
+                if stale_id not in seen_ids:
+                    os.remove(os.path.join(TOOLKIT_SCHEMAS_DIR, fn))
+                    logger.debug(f"Removed stale toolkit cache: {stale_id}")
+
     logger.info(
         f"Cached {len(all_toolkits)} toolkit schema(s) in {TOOLKIT_SCHEMAS_DIR}"
     )
-    return all_toolkits
+    return all_toolkits, display_name_to_id
 
 
 # ---------------------------------------------------------------------------
