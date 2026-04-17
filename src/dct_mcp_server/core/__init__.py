@@ -15,6 +15,8 @@ from .toolkit_schemas import (
     register_toolkit_resources,
     get_cached_toolkit_schema,
     list_cached_toolkit_ids,
+    register_refresh_hook,
+    refresh_toolkit_cache,
 )
 
 __all__ = [
@@ -33,4 +35,6 @@ __all__ = [
     "register_toolkit_resources",
     "get_cached_toolkit_schema",
     "list_cached_toolkit_ids",
+    "register_refresh_hook",
+    "refresh_toolkit_cache",
 ]
