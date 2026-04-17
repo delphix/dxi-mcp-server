@@ -1399,6 +1399,9 @@ dxi-mcp-server/
 ├── requirements.txt            # Dependencies (legacy format)
 ├── uv.lock                     # Locked dependencies (uv format)
 ├── start_mcp_server_*.{sh,bat} # Cross-platform startup scripts
+├── Dockerfile                  # Container image definition
+├── .dockerignore               # Files excluded from Docker build context
+├── docker-compose.yml          # Convenience wrapper for local Docker dev
 ├── logs/                       # Runtime logs and telemetry
 │   ├── dct_mcp_server.log      # Main application logs
 │   └── sessions/               # Telemetry session logs
