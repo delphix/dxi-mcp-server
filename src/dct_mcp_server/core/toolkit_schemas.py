@@ -121,21 +121,28 @@ def list_cached_toolkit_ids() -> List[str]:
 # MCP resource registration
 # ---------------------------------------------------------------------------
 
-def register_toolkit_resources(app, toolkits: List[Dict[str, Any]]) -> int:
+def register_toolkit_resources(
+    app,
+    toolkits: list[dict],
+    display_name_to_id: dict[str, str],
+) -> int:
     """
     Register each toolkit as an MCP resource on *app*.
 
-    Two things are registered:
-    1. A **resource template** ``toolkit://{toolkit_id}/schema`` so that
-       any toolkit (including ones added after init) can be resolved by ID.
-    2. A **concrete resource** per fetched toolkit so that ``list_resources``
-       returns them for discovery without the client needing to know IDs
-       up front.
+    Registers:
+    1. A template resource ``toolkit://{toolkit_id}/schema`` — handles any
+       toolkit_id returned by get_vdb / get_dsource API responses.
+    2. A concrete resource ``toolkit://{display_name}/schema`` per toolkit —
+       discoverable via list_resources; AI can infer display_name from the
+       user prompt (e.g. "mysql-plugin" from "create a MySQL dSource").
 
     Returns the number of concrete resources registered.
     """
+    import urllib.parse
+    from mcp.server.fastmcp.resources import FunctionResource
+    from pydantic import AnyUrl
 
-    # -- template resource (handles any toolkit_id, including cache misses) --
+    # -- template resource: resolves any toolkit_id (including cache misses) --
     @app.resource(
         "toolkit://{toolkit_id}/schema",
         name="toolkit_schema",
@@ -144,8 +151,7 @@ def register_toolkit_resources(app, toolkits: List[Dict[str, Any]]) -> int:
             "Schema definitions for a DCT toolkit/connector. Contains "
             "virtual_source_definition, linked_source_definition, "
             "discovery_definition, snapshot_parameters_definition and more. "
-            "Use this to understand the request payload structure for "
-            "appdata link and provision operations."
+            "Use this when you already have a toolkit_id from a VDB or dSource object."
         ),
         mime_type="application/json",
     )
@@ -155,21 +161,11 @@ def register_toolkit_resources(app, toolkits: List[Dict[str, Any]]) -> int:
             return json.dumps({"error": f"Toolkit '{toolkit_id}' not found in cache."})
         return json.dumps(schema, indent=2)
 
-    # -- concrete resources for each pre-fetched toolkit --
+    # -- concrete resources keyed by display_name for prompt-driven discovery --
     registered = 0
-    for toolkit in toolkits:
-        toolkit_id = toolkit.get("id")
-        if not toolkit_id:
-            continue
+    for display_name, toolkit_id in display_name_to_id.items():
+        safe_name = urllib.parse.quote(display_name, safe="-_.")
 
-        display_name = (
-            toolkit.get("display_name")
-            or toolkit.get("pretty_name")
-            or toolkit.get("name")
-            or toolkit_id
-        )
-
-        # Capture toolkit_id in the closure's default arg
         def _make_reader(tid: str):
             def _read() -> str:
                 schema = get_cached_toolkit_schema(tid)
@@ -178,24 +174,23 @@ def register_toolkit_resources(app, toolkits: List[Dict[str, Any]]) -> int:
                 return json.dumps(schema, indent=2)
             return _read
 
-        from mcp.server.fastmcp.resources import FunctionResource
-        from pydantic import AnyUrl
-
         resource = FunctionResource(
-            uri=AnyUrl(f"toolkit://{toolkit_id}/schema"),
-            name=f"toolkit_schema_{toolkit_id}",
+            uri=AnyUrl(f"toolkit://{safe_name}/schema"),
+            name=f"toolkit_schema_{safe_name}",
             title=f"Toolkit: {display_name}",
             description=(
-                f"Schema definitions for toolkit '{display_name}' ({toolkit_id}). "
-                f"Contains virtual_source_definition, linked_source_definition, "
-                f"discovery_definition, snapshot_parameters_definition, etc."
+                f"Schema for toolkit '{display_name}'. Contains "
+                f"virtual_source_definition, linked_source_definition, "
+                f"discovery_definition, snapshot_parameters_definition, etc. "
+                f"Read this before AppData link or provision operations when "
+                f"the plugin type is known from context."
             ),
             mime_type="application/json",
             fn=_make_reader(toolkit_id),
         )
         app.add_resource(resource)
         registered += 1
-        logger.debug(f"Registered MCP resource: toolkit://{toolkit_id}/schema")
+        logger.debug(f"Registered MCP resource: toolkit://{safe_name}/schema -> {toolkit_id}")
 
-    logger.info(f"Registered {registered} toolkit schema MCP resource(s)")
+    logger.info(f"Registered {registered} toolkit schema MCP resource(s) by display_name")
     return registered
