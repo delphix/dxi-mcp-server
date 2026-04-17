@@ -12,7 +12,11 @@ extra API round-trip during link or provision operations.
 import json
 import os
 import tempfile
+import urllib.parse
 from typing import Any, Dict, List, Optional
+
+from mcp.server.fastmcp.resources import FunctionResource
+from pydantic import AnyUrl
 
 from dct_mcp_server.core.logging import get_logger
 
@@ -78,14 +82,18 @@ async def fetch_and_cache_toolkit_schemas(dct_client) -> tuple[list[dict], dict[
         if not cursor:
             break
 
-    # Remove stale files for toolkits no longer in DCT
-    if os.path.isdir(TOOLKIT_SCHEMAS_DIR):
+    # Remove stale files only when we successfully fetched at least one toolkit.
+    # Skipping when seen_ids is empty prevents wiping the cache on transient API failures.
+    if seen_ids and os.path.isdir(TOOLKIT_SCHEMAS_DIR):
         for fn in os.listdir(TOOLKIT_SCHEMAS_DIR):
             if fn.endswith(".json"):
                 stale_id = fn.removesuffix(".json")
                 if stale_id not in seen_ids:
-                    os.remove(os.path.join(TOOLKIT_SCHEMAS_DIR, fn))
-                    logger.debug(f"Removed stale toolkit cache: {stale_id}")
+                    try:
+                        os.remove(os.path.join(TOOLKIT_SCHEMAS_DIR, fn))
+                        logger.debug(f"Removed stale toolkit cache: {stale_id}")
+                    except OSError:
+                        logger.debug(f"Stale cache file already gone: {stale_id}")
 
     logger.info(
         f"Cached {len(all_toolkits)} toolkit schema(s) in {TOOLKIT_SCHEMAS_DIR}"
@@ -123,7 +131,6 @@ def list_cached_toolkit_ids() -> List[str]:
 
 def register_toolkit_resources(
     app,
-    toolkits: list[dict],
     display_name_to_id: dict[str, str],
 ) -> int:
     """
@@ -138,9 +145,6 @@ def register_toolkit_resources(
 
     Returns the number of concrete resources registered.
     """
-    import urllib.parse
-    from mcp.server.fastmcp.resources import FunctionResource
-    from pydantic import AnyUrl
 
     # -- template resource: resolves any toolkit_id (including cache misses) --
     @app.resource(
