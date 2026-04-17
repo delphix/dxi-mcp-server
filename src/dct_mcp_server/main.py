@@ -133,8 +133,8 @@ async def async_main():
 
         # Prefetch toolkit schemas and register as MCP resources
         try:
-            toolkits = await fetch_and_cache_toolkit_schemas(dct_client)
-            register_toolkit_resources(app, toolkits)
+            _, display_name_to_id = await fetch_and_cache_toolkit_schemas(dct_client)
+            register_toolkit_resources(app, display_name_to_id)
             logger.info("Toolkit schemas prefetched and registered as MCP resources")
         except Exception as e:
             logger.warning(f"Toolkit schema prefetch failed (non-fatal): {e}")
