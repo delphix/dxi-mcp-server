@@ -71,25 +71,40 @@ TOOL_DOMAIN_HINTS = {
 # link/provision).  When generating docstrings for these actions, we append
 # a hint telling the AI to read the pre-cached MCP resource instead of
 # calling toolkit_tool.
-ACTIONS_REQUIRING_TOOLKIT_SCHEMA = {
-    "dsource_link_appdata",
-    "dsource_link_appdata_defaults",
-    "update_appdata_dsource",
-    "provision_by_timestamp",
-    "provision_by_snapshot",
-    "provision_from_bookmark",
-    "provision_by_location",
-    "provision_empty_vdb",
+# Maps action name -> hint group.
+# "dsource" group: payload field is 'parameters' (and 'sync_parameters').
+# "provision" group: payload fields are 'appdata_source_params' and 'appdata_config_params'.
+ACTIONS_REQUIRING_TOOLKIT_SCHEMA: dict[str, str] = {
+    "dsource_link_appdata": "dsource",
+    "dsource_link_appdata_defaults": "dsource",
+    "update_appdata_dsource": "dsource",
+    "provision_by_timestamp": "provision",
+    "provision_by_snapshot": "provision",
+    "provision_from_bookmark": "provision",
+    "provision_by_location": "provision",
+    "provision_empty_vdb": "provision",
 }
 
-TOOLKIT_SCHEMA_RESOURCE_HINT = (
-    "IMPORTANT — Toolkit schema for AppData payloads: The 'parameters', "
-    "'appdata_source_params', and 'appdata_config_params' fields follow a "
-    "DraftV4 schema defined by the toolkit. Do NOT call toolkit_tool to "
-    "fetch the schema — it is already pre-cached as an MCP resource. "
-    "Use resources/read on toolkit://{toolkit_id}/schema to get the full "
-    "schema definition. Identify the toolkit_id from the source or "
-    "environment first, then read the resource."
+_TOOLKIT_SCHEMA_HINT_COMMON = (
+    "IMPORTANT — Toolkit schema for AppData payloads: "
+    "Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as MCP resources.\n"
+    "    Two lookup paths:\n"
+    "      • Plugin type known from prompt (e.g. user said 'MySQL'): call list_resources, "
+    "match the display_name (e.g. 'mysql-plugin'), then read toolkit://{display_name}/schema.\n"
+    "      • toolkit_id available from an existing VDB/dSource object: read "
+    "toolkit://{toolkit_id}/schema directly via the template resource.\n"
+)
+
+TOOLKIT_SCHEMA_HINT_DSOURCE = (
+    _TOOLKIT_SCHEMA_HINT_COMMON
+    + "    Affected fields: 'parameters' (linked_source_definition schema) "
+    "and 'sync_parameters' (snapshot_parameters_definition schema)."
+)
+
+TOOLKIT_SCHEMA_HINT_PROVISION = (
+    _TOOLKIT_SCHEMA_HINT_COMMON
+    + "    Affected fields: 'appdata_source_params' (virtual_source_definition schema) "
+    "and 'appdata_config_params' (source config schema)."
 )
 
 
@@ -871,9 +886,13 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         docstring_lines.append(f"    >>> {tool_name}({', '.join(example_params)})")
 
         # Inject toolkit-schema resource hint for AppData-related actions
-        if action_name in ACTIONS_REQUIRING_TOOLKIT_SCHEMA:
+        hint_group = ACTIONS_REQUIRING_TOOLKIT_SCHEMA.get(action_name)
+        if hint_group == "dsource":
             docstring_lines.append("")
-            docstring_lines.append(f"    {TOOLKIT_SCHEMA_RESOURCE_HINT}")
+            docstring_lines.append(f"    {TOOLKIT_SCHEMA_HINT_DSOURCE}")
+        elif hint_group == "provision":
+            docstring_lines.append("")
+            docstring_lines.append(f"    {TOOLKIT_SCHEMA_HINT_PROVISION}")
 
     # =========================================================================
     # PARAMETERS SECTION (grouped by database type)
