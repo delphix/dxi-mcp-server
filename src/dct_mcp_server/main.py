@@ -31,6 +31,7 @@ from dct_mcp_server.core.logging import get_logger, setup_logging
 from dct_mcp_server.core.toolkit_schemas import (
     fetch_and_cache_toolkit_schemas,
     register_toolkit_resources,
+    register_refresh_hook,
 )
 from dct_mcp_server.dct_client import DCTAPIClient
 from dct_mcp_server.toolsgenerator.driver import generate_tools_from_openapi
@@ -135,6 +136,7 @@ async def async_main():
         try:
             _, display_name_to_id = await fetch_and_cache_toolkit_schemas(dct_client)
             register_toolkit_resources(app, display_name_to_id)
+            register_refresh_hook(app, dct_client)
             logger.info("Toolkit schemas prefetched and registered as MCP resources")
         except Exception as e:
             logger.warning(f"Toolkit schema prefetch failed (non-fatal): {e}")
