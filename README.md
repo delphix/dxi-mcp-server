@@ -13,6 +13,7 @@ The Delphix DCT API MCP Server provides a robust Model Context Protocol (MCP) in
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Running in Docker](#running-in-docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -424,6 +425,179 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
+
+## Running in Docker
+
+You can run the MCP server inside a Docker container instead of installing Python locally. This is useful for CI pipelines, sandboxed environments, or when you want to avoid managing a Python runtime.
+
+### Prerequisites
+
+- Docker 20.10 or later installed and running
+- The repository cloned locally (or just the `Dockerfile` if you prefer)
+
+### Build the Image
+
+```bash
+# From the repo root
+docker build -t dct-mcp-server:local .
+```
+
+### Run with Explicit Environment Variables
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -e DCT_VERIFY_SSL="true" \
+  -e DCT_TOOLSET="self_service" \
+  dct-mcp-server:local
+```
+
+> **Important**: The `-i` flag (`--interactive`) is required. It keeps stdin open, which is how MCP clients communicate with the server over stdio. Without it, the server will exit immediately.
+
+> **Tip**: Replace `dct-mcp-server:local` with a versioned tag (e.g., `dct-mcp-server:2026.0.1.0`) for reproducibility in production environments.
+
+### Run with an Environment File (docker-compose)
+
+Create a `.env` file in the repo root:
+
+```bash
+DCT_API_KEY=your-api-key-here
+DCT_BASE_URL=https://your-dct-host.company.com
+DCT_VERIFY_SSL=true
+DCT_TOOLSET=self_service
+```
+
+Then start the server:
+
+```bash
+docker compose up
+```
+
+Logs are persisted to `./logs/` on your host.
+
+### Persist Logs
+
+To write logs to a host directory, add a volume mount:
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY="..." \
+  -e DCT_BASE_URL="..." \
+  -v /host/path/to/logs:/app/logs \
+  dct-mcp-server:local
+```
+
+> **Note (Linux hosts)**: If logs are not being written, run `mkdir -p logs && chmod 777 logs` once in the repo root before starting the container. On Linux, Docker creates host-side volume directories owned by root, which can prevent the container's non-root user from writing to them.
+
+### Custom CA Certificates (SSL)
+
+If your DCT instance uses an internal or self-signed CA and you set `DCT_VERIFY_SSL=true`, mount your CA certificate bundle into the container:
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY="..." \
+  -e DCT_BASE_URL="..." \
+  -e DCT_VERIFY_SSL="true" \
+  -v /path/to/your/ca-bundle.crt:/etc/ssl/certs/custom-ca.crt:ro \
+  dct-mcp-server:local
+```
+
+The `python:3.11-slim` base image already trusts public CAs. You only need this step for private/internal certificates.
+
+### MCP Client Configuration for Docker
+
+Replace the `command`/`args` in your MCP client config with the Docker invocation. The `-i` flag is essential.
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_VERIFY_SSL=true",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:local"
+      ]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor IDE & Windsurf</strong></summary>
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "delphix-dct",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_VERIFY_SSL=true",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:local"
+      ]
+    }
+  ]
+}
+```
+</details>
+
+<details>
+<summary><strong>VS Code, Eclipse, & IntelliJ IDEA</strong></summary>
+
+```json
+{
+  "servers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_VERIFY_SSL=true",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:local"
+      ]
+    }
+  }
+}
+```
+</details>
+
+### Windows (Docker Desktop)
+
+On Windows, use `docker` in Command Prompt or PowerShell MCP client configs. The `-i` flag works the same way:
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:local"
+      ]
+    }
+  }
+}
+```
+
+> **Note**: Do not use `winpty docker ...` in MCP client configs. MCP clients handle stdio piping directly — `winpty` is only needed for interactive terminal sessions.
 
 ## Toolsets
 
