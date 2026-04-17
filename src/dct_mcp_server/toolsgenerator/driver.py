@@ -85,29 +85,24 @@ ACTIONS_REQUIRING_TOOLKIT_SCHEMA: dict[str, str] = {
     "provision_empty_vdb": "provision",
 }
 
-ACTIONS_REQUIRING_CACHE_REFRESH: set[str] = {"upload_toolkit", "delete_toolkit"}
-
 _TOOLKIT_SCHEMA_HINT_COMMON = (
-    "IMPORTANT — Toolkit schema for AppData payloads: "
-    "Do NOT call toolkit_tool to fetch the schema — it is already pre-cached as MCP resources.\n"
-    "    Two lookup paths:\n"
-    "      • Plugin type known from prompt (e.g. user said 'MySQL'): call list_resources, "
-    "match by display_name@version (e.g. 'toolkit://mysql-plugin@2025.1.1/schema'), "
-    "then read that resource URI.\n"
-    "      • toolkit_id available from an existing VDB/dSource object: read "
-    "toolkit://{toolkit_id}/schema directly via the template resource.\n"
+    "IMPORTANT — AppData toolkit schema: "
+    "Before populating toolkit-specific parameters, call toolkit_tool(action='search') "
+    "to list available toolkits. Filter results by the engine_id of the environment you "
+    "are operating on — use only toolkits whose engine_id matches.\n"
 )
 
 TOOLKIT_SCHEMA_HINT_DSOURCE = (
     _TOOLKIT_SCHEMA_HINT_COMMON
-    + "    Affected fields: 'parameters' (linked_source_definition schema) "
-    "and 'sync_parameters' (snapshot_parameters_definition schema)."
+    + "    Use the matching toolkit's 'linked_source_definition.parameters' schema "
+    "to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'."
 )
 
 TOOLKIT_SCHEMA_HINT_PROVISION = (
     _TOOLKIT_SCHEMA_HINT_COMMON
-    + "    Affected fields: 'appdata_source_params' (virtual_source_definition schema) "
-    "and 'appdata_config_params' (source config schema)."
+    + "    Use the matching toolkit's 'virtual_source_definition.parameters' schema "
+    "to populate 'appdata_source_params', and 'source_config_definition.parameters' "
+    "for 'appdata_config_params'."
 )
 
 
@@ -497,15 +492,6 @@ def generate_tools_from_openapi():
         
         tool_file_content = prefix
 
-        # Add refresh import only for modules whose tools include cache-refresh actions
-        needs_refresh = any(
-            api["action"] in ACTIONS_REQUIRING_CACHE_REFRESH
-            for apis_list in tools.values()
-            for api in apis_list
-        )
-        if needs_refresh:
-            tool_file_content += "from dct_mcp_server.core.toolkit_schemas import refresh_toolkit_cache\n"
-
         function_lists = []
 
         for tool_name, apis in tools.items():
@@ -597,17 +583,6 @@ def _get_module_for_path(api_path: str) -> str:
             return path_to_module[prefix]
     return "misc_endpoints"
 
-
-def _emit_api_return(action_name: str, method: str, endpoint_var: str, extra_args: str = "") -> str:
-    """Emit a return statement for an API call, with await refresh for cache-refresh actions."""
-    call = f"make_api_request('{method}', {endpoint_var}, params=params{extra_args})"
-    if action_name in ACTIONS_REQUIRING_CACHE_REFRESH:
-        return (
-            f"        result = {call}\n"
-            f"        await refresh_toolkit_cache()\n"
-            f"        return result\n"
-        )
-    return f"        return {call}\n"
 
 
 def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
@@ -798,9 +773,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     actions_list = list(action_details.keys())
     actions_literal = "|".join([f"'{a}'" for a in actions_list])
     
-    is_async = any(a in ACTIONS_REQUIRING_CACHE_REFRESH for a in action_details)
-    func_kw = "async def" if is_async else "def"
-    func_code = f"@log_tool_execution\n{func_kw} {tool_name}(\n"
+    func_code = f"@log_tool_execution\ndef {tool_name}(\n"
     func_code += f"    action: str,  # One of: {', '.join(actions_list)}\n"
 
     # Add all parameters as optional (since they depend on action)
@@ -1040,7 +1013,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # Handle request body
         if details["has_filter"] and method == "POST":
             func_code += "        body = {'filter_expression': filter_expression} if filter_expression else {}\n"
-            func_code += _emit_api_return(action_name, method, endpoint_var, ", json_body=body")
+            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
         elif method in ["POST", "PUT", "PATCH"]:
             # Collect body params - use the body_params stored in action_details
             body_params = details.get("body_params", [])
@@ -1055,11 +1028,11 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     func_code += "        if not environment_user_id:\n"
                     func_code += "            environment_user_id = environment_user_ref or environment_user\n"
                 func_code += f"        body = {{k: v for k, v in {{{body_items}}}.items() if v is not None}}\n"
-                func_code += _emit_api_return(action_name, method, endpoint_var, ", json_body=body if body else None")
+                func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
             else:
-                func_code += _emit_api_return(action_name, method, endpoint_var)
+                func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params)\n"
         else:
-            func_code += _emit_api_return(action_name, method, endpoint_var)
+            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params)\n"
     
     # Add else clause for unknown action
     func_code += "    else:\n"

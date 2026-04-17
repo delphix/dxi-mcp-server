@@ -8,13 +8,7 @@ import threading
 from functools import wraps
 
 client = None
-app = None
 logger = logging.getLogger(__name__)
-
-from dct_mcp_server.core.toolkit_schemas import (
-    fetch_and_cache_toolkit_schemas,
-    register_toolkit_resources,
-)
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -118,8 +112,6 @@ def environment_source_tool(
     connector_authentication_key: Optional[str] = None,
     connector_port: Optional[int] = None,
     cursor: Optional[str] = None,
-    custom_private_key: Optional[str] = None,
-    custom_public_key: Optional[str] = None,
     cyberark_vault_query_string: Optional[str] = None,
     database_name: Optional[str] = None,
     database_password: Optional[str] = None,
@@ -193,7 +185,6 @@ def environment_source_tool(
     toolkit_path: Optional[str] = None,
     type: Optional[str] = 'DIRECT',
     unique_name: Optional[str] = None,
-    use_custom_key_pair: Optional[bool] = None,
     use_engine_public_key: Optional[bool] = None,
     use_kerberos_authentication: Optional[bool] = None,
     user: Optional[str] = None,
@@ -231,7 +222,6 @@ def environment_source_tool(
         - namespace: The namespace of this environment for replicated and rest...
         - engine_id: A reference to the Engine that this Environment connectio...
         - engine_name: A reference to the Engine that this Environment connectio...
-        - address: The address of this environment. For a standalone environ...
         - enabled: True if this environment is enabled.
         - encryption_enabled: Flag indicating whether the data transfer is encrypted or...
         - description: The environment description.
@@ -277,10 +267,10 @@ def environment_source_tool(
     Method: POST
     Endpoint: /environments
     Required Parameters: engine_id, os_name, hostname
-    Key Parameters (provide as applicable): name, is_cluster, cluster_home, staging_environment, connector_port, connector_authentication_key, is_target, ssh_port, toolkit_path, username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, use_custom_key_pair, custom_private_key, custom_public_key, nfs_addresses, ase_db_vault_username, ase_db_username, ase_db_password, ase_enable_tls, ase_skip_server_certificate_validation, ase_db_vault, ase_db_hashicorp_vault_engine, ase_db_hashicorp_vault_secret_path, ase_db_hashicorp_vault_username_key, ase_db_hashicorp_vault_secret_key, ase_db_cyberark_vault_query_string, ase_db_use_kerberos_authentication, ase_db_azure_vault_name, ase_db_azure_vault_username_key, ase_db_azure_vault_secret_key, java_home, dsp_keystore_path, dsp_keystore_password, dsp_keystore_alias, dsp_truststore_path, dsp_truststore_password, description, tags, make_current_account_owner
+    Key Parameters (provide as applicable): name, is_cluster, cluster_home, staging_environment, connector_port, connector_authentication_key, is_target, ssh_port, toolkit_path, username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, nfs_addresses, ase_db_vault_username, ase_db_username, ase_db_password, ase_enable_tls, ase_skip_server_certificate_validation, ase_db_vault, ase_db_hashicorp_vault_engine, ase_db_hashicorp_vault_secret_path, ase_db_hashicorp_vault_username_key, ase_db_hashicorp_vault_secret_key, ase_db_cyberark_vault_query_string, ase_db_use_kerberos_authentication, ase_db_azure_vault_name, ase_db_azure_vault_username_key, ase_db_azure_vault_secret_key, java_home, dsp_keystore_path, dsp_keystore_password, dsp_keystore_alias, dsp_truststore_path, dsp_truststore_password, description, tags, make_current_account_owner
     
     Example:
-        >>> environment_source_tool(action='create_environment', name=..., engine_id='example-engine-123', os_name=..., is_cluster=..., cluster_home=..., hostname=..., staging_environment=..., connector_port=..., connector_authentication_key=..., is_target=..., ssh_port=..., toolkit_path=..., username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=..., nfs_addresses=..., ase_db_vault_username=..., ase_db_username=..., ase_db_password=..., ase_enable_tls=..., ase_skip_server_certificate_validation=..., ase_db_vault=..., ase_db_hashicorp_vault_engine=..., ase_db_hashicorp_vault_secret_path=..., ase_db_hashicorp_vault_username_key=..., ase_db_hashicorp_vault_secret_key=..., ase_db_cyberark_vault_query_string=..., ase_db_use_kerberos_authentication=..., ase_db_azure_vault_name=..., ase_db_azure_vault_username_key=..., ase_db_azure_vault_secret_key=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., description=..., tags=..., make_current_account_owner=...)
+        >>> environment_source_tool(action='create_environment', name=..., engine_id='example-engine-123', os_name=..., is_cluster=..., cluster_home=..., hostname=..., staging_environment=..., connector_port=..., connector_authentication_key=..., is_target=..., ssh_port=..., toolkit_path=..., username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., nfs_addresses=..., ase_db_vault_username=..., ase_db_username=..., ase_db_password=..., ase_enable_tls=..., ase_skip_server_certificate_validation=..., ase_db_vault=..., ase_db_hashicorp_vault_engine=..., ase_db_hashicorp_vault_secret_path=..., ase_db_hashicorp_vault_username_key=..., ase_db_hashicorp_vault_secret_key=..., ase_db_cyberark_vault_query_string=..., ase_db_use_kerberos_authentication=..., ase_db_azure_vault_name=..., ase_db_azure_vault_username_key=..., ase_db_azure_vault_secret_key=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., description=..., tags=..., make_current_account_owner=...)
     
     ACTION: add_environment_users
     ----------------------------------------
@@ -288,10 +278,10 @@ def environment_source_tool(
     Method: POST
     Endpoint: /environments/{environmentId}/users
     Required Parameters: environment_id
-    Key Parameters (provide as applicable): username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, use_custom_key_pair, custom_private_key, custom_public_key
+    Key Parameters (provide as applicable): username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key
     
     Example:
-        >>> environment_source_tool(action='add_environment_users', environment_id='example-environment-123', username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=...)
+        >>> environment_source_tool(action='add_environment_users', environment_id='example-environment-123', username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=...)
     
     ACTION: set_environment_primary_user
     ----------------------------------------
@@ -309,10 +299,10 @@ def environment_source_tool(
     Method: PUT
     Endpoint: /environments/{environmentId}/users/{userRef}
     Required Parameters: environment_id, user_ref
-    Key Parameters (provide as applicable): username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, use_custom_key_pair, custom_private_key, custom_public_key
+    Key Parameters (provide as applicable): username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key
     
     Example:
-        >>> environment_source_tool(action='update_environment_users', environment_id='example-environment-123', username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=..., user_ref=...)
+        >>> environment_source_tool(action='update_environment_users', environment_id='example-environment-123', username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., user_ref=...)
     
     ACTION: delete_environment_users
     ----------------------------------------
@@ -531,7 +521,6 @@ def environment_source_tool(
         - mssql_source_type: The type of this mssql source database (MSSql Only).
         - appdata_source_type: The type of this appdata source database (Appdata Only).
         - is_pdb: If this source is of PDB type (Oracle Only).
-        - mount_base: The base mount point for the NFS or iSCSI LUN mounts.
         - tags: 
         - instance_name: The instance name of this single instance database source.
         - instance_number: The instance number of this single instance database source.
@@ -784,10 +773,6 @@ def environment_source_tool(
             [Optional for all actions]
         cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
             [Required for: search_environments, search_sources, list_sources]
-        custom_private_key (str): Private key to be used for authentication
-            [Optional for all actions]
-        custom_public_key (str): Public key to be used for authentication
-            [Optional for all actions]
         cyberark_vault_query_string (str): Query to find a credential in the CyberArk vault.
             [Optional for all actions]
         database_name (str): The name of the database.
@@ -934,8 +919,6 @@ def environment_source_tool(
             [Required for: list_environment_listeners, create_appdata_source]
         unique_name (str): The unique name of this database.
             [Optional for all actions]
-        use_custom_key_pair (bool): Whether to use custom private and public key pair for authentication.
-            [Optional for all actions]
         use_engine_public_key (bool): Whether to use public key authentication.
             [Optional for all actions]
         use_kerberos_authentication (bool): Whether to use kerberos authentication.
@@ -983,7 +966,7 @@ def environment_source_tool(
         conf = check_confirmation('POST', '/environments', action, 'environment_source_tool', confirmed or False)
         if conf:
             return conf
-        body = {k: v for k, v in {'name': name, 'engine_id': engine_id, 'os_name': os_name, 'is_cluster': is_cluster, 'cluster_home': cluster_home, 'hostname': hostname, 'staging_environment': staging_environment, 'connector_port': connector_port, 'connector_authentication_key': connector_authentication_key, 'is_target': is_target, 'ssh_port': ssh_port, 'toolkit_path': toolkit_path, 'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'use_custom_key_pair': use_custom_key_pair, 'custom_private_key': custom_private_key, 'custom_public_key': custom_public_key, 'nfs_addresses': nfs_addresses, 'ase_db_vault_username': ase_db_vault_username, 'ase_db_username': ase_db_username, 'ase_db_password': ase_db_password, 'ase_enable_tls': ase_enable_tls, 'ase_skip_server_certificate_validation': ase_skip_server_certificate_validation, 'ase_db_vault': ase_db_vault, 'ase_db_hashicorp_vault_engine': ase_db_hashicorp_vault_engine, 'ase_db_hashicorp_vault_secret_path': ase_db_hashicorp_vault_secret_path, 'ase_db_hashicorp_vault_username_key': ase_db_hashicorp_vault_username_key, 'ase_db_hashicorp_vault_secret_key': ase_db_hashicorp_vault_secret_key, 'ase_db_cyberark_vault_query_string': ase_db_cyberark_vault_query_string, 'ase_db_use_kerberos_authentication': ase_db_use_kerberos_authentication, 'ase_db_azure_vault_name': ase_db_azure_vault_name, 'ase_db_azure_vault_username_key': ase_db_azure_vault_username_key, 'ase_db_azure_vault_secret_key': ase_db_azure_vault_secret_key, 'java_home': java_home, 'dsp_keystore_path': dsp_keystore_path, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_truststore_path': dsp_truststore_path, 'dsp_truststore_password': dsp_truststore_password, 'description': description, 'tags': tags, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
+        body = {k: v for k, v in {'name': name, 'engine_id': engine_id, 'os_name': os_name, 'is_cluster': is_cluster, 'cluster_home': cluster_home, 'hostname': hostname, 'staging_environment': staging_environment, 'connector_port': connector_port, 'connector_authentication_key': connector_authentication_key, 'is_target': is_target, 'ssh_port': ssh_port, 'toolkit_path': toolkit_path, 'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'nfs_addresses': nfs_addresses, 'ase_db_vault_username': ase_db_vault_username, 'ase_db_username': ase_db_username, 'ase_db_password': ase_db_password, 'ase_enable_tls': ase_enable_tls, 'ase_skip_server_certificate_validation': ase_skip_server_certificate_validation, 'ase_db_vault': ase_db_vault, 'ase_db_hashicorp_vault_engine': ase_db_hashicorp_vault_engine, 'ase_db_hashicorp_vault_secret_path': ase_db_hashicorp_vault_secret_path, 'ase_db_hashicorp_vault_username_key': ase_db_hashicorp_vault_username_key, 'ase_db_hashicorp_vault_secret_key': ase_db_hashicorp_vault_secret_key, 'ase_db_cyberark_vault_query_string': ase_db_cyberark_vault_query_string, 'ase_db_use_kerberos_authentication': ase_db_use_kerberos_authentication, 'ase_db_azure_vault_name': ase_db_azure_vault_name, 'ase_db_azure_vault_username_key': ase_db_azure_vault_username_key, 'ase_db_azure_vault_secret_key': ase_db_azure_vault_secret_key, 'java_home': java_home, 'dsp_keystore_path': dsp_keystore_path, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_truststore_path': dsp_truststore_path, 'dsp_truststore_password': dsp_truststore_password, 'description': description, 'tags': tags, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
         return make_api_request('POST', '/environments', params=params, json_body=body if body else None)
     elif action == 'add_environment_users':
         if environment_id is None:
@@ -993,7 +976,7 @@ def environment_source_tool(
         conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False)
         if conf:
             return conf
-        body = {k: v for k, v in {'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'use_custom_key_pair': use_custom_key_pair, 'custom_private_key': custom_private_key, 'custom_public_key': custom_public_key}.items() if v is not None}
+        body = {k: v for k, v in {'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key}.items() if v is not None}
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     elif action == 'set_environment_primary_user':
         if environment_id is None:
@@ -1016,7 +999,7 @@ def environment_source_tool(
         conf = check_confirmation('PUT', endpoint, action, 'environment_source_tool', confirmed or False)
         if conf:
             return conf
-        body = {k: v for k, v in {'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'use_custom_key_pair': use_custom_key_pair, 'custom_private_key': custom_private_key, 'custom_public_key': custom_public_key}.items() if v is not None}
+        body = {k: v for k, v in {'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key}.items() if v is not None}
         return make_api_request('PUT', endpoint, params=params, json_body=body if body else None)
     elif action == 'delete_environment_users':
         if environment_id is None:
@@ -1522,15 +1505,7 @@ def toolkit_tool(
         conf = check_confirmation('POST', '/toolkits/upload', action, 'toolkit_tool', confirmed or False)
         if conf:
             return conf
-        result = make_api_request('POST', '/toolkits/upload', params=params)
-        try:
-            count = _refresh_toolkit_cache()
-            result["toolkit_cache_refreshed"] = True
-            result["cached_toolkit_count"] = count
-        except Exception as e:
-            logger.warning(f"Toolkit cache refresh after upload failed: {e}")
-            result["toolkit_cache_refreshed"] = False
-        return result
+        return make_api_request('POST', '/toolkits/upload', params=params)
     elif action == 'delete_toolkit':
         if toolkit_id is None:
             return {'error': 'Missing required parameter: toolkit_id for action delete_toolkit'}
@@ -1539,15 +1514,7 @@ def toolkit_tool(
         conf = check_confirmation('DELETE', endpoint, action, 'toolkit_tool', confirmed or False)
         if conf:
             return conf
-        result = make_api_request('DELETE', endpoint, params=params)
-        try:
-            count = _refresh_toolkit_cache()
-            result["toolkit_cache_refreshed"] = True
-            result["cached_toolkit_count"] = count
-        except Exception as e:
-            logger.warning(f"Toolkit cache refresh after delete failed: {e}")
-            result["toolkit_cache_refreshed"] = False
-        return result
+        return make_api_request('DELETE', endpoint, params=params)
     elif action == 'get_tags':
         if toolkit_id is None:
             return {'error': 'Missing required parameter: toolkit_id for action get_tags'}
@@ -1581,20 +1548,9 @@ def toolkit_tool(
         return {'error': f'Unknown action: {action}. Valid actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags'}
 
 
-def _refresh_toolkit_cache():
-    """Re-fetch all toolkit schemas and re-register MCP resources. Called after upload/delete."""
-    @async_to_sync
-    async def _do_refresh():
-        _, display_name_to_id = await fetch_and_cache_toolkit_schemas(client)
-        register_toolkit_resources(app, display_name_to_id)
-        return len(display_name_to_id)
-    return _do_refresh()
-
-
-def register_tools(_app, dct_client):
-    global client, app
+def register_tools(app, dct_client):
+    global client
     client = dct_client
-    app = _app
     logger.info(f'Registering tools for environment_endpoints...')
     try:
         logger.info(f'  Registering tool function: environment_source_tool')
