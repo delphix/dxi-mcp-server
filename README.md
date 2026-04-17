@@ -476,6 +476,8 @@ docker compose up
 
 Logs are persisted to `./logs/` on your host.
 
+> **Note**: `docker compose up` is useful for verifying the container starts cleanly and for checking logs. MCP clients (Claude Desktop, Cursor, etc.) must still use the `docker run --rm -i` invocation shown in the [MCP Client Configuration for Docker](#mcp-client-configuration-for-docker) section — Docker Compose does not route stdin from the calling process to the container.
+
 ### Persist Logs
 
 To write logs to a host directory, add a volume mount:
@@ -499,11 +501,12 @@ docker run --rm -i \
   -e DCT_API_KEY="..." \
   -e DCT_BASE_URL="..." \
   -e DCT_VERIFY_SSL="true" \
+  -e SSL_CERT_FILE="/etc/ssl/certs/custom-ca.crt" \
   -v /path/to/your/ca-bundle.crt:/etc/ssl/certs/custom-ca.crt:ro \
   dct-mcp-server:local
 ```
 
-The `python:3.11-slim` base image already trusts public CAs. You only need this step for private/internal certificates.
+The `SSL_CERT_FILE` environment variable tells the Python SSL stack to use your certificate file directly. The `python:3.11-slim` base image already trusts public CAs. You only need this step for private/internal certificates.
 
 ### MCP Client Configuration for Docker
 
@@ -552,6 +555,8 @@ Replace the `command`/`args` in your MCP client config with the Docker invocatio
   ]
 }
 ```
+
+> **Note**: Windsurf uses the same configuration format as Cursor (`mcpServers` array).
 </details>
 
 <details>
@@ -589,6 +594,7 @@ On Windows, use `docker` in Command Prompt or PowerShell MCP client configs. The
         "run", "--rm", "-i",
         "-e", "DCT_API_KEY=your-api-key-here",
         "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_VERIFY_SSL=true",
         "-e", "DCT_TOOLSET=self_service",
         "dct-mcp-server:local"
       ]
