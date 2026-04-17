@@ -137,13 +137,11 @@ class GlobalLogger:
         # src/dct_mcp_server/core/logging.py — four levels up is the repo root.
         # When installed as a package (e.g. inside a Docker image) the path is
         # something like /usr/local/lib/python3.x/site-packages/dct_mcp_server/core/logging.py
-        # and parents[3] would point into the Python lib directory. Detect this
-        # by checking whether the computed root looks like a writable project directory.
-        candidate = Path(__file__).resolve().parents[3]
-        candidate_logs = candidate / "logs"
-        # If candidate is a site-packages parent or otherwise not a project root,
-        # fall back to the current working directory (e.g. /app in Docker).
-        if "site-packages" in str(candidate) or not os.access(str(candidate), os.W_OK):
+        # and parents[3] would point into the Python lib directory.
+        # Detect this by checking whether __file__ itself lives under site-packages.
+        resolved_file = Path(__file__).resolve()
+        candidate = resolved_file.parents[3]
+        if "site-packages" in str(resolved_file) or not os.access(str(candidate), os.W_OK):
             return Path.cwd()
         return candidate
 

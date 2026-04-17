@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Layer caching: install dependencies before copying source
+# Copy project files needed for pip install
 COPY pyproject.toml README.md ./
 COPY src/ src/
 

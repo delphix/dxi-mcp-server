@@ -40,6 +40,7 @@ Key optional env vars:
 - `DCT_TIMEOUT` — seconds, default `30`
 - `DCT_MAX_RETRIES` — default `3`
 - `IS_LOCAL_TELEMETRY_ENABLED` — default `false`
+- `DCT_LOG_DIR` — optional override for log directory; useful in Docker to write logs to a mounted volume path
 
 No automated test suite exists. Testing is done by connecting an MCP client to the running server. Logs are written to `logs/dct_mcp_server.log` (rotating) and `logs/sessions/{session_id}.log` (telemetry).
 

@@ -44,6 +44,7 @@ This allows server restarts without reconfiguring the client.
 | `DCT_TIMEOUT` | No | `30` | Seconds |
 | `DCT_MAX_RETRIES` | No | `3` | |
 | `IS_LOCAL_TELEMETRY_ENABLED` | No | `false` | Opt-in telemetry |
+| `DCT_LOG_DIR` | No | auto-detected | Override the log directory; useful when running as pip-installed package (e.g. Docker) to write logs to a mounted volume |
 
 ## Logs
 
