@@ -8,7 +8,13 @@ import threading
 from functools import wraps
 
 client = None
+app = None
 logger = logging.getLogger(__name__)
+
+from dct_mcp_server.core.toolkit_schemas import (
+    fetch_and_cache_toolkit_schemas,
+    register_toolkit_resources,
+)
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -1516,7 +1522,15 @@ def toolkit_tool(
         conf = check_confirmation('POST', '/toolkits/upload', action, 'toolkit_tool', confirmed or False)
         if conf:
             return conf
-        return make_api_request('POST', '/toolkits/upload', params=params)
+        result = make_api_request('POST', '/toolkits/upload', params=params)
+        try:
+            count = _refresh_toolkit_cache()
+            result["toolkit_cache_refreshed"] = True
+            result["cached_toolkit_count"] = count
+        except Exception as e:
+            logger.warning(f"Toolkit cache refresh after upload failed: {e}")
+            result["toolkit_cache_refreshed"] = False
+        return result
     elif action == 'delete_toolkit':
         if toolkit_id is None:
             return {'error': 'Missing required parameter: toolkit_id for action delete_toolkit'}
@@ -1525,7 +1539,15 @@ def toolkit_tool(
         conf = check_confirmation('DELETE', endpoint, action, 'toolkit_tool', confirmed or False)
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
+        result = make_api_request('DELETE', endpoint, params=params)
+        try:
+            count = _refresh_toolkit_cache()
+            result["toolkit_cache_refreshed"] = True
+            result["cached_toolkit_count"] = count
+        except Exception as e:
+            logger.warning(f"Toolkit cache refresh after delete failed: {e}")
+            result["toolkit_cache_refreshed"] = False
+        return result
     elif action == 'get_tags':
         if toolkit_id is None:
             return {'error': 'Missing required parameter: toolkit_id for action get_tags'}
@@ -1559,9 +1581,20 @@ def toolkit_tool(
         return {'error': f'Unknown action: {action}. Valid actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags'}
 
 
-def register_tools(app, dct_client):
-    global client
+def _refresh_toolkit_cache():
+    """Re-fetch all toolkit schemas and re-register MCP resources. Called after upload/delete."""
+    @async_to_sync
+    async def _do_refresh():
+        _, display_name_to_id = await fetch_and_cache_toolkit_schemas(client)
+        register_toolkit_resources(app, display_name_to_id)
+        return len(display_name_to_id)
+    return _do_refresh()
+
+
+def register_tools(_app, dct_client):
+    global client, app
     client = dct_client
+    app = _app
     logger.info(f'Registering tools for environment_endpoints...')
     try:
         logger.info(f'  Registering tool function: environment_source_tool')
