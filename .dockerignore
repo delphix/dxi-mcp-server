@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Runtime artifacts
+logs/
+
+# Secrets
+.env
+
+# Development tools
+.git/
+.github/
+.claude/
+.vscode/
+docs/
+
+# Windows scripts (not needed in Linux container)
+*.bat
+
+# Build tools
+uv.lock
