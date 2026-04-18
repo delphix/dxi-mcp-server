@@ -254,11 +254,17 @@ prefix = """from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
+from datetime import datetime, timezone
 import asyncio
 import logging
 
 client = None
 logger = logging.getLogger(__name__)
+
+class _SafeDict(dict):
+    \"\"\"Returns '{key}' for missing keys so unresolvable placeholders stay readable.\"\"\"
+    def __missing__(self, key):
+        return f"{{{key}}}"
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -279,42 +285,51 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, context: dict = None) -> Optional[Dict[str, Any]]:
     \"\"\"Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed.\"\"\"
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none" and not confirmed:
-        # Merge query params and body into a single review dict so the LLM can
-        # render the exact payload that will be sent. None values are already
-        # stripped upstream by build_params / body filter.
-        review: Dict[str, Any] = {}
-        if request_params:
-            review.update(request_params)
-        if request_body:
-            review.update(request_body)
-        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
-        instructions = (
-            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
-            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
-        )
-        if is_review_critical:
-            instructions = (
-                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
-                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
-                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
-                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
-            )
-        return {
-            "status": "confirmation_required",
-            "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get("message", "Please confirm this operation."),
-            "action": action,
-            "tool": tool_name,
-            "api_path": api_path,
-            "method": method,
-            "review_parameters": review,
-            "instructions": instructions,
-        }
-    return None
+
+    if confirmation["level"] == "none":
+        return None
+
+    if confirmation.get("conditional"):
+        level = confirmation["level"]
+        threshold = confirmation.get("threshold_days")
+
+        if level == "retention_check" and context and threshold is not None:
+            retain_forever = context.get("retain_forever")
+            expiration_date = context.get("expiration_date")
+
+            if retain_forever:
+                return None
+
+            if expiration_date is not None:
+                try:
+                    exp = datetime.fromisoformat(str(expiration_date).replace("Z", "+00:00"))
+                    days_until = (exp - datetime.now(timezone.utc)).days
+                    if days_until > threshold:
+                        return None
+                    context = dict(context)
+                    context["days"] = max(0, days_until)
+                except (ValueError, TypeError):
+                    pass
+
+    if confirmed:
+        return None
+
+    message = confirmation.get("message", "Please confirm this operation.")
+    if context:
+        message = message.format_map(_SafeDict(context))
+
+    return {
+        "status": "confirmation_required",
+        "confirmation_level": confirmation["level"],
+        "confirmation_message": message,
+        "action": action,
+        "tool": tool_name,
+        "api_path": api_path,
+        "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+    }
 
 async def make_api_request(method: str, endpoint: str, params: dict = None, json_body: dict = None):
     \"\"\"Utility function to make API requests with consistent parameter handling.\"\"\"
@@ -1005,7 +1020,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # Build request body BEFORE confirmation check so the review payload
         # can surface the exact values that will be sent to DCT.
         method = details["method"]
-        body_var = "None"
+        func_code += f"        _ctx = {{k: v for k, v in locals().items() if v is not None and not k.startswith('_')}}\n"
+        func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False, context=_ctx)\n"
+        func_code += f"        if conf:\n"
+        func_code += f"            return conf\n"
+
+        # Handle request body
         if details["has_filter"] and method == "POST":
             func_code += "        body = {'filter_expression': filter_expression} if filter_expression else {}\n"
             body_var = "body"
@@ -1022,12 +1042,6 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     func_code += "            environment_user_id = environment_user_ref or environment_user\n"
                 func_code += f"        body = {{k: v for k, v in {{{body_items}}}.items() if v is not None}}\n"
                 body_var = "body"
-
-        # Confirmation check — include params + body so the LLM can render a
-        # review table for provisioning / linking / snapshot workflows.
-        func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False, request_params=params, request_body={body_var})\n"
-        func_code += f"        if conf:\n"
-        func_code += f"            return conf\n"
 
         # Dispatch the request
         if details["has_filter"] and method == "POST":
