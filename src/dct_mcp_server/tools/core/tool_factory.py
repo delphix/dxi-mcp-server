@@ -13,12 +13,11 @@ Architecture:
 
 import logging
 import asyncio
-import threading
 import tempfile
 import os
 import re
 from typing import Dict, Any, List, Optional, Callable, Tuple
-from functools import wraps, lru_cache
+
 from pathlib import Path
 
 import yaml
@@ -152,32 +151,6 @@ def _get_python_type(schema_type: str) -> str:
     return type_map.get(schema_type, "Any")
 
 
-def _async_to_sync(async_func):
-    """Decorator to convert async function to sync with proper event loop handling."""
-    @wraps(async_func)
-    def wrapper(*args, **kwargs):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                result = None
-                exception = None
-                def run_in_thread():
-                    nonlocal result, exception
-                    try:
-                        result = asyncio.run(async_func(*args, **kwargs))
-                    except Exception as e:
-                        exception = e
-                thread = threading.Thread(target=run_in_thread)
-                thread.start()
-                thread.join()
-                if exception:
-                    raise exception
-                return result
-            else:
-                return loop.run_until_complete(async_func(*args, **kwargs))
-        except RuntimeError:
-            return asyncio.run(async_func(*args, **kwargs))
-    return wrapper
 
 
 # =============================================================================
@@ -248,7 +221,7 @@ def _create_tool_function(
     needs_confirmation = confirmation["level"] != "none"
     
     # Create the actual function
-    def tool_function(**kwargs):
+    async def tool_function(**kwargs):
         """Dynamic tool function - actual implementation."""
         if _dct_client is None:
             return {"error": "DCT client not initialized"}
@@ -288,25 +261,20 @@ def _create_tool_function(
         for param_name, param_value in path_params.items():
             final_path = final_path.replace(f"{{{param_name}}}", str(param_value))
         
-        # Make the API request
-        @_async_to_sync
-        async def _make_request():
-            return await _dct_client.make_request(
-                method, 
-                final_path, 
-                params=query_params,
-                json=json_body
-            )
-        
-        return _make_request()
-    
+        return await _dct_client.make_request(
+            method,
+            final_path,
+            params=query_params,
+            json=json_body
+        )
+
     # Set function metadata
     tool_function.__name__ = operation_id
     tool_function.__doc__ = docstring
-    
+
     # Apply logging decorator
     decorated_func = log_tool_execution(tool_function)
-    
+
     return decorated_func, operation_id
 
 
@@ -380,7 +348,7 @@ Returns:
     API response as dict
 """
     
-    def grouped_tool(action: str, **kwargs):
+    async def grouped_tool(action: str, **kwargs):
         """Grouped tool implementation."""
         if _dct_client is None:
             return {"error": "DCT client not initialized"}
@@ -431,16 +399,12 @@ Returns:
         # Remaining kwargs become query params
         query_params = {k: v for k, v in kwargs.items() if v is not None}
         
-        @_async_to_sync
-        async def _make_request():
-            return await _dct_client.make_request(
-                method,
-                final_path,
-                params=query_params if query_params else None,
-                json=json_body
-            )
-        
-        return _make_request()
+        return await _dct_client.make_request(
+            method,
+            final_path,
+            params=query_params if query_params else None,
+            json=json_body
+        )
     
     grouped_tool.__name__ = tool_name
     grouped_tool.__doc__ = docstring

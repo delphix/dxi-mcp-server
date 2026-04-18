@@ -127,6 +127,13 @@ async def async_main():
         except Exception as e:
             logger.warning(f"Could not determine toolset configuration: {e}")
 
+        # Generate fresh tools from DCT API (non-blocking — runs in thread pool)
+        try:
+            await asyncio.to_thread(generate_tools_from_openapi)
+            logger.info("Successfully generated fresh tools from DCT API")
+        except Exception as e:
+            logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
+
         # Dynamically register all tools
         from .tools import register_all_tools
 
@@ -161,14 +168,6 @@ def main():
     """Synchronous main entry point - wrapper for async_main"""
     setup_logging()
     logger = logging.getLogger(__name__)
-    
-    # Try to generate fresh tools, but don't fail if it doesn't work
-    try:
-        generate_tools_from_openapi()
-        logger.info("Successfully generated fresh tools from DCT API")
-    except Exception as e:
-        logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
-    
     try:
         # Run the async main function
         asyncio.run(async_main())

@@ -256,8 +256,6 @@ from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
 import asyncio
 import logging
-import threading
-from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
@@ -318,40 +316,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
         }
     return None
 
-def async_to_sync(async_func):
-    \"\"\"Utility decorator to convert async functions to sync with proper event loop handling.\"\"\"
-    @wraps(async_func)
-    def wrapper(*args, **kwargs):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a task and run it synchronously
-                result = None
-                exception = None
-                def run_in_thread():
-                    nonlocal result, exception
-                    try:
-                        result = asyncio.run(async_func(*args, **kwargs))
-                    except Exception as e:
-                        exception = e
-                thread = threading.Thread(target=run_in_thread)
-                thread.start()
-                thread.join()
-                if exception:
-                    raise exception
-                return result
-            else:
-                return loop.run_until_complete(async_func(*args, **kwargs))
-        except RuntimeError:
-            return asyncio.run(async_func(*args, **kwargs))
-    return wrapper
-
-def make_api_request(method: str, endpoint: str, params: dict = None, json_body: dict = None):
+async def make_api_request(method: str, endpoint: str, params: dict = None, json_body: dict = None):
     \"\"\"Utility function to make API requests with consistent parameter handling.\"\"\"
-    @async_to_sync
-    async def _make_request():
-        return await client.make_request(method, endpoint, params=params or {}, json=json_body)
-    return _make_request()
+    return await client.make_request(method, endpoint, params=params or {}, json=json_body)
 
 def build_params(**kwargs):
     \"\"\"Build parameters dictionary excluding None and empty string values.\"\"\"
@@ -797,7 +764,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     actions_list = list(action_details.keys())
     actions_literal = "|".join([f"'{a}'" for a in actions_list])
     
-    func_code = f"@log_tool_execution\ndef {tool_name}(\n"
+    func_code = f"@log_tool_execution\nasync def {tool_name}(\n"
     func_code += f"    action: str,  # One of: {', '.join(actions_list)}\n"
 
     # Add all parameters as optional (since they depend on action)
@@ -1064,11 +1031,11 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
 
         # Dispatch the request
         if details["has_filter"] and method == "POST":
-            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
+            func_code += f"        return await make_api_request('{method}', {endpoint_var}, params=params, json_body=body)\n"
         elif method in ["POST", "PUT", "PATCH"] and body_var == "body":
-            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
+            func_code += f"        return await make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
         else:
-            func_code += f"        return make_api_request('{method}', {endpoint_var}, params=params)\n"
+            func_code += f"        return await make_api_request('{method}', {endpoint_var}, params=params)\n"
     
     # Add else clause for unknown action
     func_code += "    else:\n"
