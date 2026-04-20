@@ -1,8 +1,6 @@
 # Testing Rules
 
-## No Automated Test Suite
-
-There is no unit or integration test suite in this repository. Do not create mock-based unit tests — the FastMCP framework and DCT API interactions are too tightly coupled to a live server for mocks to be reliable.
+Based on the jira information or description of the change, determine which toolsets and scenarios to test against. Use the appropriate prompt files from `.claude/rules/testing/` to guide your testing.
 
 ## Testing Is Done via MCP Clients
 
@@ -33,3 +31,17 @@ PR descriptions must include:
 - Which toolset(s) were tested
 - Which DCT version was used
 - Specific actions/scenarios exercised
+
+Generate a final test report summarizing the above and any issues encountered, and attach it to the PR for reviewer reference.
+
+## Toolset Test Prompt Files
+
+Full prompt lists for each toolset are in `.claude/rules/testing/`:
+
+| File | Toolset | Prompts |
+|------|---------|---------|
+| [testing/self_service.md](testing/self_service.md) | `self_service` | 70 |
+| [testing/self_service_provision.md](testing/self_service_provision.md) | `self_service_provision` | 70 inherited + 69 new |
+| [testing/continuous_data_admin.md](testing/continuous_data_admin.md) | `continuous_data_admin` | 431 |
+| [testing/platform_admin.md](testing/platform_admin.md) | `platform_admin` | 198 |
+| [testing/reporting_insights.md](testing/reporting_insights.md) | `reporting_insights` | 79 |
