@@ -2,9 +2,9 @@
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-# Delphix DCT API MCP Server
+# Delphix DCT MCP Server
 
-The Delphix DCT API MCP Server provides a robust Model Context Protocol (MCP) interface for interacting with the Delphix Data Control Tower (DCT) API. This service enables AI assistants and client applications to securely access test data management capabilities through a structured toolset.
+The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interface for interacting with the Delphix Data Control Tower (DCT) API. This service enables AI assistants and client applications to securely access test data management capabilities through a structured toolset.
 
 ## Table of Contents
 - [Features](#features)
