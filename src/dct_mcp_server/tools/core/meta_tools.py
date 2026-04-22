@@ -172,8 +172,8 @@ def get_toolset_tools(toolset_name: str) -> Dict[str, Any]:
             "total_tools": len(tools),
             "total_actions": sum(len(t.get("actions", [])) for t in tools),
             "instructions": (
-                f"To enable this toolset, set the environment variable: "
-                f"DCT_TOOLSET={toolset_name} and restart the server."
+                f"Call enable_toolset(toolset_name='{toolset_name}') to activate this toolset "
+                f"at runtime — no restart required."
             )
         }
     except Exception as e:

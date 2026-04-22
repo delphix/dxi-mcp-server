@@ -40,6 +40,7 @@ Full prompt lists for each toolset are in `.claude/rules/testing/`:
 
 | File | Toolset | Prompts |
 |------|---------|---------|
+| [testing/auto.md](testing/auto.md) | `auto` | 57 |
 | [testing/self_service.md](testing/self_service.md) | `self_service` | 70 |
 | [testing/self_service_provision.md](testing/self_service_provision.md) | `self_service_provision` | 70 inherited + 69 new |
 | [testing/continuous_data_admin.md](testing/continuous_data_admin.md) | `continuous_data_admin` | 431 |

@@ -395,9 +395,17 @@ Returns:
         body = kwargs.pop("body", None)
         if body:
             json_body = body
-        
-        # Remaining kwargs become query params
-        query_params = {k: v for k, v in kwargs.items() if v is not None}
+
+        # Remaining kwargs: for mutating methods send as JSON body, for GET/DELETE as query params
+        remaining = {k: v for k, v in kwargs.items() if v is not None}
+        if method.upper() in ("POST", "PUT", "PATCH") and remaining:
+            if json_body:
+                json_body.update(remaining)
+            else:
+                json_body = remaining
+            query_params = {}
+        else:
+            query_params = remaining
         
         return await _dct_client.make_request(
             method,
