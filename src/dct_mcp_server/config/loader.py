@@ -25,7 +25,7 @@ TOOLSETS_DIR = CONFIG_DIR / "toolsets"
 MAPPINGS_DIR = CONFIG_DIR / "mappings"
 
 # Meta-tools that are always available in auto mode
-META_TOOLS = ["list_available_toolsets", "get_toolset_tools", "enable_toolset"]
+META_TOOLS = ["list_available_toolsets", "get_toolset_tools", "execute_action"]
 
 
 # ============================================================================

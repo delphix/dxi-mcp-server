@@ -19,31 +19,32 @@ logger = logging.getLogger(__name__)
 def register_meta_tools_only(app, dct_client=None):
     """
     Register only the meta-tools for auto mode with runtime switching support.
-    
+
     In auto mode, the LLM can discover available toolsets using:
     - list_available_toolsets
     - get_toolset_tools
     - enable_toolset (runtime registration - no restart required)
     - disable_toolset (return to meta-tools only)
     - check_operation_confirmation
-    
+    - execute_action (direct execution without tool list refresh)
+
     Args:
         app: FastMCP application instance
         dct_client: DCT API client instance (needed for runtime tool registration)
     """
     from .core.meta_tools import register_meta_tools, initialize_tool_inventory
-    
-    # Register the 5 meta-tools
+
+    # Register the 6 meta-tools
     register_meta_tools(app)
-    
+
     # Initialize tool inventory for runtime switching
     if dct_client is not None:
         initialize_tool_inventory(app, dct_client)
         logger.info("Tool inventory initialized for runtime toolset switching")
     else:
         logger.warning("DCT client not provided - runtime toolset switching will be limited")
-    
-    logger.info("Auto mode: 5 meta-tools registered. Use list_available_toolsets to discover toolsets.")
+
+    logger.info("Auto mode: 6 meta-tools registered. Use list_available_toolsets to discover toolsets.")
 
 
 def register_all_tools(app, dct_client):
