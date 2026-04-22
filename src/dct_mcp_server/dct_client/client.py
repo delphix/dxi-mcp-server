@@ -33,7 +33,7 @@ class DCTAPIClient:
         try:
             version = importlib.metadata.version("dct-mcp-server")
         except importlib.metadata.PackageNotFoundError:
-            version = "2025.0.1.0-preview"
+            version = "2026.0.1.0-preview"
 
         # Default headers
         self.headers = {
@@ -64,8 +64,12 @@ class DCTAPIClient:
         client = await self._get_client()
         try:
             yield client
+        except httpx.HTTPStatusError:
+            # Let HTTP status errors (4xx/5xx) propagate to the retry handler
+            # in make_request, which extracts the response body for diagnostics.
+            raise
         except Exception as e:
-            # If there's a connection error, close and create a new client next time
+            # Actual connection/transport errors — close and recreate client
             logger.warning(f"Connection error: {str(e)}")
             await self.close()
             raise DCTClientError(f"A connection error occurred: {e}") from e
@@ -107,6 +111,10 @@ class DCTAPIClient:
 
             except httpx.HTTPStatusError as e:
                 error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
+                # Don't retry client errors (4xx) — the request itself is wrong
+                if 400 <= e.response.status_code < 500:
+                    logger.error(f"Client error (not retrying): {error_msg}")
+                    raise DCTClientError(error_msg) from e
                 if attempt == self.max_retries - 1:
                     logger.error(
                         f"API request failed after {self.max_retries} attempts: {error_msg}"

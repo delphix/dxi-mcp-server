@@ -10,7 +10,6 @@ from .session import (
     log_tool_call,
     get_current_session_id,
 )
-
 __all__ = [
     "get_logger",
     "setup_logging",

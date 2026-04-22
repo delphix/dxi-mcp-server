@@ -49,3 +49,6 @@ Thumbs.db
 *.log
 logs/
 mcp_server_setup_logfile.txt
+
+# Local docs (not part of review)
+docs/

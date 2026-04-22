@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
+from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
 import asyncio
 import logging
 import threading
@@ -8,6 +9,62 @@ from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CONFIRMATION INTEGRATION
+# =============================================================================
+# For destructive operations (DELETE, POST .../delete), generated tools should:
+# 1. Call requires_confirmation(method, path) to check if confirmation needed
+# 2. If True, include confirmation_message in the response
+# 3. LLM should use check_operation_confirmation meta-tool before executing
+#
+# Example usage in generated tool:
+#   confirmation = get_confirmation_for_operation("DELETE", "/vdbs/{id}")
+#   if confirmation["level"] != "none":
+#       return {
+#           "requires_confirmation": True,
+#           "confirmation_level": confirmation["level"],
+#           "confirmation_message": confirmation["message"],
+#           "operation": "delete_vdb"
+#       }
+# =============================================================================
+
+def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
+    confirmation = get_confirmation_for_operation(method, api_path)
+    if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
+        return {
+            "status": "confirmation_required",
+            "confirmation_level": confirmation["level"],
+            "confirmation_message": confirmation.get("message", "Please confirm this operation."),
+            "action": action,
+            "tool": tool_name,
+            "api_path": api_path,
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
+        }
+    return None
 
 def async_to_sync(async_func):
     """Utility decorator to convert async functions to sync with proper event loop handling."""
@@ -45,105 +102,230 @@ def make_api_request(method: str, endpoint: str, params: dict = None, json_body:
     return _make_request()
 
 def build_params(**kwargs):
-    """Build parameters dictionary excluding None values."""
-    return {k: v for k, v in kwargs.items() if v is not None}
+    """Build parameters dictionary excluding None and empty string values."""
+    return {k: v for k, v in kwargs.items() if v is not None and v != ''}
 
 @log_tool_execution
-def search_jobs(limit: Optional[int] = None, cursor: Optional[str] = None, sort: Optional[str] = None, filter_expression: Optional[str] = None) -> Dict[str, Any]:
+def job_tool(
+    action: str,  # One of: search, get, abandon, get_result, get_tags, add_tags, delete_tags
+    cursor: Optional[str] = None,
+    filter_expression: Optional[str] = None,
+    job_id: Optional[str] = None,
+    key: Optional[str] = None,
+    limit: Optional[int] = 100,
+    sort: Optional[str] = '-start_time',
+    tags: Optional[list] = None,
+    value: Optional[str] = None,
+    confirmed: Optional[bool] = None,
+) -> Dict[str, Any]:
     """
-    Search for jobs.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.
-    :param limit: Maximum number of objects to return per query. The value must be between 1 and 1000. Default is 100.(optional)
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.
-    :param cursor: Cursor to fetch the next or previous page of results. The value of this property must be extracted from the 'prev_cursor' or 'next_cursor' property of a PaginatedResponseMetadata which is contained in the response of list and search API endpoints.(optional)
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.
-    :param sort: The field to sort results by. A property name with a prepended '-' signifies descending order.(optional)
-    :param filter_expression: Filter expression string (optional)
-    Filter expression can include the following fields:
-     - id: The Job entity ID.
-     - status: The status of the job.
-     - is_waiting_for_telemetry: Indicates that the operations performed by this Job have completed successfully, but the object changes are not yet reflected. This is only set when when the JOB is in STARTED status, with the guarantee that the job will not transition to the FAILED status. Note that this flag will likely be replaced with a new status in future API versions and be deprecated.
-     - type: The type of job being done.
-     - localized_type: The i18n translated type of job being done.
-     - error_details: Details about the failure for FAILED jobs.
-     - warning_message: Warnings for the job.
-     - target_id: A reference to the job's target.
-     - target_name: A reference to the job's target name.
-     - start_time: The time the job started executing.
-     - update_time: The time the job was last updated.
-     - trace_id: traceId of the request which created this Job
-     - engine_ids: IDs of the engines this Job is executing on.
-     - tags: No description
-     - engines: No description
-     - account_id: The ID of the account who initiated this job.
-     - account_name: The account name which initiated this job. It can be either firstname and lastname combination or firstname or lastname or username or email address or Account-<id>.
-     - percent_complete: Completion percentage of the Job.
-     - virtualization_tasks: No description
-     - tasks: No description
-     - execution_id: The ID of the associated masking execution, if any.
-     - result_type: The type of the job result. This is the type of the object present in the result.
-     - result: The result of the job execution. This is JSON serialized string of the result object whose type is specified by result_type property.
-
-    How to use filter_expresssion: 
-    A request body containing a filter expression. This enables searching
-    for items matching arbitrarily complex conditions. The list of
-    attributes which can be used in filter expressions is available
-    in the x-filterable vendor extension.
+    Unified tool for JOB operations.
     
-    # Filter Expression Overview
-    **Note: All keywords are case-insensitive**
+    This tool supports 7 actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags
     
-    ## Comparison Operators
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | CONTAINS | Substring or membership testing for string and list attributes respectively. | field3 CONTAINS 'foobar', field4 CONTAINS TRUE  |
-    | IN | Tests if field is a member of a list literal. List can contain a maximum of 100 values | field2 IN ['Goku', 'Vegeta'] |
-    | GE | Tests if a field is greater than or equal to a literal value | field1 GE 1.2e-2 |
-    | GT | Tests if a field is greater than a literal value | field1 GT 1.2e-2 |
-    | LE | Tests if a field is less than or equal to a literal value | field1 LE 9000 |
-    | LT | Tests if a field is less than a literal value | field1 LT 9.02 |
-    | NE | Tests if a field is not equal to a literal value | field1 NE 42 |
-    | EQ | Tests if a field is equal to a literal value | field1 EQ 42 |
+    ======================================================================
+    ACTION REFERENCE
+    ======================================================================
     
-    ## Search Operator
-    The SEARCH operator filters for items which have any filterable
-    attribute that contains the input string as a substring, comparison
-    is done case-insensitively. This is not restricted to attributes with
-    string values. Specifically `SEARCH '12'` would match an item with an
-    attribute with an integer value of `123`.
+    ACTION: search
+    ----------------------------------------
+    Summary: Search for jobs.
+    Method: POST
+    Endpoint: /jobs/search
+    Required Parameters: limit, cursor, sort
+    Key Parameters (provide as applicable): filter_expression
     
-    ## Logical Operators
-    Ordered by precedence.
-    | Operator | Description | Example |
-    | --- | --- | --- |
-    | NOT | Logical NOT (Right associative) | NOT field1 LE 9000 |
-    | AND | Logical AND (Left Associative) | field1 GT 9000 AND field2 EQ 'Goku' |
-    | OR | Logical OR (Left Associative) | field1 GT 9000 OR field2 EQ 'Goku' |
+    Filterable Fields:
+        - id: The Job entity ID.
+        - status: The status of the job.
+        - is_waiting_for_telemetry: Indicates that the operations performed by this Job have ...
+        - type: The type of job being done.
+        - localized_type: The i18n translated type of job being done.
+        - error_details: Details about the failure for FAILED jobs.
+        - warning_message: Warnings for the job.
+        - target_id: A reference to the job's target.
+        - target_name: A reference to the job's target name.
+        - start_time: The time the job started executing.
+        - update_time: The time the job was last updated.
+        - trace_id: traceId of the request which created this Job
+        - engine_ids: IDs of the engines this Job is executing on.
+        - tags: 
+        - engines: 
+        - account_id: The ID of the account who initiated this job.
+        - account_name: The account name which initiated this job. It can be eith...
+        - percent_complete: Completion percentage of the Job.
+        - virtualization_tasks: 
+        - tasks: 
+        - execution_id: The ID of the associated masking execution, if any.
+        - result_type: The type of the job result. This is the type of the objec...
+        - result: The result of the job execution. This is JSON serialized ...
     
-    ## Grouping
-    Parenthesis `()` can be used to override operator precedence.
+    Filter Syntax:
+        Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
+        Combine: AND, OR
+        Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
     
-    For example:
-    NOT (field1 LT 1234 AND field2 CONTAINS 'foo')
+    Example:
+        >>> job_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
     
-    ## Literal Values
-    | Literal      | Description | Examples |
-    | --- | --- | --- |
-    | Nil | Represents the absence of a value | nil, Nil, nIl, NIL |
-    | Boolean | true/false boolean | true, false, True, False, TRUE, FALSE |
-    | Number | Signed integer and floating point numbers. Also supports scientific notation. | 0, 1, -1, 1.2, 0.35, 1.2e-2, -1.2e+2 |
-    | String | Single or double quoted | "foo", "bar", "foo bar", 'foo', 'bar', 'foo bar' |
-    | Datetime | Formatted according to [RFC3339](https://datatracker.ietf.org/doc/html/rfc3339) | 2018-04-27T18:39:26.397237+00:00 |
-    | List | Comma-separated literals wrapped in square brackets | [0], [0, 1], ['foo', "bar"] |
+    ACTION: get
+    ----------------------------------------
+    Summary: Returns a job by ID.
+    Method: GET
+    Endpoint: /jobs/{jobId}
+    Required Parameters: job_id
     
-    ## Limitations
-    - A maximum of 8 unique identifiers may be used inside a filter expression.
+    Example:
+        >>> job_tool(action='get', job_id='example-job-123')
     
+    ACTION: abandon
+    ----------------------------------------
+    Summary: Abandons a job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/abandon
+    Required Parameters: job_id
+    
+    Example:
+        >>> job_tool(action='abandon', job_id='example-job-123')
+    
+    ACTION: get_result
+    ----------------------------------------
+    Summary: Get job result.
+    Method: GET
+    Endpoint: /jobs/{jobId}/result
+    Required Parameters: job_id
+    
+    Example:
+        >>> job_tool(action='get_result', job_id='example-job-123')
+    
+    ACTION: get_tags
+    ----------------------------------------
+    Summary: Get tags for a Job.
+    Method: GET
+    Endpoint: /jobs/{jobId}/tags
+    Required Parameters: job_id
+    
+    Example:
+        >>> job_tool(action='get_tags', job_id='example-job-123')
+    
+    ACTION: add_tags
+    ----------------------------------------
+    Summary: Create tags for a Job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/tags
+    Required Parameters: job_id, tags
+    
+    Example:
+        >>> job_tool(action='add_tags', job_id='example-job-123', tags=...)
+    
+    ACTION: delete_tags
+    ----------------------------------------
+    Summary: Delete tags for a Job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/tags/delete
+    Required Parameters: job_id
+    Key Parameters (provide as applicable): tags, key, value
+    
+    Example:
+        >>> job_tool(action='delete_tags', job_id='example-job-123', tags=..., key=..., value=...)
+    
+    ======================================================================
+    PARAMETERS
+    ======================================================================
+    
+    Args:
+        action (str): The operation to perform. One of: search, get, abandon, get_result, get_tags, add_tags, delete_tags
+    
+      -- General parameters (all database types) --
+        cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
+            [Required for: search]
+        filter_expression (str): Request body parameter
+            [Optional for all actions]
+        job_id (str): The unique identifier for the job.
+            [Required for: get, abandon, get_result, get_tags, add_tags, delete_tags]
+        key (str): Key of the tag
+            [Optional for all actions]
+        limit (int): Maximum number of objects to return per query. The value must be between 1 an...
+            [Required for: search]
+        sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
+            [Required for: search]
+        tags (list): Array of tags with key value pairs (Pass as JSON array)
+            [Required for: add_tags]
+        value (str): Value of the tag
+            [Optional for all actions]
+    
+    Returns:
+        Dict[str, Any]: The API response containing operation results
+    
+    Raises:
+        Returns error dict if required parameters are missing for the action
     """
-    # Build parameters excluding None values
-    params = build_params(limit=limit, cursor=cursor, sort=sort)
-    search_body = {'filter_expression': filter_expression}
-    return make_api_request('POST', '/jobs/search', params=params, json_body=search_body)
+    # Route to appropriate API based on action
+    if action == 'search':
+        params = build_params(limit=limit, cursor=cursor, sort=sort)
+        body = {'filter_expression': filter_expression} if filter_expression else {}
+        conf = check_confirmation('POST', '/jobs/search', action, 'job_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
+        return make_api_request('POST', '/jobs/search', params=params, json_body=body)
+    elif action == 'get':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action get'}
+        endpoint = f'/jobs/{job_id}'
+        params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
+        if conf:
+            return conf
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'abandon':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action abandon'}
+        endpoint = f'/jobs/{job_id}/abandon'
+        params = build_params()
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
+        if conf:
+            return conf
+        return make_api_request('POST', endpoint, params=params)
+    elif action == 'get_result':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action get_result'}
+        endpoint = f'/jobs/{job_id}/result'
+        params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
+        if conf:
+            return conf
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'get_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action get_tags'}
+        endpoint = f'/jobs/{job_id}/tags'
+        params = build_params()
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=None)
+        if conf:
+            return conf
+        return make_api_request('GET', endpoint, params=params)
+    elif action == 'add_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action add_tags'}
+        endpoint = f'/jobs/{job_id}/tags'
+        params = build_params(tags=tags)
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
+        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    elif action == 'delete_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action delete_tags'}
+        endpoint = f'/jobs/{job_id}/tags/delete'
+        params = build_params()
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, request_params=params, request_body=body)
+        if conf:
+            return conf
+        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    else:
+        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags'}
 
 
 def register_tools(app, dct_client):
@@ -151,8 +333,8 @@ def register_tools(app, dct_client):
     client = dct_client
     logger.info(f'Registering tools for job_endpoints...')
     try:
-        logger.info(f'  Registering tool function: search_jobs')
-        app.add_tool(search_jobs, name="search_jobs")
+        logger.info(f'  Registering tool function: job_tool')
+        app.add_tool(job_tool, name="job_tool")
     except Exception as e:
         logger.error(f'Error registering tools for job_endpoints: {e}')
     logger.info(f'Tools registration finished for job_endpoints.')

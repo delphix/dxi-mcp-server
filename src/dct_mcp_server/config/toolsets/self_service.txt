@@ -1,0 +1,102 @@
+# Self Service Toolset - 6 Tools
+# Description: Perform classic Self Service activities
+# Format: METHOD|/endpoint/path|action_name
+# Target users: Developers, QA engineers who need to work with VDBs
+
+# ----------------------------------------------------------------------------
+# TOOL 1: vdb_tool - VDB
+# ----------------------------------------------------------------------------
+POST|/vdbs/search|search
+GET|/vdbs/{vdbId}|get
+POST|/vdbs/{vdbId}/start|start
+POST|/vdbs/{vdbId}/stop|stop
+POST|/vdbs/{vdbId}/enable|enable
+POST|/vdbs/{vdbId}/disable|disable
+POST|/vdbs/{vdbId}/refresh_by_timestamp|refresh_by_timestamp
+POST|/vdbs/{vdbId}/refresh_by_snapshot|refresh_by_snapshot
+POST|/vdbs/{vdbId}/refresh_from_bookmark|refresh_from_bookmark
+POST|/vdbs/{vdbId}/rollback_by_timestamp|rollback_by_timestamp
+POST|/vdbs/{vdbId}/rollback_by_snapshot|rollback_by_snapshot
+POST|/vdbs/{vdbId}/rollback_from_bookmark|rollback_from_bookmark
+GET|/vdbs/{vdbId}/snapshots|list_snapshots
+GET|/vdbs/{vdbId}/bookmarks|list_bookmarks
+GET|/vdbs/{vdbId}/tags|get_tags
+POST|/vdbs/{vdbId}/tags|add_tags
+POST|/vdbs/{vdbId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 2: vdb_group_tool - VDB Group
+# ----------------------------------------------------------------------------
+POST|/vdb-groups/search|search
+GET|/vdb-groups/{vdbGroupId}|get
+POST|/vdb-groups/{vdbGroupId}/refresh|refresh
+POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|refresh_from_bookmark
+POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|refresh_by_snapshot
+POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|refresh_by_timestamp
+POST|/vdb-groups/{vdbGroupId}/rollback|rollback
+POST|/vdb-groups/{vdbGroupId}/lock|lock
+POST|/vdb-groups/{vdbGroupId}/unlock|unlock
+POST|/vdb-groups/{vdbGroupId}/start|start
+POST|/vdb-groups/{vdbGroupId}/stop|stop
+POST|/vdb-groups/{vdbGroupId}/enable|enable
+POST|/vdb-groups/{vdbGroupId}/disable|disable
+GET|/vdb-groups/{vdbGroupId}/bookmarks|list_bookmarks
+GET|/vdb-groups/{vdbGroupId}/tags|get_tags
+POST|/vdb-groups/{vdbGroupId}/tags|add_tags
+POST|/vdb-groups/{vdbGroupId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 3: dsource_tool - dSources
+# ----------------------------------------------------------------------------
+POST|/dsources/search|search
+GET|/dsources/{dsourceId}|get
+GET|/dsources/{dsourceId}/snapshots|list_snapshots
+GET|/dsources/{dsourceId}/tags|get_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 4: snapshot_tool - Snapshots
+# ----------------------------------------------------------------------------
+POST|/snapshots/search|search
+GET|/snapshots/{snapshotId}|get
+GET|/snapshots/{snapshotId}/timeflow_range|get_timeflow_range
+GET|/snapshots/{snapshotId}/runtime|get_runtime
+POST|/snapshots/find_by_location|find_by_location
+POST|/snapshots/find_by_timestamp|find_by_timestamp
+GET|/snapshots/{snapshotId}/tags|get_tags
+POST|/snapshots/{snapshotId}/tags|add_tags
+POST|/snapshots/{snapshotId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 5: bookmark_tool - Bookmarks
+# ----------------------------------------------------------------------------
+POST|/bookmarks/search|search
+GET|/bookmarks/{bookmarkId}|get
+POST|/bookmarks|create
+PATCH|/bookmarks/{bookmarkId}|update
+DELETE|/bookmarks/{bookmarkId}|delete
+GET|/bookmarks/{bookmarkId}/vdb-groups|get_vdb_groups
+GET|/bookmarks/{bookmarkId}/tags|get_tags
+POST|/bookmarks/{bookmarkId}/tags|add_tags
+POST|/bookmarks/{bookmarkId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 6: job_tool - Operations
+# ----------------------------------------------------------------------------
+POST|/jobs/search|search
+GET|/jobs/{jobId}|get
+POST|/jobs/{jobId}/abandon|abandon
+GET|/jobs/{jobId}/tags|get_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 7: timeflow_tool - Timeflows
+# ----------------------------------------------------------------------------
+GET|/timeflows|list
+POST|/timeflows/search|search
+GET|/timeflows/{timeflowId}|get
+PATCH|/timeflows/{timeflowId}|update
+DELETE|/timeflows/{timeflowId}|delete
+GET|/timeflows/{timeflowId}/timeflowSnapshotDayRange|get_snapshot_day_range
+POST|/timeflows/{timeflowId}/repair|repair
+GET|/timeflows/{timeflowId}/tags|get_tags
+POST|/timeflows/{timeflowId}/tags|add_tags
+POST|/timeflows/{timeflowId}/tags/delete|delete_tags
