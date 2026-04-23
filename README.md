@@ -13,6 +13,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+  - [Running with Docker](#running-with-docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -424,6 +425,117 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
+
+### Running with Docker
+
+Docker lets you run the DCT MCP Server without installing Python or any dependencies on the host.
+
+**Prerequisites:**
+- [Docker Engine](https://docs.docker.com/get-started/get-docker/) 20.10+ installed and running
+- A valid `DCT_API_KEY` and `DCT_BASE_URL`
+- A local clone of this repository (for `docker build`)
+
+**1. Build the image**
+
+From the project root:
+```bash
+docker build -t dct-mcp-server:latest .
+```
+
+**2. Run the server manually (smoke test)**
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY="your-api-key" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  dct-mcp-server:latest
+```
+
+The server starts and listens on stdin/stdout. Press `Ctrl+C` to stop.
+
+**3. Persist logs (optional)**
+
+Mount a host directory to `/app/logs` to retain logs after the container exits:
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY="your-api-key" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -v "$(pwd)/logs:/app/logs" \
+  dct-mcp-server:latest
+```
+
+**4. Configure your MCP client**
+
+Use `docker run` as the client's `command`. The `--rm` and `-i` flags are required: `--rm` removes the container after use, and `-i` keeps stdin attached for stdio communication.
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor IDE & Windsurf</strong></summary>
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "delphix-dct",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:latest"
+      ]
+    }
+  ]
+}
+```
+</details>
+
+<details>
+<summary><strong>VS Code, Eclipse & IntelliJ IDEA</strong></summary>
+
+```json
+{
+  "servers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+</details>
+
+> **Tip:** To pass credentials from an env file instead of inline `-e` flags, replace the `-e` arguments with `--env-file /absolute/path/to/.env`.
+
+> **Note:** Do not prefix the `DCT_API_KEY` value with `apk`. The server adds this prefix automatically.
 
 ## Toolsets
 
