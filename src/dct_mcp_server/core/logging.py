@@ -72,8 +72,11 @@ class GlobalLogger:
 
         # Determine log file path
         if log_file is None:
-            project_root = self._get_project_root()
-            logs_dir = project_root / "logs"
+            log_dir_env = os.environ.get("DCT_LOG_DIR")
+            if log_dir_env:
+                logs_dir = Path(log_dir_env)
+            else:
+                logs_dir = self._get_project_root() / "logs"
             log_file_path = logs_dir / "dct_mcp_server.log"
         else:
             log_file_path = Path(log_file)

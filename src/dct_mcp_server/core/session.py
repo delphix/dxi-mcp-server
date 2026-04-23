@@ -89,8 +89,11 @@ class SessionManager:
         session_logger.propagate = False  # Don't propagate to global logger
 
         # Create session log directory and file
-        project_root = self._get_project_root()
-        sessions_dir = project_root / "logs" / "sessions"
+        log_dir_env = os.environ.get("DCT_LOG_DIR")
+        if log_dir_env:
+            sessions_dir = Path(log_dir_env) / "sessions"
+        else:
+            sessions_dir = self._get_project_root() / "logs" / "sessions"
         sessions_dir.mkdir(parents=True, exist_ok=True)
 
         session_log_file = sessions_dir / f"{session_id}.log"

@@ -13,6 +13,7 @@ __pycache__
 dist
 build
 .eggs
+requirements.txt
 
 # Environment / secrets
 .env
