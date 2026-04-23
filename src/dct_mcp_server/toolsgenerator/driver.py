@@ -107,6 +107,34 @@ TOOLKIT_SCHEMA_HINT_PROVISION = (
     "For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step."
 )
 
+# Action-level domain hints injected into the per-action docstring section.
+# Use these when a specific action has Delphix-domain semantics that the raw
+# OpenAPI summary/parameter descriptions don't convey — e.g. distinguishing
+# between credential fields that look interchangeable or flagging that a
+# parameter toggles a concept the user typically names differently.
+ACTION_DOMAIN_HINTS: dict[str, str] = {
+    "create_environment": (
+        "IMPORTANT — SAP ASE discovery credentials (ONLY relevant when the user "
+        "has explicitly asked to enable SAP ASE discovery on the environment; "
+        "otherwise IGNORE this hint and DO NOT prompt for any ase_db_* fields):\n"
+        "    • ase_db_username / ase_db_password are credentials for the SAP ASE "
+        "*database instance* and are SEPARATE from username / password (which are "
+        "the OS SSH credentials for the host).\n"
+        "    • If — and only if — the user has asked to enable SAP ASE discovery "
+        "and has NOT explicitly provided ASE DB credentials, STOP and ask for "
+        "them. Do NOT reuse the OS username/password as ASE DB credentials — "
+        "they are almost always different and silently copying them will cause "
+        "discovery to fail.\n"
+        "    • The same separation applies to the vault-based ASE credential "
+        "fields (ase_db_vault, ase_db_vault_username, ase_db_hashicorp_vault_*, "
+        "ase_db_azure_vault_*, ase_db_cyberark_vault_query_string) — these are "
+        "ASE-specific and must not be inferred from the host credential fields.\n"
+        "    • For non-ASE environments (Oracle, MSSQL, PostgreSQL, AppData, "
+        "plain UNIX/Windows hosts, etc.), skip all ase_db_* fields entirely — "
+        "do not ask the user about them."
+    ),
+}
+
 
 def load_api_endpoints_from_toolsets():
     """
@@ -906,6 +934,13 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         elif hint_group == "provision":
             docstring_lines.append("")
             docstring_lines.append(f"    {TOOLKIT_SCHEMA_HINT_PROVISION}")
+
+        # Inject action-level domain hints for actions whose OpenAPI description
+        # does not make Delphix-specific semantics (e.g. credential separation)
+        # clear to the LLM.
+        if action_name in ACTION_DOMAIN_HINTS:
+            docstring_lines.append("")
+            docstring_lines.append(f"    {ACTION_DOMAIN_HINTS[action_name]}")
 
     # =========================================================================
     # PARAMETERS SECTION (grouped by database type)
