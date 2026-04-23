@@ -1,0 +1,35 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist
+build
+.eggs
+
+# Environment / secrets
+.env
+.env.*
+
+# Logs
+logs/
+
+# Generated tools (ephemeral, regenerated at container startup)
+docs/api-external.yaml
+
+# Dev tooling
+.claude
+.vscode
+.idea
+*.sh
+*.bat
+
+# Docs (not needed in image)
+docs/
