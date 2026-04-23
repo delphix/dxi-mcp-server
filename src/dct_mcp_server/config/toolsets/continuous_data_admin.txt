@@ -306,6 +306,8 @@ POST|/sources/ase|create_ase_source
 PATCH|/sources/ase/{sourceId}|update_ase_source
 POST|/sources/appdata|create_appdata_source
 PATCH|/sources/appdata/{sourceId}|update_appdata_source
+POST|/sources/mssql|create_mssql_source
+PATCH|/sources/mssql/{sourceId}|update_mssql_source
 
 # ----------------------------------------------------------------------------
 # TOOL 10: replication_tool - Replication, Namespaces & Retention
