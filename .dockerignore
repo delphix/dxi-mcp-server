@@ -17,6 +17,10 @@ build
 # Environment / secrets
 .env
 .env.*
+.mcp.json
+
+# Lockfiles (not needed at runtime)
+uv.lock
 
 # Logs
 logs/
@@ -28,6 +32,10 @@ docs/api-external.yaml
 .claude
 .vscode
 .idea
+.whitesource
+.github
+CLAUDE.md
+.DS_Store
 *.sh
 *.bat
 
