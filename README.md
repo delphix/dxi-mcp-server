@@ -513,7 +513,9 @@ Use `docker run` as the client's `command`. The `--rm` and `-i` flags are requir
 </details>
 
 <details>
-<summary><strong>VS Code, Eclipse & IntelliJ IDEA</strong></summary>
+<summary><strong>VS Code, Eclipse, & IntelliJ IDEA</strong></summary>
+
+> **VS Code Copilot Note**: For best experience, use a fixed toolset instead of `auto` mode, as VS Code Copilot doesn't refresh tools mid-session.
 
 ```json
 {
