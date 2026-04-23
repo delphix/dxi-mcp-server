@@ -39,6 +39,7 @@ Key optional env vars:
 - `DCT_LOG_LEVEL` — default `INFO`
 - `DCT_TIMEOUT` — seconds, default `30`
 - `DCT_MAX_RETRIES` — default `3`
+- `DCT_LOG_DIR` — optional override for log directory (default: `logs/` relative to project root)
 - `IS_LOCAL_TELEMETRY_ENABLED` — default `false`
 
 No automated test suite exists. Testing is done by connecting an MCP client to the running server. Logs are written to `logs/dct_mcp_server.log` (rotating) and `logs/sessions/{session_id}.log` (telemetry).

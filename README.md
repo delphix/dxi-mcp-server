@@ -89,6 +89,7 @@ All configuration methods use these environment variables:
   - `continuous_data_admin` - Full DBA operations (22 tools)
   - `platform_admin` - System administration (13 tools)
   - `reporting_insights` - Read-only reporting (13 tools)
+- `DCT_LOG_DIR` - Override the log directory path (default: `logs/` relative to project root). Useful for containerized deployments where logs should be written to a mounted volume (e.g. `/app/logs`).
 - `IS_LOCAL_TELEMETRY_ENABLED` - Enable telemetry (`true`/`false`, default: `false`)
 
 ## MCP Client Configuration
