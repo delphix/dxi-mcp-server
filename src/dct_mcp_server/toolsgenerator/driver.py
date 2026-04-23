@@ -1026,6 +1026,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         func_code += f"            return conf\n"
 
         # Handle request body
+        body_var = None
         if details["has_filter"] and method == "POST":
             func_code += "        body = {'filter_expression': filter_expression} if filter_expression else {}\n"
             body_var = "body"
