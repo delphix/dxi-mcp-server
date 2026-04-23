@@ -91,25 +91,28 @@ POST|/heldspace/{heldspaceId}/delete|delete_heldspace
 # ----------------------------------------------------------------------------
 # Storage Reports
 POST|/reporting/storage-savings-report/search|search_storage_savings_report
-POST|/reporting/storage-capacity-data-report|get_storage_capacity_report
-POST|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
+GET|/reporting/storage-capacity-data-report|get_storage_capacity_report
+GET|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
 # VDB Inventory Reports
-POST|/reporting/vdb-inventory-report|get_vdb_inventory_report
+GET|/reporting/vdb-inventory-report|get_vdb_inventory_report
 POST|/reporting/vdb-inventory-report/search|search_vdb_inventory_report
 # dSource Reports
-POST|/reporting/dsource-consumption-report|get_dsource_consumption_report
+GET|/reporting/dsource-consumption-report|get_dsource_consumption_report
 # Performance Reports
-POST|/reporting/engine-performance-analytic-report|get_engine_performance_report
+GET|/reporting/engine-performance-analytic-report|get_engine_performance_report
 POST|/reporting/dataset-performance-analytics|get_dataset_performance_analytics
 # API & Audit Reports
-POST|/reporting/api-usage-report|get_api_usage_report
-POST|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
+GET|/reporting/api-usage-report|get_api_usage_report
+GET|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
 # Automated/Scheduled Reports
 POST|/reporting/schedule/search|search_scheduled_reports
 GET|/reporting/schedule/{reportId}|get_scheduled_report
 POST|/reporting/schedule|create_scheduled_report
-PATCH|/reporting/schedule/{reportId}|update_scheduled_report
+PUT|/reporting/schedule/{reportId}|update_scheduled_report
 DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
+GET|/reporting/schedule/{reportId}/tags|get_scheduled_report_tags
+POST|/reporting/schedule/{reportId}/tags|add_scheduled_report_tags
+POST|/reporting/schedule/{reportId}/tags/delete|delete_scheduled_report_tags
 # License Report
 GET|/management/license|get_license
 POST|/management/license/change-license|change_license
@@ -133,7 +136,7 @@ POST|/virtualization-alerts/history/search|search_virtualization_alerts_history
 POST|/management/accounts/search|search_accounts
 GET|/management/accounts/{id}|get_account
 POST|/management/accounts|create_account
-PATCH|/management/accounts/{id}|update_account
+PUT|/management/accounts/{id}|update_account
 DELETE|/management/accounts/{id}|delete_account
 POST|/management/accounts/{id}/enable|enable_account
 POST|/management/accounts/{id}/disable|disable_account
@@ -177,10 +180,6 @@ POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects|add_scope_objects
 POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects/delete|delete_scope_objects
 POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions|add_scope_always_allowed_permissions
 POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions/delete|delete_scope_always_allowed_permissions
-# Authentication / API Clients
-GET|/management/api-clients|list_api_clients
-POST|/management/api-clients|create_api_client
-DELETE|/management/api-clients/{id}|delete_api_client
 
 # ----------------------------------------------------------------------------
 # TOOL 8: data_connection_tool - Connections
@@ -197,8 +196,7 @@ POST|/data-connections/{dataConnectionId}/tags/delete|delete_tags
 # ----------------------------------------------------------------------------
 POST|/management/tags/search|search
 GET|/management/tags/{tagId}|get
-POST|/management/tags|create
-DELETE|/management/tags/{tagId}|delete
+GET|/management/tags|list
 GET|/management/tags/{tagId}/usages|get_usages
 POST|/management/tags/{tagId}/usages/search|search_usages
 
