@@ -60,8 +60,8 @@ POST|/snapshots/search|search
 GET|/snapshots/{snapshotId}|get
 GET|/snapshots/{snapshotId}/timeflow_range|get_timeflow_range
 GET|/snapshots/{snapshotId}/runtime|get_runtime
-POST|/snapshots/find_by_location|find_by_location
-POST|/snapshots/find_by_timestamp|find_by_timestamp
+GET|/snapshots/find_by_location|find_by_location
+GET|/snapshots/find_by_timestamp|find_by_timestamp
 GET|/snapshots/{snapshotId}/tags|get_tags
 POST|/snapshots/{snapshotId}/tags|add_tags
 POST|/snapshots/{snapshotId}/tags/delete|delete_tags

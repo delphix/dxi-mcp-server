@@ -49,7 +49,7 @@ GET|/vdbs/{vdbId}/deletion-dependencies|get_vdb_deletion_dependencies
 POST|/vdbs/{vdbId}/jdbc-check|verify_vdb_jdbc_connection
 GET|/vdbs/{vdbId}/tags|get_vdb_tags
 POST|/vdbs/{vdbId}/tags|add_vdb_tags
-DELETE|/vdbs/{vdbId}/tags/delete|delete_vdb_tags
+POST|/vdbs/{vdbId}/tags/delete|delete_vdb_tags
 POST|/vdbs/{vdbId}/in-place-export|export_vdb_in_place
 POST|/vdbs/{vdbId}/asm-in-place-export|export_vdb_asm_in_place
 POST|/vdbs/{vdbId}/export-by-snapshot|export_vdb_by_snapshot
@@ -87,7 +87,7 @@ GET|/vdb-groups/{vdbGroupId}/bookmarks|list_vdb_group_bookmarks
 POST|/vdb-groups/{vdbGroupId}/bookmarks/search|search_vdb_group_bookmarks
 GET|/vdb-groups/{vdbGroupId}/tags|get_vdb_group_tags
 POST|/vdb-groups/{vdbGroupId}/tags|add_vdb_group_tags
-DELETE|/vdb-groups/{vdbGroupId}/tags/delete|delete_vdb_group_tags
+POST|/vdb-groups/{vdbGroupId}/tags/delete|delete_vdb_group_tags
 # dSource Operations
 GET|/dsources|list_dsources
 POST|/dsources/search|search_dsources
@@ -151,8 +151,8 @@ POST|/snapshots/{snapshotId}/delete|delete_snapshot
 POST|/snapshots/{snapshotId}/unset_expiration|unset_snapshot_expiration
 GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
 GET|/snapshots/{snapshotId}/runtime|get_runtime
-POST|/snapshots/find_by_location|find_snapshot_by_location
-POST|/snapshots/find_by_timestamp|find_snapshot_by_timestamp
+GET|/snapshots/find_by_location|find_snapshot_by_location
+GET|/snapshots/find_by_timestamp|find_snapshot_by_timestamp
 GET|/snapshots/{snapshotId}/tags|get_snapshot_tags
 POST|/snapshots/{snapshotId}/tags|add_snapshot_tags
 POST|/snapshots/{snapshotId}/tags/delete|delete_snapshot_tags
@@ -275,7 +275,6 @@ POST|/environments/{environmentId}/enable|enable_environment
 POST|/environments/{environmentId}/disable|disable_environment
 POST|/environments/{environmentId}/refresh|refresh_environment
 POST|/environments/{environmentId}/hosts|list_environment_hosts
-POST|/environments/{environmentId}/hosts/{hostId}|get_environment_host
 PATCH|/environments/{environmentId}/hosts/{hostId}|update_environment_host
 DELETE|/environments/{environmentId}/hosts/{hostId}|delete_environment_host
 POST|/environments/{environmentId}/listeners|list_environment_listeners
@@ -343,25 +342,28 @@ POST|/heldspace/{heldspaceId}/delete|delete_heldspace
 # ----------------------------------------------------------------------------
 # Storage Reports
 POST|/reporting/storage-savings-report/search|search_storage_savings_report
-POST|/reporting/storage-capacity-data-report|get_storage_capacity_report
-POST|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
+GET|/reporting/storage-capacity-data-report|get_storage_capacity_report
+GET|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
 # VDB Inventory Reports
-POST|/reporting/vdb-inventory-report|get_vdb_inventory_report
+GET|/reporting/vdb-inventory-report|get_vdb_inventory_report
 POST|/reporting/vdb-inventory-report/search|search_vdb_inventory_report
 # dSource Reports
-POST|/reporting/dsource-consumption-report|get_dsource_consumption_report
+GET|/reporting/dsource-consumption-report|get_dsource_consumption_report
 # Performance Reports
-POST|/reporting/engine-performance-analytic-report|get_engine_performance_report
+GET|/reporting/engine-performance-analytic-report|get_engine_performance_report
 POST|/reporting/dataset-performance-analytics|get_dataset_performance_analytics
 # API & Audit Reports
-POST|/reporting/api-usage-report|get_api_usage_report
-POST|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
+GET|/reporting/api-usage-report|get_api_usage_report
+GET|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
 # Automated/Scheduled Reports
 POST|/reporting/schedule/search|search_scheduled_reports
 GET|/reporting/schedule/{reportId}|get_scheduled_report
 POST|/reporting/schedule|create_scheduled_report
-PATCH|/reporting/schedule/{reportId}|update_scheduled_report
+PUT|/reporting/schedule/{reportId}|update_scheduled_report
 DELETE|/reporting/schedule/{reportId}|delete_scheduled_report
+GET|/reporting/schedule/{reportId}/tags|get_scheduled_report_tags
+POST|/reporting/schedule/{reportId}/tags|add_scheduled_report_tags
+POST|/reporting/schedule/{reportId}/tags/delete|delete_scheduled_report_tags
 # License Report
 GET|/management/license|get_license
 # Virtualization History & Operational Visibility
@@ -384,7 +386,7 @@ POST|/virtualization-alerts/history/search|search_virtualization_alerts_history
 POST|/management/accounts/search|search_accounts
 GET|/management/accounts/{id}|get_account
 POST|/management/accounts|create_account
-PATCH|/management/accounts/{id}|update_account
+PUT|/management/accounts/{id}|update_account
 DELETE|/management/accounts/{id}|delete_account
 POST|/management/accounts/{id}/enable|enable_account
 POST|/management/accounts/{id}/disable|disable_account
@@ -429,9 +431,6 @@ POST|/access-groups/{accessGroupId}/scopes/{scopeId}/objects/delete|delete_scope
 POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions|add_scope_always_allowed_permissions
 POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions/delete|delete_scope_always_allowed_permissions
 # Authentication
-GET|/management/api-clients|list_api_clients
-POST|/management/api-clients|create_api_client
-DELETE|/management/api-clients/{id}|delete_api_client
 
 # ----------------------------------------------------------------------------
 # TOOL 13: toolkit_tool - Toolkits (AppData plugin schemas)
@@ -460,8 +459,7 @@ POST|/data-connections/{dataConnectionId}/tags/delete|delete_tags
 # ----------------------------------------------------------------------------
 POST|/management/tags/search|search
 GET|/management/tags/{tagId}|get
-POST|/management/tags|create
-DELETE|/management/tags/{tagId}|delete
+GET|/management/tags|list
 GET|/management/tags/{tagId}/usages|get_usages
 POST|/management/tags/{tagId}/usages/search|search_usages
 
@@ -503,6 +501,9 @@ POST|/cdb-dsources/{cdbDSourceId}/enable|enable
 POST|/cdb-dsources/{cdbDSourceId}/disable|disable
 POST|/cdb-dsources/{cdbDSourceId}/delete|delete
 POST|/cdb-dsources/{cdbDSourceId}/upgrade|upgrade
+GET|/cdb-dsources/{cdbDSourceId}/tags|get_cdb_dsource_tags
+POST|/cdb-dsources/{cdbDSourceId}/tags|add_cdb_dsource_tags
+POST|/cdb-dsources/{cdbDSourceId}/tags/delete|delete_cdb_dsource_tags
 
 # ----------------------------------------------------------------------------
 # TOOL 19: group_tool - Dataset Groups

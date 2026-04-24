@@ -48,6 +48,13 @@ logger = logging.getLogger(__name__)
 # Format: {"vdb_tool": [{"method": "POST", "path": "/vdbs/search", "action": "search"}, ...]}
 TOOLS_BY_NAME = {}
 
+# Entries skipped during generation because the toolset .txt line did not match
+# any operation in the OpenAPI spec (usually a wrong HTTP method or a stale
+# path). Populated by _generate_unified_tool, emitted as a loud summary at the
+# end of generate_tools_from_openapi so configuration typos do not ship silently.
+# Each item: {"tool": str, "action": str, "method": str, "path": str, "hint": str}
+SKIPPED_ENTRIES: list[dict] = []
+
 # Domain terminology hints injected into tool docstrings so the AI agent
 # correctly interprets Delphix-specific jargon used as verbs in user prompts.
 TOOL_DOMAIN_HINTS = {
@@ -492,6 +499,9 @@ def generate_tools_from_openapi():
 
     api_spec = read_open_api_yaml(API_FILE)
     logger.info(f"Unified tools to generate: {list(TOOLS_BY_NAME.keys())}")
+
+    # Reset per-run skip tracker so the summary only reflects this generation.
+    SKIPPED_ENTRIES.clear()
     
     os.makedirs(TOOLS_DIR, exist_ok=True)
 
@@ -550,6 +560,22 @@ def generate_tools_from_openapi():
     if os.path.exists(API_FILE):
         os.remove(API_FILE)
 
+    # Loud summary of any toolset entries skipped due to method/path mismatches.
+    # These are silent correctness bugs (the action won't be callable at runtime)
+    # so surface them at ERROR level with enough detail to locate the offending
+    # toolset .txt line.
+    if SKIPPED_ENTRIES:
+        logger.error(
+            f"Tool generation skipped {len(SKIPPED_ENTRIES)} toolset entries "
+            f"due to method/path mismatches with the OpenAPI spec. "
+            f"These actions will NOT be callable at runtime:"
+        )
+        for entry in SKIPPED_ENTRIES:
+            logger.error(
+                f"  - {entry['tool']}.{entry['action']}: "
+                f"{entry['method']} {entry['path']} — {entry['hint']}"
+            )
+
 
 def _get_module_for_path(api_path: str) -> str:
     """Determine module name based on API path."""
@@ -585,11 +611,10 @@ def _get_module_for_path(api_path: str) -> str:
         "/reporting": "reports_endpoints",
         "/reports": "reports_endpoints",
         
-        # IAM endpoints (accounts, roles, access-groups, api-clients)
+        # IAM endpoints (accounts, roles, access-groups)
         "/management/accounts": "iam_endpoints",
         "/roles": "iam_endpoints",
         "/access-groups": "iam_endpoints",
-        "/management/api-clients": "iam_endpoints",
         "/management/tags": "iam_endpoints",
         
         # Policy endpoints (replication, virtualization policies)
@@ -645,9 +670,30 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         
         path_item = api_spec.get("paths", {}).get(path, {})
         operation = path_item.get(method.lower())
-        
+
         if not operation:
-            logger.warning(f"No operation found for {method} {path}")
+            # Distinguish "path not in spec" from "wrong method on a valid path"
+            # so the startup summary can point to the likely typo directly.
+            available_methods = sorted(
+                m.upper() for m in path_item.keys()
+                if m.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}
+            )
+            if available_methods:
+                hint = (
+                    f"path exists in OpenAPI spec but not with method {method} — "
+                    f"available methods: {', '.join(available_methods)}. "
+                    f"Likely wrong HTTP method in the toolset .txt file."
+                )
+            else:
+                hint = "path not found in OpenAPI spec — likely stale or misspelled."
+            logger.warning(f"Skipping {tool_name}.{action}: {method} {path} — {hint}")
+            SKIPPED_ENTRIES.append({
+                "tool": tool_name,
+                "action": action,
+                "method": method,
+                "path": path,
+                "hint": hint,
+            })
             continue
         
         # Extract path parameters

@@ -104,19 +104,19 @@ GET|/sources/{sourceId}/tags|get_tags
 # ----------------------------------------------------------------------------
 # Storage Reports
 POST|/reporting/storage-savings-report/search|search_storage_savings_report
-POST|/reporting/storage-capacity-data-report|get_storage_capacity_report
-POST|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
+GET|/reporting/storage-capacity-data-report|get_storage_capacity_report
+GET|/reporting/virtualization-storage-summary-report|get_virtualization_storage_summary
 # VDB Inventory Reports
-POST|/reporting/vdb-inventory-report|get_vdb_inventory_report
+GET|/reporting/vdb-inventory-report|get_vdb_inventory_report
 POST|/reporting/vdb-inventory-report/search|search_vdb_inventory_report
 # dSource Reports
-POST|/reporting/dsource-consumption-report|get_dsource_consumption_report
+GET|/reporting/dsource-consumption-report|get_dsource_consumption_report
 # Performance Reports
-POST|/reporting/engine-performance-analytic-report|get_engine_performance_report
+GET|/reporting/engine-performance-analytic-report|get_engine_performance_report
 POST|/reporting/dataset-performance-analytics|get_dataset_performance_analytics
 # API & Audit Reports
-POST|/reporting/api-usage-report|get_api_usage_report
-POST|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
+GET|/reporting/api-usage-report|get_api_usage_report
+GET|/reporting/audit-logs-summary-report|get_audit_logs_summary_report
 # Automated/Scheduled Reports (read only)
 POST|/reporting/schedule/search|search_scheduled_reports
 GET|/reporting/schedule/{reportId}|get_scheduled_report
