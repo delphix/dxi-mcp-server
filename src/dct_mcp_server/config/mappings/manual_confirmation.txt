@@ -93,3 +93,15 @@ POST|/dsources/appdata|elevated|Review parameters below. Proceed with linking Ap
 # RULE 7: dSource Snapshot Creation (STANDARD)
 # ============================================
 POST|/dsources/{dsourceId}/snapshots|standard|Review parameters below. Proceed with creating a snapshot of dSource?
+
+# ============================================
+# RULE 8: Tag Deletion Operations (STANDARD)
+# ============================================
+POST|/vdbs/{vdbId}/tags/delete|standard|This will remove tags from VDB '{name}'. Confirm?
+POST|/vdb-groups/{vdbGroupId}/tags/delete|standard|This will remove tags from VDB Group '{name}'. Confirm?
+POST|/dsources/{dsourceId}/tags/delete|standard|This will remove tags from dSource '{name}'. Confirm?
+POST|/snapshots/{snapshotId}/tags/delete|standard|This will remove tags from snapshot '{name}'. Confirm?
+POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from bookmark '{name}'. Confirm?
+POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from database template '{name}'. Confirm?
+POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from hook template '{name}'. Confirm?
+POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeflow '{name}'. Confirm?
