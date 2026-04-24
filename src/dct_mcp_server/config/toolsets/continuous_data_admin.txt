@@ -49,7 +49,7 @@ GET|/vdbs/{vdbId}/deletion-dependencies|get_vdb_deletion_dependencies
 POST|/vdbs/{vdbId}/jdbc-check|verify_vdb_jdbc_connection
 GET|/vdbs/{vdbId}/tags|get_vdb_tags
 POST|/vdbs/{vdbId}/tags|add_vdb_tags
-DELETE|/vdbs/{vdbId}/tags/delete|delete_vdb_tags
+POST|/vdbs/{vdbId}/tags/delete|delete_vdb_tags
 POST|/vdbs/{vdbId}/in-place-export|export_vdb_in_place
 POST|/vdbs/{vdbId}/asm-in-place-export|export_vdb_asm_in_place
 POST|/vdbs/{vdbId}/export-by-snapshot|export_vdb_by_snapshot
@@ -87,7 +87,7 @@ GET|/vdb-groups/{vdbGroupId}/bookmarks|list_vdb_group_bookmarks
 POST|/vdb-groups/{vdbGroupId}/bookmarks/search|search_vdb_group_bookmarks
 GET|/vdb-groups/{vdbGroupId}/tags|get_vdb_group_tags
 POST|/vdb-groups/{vdbGroupId}/tags|add_vdb_group_tags
-DELETE|/vdb-groups/{vdbGroupId}/tags/delete|delete_vdb_group_tags
+POST|/vdb-groups/{vdbGroupId}/tags/delete|delete_vdb_group_tags
 # dSource Operations
 GET|/dsources|list_dsources
 POST|/dsources/search|search_dsources
