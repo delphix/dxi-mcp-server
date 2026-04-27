@@ -1,0 +1,106 @@
+# .dockerignore — keep the build context lean.
+# Anything matched here is invisible to `docker build`.
+# Order: blanket excludes first, targeted re-includes second.
+
+# ---------------------------------------------------------------
+# Python build artefacts
+# ---------------------------------------------------------------
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# ---------------------------------------------------------------
+# Virtualenvs (host-side; the image builds its own /app/.venv)
+# ---------------------------------------------------------------
+.venv/
+venv/
+env/
+
+# ---------------------------------------------------------------
+# Logs (host-side; the image creates its own /app/logs)
+# ---------------------------------------------------------------
+logs/
+*.log
+mcp_server_setup_logfile.txt
+
+# ---------------------------------------------------------------
+# Env / secrets — must never enter the build context
+# ---------------------------------------------------------------
+.env
+.env.*
+.env.local
+.env.*.local
+
+# ---------------------------------------------------------------
+# VCS metadata and CI
+# ---------------------------------------------------------------
+.git/
+.gitignore
+.gitattributes
+.github/
+.whitesource
+
+# ---------------------------------------------------------------
+# Documentation and specs (the README + LICENSE are re-included below)
+# ---------------------------------------------------------------
+docs/
+*.md
+
+# Re-include the two markdown files the project ships:
+#   - README.md is referenced by pyproject.toml (`readme = "README.md"`)
+#   - LICENSE.md is shipped alongside the package
+!README.md
+!LICENSE.md
+
+# ---------------------------------------------------------------
+# Project-specific (Claude / worktrees / repo conventions)
+# ---------------------------------------------------------------
+.claude/
+CLAUDE.md
+.worktrees/
+worktrees/
+
+# ---------------------------------------------------------------
+# Dev startup scripts (host-only — the image runs the entrypoint directly)
+# ---------------------------------------------------------------
+start_mcp_server_python.sh
+start_mcp_server_uv.sh
+start_mcp_server_windows_python.bat
+start_mcp_server_windows_uv.bat
+
+# ---------------------------------------------------------------
+# Test files (defensive — no tests today)
+# ---------------------------------------------------------------
+tests/
+test/
+**/test_*.py
+**/*_test.py
+
+# ---------------------------------------------------------------
+# IDE / editor
+# ---------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------------
+# OS junk
+# ---------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# ---------------------------------------------------------------
+# Don't rebuild Docker artefacts into the image
+# ---------------------------------------------------------------
+Dockerfile
+.dockerignore

@@ -13,6 +13,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Docker](#docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -424,6 +425,178 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
+
+## Docker
+
+Run the MCP server inside a Docker container — useful when you don't want a host Python or `uv` install, or when you standardise on container runtimes for consistency across machines. The container uses **stdio transport**, so it is **invoked by the MCP client** (`docker run -i …`) rather than run as a long-lived background daemon.
+
+### Prerequisites
+
+- **Docker Engine 20.10+** or **Docker Desktop** (tested with 29.x).
+- **Docker Buildx** — only needed if you want a multi-arch build. Bundled with Docker Desktop and recent Engine releases.
+- A valid Delphix DCT API key and base URL (the same values you would set for any other run mode — see [Environment Variables](#environment-variables)).
+
+### Build the image
+
+```bash
+git clone https://github.com/delphix/dxi-mcp-server.git
+cd dxi-mcp-server
+docker build -t dct-mcp-server:latest .
+```
+
+The build is a two-stage process: a `python:3.11-slim-bookworm` builder stage materialises a frozen virtualenv from `uv.lock`, and the runtime stage copies that venv into a minimal image that runs as a non-root user (UID 1000).
+
+### Run the server (stdio)
+
+The container is **driven by your MCP client**, not started in the background. The client runs `docker run --rm -i …` and pipes JSON-RPC frames over stdin/stdout. When the client closes stdin (e.g. you quit Claude Desktop), the server exits and the container is removed.
+
+To smoke-test the container by hand:
+
+```bash
+docker run --rm -i   -e DCT_API_KEY="your-api-key"   -e DCT_BASE_URL="https://your-dct-host.example.com"   -e DCT_TOOLSET="self_service"   -e DCT_VERIFY_SSL="false"   dct-mcp-server:latest
+```
+
+The server starts, prints initialisation logs to stderr, and waits for MCP frames on stdin. Press `Ctrl-D` (EOF) to exit.
+
+### Environment variables in the container
+
+The same env vars documented in [Environment Variables](#environment-variables) apply, with one container-specific default:
+
+| Variable | Default in container | Notes |
+|----------|----------------------|-------|
+| `DCT_API_KEY` | (none — required) | Required at runtime. **Do not bake into the image.** |
+| `DCT_BASE_URL` | (none — required) | |
+| `DCT_LOG_DIR` | `/app/logs` | Override to redirect logs (see [Persist logs](#persist-logs-to-the-host) below). |
+| `DCT_TOOLSET` | `self_service` | One of: `auto`, `self_service`, `self_service_provision`, `continuous_data_admin`, `platform_admin`, `reporting_insights`. |
+| `DCT_VERIFY_SSL` | `false` | |
+| `DCT_LOG_LEVEL` | `INFO` | |
+| `DCT_TIMEOUT` | `30` | |
+| `DCT_MAX_RETRIES` | `3` | |
+| `IS_LOCAL_TELEMETRY_ENABLED` | `false` | |
+
+### Persist logs to the host
+
+By default the server writes logs to `/app/logs/dct_mcp_server.log` inside the container. The container is removed when it exits (`--rm`), so logs are lost unless you mount a host directory. The host directory must be writable by **UID 1000** (the runtime user).
+
+```bash
+# One-time: create a host log directory and grant UID 1000 access
+mkdir -p ./logs
+sudo chown 1000:1000 ./logs
+
+docker run --rm -i   -e DCT_API_KEY="..."   -e DCT_BASE_URL="..."   -v "$(pwd)/logs:/app/logs"   dct-mcp-server:latest
+```
+
+To redirect logs elsewhere inside the container, override `DCT_LOG_DIR` and mount the corresponding path:
+
+```bash
+docker run --rm -i   -e DCT_API_KEY="..."   -e DCT_BASE_URL="..."   -e DCT_LOG_DIR="/var/log/dct-mcp"   -v "$(pwd)/logs:/var/log/dct-mcp"   dct-mcp-server:latest
+```
+
+### MCP client configuration (Docker)
+
+Configure your MCP client to launch the container instead of a host Python interpreter. The pattern is the same for all clients — only the JSON wrapper differs.
+
+The examples below use the `"-e", "DCT_API_KEY"` form (env-var name without `=value`) in the `args` array, which tells `docker run` to inherit the value from the calling process's environment. The actual values come from the client's own `env` block. **Do not put your API key in the `args` array** — it would be visible in process listings.
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY",
+        "-e", "DCT_BASE_URL",
+        "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_VERIFY_SSL=false",
+        "dct-mcp-server:latest"
+      ],
+      "env": {
+        "DCT_API_KEY": "your-api-key-here",
+        "DCT_BASE_URL": "https://your-dct-host.example.com"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY",
+        "-e", "DCT_BASE_URL",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:latest"
+      ],
+      "env": {
+        "DCT_API_KEY": "your-api-key-here",
+        "DCT_BASE_URL": "https://your-dct-host.example.com"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>VS Code Copilot Chat</strong></summary>
+
+```json
+{
+  "servers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY",
+        "-e", "DCT_BASE_URL",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server:latest"
+      ],
+      "env": {
+        "DCT_API_KEY": "your-api-key-here",
+        "DCT_BASE_URL": "https://your-dct-host.example.com"
+      }
+    }
+  }
+}
+```
+
+> **Note**: VS Code Copilot Chat requires a chat restart after any config change. For dynamic toolset switching (`DCT_TOOLSET=auto`), prefer Claude Desktop or Cursor.
+</details>
+
+### Multi-arch build (optional)
+
+`linux/amd64` is the primary supported architecture; `linux/arm64` is best-effort. To build a multi-arch image:
+
+```bash
+# One-time: create and use a buildx builder
+docker buildx create --name dct-multiarch --use
+
+# Build for both architectures
+docker buildx build   --platform linux/amd64,linux/arm64   -t dct-mcp-server:latest   --load   .
+```
+
+> `--load` only works for single-architecture builds. To produce a true multi-arch image, push to a registry with `--push` instead of `--load`. See [Docker buildx multi-platform docs](https://docs.docker.com/build/building/multi-platform/) for details.
+
+### Common pitfalls
+
+- **"The container exits immediately."** You forgot the `-i` flag. The MCP server is a stdio process — without `-i`, Docker doesn't attach stdin and the server reads EOF and exits cleanly. The MCP client must use `docker run -i …`.
+- **"My logs aren't appearing on the host."** Either you didn't bind-mount `/app/logs`, or the host directory isn't writable by UID 1000. Run `sudo chown 1000:1000 <host-dir>`, or pass `--user "$(id -u):$(id -g)"` to `docker run` (and ensure the host dir is writable by your UID).
+- **"`docker build` fails with a `uv.lock` mismatch."** You edited `pyproject.toml` without re-running `uv lock` on the host. Run `uv lock` first, then rebuild.
+- **"`docker logs <id>` shows nothing useful."** The container is `--rm` and short-lived for stdio servers. Look at your **MCP client's** log to see what the server emitted. The container's stderr is forwarded to the client when it runs interactively.
+- **"My MCP client says the server crashed at startup."** Check that `DCT_API_KEY` and `DCT_BASE_URL` are set in the client's `env` block. Without them, the server prints the config-help message to stderr and exits 1.
 
 ## Toolsets
 

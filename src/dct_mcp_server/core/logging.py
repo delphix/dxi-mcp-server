@@ -72,18 +72,26 @@ class GlobalLogger:
 
         # Determine log file path
         if log_file is None:
-            project_root = self._get_project_root()
-            logs_dir = project_root / "logs"
+            # DCT_LOG_DIR env var overrides the default (project_root/logs).
+            # Empty string falls through to the default for backward compat.
+            env_log_dir = os.getenv("DCT_LOG_DIR")
+            if env_log_dir:
+                logs_dir = Path(env_log_dir)
+            else:
+                project_root = self._get_project_root()
+                logs_dir = project_root / "logs"
             log_file_path = logs_dir / "dct_mcp_server.log"
         else:
             log_file_path = Path(log_file)
             logs_dir = log_file_path.parent
 
-        # Create logs directory
-        logs_dir.mkdir(exist_ok=True)
-
-        # Add rotating file handler for global logs
+        # Add rotating file handler for global logs.
+        # The mkdir is inside the try block so that an unwritable DCT_LOG_DIR
+        # (e.g. read-only mount) degrades gracefully to console-only logging
+        # instead of raising at import time.
         try:
+            # parents=True so multi-segment DCT_LOG_DIR works on first run.
+            logs_dir.mkdir(parents=True, exist_ok=True)
             global_handler = TimedRotatingFileHandler(
                 log_file_path,
                 when=LoggingConfig.WHEN,

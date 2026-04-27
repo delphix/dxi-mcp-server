@@ -56,6 +56,9 @@ def print_config_help():
         "  DCT_LOG_LEVEL    Logging level (default: INFO, options: DEBUG, INFO, WARNING, ERROR, CRITICAL)"
     )
     print(
+        "  DCT_LOG_DIR      Override directory for log files (default: <project_root>/logs)"
+    )
+    print(
         "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
     )
     print(
