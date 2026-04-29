@@ -1,0 +1,34 @@
+# Version control
+.git/
+.github/
+
+# Python build artefacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+
+# Development and CI tooling
+.claude/
+docs/
+
+# Logs (ephemeral; mount a volume if log persistence is needed)
+logs/
+
+# Credential files — must never enter the build context
+.env
+.env.*
+
+# Windows startup scripts (not needed in the Linux container)
+*.bat
+
+# Build artefacts
+artifact.json
+uv.lock

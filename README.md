@@ -13,6 +13,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Docker](#docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -424,6 +425,125 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
+
+## Docker
+
+Run the DCT MCP Server as a Docker container — useful for CI pipelines, team deployments, or environments where you want an isolated, reproducible server without installing Python.
+
+### Quick Start (Docker Registry)
+
+> **Note**: The Docker registry image is not yet published. The pull command below is a placeholder for when the image is available. Use **Build from Source** in the meantime.
+
+```bash
+# Placeholder — will be updated when the image is published to the registry
+docker pull ghcr.io/delphix/dct-mcp-server:latest
+```
+
+### Build from Source
+
+```bash
+# Clone the repository and build the image
+git clone https://github.com/delphix/dxi-mcp-server.git
+cd dxi-mcp-server
+docker build -t dct-mcp-server .
+```
+
+The build copies `pyproject.toml` and `requirements.txt` into the image first (maximising layer cache for code-only rebuilds), then installs all dependencies via `pip install .`, and finally copies the `src/` tree.
+
+### Run the Container
+
+**stdio mode** (default — used by MCP clients that launch the server as a subprocess):
+
+```bash
+docker run \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=https://your-dct-instance.example.com \
+  dct-mcp-server
+```
+
+**HTTP/SSE mode** (used when the MCP client connects over a port — see [Connect Your MCP Client](#connect-your-mcp-client) below):
+
+```bash
+docker run -p 6790:6790 \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=https://your-dct-instance.example.com \
+  -e DCT_TOOLSET=self_service \
+  -e DCT_VERIFY_SSL=true \
+  dct-mcp-server
+```
+
+Optional: persist logs outside the container by mounting the `logs/` directory:
+
+```bash
+docker run -p 6790:6790 \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=https://your-dct-instance.example.com \
+  -v "$(pwd)/logs:/app/logs" \
+  dct-mcp-server
+```
+
+### Windows Compatibility
+
+The Docker image uses `python:3.11-slim` (a Linux base image) and runs identically on Docker Desktop for Windows in **Linux container mode** (the default).
+
+> **Windows users**: Ensure Docker Desktop is set to use Linux containers (this is the default). This image does not support Windows-native containers.
+
+**PowerShell example:**
+
+```powershell
+docker run -p 6790:6790 `
+  -e DCT_API_KEY=$env:DCT_API_KEY `
+  -e DCT_BASE_URL=$env:DCT_BASE_URL `
+  dct-mcp-server
+```
+
+**Command Prompt (cmd.exe) example:**
+
+```cmd
+docker run -p 6790:6790 ^
+  -e DCT_API_KEY=%DCT_API_KEY% ^
+  -e DCT_BASE_URL=%DCT_BASE_URL% ^
+  dct-mcp-server
+```
+
+### Connect Your MCP Client
+
+When the container is running in HTTP/SSE mode (`-p 6790:6790`), connect your MCP client by port — no environment variables needed in the client config:
+
+**Claude Desktop (`claude_desktop_config.json`):**
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "port": 6790
+    }
+  }
+}
+```
+
+**Cursor / VS Code (`mcp.json`):**
+```json
+{
+  "servers": {
+    "delphix-dct": {
+      "port": 6790
+    }
+  }
+}
+```
+
+> **Note**: If you need to remap the port (e.g. 6790 is already in use), use `-p <alternative-port>:6790` in `docker run` and update the `port` value in your client config accordingly.
+
+> **Note**: stdio transport does not cross container boundaries. The port-based connection method above is the correct approach for containerised deployments.
+
+### Environment Variables Reference
+
+All environment variables behave identically inside the container. See [Environment Variables](#environment-variables) for the full reference.
+
+Key points specific to Docker:
+- `DCT_API_KEY` and `DCT_BASE_URL` are **required** and must be supplied via `-e` at `docker run` time — they are intentionally not baked into the image.
+- `DCT_VERIFY_SSL` defaults to `false`. For production deployments, set `-e DCT_VERIFY_SSL=true`.
+- Logs are written to `/app/logs` inside the container. Mount `-v $(pwd)/logs:/app/logs` to persist them on the host.
 
 ## Toolsets
 
