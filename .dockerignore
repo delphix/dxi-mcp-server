@@ -1,0 +1,50 @@
+# Virtual environments
+.venv/
+
+# Runtime logs — generated inside the container, not needed in image
+logs/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment files — secrets must be passed at runtime via -e flags
+.env
+.env.*
+
+# Git worktrees directory (feature branches)
+.worktrees/
+
+# Generated docs and spec docs (not needed at runtime)
+docs/
+
+# Windows scripts (container runs Linux)
+*.bat
+
+# Shell startup scripts (not used inside the container)
+*.sh
+
+# Version control
+.git/
+.gitignore
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# CI/CD and GitHub-specific files
+.github/
+
+# Claude AI project files
+.claude/
+CLAUDE.md
+
+# Test and development artifacts
+*.egg-info/
+dist/
+build/

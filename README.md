@@ -12,6 +12,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Videos](#videos)
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
+- [Running with Docker](#running-with-docker)
 - [Advanced Installation](#advanced-installation)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
@@ -300,6 +301,82 @@ See below for the full JSON configuration examples for each client.
 
 > **Note**: VS Code, Eclipse, and IntelliJ all use the same configuration format (servers object).
 </details>
+
+## Running with Docker
+
+Docker is the easiest way to run the MCP server in a consistent, isolated environment on Linux, macOS, or Windows (via Docker Desktop).
+
+### Build the Image
+
+```bash
+docker build -t dct-mcp-server .
+```
+
+### Run the Container
+
+The server uses stdio transport, so the `-i` flag is required to keep stdin open:
+
+```bash
+docker run -i \
+  -e DCT_API_KEY=your-api-key-here \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  dct-mcp-server
+```
+
+Optional environment variables can be passed the same way:
+
+```bash
+docker run -i \
+  -e DCT_API_KEY=your-api-key-here \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  -e DCT_TOOLSET=continuous_data_admin \
+  -e DCT_VERIFY_SSL=true \
+  -e DCT_LOG_LEVEL=DEBUG \
+  dct-mcp-server
+```
+
+> **Important**: The `-i` flag is required. Without it the container exits immediately because the MCP stdio transport needs an open stdin to communicate with the client.
+
+### MCP Client Configuration
+
+Configure your MCP client to launch the container instead of running the server directly:
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+### Using a Pre-Built Image
+
+A pre-built image will be available once published:
+
+```bash
+# Pull the latest image (URL will be updated once the image is published)
+docker pull ghcr.io/delphix/dct-mcp-server:latest
+
+docker run -i \
+  -e DCT_API_KEY=your-api-key-here \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  ghcr.io/delphix/dct-mcp-server:latest
+```
+
+### Windows Docker Desktop Note
+
+Docker Desktop for Windows runs Linux containers by default. The standard Linux image built from this `Dockerfile` works without any changes on Windows — no Windows-specific image is needed.
+
+---
 
 ## Advanced Installation
 
