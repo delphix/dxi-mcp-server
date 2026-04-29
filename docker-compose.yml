@@ -1,0 +1,25 @@
+services:
+  dct-mcp-server:
+    build: .
+    image: dct-mcp-server:local
+    env_file:
+      - .env
+    environment:
+      # Required — must be set in .env or overridden here
+      - DCT_API_KEY
+      - DCT_BASE_URL
+      # Optional with defaults
+      - DCT_TOOLSET=${DCT_TOOLSET:-self_service}
+      - DCT_VERIFY_SSL=${DCT_VERIFY_SSL:-false}
+      - DCT_LOG_LEVEL=${DCT_LOG_LEVEL:-INFO}
+      - DCT_TIMEOUT=${DCT_TIMEOUT:-30}
+      - DCT_MAX_RETRIES=${DCT_MAX_RETRIES:-3}
+      - IS_LOCAL_TELEMETRY_ENABLED=${IS_LOCAL_TELEMETRY_ENABLED:-false}
+    volumes:
+      - ./logs:/app/logs
+    # stdin_open keeps stdin open (equivalent to docker run -i) — required for MCP stdio transport
+    stdin_open: true
+    # tty: false avoids TTY allocation which would corrupt binary MCP framing
+    tty: false
+    # Prevent silent restart on credential or configuration errors
+    restart: "no"

@@ -13,6 +13,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Running with Docker](#running-with-docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -424,6 +425,176 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
+
+## Running with Docker
+
+You can run the DCT MCP Server inside a Docker container on Linux and Windows (via Docker Desktop with Linux containers). This is useful when you want a fully isolated, reproducible runtime that does not require a local Python installation.
+
+### Prerequisites
+
+- **Docker Engine 20.10+** (Linux) or **Docker Desktop 4.x+** (Windows / macOS)
+- **Linux containers mode** — required on Windows. In Docker Desktop go to **Settings → General** and ensure "Use the WSL 2 based engine" or "Linux containers" is selected (not Windows containers).
+
+### Build the image
+
+From the repository root:
+
+```bash
+docker build -t dct-mcp-server .
+```
+
+The build installs all dependencies from `requirements.txt` / `pyproject.toml` and makes the `dct-mcp-server` CLI entry point available inside the image.
+
+### Run with docker run
+
+The MCP server uses **stdio transport** — it reads from stdin and writes to stdout. Pass `-i` to keep stdin open; without it the container exits immediately.
+
+```bash
+docker run -i --rm \
+  -e DCT_API_KEY=your-api-key \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  dct-mcp-server
+```
+
+Optional environment variables can be appended with additional `-e` flags:
+
+```bash
+docker run -i --rm \
+  -e DCT_API_KEY=your-api-key \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  -e DCT_TOOLSET=continuous_data_admin \
+  -e DCT_VERIFY_SSL=true \
+  -e DCT_LOG_LEVEL=DEBUG \
+  dct-mcp-server
+```
+
+### MCP client configuration for Docker
+
+Because the server uses stdio transport, your MCP client must launch the container process directly. Use the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "DCT_API_KEY=your-api-key",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+> **Note**: The `-i` flag is mandatory — it keeps stdin open so the MCP client can send requests to the container.
+
+### Run with docker-compose
+
+Docker Compose provides a simpler way to manage environment variables via a `.env` file.
+
+**Step 1 — Create your `.env` file:**
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in your `DCT_API_KEY` and `DCT_BASE_URL`. Do not commit `.env` to git — it contains real credentials.
+
+**Step 2 — Build and start:**
+
+```bash
+docker-compose up --build
+```
+
+**Stop and remove the container:**
+
+```bash
+docker-compose down
+```
+
+> **Note**: `docker-compose up` starts the container in the foreground (stdio mode). For MCP client integration use `docker run -i` as shown above — `docker-compose up` is most useful for testing the server manually or running it as a daemon when using future HTTP/SSE transport.
+
+### Windows (Docker Desktop)
+
+Docker Desktop on Windows must be in **Linux containers mode** to run this image.
+
+1. Open Docker Desktop → **Settings → General**
+2. Ensure **"Use the WSL 2 based engine"** is selected (or switch from Windows containers to Linux containers)
+3. Apply and restart Docker Desktop if prompted
+
+Then build and run using the same commands as Linux:
+
+```powershell
+docker build -t dct-mcp-server .
+
+docker run -i --rm `
+  -e DCT_API_KEY=your-api-key `
+  -e DCT_BASE_URL=https://your-dct-host.company.com `
+  dct-mcp-server
+```
+
+> **Apple Silicon / ARM64 note**: If you are building on Apple Silicon (M1/M2/M3) and deploying to a Linux amd64 host, add `--platform linux/amd64` to the build command: `docker build --platform linux/amd64 -t dct-mcp-server .`
+
+### Pre-built image (coming soon)
+
+> **Not yet published.** The registry image below is a placeholder and cannot be pulled at this time.
+
+A pre-built image will be available at:
+
+```
+ghcr.io/delphix/dct-mcp-server:latest
+```
+
+Once published, you will be able to run the server without cloning the repository:
+
+```bash
+# Coming soon — not yet available
+docker run -i --rm \
+  -e DCT_API_KEY=your-api-key \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  ghcr.io/delphix/dct-mcp-server:latest
+```
+
+### Troubleshooting Docker
+
+**Container exits immediately**
+
+- Ensure you are passing `-i` (`docker run -i ...`). Without it, stdin is closed and the MCP server exits.
+- Check `DCT_API_KEY` and `DCT_BASE_URL` are set — the server exits with an error if either is missing.
+
+**View container logs**
+
+```bash
+docker logs <container-id>
+```
+
+Or, if using docker-compose with the `./logs` volume mount:
+
+```bash
+tail -f logs/dct_mcp_server.log
+```
+
+**SSL errors inside the container**
+
+If your DCT server uses a self-signed certificate, set `DCT_VERIFY_SSL=false`. To inject a custom CA bundle, mount it and set `REQUESTS_CA_BUNDLE`:
+
+```bash
+docker run -i --rm \
+  -e DCT_API_KEY=your-api-key \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  -e DCT_VERIFY_SSL=true \
+  -e REQUESTS_CA_BUNDLE=/certs/ca-bundle.crt \
+  -v /path/to/your/ca-bundle.crt:/certs/ca-bundle.crt:ro \
+  dct-mcp-server
+```
+
+**Build fails at pip install**
+
+If the build environment has no internet access, `pip install` will fail. Ensure the Docker build host can reach PyPI, or use a pre-built image (coming soon).
+
+---
 
 ## Toolsets
 
@@ -1316,6 +1487,9 @@ dxi-mcp-server/
 ├── pyproject.toml              # Python project configuration
 ├── requirements.txt            # Dependencies (legacy format)
 ├── uv.lock                     # Locked dependencies (uv format)
+├── Dockerfile                  # Docker image build instructions
+├── docker-compose.yml          # Single-command Docker startup
+├── .env.example                # Environment variable template (copy to .env)
 ├── start_mcp_server_*.{sh,bat} # Cross-platform startup scripts
 ├── logs/                       # Runtime logs and telemetry
 │   ├── dct_mcp_server.log      # Main application logs
