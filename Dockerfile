@@ -5,8 +5,9 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copy dependency manifests first to leverage layer caching
-COPY requirements.txt pyproject.toml ./
+# Copy dependency manifests and README first to leverage layer caching
+# README.md is required by pyproject.toml (readme = "README.md") for hatchling metadata validation
+COPY requirements.txt pyproject.toml README.md ./
 
 # Copy source code
 COPY src/ ./src/
