@@ -50,8 +50,6 @@ Thumbs.db
 logs/
 mcp_server_setup_logfile.txt
 
-# Local docs (not part of review)
-docs/
 
 # Git worktrees (project-local isolation)
 .worktrees/
