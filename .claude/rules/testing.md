@@ -34,6 +34,37 @@ PR descriptions must include:
 
 Generate a final test report summarizing the above and any issues encountered, and attach it to the PR for reviewer reference.
 
+## Automated Testing via Docker MCP Script
+
+Use `pytest` + `pytest-asyncio` + `fastmcp` client to spawn the Docker container as a subprocess
+and drive it over stdio transport. This is the automated testing approach for this project.
+
+Test files live in `tests/` and follow the naming pattern `tests/<ticket>-docker-test.py`.
+
+**Setup**:
+```bash
+# Build the image first (see .claude/test-infra.md)
+docker build -t dct-mcp-server:local .
+
+# Install test dependencies
+pip install pytest pytest-asyncio
+# fastmcp is already in requirements.txt
+```
+
+**How a test file is structured**:
+- A module-scoped `pytest_asyncio` fixture that reads `DCT_API_KEY` and `DCT_BASE_URL` from
+  `.claude/settings.local.json` (under `mcpServers.dct.env`) and opens an async `fastmcp.Client`
+  using `StdioServerParameters(command="docker", args=["run","--rm","-i",
+  "-e","DCT_API_KEY=...","dct-mcp-server:local"])`
+- One `async def test_*` function per scenario, calling `client.call_tool(name, arguments)` and
+  asserting the response (expected keys present, no error fields)
+- See `.claude/test-infra.md` for the full Docker run flags and env var names
+
+**Run tests**:
+```bash
+pytest tests/ -v
+```
+
 ## Toolset Test Prompt Files
 
 Full prompt lists for each toolset are in `.claude/rules/testing/`:

@@ -41,8 +41,6 @@ Key optional env vars:
 - `DCT_MAX_RETRIES` — default `3`
 - `IS_LOCAL_TELEMETRY_ENABLED` — default `false`
 
-No automated test suite exists. Testing is done by connecting an MCP client to the running server. Logs are written to `logs/dct_mcp_server.log` (rotating) and `logs/sessions/{session_id}.log` (telemetry).
-
 ## Architecture
 
 ### Persona-Based Toolsets
@@ -120,3 +118,7 @@ src/dct_mcp_server/
 ### Startup Flow
 
 `main.py` → initialize `DCTAPIClient` → `register_all_tools()` (dynamic module discovery in `tools/__init__.py`) → FastMCP stdio transport. Shutdown: lifespan context manager closes HTTP client and ends telemetry session.
+
+## Testing
+
+See [`.claude/rules/testing.md`](.claude/rules/testing.md) for the full testing approach — manual MCP client testing and automated Docker pytest scripts. Test infrastructure setup (Docker build, credentials, env vars) is in [`.claude/test-infra.md`](.claude/test-infra.md).
