@@ -48,3 +48,26 @@ Exit code: 0
 - The DCT instance at `https://dct-sho.dlpxdc.co` is already running and accessible — it is the test target, not infrastructure that this phase needs to start.
 - Container is started fresh on each MCP-client connection (`--rm`), so no long-running container is left behind.
 - The image tag `dct-mcp-server:local` and `dct-mcp-server:dev` resolve to the same digest because the build phase already produced this layer set.
+
+### Step: release
+
+```
+
+Checking: DLPXECO-13635 (step: release)
+---
+[release]
+PASS  docs/DLPXECO-13635-doc-updates.md exists
+PASS  ## Summary of Change present
+PASS  ## Pages to Update present
+PASS  ## Release Notes Entry present
+PASS  Summary of Change has content
+PASS  Summary of Change no TBD/TODO
+PASS  Pages to Update has content
+PASS  Pages to Update no TBD/TODO
+PASS  Release Notes Entry has content
+PASS  Release Notes Entry no TBD/TODO
+PASS  No code constructs in Release Notes
+---
+Result: 11 passed, 0 failed
+
+```
