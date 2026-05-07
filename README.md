@@ -13,6 +13,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Run with Docker](#run-with-docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -405,6 +406,130 @@ Method for developers who want to modify the code or run it from a local clone.
    ```
    
    > **Note**: If you prefer not to use `uv`, scripts for standard Python with `venv` are also provided (`start_mcp_server_python.sh` and `start_mcp_server_windows_python.bat`).
+
+### Run with Docker
+
+Run the MCP server inside a Docker container — useful when you don't want to install Python or `uv` on the host, or when you need a hermetic, reproducible runtime (for example on Windows hosts via Docker Desktop + WSL2 backend, or in air-gapped environments after building the image once).
+
+> **Note**: this image is for **local-development MCP usage**. The MCP transport is stdio, so the container is launched per-session by the MCP client — it is not a long-lived hosted service.
+
+**Prerequisites**:
+- Docker (Linux, macOS, or Windows with Docker Desktop + WSL2 backend, Linux containers mode).
+- Network access to your DCT instance from the host.
+- A valid `DCT_API_KEY`.
+
+**Steps**:
+
+1. **Build the image from source:**
+
+   **Linux / macOS (bash, zsh):**
+   ```bash
+   git clone https://github.com/delphix/dxi-mcp-server.git
+   cd dxi-mcp-server
+   docker build -t dct-mcp-server:dev .
+   ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   git clone https://github.com/delphix/dxi-mcp-server.git
+   cd dxi-mcp-server
+   docker build -t dct-mcp-server:dev .
+   ```
+
+   The build produces a multi-stage image of roughly 244 MB uncompressed (≈ 80 MB compressed) running as non-root user `appuser` (UID 1000) and using `tini` as PID 1 for clean signal handling.
+
+2. **Pull from a registry** *(placeholder — pending registry provisioning)*
+
+   <!-- TODO(DLPXECO-13635): swap placeholder for real registry URL once provisioned -->
+
+   The image will be published to a registry in a future release. The intended form is:
+
+   ```bash
+   docker pull <registry-host>/delphix/dct-mcp-server:<tag>
+   ```
+
+   For now, build from source as shown above.
+
+3. **Run the server interactively:**
+
+   The MCP transport is stdio, so always pass `-i` (no `-t`).
+
+   **Linux / macOS (bash, zsh):**
+   ```bash
+   docker run --rm -i \
+     -e DCT_API_KEY="your-api-key" \
+     -e DCT_BASE_URL="https://your-dct-host.company.com" \
+     dct-mcp-server:dev
+   ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   docker run --rm -i `
+     -e DCT_API_KEY="your-api-key" `
+     -e DCT_BASE_URL="https://your-dct-host.company.com" `
+     dct-mcp-server:dev
+   ```
+
+   **Windows (cmd.exe):**
+   ```bat
+   docker run --rm -i ^
+     -e DCT_API_KEY=your-api-key ^
+     -e DCT_BASE_URL=https://your-dct-host.company.com ^
+     dct-mcp-server:dev
+   ```
+
+   > Use `-i` (no `-t`). MCP is a JSON-RPC stream over stdio — a TTY would mangle line buffering on Windows and is not needed.
+
+4. **Optional environment variables:**
+
+   The container honours every variable documented in [Environment Variables](#environment-variables) — pass each with `-e VAR=value` on the `docker run` line. Defaults match the host-clone runtime exactly.
+
+5. **Persist logs to the host (optional):**
+
+   Mount the host `logs/` directory into the container so logs survive after the session ends:
+
+   **Linux / macOS:**
+   ```bash
+   docker run --rm -i \
+     -e DCT_API_KEY="your-api-key" \
+     -e DCT_BASE_URL="https://your-dct-host.company.com" \
+     -v "$(pwd)/logs:/app/logs" \
+     dct-mcp-server:dev
+   ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   docker run --rm -i `
+     -e DCT_API_KEY="your-api-key" `
+     -e DCT_BASE_URL="https://your-dct-host.company.com" `
+     -v "${PWD}\logs:/app/logs" `
+     dct-mcp-server:dev
+   ```
+
+   On Linux the host-side `logs/` directory must be writable by UID 1000 (the container's `appuser`); on macOS and Windows Docker Desktop handles UID mapping automatically.
+
+6. **Wire into MCP clients:**
+
+   Configure your MCP client to launch the container per session. The client supplies stdin/stdout, so `docker run --rm -i` is the canonical invocation form.
+
+   **Claude Desktop** (`claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "delphix-dct": {
+         "command": "docker",
+         "args": [
+           "run", "--rm", "-i",
+           "-e", "DCT_API_KEY=your-api-key",
+           "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+           "dct-mcp-server:dev"
+         ]
+       }
+     }
+   }
+   ```
+
+   > The MCP client launches a fresh container per session; the container exits when the client closes the connection.
 
 ### Connecting a Client to a Running Server
 
