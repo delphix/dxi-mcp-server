@@ -1,0 +1,66 @@
+# VCS
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+build/
+dist/
+wheels/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / IDE noise
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Project-local secrets and local-only state
+.env
+.env.*
+!.env.example
+*.log
+logs/
+mcp_server_setup_logfile.txt
+
+# Claude Code workspace (NOT runtime — purely dev tooling)
+.claude/
+.worktrees/
+
+# Workflow artefacts (vision/functional/design/test docs etc).
+# The runtime fallback OpenAPI spec at docs/api-external.yaml is fetched
+# at runtime from DCT_BASE_URL; the bundled fallback file is not present
+# in this repository, so a blanket exclusion of docs/ is safe.
+docs/
+
+# Host-only startup scripts (the container does not invoke these)
+start_mcp_server_python.sh
+start_mcp_server_uv.sh
+start_mcp_server_windows_python.bat
+start_mcp_server_windows_uv.bat
+
+# Misc
+node_modules/
+.coverage
+htmlcov/
+*.cover
+
+# Don't ship the Dockerfile itself or this file into the image
+Dockerfile
+.dockerignore
