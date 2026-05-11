@@ -1,4 +1,4 @@
-# Continuous Data Administrator Toolset - 22 Tools
+# Continuous Data Administrator Toolset - 23 Tools
 # Description: Perform traditional Continuous Data "Management App" operations
 # Format: METHOD|/endpoint/path|action_name
 # Target users: DBAs, Data administrators with full data management capability
@@ -563,3 +563,17 @@ POST|/file-mapping/validate-file-mapping-by-snapshot|validate_file_mapping_by_sn
 POST|/file-mapping/validate-file-mapping-by-location|validate_file_mapping_by_location
 POST|/file-mapping/validate-file-mapping-by-timestamp|validate_file_mapping_by_timestamp
 POST|/file-mapping/validate-file-mapping-by-bookmark|validate_file_mapping_by_bookmark
+
+# ----------------------------------------------------------------------------
+# TOOL 23: vdb_bulk_tool - VDB Bulk Lifecycle (DLPXECO-13965)
+# NOTE: The four paths below are SENTINEL paths consumed only by the loader
+# (config/loader.py:TOOL_TO_MODULE) — they are NOT in the DCT OpenAPI spec.
+# The generator's "path not found in OpenAPI spec" warning for these entries
+# is expected and informational. The actual fan-out targets the existing
+# per-VDB endpoints /vdbs/{vdbId}/start, /stop, /enable, /disable inside
+# tools/vdb_bulk_endpoints_tool.py. Do not "fix" by changing the paths.
+# ----------------------------------------------------------------------------
+POST|/vdbs/bulk_start|bulk_start
+POST|/vdbs/bulk_stop|bulk_stop
+POST|/vdbs/bulk_enable|bulk_enable
+POST|/vdbs/bulk_disable|bulk_disable

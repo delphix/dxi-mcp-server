@@ -1,4 +1,4 @@
-# Self Service Toolset - 6 Tools
+# Self Service Toolset - 7 Tools
 # Description: Perform classic Self Service activities
 # Format: METHOD|/endpoint/path|action_name
 # Target users: Developers, QA engineers who need to work with VDBs
@@ -100,3 +100,17 @@ POST|/timeflows/{timeflowId}/repair|repair
 GET|/timeflows/{timeflowId}/tags|get_tags
 POST|/timeflows/{timeflowId}/tags|add_tags
 POST|/timeflows/{timeflowId}/tags/delete|delete_tags
+
+# ----------------------------------------------------------------------------
+# TOOL 8: vdb_bulk_tool - VDB Bulk Lifecycle (DLPXECO-13965)
+# NOTE: The four paths below are SENTINEL paths consumed only by the loader
+# (config/loader.py:TOOL_TO_MODULE) — they are NOT in the DCT OpenAPI spec.
+# The generator's "path not found in OpenAPI spec" warning for these entries
+# is expected and informational. The actual fan-out targets the existing
+# per-VDB endpoints /vdbs/{vdbId}/start, /stop, /enable, /disable inside
+# tools/vdb_bulk_endpoints_tool.py. Do not "fix" by changing the paths.
+# ----------------------------------------------------------------------------
+POST|/vdbs/bulk_start|bulk_start
+POST|/vdbs/bulk_stop|bulk_stop
+POST|/vdbs/bulk_enable|bulk_enable
+POST|/vdbs/bulk_disable|bulk_disable

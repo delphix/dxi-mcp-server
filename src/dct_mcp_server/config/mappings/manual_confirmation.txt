@@ -105,3 +105,11 @@ POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from boo
 POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from database template '{name}'. Confirm?
 POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from hook template '{name}'. Confirm?
 POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeflow '{name}'. Confirm?
+
+# ============================================
+# RULE 9: Bulk VDB Lifecycle (DLPXECO-13965)
+# Sentinel paths matched only by vdb_bulk_endpoints_tool when
+# len(vdbIds) > 5. Triggered from the handler, not from generated tools.
+# ============================================
+POST|/vdbs/bulk_stop|manual|You are about to stop {count} VDBs. This will interrupt active connections. Confirm to proceed.
+POST|/vdbs/bulk_disable|manual|You are about to disable {count} VDBs. This will take them offline. Confirm to proceed.

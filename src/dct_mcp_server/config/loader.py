@@ -450,6 +450,7 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         "source_tool": "dataset_endpoints_tool",
         "data_connection_tool": "dataset_endpoints_tool",
         "data_tool": "dataset_endpoints_tool",  # Merged tool
+        "vdb_bulk_tool": "vdb_bulk_endpoints_tool",  # DLPXECO-13965 — new bulk lifecycle tool
         "snapshot_bookmark_tool": "dataset_endpoints_tool",  # Merged tool
         "timeflow_tool": "dataset_endpoints_tool",
         
