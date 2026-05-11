@@ -60,7 +60,7 @@ Instead of one MCP tool per API endpoint, related endpoints are grouped under a 
 
 ### Auto Mode
 
-When `DCT_TOOLSET=auto`, the server starts with only 5 meta-tools. The AI can dynamically enable/disable toolsets at runtime (using `tools/list_changed` MCP notifications) without restarting the server.
+When `DCT_TOOLSET=auto`, the server starts with only 6 meta-tools. The AI can dynamically enable/disable toolsets at runtime (using `tools/list_changed` MCP notifications) without restarting the server.
 
 Client compatibility for dynamic tool switching:
 - Claude Desktop, Cursor, Continue.dev — fully supported
@@ -121,4 +121,4 @@ src/dct_mcp_server/
 
 ## Testing
 
-See [`.claude/rules/testing.md`](.claude/rules/testing.md) for the full testing approach — manual MCP client testing and automated Docker pytest scripts. Test infrastructure setup (Docker build, credentials, env vars) is in [`.claude/test-infra.md`](.claude/test-infra.md).
+See [`.claude/test/testing.md`](.claude/test/testing.md) for the full testing approach — manual MCP client testing and automated Docker pytest scripts. Test infrastructure setup (Docker build, credentials, env vars) is in [`.claude/test/test-infra.md`](.claude/test/test-infra.md).

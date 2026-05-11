@@ -4,7 +4,7 @@
 
 This toolset is read-only. No write or destructive operations are available.
 
-Start the server with this toolset, connect Claude Desktop, then run the prompts top to bottom in the same conversation thread.
+Set `DCT_TOOLSET=reporting_insights` in `.mcp.json` and restart the dct MCP server. Then execute the prompts top to bottom via the dct MCP tools — Claude is the runner.
 
 ---
 

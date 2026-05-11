@@ -2,9 +2,9 @@
 
 > `DCT_TOOLSET=platform_admin`
 
-Start the server with this toolset, connect Claude Desktop, then run the prompts top to bottom in the same conversation thread. Prompts are chained — IDs discovered in earlier steps carry forward automatically.
+Set `DCT_TOOLSET=platform_admin` in `.mcp.json` and restart the dct MCP server. Then execute the prompts top to bottom via the dct MCP tools — Claude is the runner. Prompts are chained: IDs discovered in earlier steps carry forward to later ones.
 
-For confirmation-flow prompts, the first call returns `confirmation_required`. Follow up with "yes, go ahead and confirm" to execute.
+For confirmation-flow prompts the first call returns `confirmation_required`; re-issue the same call with `confirmed=True` to execute.
 
 ---
 
