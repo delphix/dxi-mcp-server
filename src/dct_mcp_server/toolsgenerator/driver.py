@@ -505,18 +505,8 @@ def generate_tools_from_openapi():
     
     os.makedirs(TOOLS_DIR, exist_ok=True)
 
-    # Clean up existing generated tool files before creating new ones
-    existing_tools = glob.glob(os.path.join(TOOLS_DIR, "*_tool.py"))
-    for tool_file in existing_tools:
-        try:
-            os.remove(tool_file)
-            logger.info(f"Deleted existing tool file: {tool_file}")
-        except OSError as e:
-            logger.warning(f"Could not delete {tool_file}: {e}")
-    
-    logger.info(f"Cleaned up {len(existing_tools)} existing tool files")
-
-    # Group tools by module for file organization
+    # Group tools by module for file organization. Computed before the cleanup
+    # sweep so we know which filenames this run will (re)generate.
     module_tools = {}
     for tool_name, apis in TOOLS_BY_NAME.items():
         # Determine module based on first API path
@@ -525,10 +515,35 @@ def generate_tools_from_openapi():
             module_name = _get_module_for_path(first_path)
         else:
             module_name = "misc_endpoints"
-        
+
         if module_name not in module_tools:
             module_tools[module_name] = {}
         module_tools[module_name][tool_name] = apis
+
+    # Clean up only the generated tool files this run is about to replace.
+    # Pre-built modules whose names are not in the generator's target set
+    # (e.g. tools whose toolset paths are absent from the OpenAPI spec) are
+    # preserved so the standard pre-built fallback path can still load them.
+    target_filenames = {f"{module_name}_tool.py" for module_name in module_tools}
+    existing_tools = glob.glob(os.path.join(TOOLS_DIR, "*_tool.py"))
+    deleted_count = 0
+    preserved_count = 0
+    for tool_file in existing_tools:
+        if os.path.basename(tool_file) not in target_filenames:
+            logger.debug(f"Preserving pre-built tool file outside generator coverage: {tool_file}")
+            preserved_count += 1
+            continue
+        try:
+            os.remove(tool_file)
+            deleted_count += 1
+            logger.info(f"Deleted existing tool file: {tool_file}")
+        except OSError as e:
+            logger.warning(f"Could not delete {tool_file}: {e}")
+
+    logger.info(
+        f"Cleaned up {deleted_count} existing tool files "
+        f"(preserved {preserved_count} outside generator coverage)"
+    )
 
     # Generate one file per module containing unified tools
     for module_name, tools in module_tools.items():
