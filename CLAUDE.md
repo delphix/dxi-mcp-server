@@ -121,4 +121,4 @@ src/dct_mcp_server/
 
 ## Testing
 
-See [`.claude/rules/testing.md`](.claude/rules/testing.md) for the full testing approach — manual MCP client testing and automated Docker pytest scripts. Test infrastructure setup (Docker build, credentials, env vars) is in [`.claude/test-infra.md`](.claude/test-infra.md).
+See [`.claude/test/testing.md`](.claude/test/testing.md) for the full testing approach — manual MCP client testing and automated Docker pytest scripts. Test infrastructure setup (Docker build, credentials, env vars) is in [`.claude/test/test-infra.md`](.claude/test/test-infra.md).

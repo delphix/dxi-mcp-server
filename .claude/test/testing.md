@@ -1,6 +1,6 @@
 # Testing Rules
 
-Based on the jira information or description of the change, determine which toolsets and scenarios to test against. Use the appropriate prompt files from `.claude/rules/testing/` to guide your testing.
+Based on the jira information or description of the change, determine which toolsets and scenarios to test against. Use the appropriate prompt files from `.claude/test/testing/` to guide your testing.
 
 ## Testing Is Done via MCP Clients
 
@@ -43,7 +43,7 @@ Test files live in `tests/` and follow the naming pattern `tests/<ticket>-test.p
 
 **Setup**:
 ```bash
-# Install dependencies (see .claude/test-infra.md for full setup)
+# Install dependencies (see .claude/test/test-infra.md for full setup)
 uv sync   # or: pip install -r requirements.txt && pip install -e .
 
 # Install test dependencies
@@ -57,7 +57,7 @@ pip install pytest pytest-asyncio
   using `StdioServerParameters(command="bash", args=["start_mcp_server_uv.sh"], env={...})`
 - One `async def test_*` function per scenario, calling `client.call_tool(name, arguments)` and
   asserting the response (expected keys present, no error fields)
-- See `.claude/test-infra.md` for the full launch script and env var names
+- See `.claude/test/test-infra.md` for the full launch script and env var names
 
 **Run tests**:
 ```bash
@@ -66,7 +66,7 @@ pytest tests/ -v
 
 ## Toolset Test Prompt Files
 
-Full prompt lists for each toolset are in `.claude/rules/testing/`:
+Full prompt lists for each toolset are in `.claude/test/testing/`:
 
 | File | Toolset | Prompts |
 |------|---------|---------|
