@@ -53,3 +53,6 @@ mcp_server_setup_logfile.txt
 
 # Git worktrees (project-local isolation)
 .worktrees/
+
+# Transient harness output (validate phase) — contains real DCT IDs
+.claude/tmp/
