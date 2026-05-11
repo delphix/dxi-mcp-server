@@ -2,42 +2,45 @@
 
 Based on the jira information or description of the change, determine which toolsets and scenarios to test against. Use the appropriate prompt files from `.claude/test/testing/` to guide your testing.
 
-## Testing Is Done via MCP Clients
+## Testing Is Driven by Claude
 
-Test by running the server locally and connecting a real MCP client (Claude Desktop, Cursor, VS Code Copilot) against a live DCT instance.
+Testing for this repository is performed by **Claude** running in this checkout — not by a human typing into a separate MCP client. The dct MCP server is configured in `.mcp.json`, so Claude calls its tools directly to exercise scenarios against a live DCT instance and verifies the responses.
+
+Two complementary tracks, both driven by Claude:
+
+1. **Scenario execution** — Claude executes the prompt lists in `.claude/test/testing/<toolset>.md` against a live DCT and reports outcomes per prompt.
+2. **Automated regression (`pytest`)** — Claude authors and runs `tests/<ticket>-test.py` files that spawn the server as a subprocess and assert tool responses programmatically. Use for changes whose behaviour is deterministic enough to re-run in CI.
 
 ## What to Verify for Each Change
 
 | Change type | What to verify |
 |-------------|---------------|
-| New toolset entry (`.txt`) | Tool appears in client, action executes against DCT, response is correct |
+| New toolset entry (`.txt`) | Tool registers, action executes against DCT, response is correct |
 | New confirmation rule | First call returns `confirmation_required`; re-call with `confirmed=True` executes |
-| New pre-built tool module | `register_tools()` is called at startup; tool appears in MCP client |
+| New pre-built tool module | `register_tools()` runs at startup; tool is exposed via the MCP server |
 | `TOOL_TO_MODULE` mapping change | Correct module loads for the affected toolset |
 | Dynamic tool generation change | Generated module in `$TEMP/dct_mcp_tools/` takes priority over pre-built |
-| Auto mode change | `enable_toolset` / `disable_toolset` works; client reflects updated tool list |
+| Auto mode change | `enable_toolset` / `disable_toolset` works; subsequent tool listing reflects the change |
 
 ## DCT Toolset Coverage
 
-When changing toolset configs or tool implementations, test with at least:
-- The specific toolset being modified
-- A client that supports dynamic tool switching (Claude Desktop or Cursor) if changing auto mode
-- VS Code Copilot if the change affects fixed-toolset behaviour
+When changing toolset configs or tool implementations, exercise at minimum:
+- The specific toolset(s) the change affects
+- `auto` mode if the change touches dynamic enable/disable behaviour
 
-## Documenting Test Evidence in PRs
+## Track 1 — Scenario Execution
 
-PR descriptions must include:
-- Which MCP client was used
-- Which toolset(s) were tested
-- Which DCT version was used
-- Specific actions/scenarios exercised
+Steps Claude follows for a change:
 
-Generate a final test report summarizing the above and any issues encountered, and attach it to the PR for reviewer reference.
+1. Confirm credentials are present — `.claude/settings.local.json` under `mcpServers.dct.env` must have `DCT_API_KEY` and `DCT_BASE_URL` (see `.claude/test/test-infra.md`).
+2. Set `DCT_TOOLSET=<toolset>` for the change in `.mcp.json` and restart the dct MCP server so the new toolset is registered.
+3. Open the matching scenario file `.claude/test/testing/<toolset>.md` and execute each prompt by calling the relevant dct MCP tool. Prompts are chained — IDs/values discovered in earlier prompts are reused in later ones.
+4. For confirmation-flow prompts: the first call should return `status=confirmation_required`. Re-issue the same call with `confirmed=True` and verify success.
+5. Record results into the PR test report (see "Test Report" below).
 
-## Automated Testing via pytest
+## Track 2 — Automated `pytest` Regression
 
-Use `pytest` + `pytest-asyncio` + `fastmcp` client to spawn the local MCP server as a subprocess
-and drive it over stdio transport. This is the automated testing approach for this project.
+Use `pytest` + `pytest-asyncio` + `fastmcp` client to spawn the local MCP server as a subprocess and drive it over stdio transport.
 
 Test files live in `tests/` and follow the naming pattern `tests/<ticket>-test.py`.
 
@@ -68,6 +71,18 @@ python3 -c "import json; e=json.load(open('.claude/settings.local.json'))['mcpSe
 
 pytest tests/ -v
 ```
+
+## Test Report (PR Evidence)
+
+PR descriptions must include a Claude-generated test report containing:
+
+- Toolset(s) tested and the `DCT_TOOLSET` value used
+- DCT version exercised against
+- Scenario prompts executed (from `.claude/test/testing/<toolset>.md`) with pass / fail / skipped + reason per prompt
+- Any `pytest` runs invoked and their output
+- Issues encountered and follow-ups
+
+Attach the report to the PR for reviewer reference.
 
 ## Toolset Test Prompt Files
 

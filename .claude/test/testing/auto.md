@@ -2,11 +2,9 @@
 
 > `DCT_TOOLSET=auto`
 
-Start the server with `DCT_TOOLSET=auto`, connect Claude Desktop (or Cursor), then run the prompts below in the same conversation thread. Auto mode starts with only 5 meta-tools — domain tools are enabled dynamically at runtime without restarting the server.
+Set `DCT_TOOLSET=auto` in `.mcp.json` and restart the dct MCP server. Then execute the prompts below in order via the dct MCP tools — Claude is the runner. Auto mode starts with only 6 meta-tools; domain tools are enabled dynamically at runtime via `enable_toolset` without restarting the server.
 
-Use Claude Desktop or Cursor for these tests. VS Code Copilot requires a chat restart after `enable_toolset` and is not suitable for dynamic switching scenarios.
-
-For confirmation-flow prompts, the first call returns `confirmation_required`. Follow up with "yes, go ahead and confirm" to execute.
+For confirmation-flow prompts the first call returns `confirmation_required`; re-issue the same call with `confirmed=True` to execute.
 
 ---
 
