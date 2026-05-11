@@ -23,6 +23,11 @@ GET|/vdbs/{vdbId}/bookmarks|list_bookmarks
 GET|/vdbs/{vdbId}/tags|get_tags
 POST|/vdbs/{vdbId}/tags|add_tags
 POST|/vdbs/{vdbId}/tags/delete|delete_tags
+# Synthetic paths — action handler fans out to per-VDB endpoints.
+POST|/vdbs/bulk_start|bulk_start
+POST|/vdbs/bulk_stop|bulk_stop
+POST|/vdbs/bulk_enable|bulk_enable
+POST|/vdbs/bulk_disable|bulk_disable
 
 # ----------------------------------------------------------------------------
 # TOOL 2: vdb_group_tool - VDB Group

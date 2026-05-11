@@ -105,6 +105,130 @@ def build_params(**kwargs):
     """Build parameters dictionary excluding None and empty string values."""
     return {k: v for k, v in kwargs.items() if v is not None and v != ''}
 
+import os
+
+
+def _resolve_bulk_concurrency() -> int:
+    """
+    Read DCT_BULK_CONCURRENCY from the environment, parse to int, and clamp to [1, 50].
+    On parse failure, value <= 0, or value > 50 → logs WARNING and returns 5.
+    On missing env var → returns 5 silently (documented default).
+    """
+    raw = os.environ.get("DCT_BULK_CONCURRENCY")
+    if raw is None:
+        return 5
+    try:
+        val = int(raw)
+    except (ValueError, TypeError):
+        logger.warning(f"DCT_BULK_CONCURRENCY={raw!r} is invalid; falling back to 5")
+        return 5
+    if val <= 0 or val > 50:
+        logger.warning(f"DCT_BULK_CONCURRENCY={raw!r} is out of range [1,50]; falling back to 5")
+        return 5
+    return val
+
+
+def _bulk_endpoint_for(action: str):
+    """
+    Map a bulk action name to a per-VDB endpoint template.
+    The {vdb_id} token is a format placeholder; caller uses .format(vdb_id=vid).
+    Returns None for unknown actions.
+    """
+    _map = {
+        "bulk_start": "/vdbs/{vdb_id}/start",
+        "bulk_stop": "/vdbs/{vdb_id}/stop",
+        "bulk_enable": "/vdbs/{vdb_id}/enable",
+        "bulk_disable": "/vdbs/{vdb_id}/disable",
+    }
+    return _map.get(action)
+
+
+def _bulk_confirmation_envelope(action: str, vdb_ids: list, tool_name: str) -> dict:
+    """
+    Build the FR-005 confirmation envelope for bulk_stop / bulk_disable when
+    len(vdbIds) > 5 and confirmed is not True.
+    """
+    verb_map = {"bulk_stop": "stop", "bulk_disable": "disable"}
+    verb = verb_map.get(action, action)
+    return {
+        "status": "confirmation_required",
+        "confirmation_level": "manual",
+        "confirmation_message": (
+            f"You are about to {verb} {len(vdb_ids)} VDBs. This is destructive. "
+            "Re-call with confirmed=True to proceed."
+        ),
+        "action": action,
+        "tool": tool_name,
+        "vdb_count": len(vdb_ids),
+        "instructions": (
+            "STOP: Display confirmation_message to the user, get EXPLICIT approval, "
+            "then re-call with confirmed=True and the same vdbIds."
+        ),
+    }
+
+
+async def _run_bulk_batch(
+    action: str,
+    vdb_ids: list,
+    concurrency: int,
+    extra_body,
+    tool_name: str,
+) -> dict:
+    """
+    Async batch coroutine that fans out per-VDB DCT calls under one Semaphore.
+    Workers never raise — all failures are caught and aggregated.
+    Called via async_to_sync(_run_bulk_batch)(...) from the action branches.
+    """
+    endpoint_template = _bulk_endpoint_for(action)
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _one(vid: str):
+        async with sem:
+            try:
+                endpoint = endpoint_template.format(vdb_id=vid)
+                resp = await client.make_request(
+                    "POST", endpoint,
+                    params={}, json=extra_body or None,
+                )
+                logger.debug(f"bulk action={action} vdbId={vid} outcome=success")
+                return (vid, resp)
+            except Exception as exc:  # broad catch intentional — FR-003
+                err = str(exc) or "unknown error"
+                logger.debug(
+                    f"bulk action={action} vdbId={vid} outcome=failure error={err}"
+                )
+                return (vid, {"_bulk_error": err})
+
+    results = await asyncio.gather(*[_one(v) for v in vdb_ids])
+
+    succeeded = []
+    failed = []
+    jobs = []
+    for vid, resp in results:
+        if isinstance(resp, dict) and "_bulk_error" in resp:
+            failed.append({"vdbId": vid, "error": resp["_bulk_error"]})
+            continue
+        succeeded.append(vid)
+        job = (resp or {}).get("job") if isinstance(resp, dict) else None
+        if job and isinstance(job, dict) and job.get("id"):
+            jobs.append({"vdbId": vid, "jobId": job["id"]})
+
+    if not failed:
+        status = "success"
+    elif not succeeded:
+        status = "failed"
+    else:
+        status = "partial_success"
+
+    return {
+        "status": status,
+        "total": len(vdb_ids),
+        "succeeded": succeeded,
+        "failed": failed,
+        "jobs": jobs,
+    }
+
+
 @log_tool_execution
 def data_tool(
     action: str,  # One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
@@ -420,6 +544,7 @@ def data_tool(
     vdb_stop_param_mappings: Optional[list] = None,
     vdb_timestamp_mappings: Optional[list] = None,
     vdbs: Optional[list] = None,
+    vdbIds: Optional[list] = None,
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
@@ -2847,6 +2972,85 @@ def data_tool(
         if conf:
             return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    # -----------------------------------------------------------------------
+    # BULK VDB ACTIONS (FR-001 – FR-007)
+    # Contract for every bulk branch:
+    #   1. Validate vdbIds (non-empty list of non-empty strings)
+    #   2. For bulk_stop / bulk_disable only: inline threshold gate (FR-005)
+    #   3. Fan out via async_to_sync(_run_bulk_batch)
+    #   4. Log dispatch and completion at INFO level
+    #   5. Return aggregated 5-key dict
+    # Synthetic paths (/vdbs/bulk_*) in toolset .txt files map to these branches.
+    # The action handler fans out to per-VDB endpoints; no real /vdbs/bulk_* DCT path.
+    # -----------------------------------------------------------------------
+    elif action == 'bulk_start':
+        if not isinstance(vdbIds, list) or len(vdbIds) == 0 or \
+                not all(isinstance(v, str) and v for v in vdbIds):
+            return {"error": "vdbIds must be a non-empty list of VDB IDs"}
+        concurrency = _resolve_bulk_concurrency()
+        logger.info(f"bulk action={action} total={len(vdbIds)} concurrency={concurrency}")
+        extra_body = {k: v for k, v in {'instances': instances}.items() if v is not None}
+        result = async_to_sync(_run_bulk_batch)(
+            action, vdbIds, concurrency, extra_body or None, 'data_tool',
+        )
+        logger.info(
+            f"bulk action={action} total={result['total']} "
+            f"succeeded={len(result['succeeded'])} failed={len(result['failed'])} "
+            f"status={result['status']}"
+        )
+        return result
+    elif action == 'bulk_stop':
+        if not isinstance(vdbIds, list) or len(vdbIds) == 0 or \
+                not all(isinstance(v, str) and v for v in vdbIds):
+            return {"error": "vdbIds must be a non-empty list of VDB IDs"}
+        if len(vdbIds) > 5 and not confirmed:
+            return _bulk_confirmation_envelope(action, vdbIds, 'data_tool')
+        concurrency = _resolve_bulk_concurrency()
+        logger.info(f"bulk action={action} total={len(vdbIds)} concurrency={concurrency}")
+        extra_body = {k: v for k, v in {'instances': instances, 'abort': abort}.items() if v is not None}
+        result = async_to_sync(_run_bulk_batch)(
+            action, vdbIds, concurrency, extra_body or None, 'data_tool',
+        )
+        logger.info(
+            f"bulk action={action} total={result['total']} "
+            f"succeeded={len(result['succeeded'])} failed={len(result['failed'])} "
+            f"status={result['status']}"
+        )
+        return result
+    elif action == 'bulk_enable':
+        if not isinstance(vdbIds, list) or len(vdbIds) == 0 or \
+                not all(isinstance(v, str) and v for v in vdbIds):
+            return {"error": "vdbIds must be a non-empty list of VDB IDs"}
+        concurrency = _resolve_bulk_concurrency()
+        logger.info(f"bulk action={action} total={len(vdbIds)} concurrency={concurrency}")
+        extra_body = {k: v for k, v in {'attempt_start': attempt_start, 'container_mode': container_mode, 'ownership_spec': ownership_spec}.items() if v is not None}
+        result = async_to_sync(_run_bulk_batch)(
+            action, vdbIds, concurrency, extra_body or None, 'data_tool',
+        )
+        logger.info(
+            f"bulk action={action} total={result['total']} "
+            f"succeeded={len(result['succeeded'])} failed={len(result['failed'])} "
+            f"status={result['status']}"
+        )
+        return result
+    elif action == 'bulk_disable':
+        if not isinstance(vdbIds, list) or len(vdbIds) == 0 or \
+                not all(isinstance(v, str) and v for v in vdbIds):
+            return {"error": "vdbIds must be a non-empty list of VDB IDs"}
+        if len(vdbIds) > 5 and not confirmed:
+            return _bulk_confirmation_envelope(action, vdbIds, 'data_tool')
+        concurrency = _resolve_bulk_concurrency()
+        logger.info(f"bulk action={action} total={len(vdbIds)} concurrency={concurrency}")
+        extra_body = {k: v for k, v in {'attempt_cleanup': attempt_cleanup, 'container_mode': container_mode}.items() if v is not None}
+        result = async_to_sync(_run_bulk_batch)(
+            action, vdbIds, concurrency, extra_body or None, 'data_tool',
+        )
+        logger.info(
+            f"bulk action={action} total={result['total']} "
+            f"succeeded={len(result['succeeded'])} failed={len(result['failed'])} "
+            f"status={result['status']}"
+        )
+        return result
     elif action == 'refresh_vdb_by_timestamp':
         if vdb_id is None:
             return {'error': 'Missing required parameter: vdb_id for action refresh_vdb_by_timestamp'}
@@ -3821,7 +4025,7 @@ def data_tool(
             return conf
         return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark'}
+        return {'error': f'Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, bulk_start, bulk_stop, bulk_enable, bulk_disable, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark'}
 
 @log_tool_execution
 def snapshot_bookmark_tool(
