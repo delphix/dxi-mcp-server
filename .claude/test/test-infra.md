@@ -74,9 +74,13 @@ DCT_API_KEY="$DCT_API_KEY" DCT_BASE_URL="$DCT_BASE_URL" DCT_TOOLSET=self_service
   DCT_LOG_LEVEL=DEBUG \
   uvx --from git+https://github.com/delphix/dxi-mcp-server.git dct-mcp-server &
 SERVER_PID=$!
-sleep 6
+# Poll for the success line (up to 60s — first uvx run downloads); break early on success.
+for i in $(seq 1 60); do
+  grep -q "All available tools have been registered." logs/dct_mcp_server.log 2>/dev/null && break
+  sleep 1
+done
 kill $SERVER_PID 2>/dev/null
-cat logs/dct_mcp_server.log | head -20
+head -20 logs/dct_mcp_server.log
 ```
 
 **Expected outcome**: Log shows `DCT MCP Server initialized` and
@@ -101,7 +105,7 @@ mcp['mcpServers']['delphix-dct'] = {
     'env': {
         'DCT_API_KEY':                env['DCT_API_KEY'],
         'DCT_BASE_URL':               env['DCT_BASE_URL'],
-        'DCT_TOOLSET':                env.get('DCT_TOOLSET', 'auto'),
+        'DCT_TOOLSET':                env.get('DCT_TOOLSET', 'self_service'),
         'DCT_VERIFY_SSL':             env.get('DCT_VERIFY_SSL', 'false'),
         'DCT_LOG_LEVEL':              env.get('DCT_LOG_LEVEL', 'INFO'),
         'DCT_TIMEOUT':                env.get('DCT_TIMEOUT', '30'),
@@ -143,9 +147,12 @@ DCT_BASE_URL=$(python3 -c "import json; d=json.load(open('.claude/settings.local
 DCT_API_KEY="$DCT_API_KEY" DCT_BASE_URL="$DCT_BASE_URL" DCT_TOOLSET=self_service \
   DCT_LOG_LEVEL=DEBUG dct-mcp-server &
 SERVER_PID=$!
-sleep 4
+for i in $(seq 1 30); do
+  grep -q "All available tools have been registered." logs/dct_mcp_server.log 2>/dev/null && break
+  sleep 1
+done
 kill $SERVER_PID 2>/dev/null
-cat logs/dct_mcp_server.log | head -20
+head -20 logs/dct_mcp_server.log
 ```
 
 **Expected outcome**: Log shows `DCT MCP Server initialized` and
@@ -171,7 +178,7 @@ mcp['mcpServers']['delphix-dct'] = {
     'env': {
         'DCT_API_KEY':                env['DCT_API_KEY'],
         'DCT_BASE_URL':               env['DCT_BASE_URL'],
-        'DCT_TOOLSET':                env.get('DCT_TOOLSET', 'auto'),
+        'DCT_TOOLSET':                env.get('DCT_TOOLSET', 'self_service'),
         'DCT_VERIFY_SSL':             env.get('DCT_VERIFY_SSL', 'false'),
         'DCT_LOG_LEVEL':              env.get('DCT_LOG_LEVEL', 'INFO'),
         'DCT_TIMEOUT':                env.get('DCT_TIMEOUT', '30'),
@@ -202,7 +209,7 @@ uv sync
 
 ## Option C: Local clone (pip)
 
-### Step C1 — Install dependencies
+### Step C1 — Install dependencies (pip variant)
 
 ```bash
 python3 -m venv .venv
@@ -223,9 +230,12 @@ DCT_BASE_URL=$(python3 -c "import json; d=json.load(open('.claude/settings.local
 DCT_API_KEY="$DCT_API_KEY" DCT_BASE_URL="$DCT_BASE_URL" DCT_TOOLSET=self_service \
   DCT_LOG_LEVEL=DEBUG .venv/bin/python -m dct_mcp_server.main &
 SERVER_PID=$!
-sleep 4
+for i in $(seq 1 30); do
+  grep -q "All available tools have been registered." logs/dct_mcp_server.log 2>/dev/null && break
+  sleep 1
+done
 kill $SERVER_PID 2>/dev/null
-cat logs/dct_mcp_server.log | head -20
+head -20 logs/dct_mcp_server.log
 ```
 
 **Expected outcome**: Log shows `DCT MCP Server initialized` and
@@ -256,7 +266,7 @@ mcp['mcpServers']['delphix-dct'] = {
     'env': {
         'DCT_API_KEY':                env['DCT_API_KEY'],
         'DCT_BASE_URL':               env['DCT_BASE_URL'],
-        'DCT_TOOLSET':                env.get('DCT_TOOLSET', 'auto'),
+        'DCT_TOOLSET':                env.get('DCT_TOOLSET', 'self_service'),
         'DCT_VERIFY_SSL':             env.get('DCT_VERIFY_SSL', 'false'),
         'DCT_LOG_LEVEL':              env.get('DCT_LOG_LEVEL', 'INFO'),
         'DCT_TIMEOUT':                env.get('DCT_TIMEOUT', '30'),
@@ -307,3 +317,10 @@ Change `DCT_TOOLSET` in `.mcp.json` and restart the MCP client:
 - `logs/dct_mcp_server.log` — application log (daily rotation)
 - `logs/sessions/{session_id}.log` — per-session JSON telemetry, only when
   `IS_LOCAL_TELEMETRY_ENABLED=true`
+
+---
+
+## Next: run the tests
+
+With the server wired up, follow [`testing.md`](testing.md) for what to verify per change
+type and how to drive the automated pytest suite.

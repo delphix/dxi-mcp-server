@@ -54,13 +54,18 @@ pip install pytest pytest-asyncio
 **How a test file is structured**:
 - A module-scoped `pytest_asyncio` fixture that reads `DCT_API_KEY` and `DCT_BASE_URL` from
   `.claude/settings.local.json` (under `mcpServers.dct.env`) and opens an async `fastmcp.Client`
-  using `StdioServerParameters(command="bash", args=["start_mcp_server_uv.sh"], env={...})`
+  using `StdioServerParameters(command="bash", args=[<launch_script>], env={...})`. Pick the
+  launch script the same way `test-infra.md` does: `start_mcp_server_uv.sh` if `uv` is on PATH,
+  otherwise `start_mcp_server_python.sh`
 - One `async def test_*` function per scenario, calling `client.call_tool(name, arguments)` and
   asserting the response (expected keys present, no error fields)
 - See `.claude/test/test-infra.md` for the full launch script and env var names
 
 **Run tests**:
 ```bash
+# Precheck: credentials must be in .claude/settings.local.json (see test-infra.md)
+python3 -c "import json; e=json.load(open('.claude/settings.local.json'))['mcpServers']['dct']['env']; assert e.get('DCT_API_KEY') and e.get('DCT_BASE_URL'), 'missing creds'"
+
 pytest tests/ -v
 ```
 

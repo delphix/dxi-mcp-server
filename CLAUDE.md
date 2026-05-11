@@ -60,7 +60,7 @@ Instead of one MCP tool per API endpoint, related endpoints are grouped under a 
 
 ### Auto Mode
 
-When `DCT_TOOLSET=auto`, the server starts with only 5 meta-tools. The AI can dynamically enable/disable toolsets at runtime (using `tools/list_changed` MCP notifications) without restarting the server.
+When `DCT_TOOLSET=auto`, the server starts with only 6 meta-tools. The AI can dynamically enable/disable toolsets at runtime (using `tools/list_changed` MCP notifications) without restarting the server.
 
 Client compatibility for dynamic tool switching:
 - Claude Desktop, Cursor, Continue.dev — fully supported
