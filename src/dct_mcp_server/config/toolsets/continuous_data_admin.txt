@@ -62,6 +62,10 @@ POST|/vdbs/{vdbId}/asm-export-by-location|export_vdb_to_asm_by_location
 POST|/vdbs/{vdbId}/asm-export-from-bookmark|export_vdb_to_asm_from_bookmark
 POST|/vdbs/{vdbId}/export_cleanup|export_cleanup
 POST|/vdbs/{vdbId}/export_finalize|export_finalize
+POST|/vdbs/bulk_start|bulk_start
+POST|/vdbs/bulk_stop|bulk_stop
+POST|/vdbs/bulk_enable|bulk_enable
+POST|/vdbs/bulk_disable|bulk_disable
 # VDB Group Operations
 GET|/vdb-groups|list_vdb_groups
 POST|/vdb-groups/search|search_vdb_groups
