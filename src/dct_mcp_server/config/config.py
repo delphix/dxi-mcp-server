@@ -2,12 +2,37 @@
 Configuration module for DCT MCP Server
 """
 
+import logging
 import os
 from typing import Any, Dict
+
+logger = logging.getLogger(__name__)
 
 
 def get_dct_config() -> Dict[str, Any]:
     """Get DCT configuration from environment variables"""
+
+    # Parse DCT_BULK_CONCURRENCY with fallback and clamping
+    _bulk_concurrency_raw = os.getenv("DCT_BULK_CONCURRENCY", "5")
+    try:
+        _bulk_concurrency = int(_bulk_concurrency_raw)
+    except ValueError:
+        logger.warning(
+            f"DCT_BULK_CONCURRENCY='{_bulk_concurrency_raw}' is not a valid integer; "
+            "falling back to default 5."
+        )
+        _bulk_concurrency = 5
+
+    if _bulk_concurrency < 1:
+        logger.warning(
+            f"DCT_BULK_CONCURRENCY={_bulk_concurrency} is below minimum 1; clamping to 1."
+        )
+        _bulk_concurrency = 1
+    elif _bulk_concurrency > 50:
+        logger.warning(
+            f"DCT_BULK_CONCURRENCY={_bulk_concurrency} exceeds maximum 50; clamping to 50."
+        )
+        _bulk_concurrency = 50
 
     config = {
         "api_key": os.getenv("DCT_API_KEY"),
@@ -19,6 +44,7 @@ def get_dct_config() -> Dict[str, Any]:
         "is_local_telemetry_enabled": os.getenv("IS_LOCAL_TELEMETRY_ENABLED", "false").lower()
         == "true",
         "toolset": os.getenv("DCT_TOOLSET", "self_service").lower().strip(),
+        "bulk_concurrency": _bulk_concurrency,
     }
 
     # Validate required configuration
@@ -59,6 +85,9 @@ def print_config_help():
         "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
     )
     print(
+        "  DCT_BULK_CONCURRENCY  Max concurrent DCT requests in bulk VDB actions (default: 5, range: 1-50)"
+    )
+    print(
         "  DCT_TOOLSET      Active toolset (default: self_service). Options:"
     )
     print(
@@ -86,4 +115,5 @@ def print_config_help():
     print("  export DCT_VERIFY_SSL=true")
     print("  export DCT_LOG_LEVEL=DEBUG")
     print("  export DCT_TOOLSET=self_service")
+    print("  export DCT_BULK_CONCURRENCY=5")
     print()
