@@ -1,6 +1,6 @@
 """Tests for bulk action registration in toolset .txt config files."""
 import pytest
-from dct_mcp_server.config.loader import load_toolset_grouped_apis, load_toolset_apis
+from dct_mcp_server.config.loader import load_toolset_grouped_apis, load_toolset_apis, get_modules_for_toolset
 
 
 BULK_ACTIONS = {"bulk_start", "bulk_stop", "bulk_enable", "bulk_disable"}
@@ -27,3 +27,10 @@ def test_reporting_insights_has_no_bulk_actions():
     all_actions = {api["action"] for api in apis}
     overlap = BULK_ACTIONS & all_actions
     assert not overlap, f"Unexpected bulk actions in reporting_insights: {overlap}"
+
+
+def test_self_service_modules_include_vdb_endpoints_tool():
+    modules = get_modules_for_toolset("self_service")
+    assert "vdb_endpoints_tool" in modules, (
+        f"vdb_endpoints_tool not in modules for self_service: {modules}"
+    )

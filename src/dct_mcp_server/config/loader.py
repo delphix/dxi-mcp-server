@@ -442,7 +442,7 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
     # Based on which module implements APIs for which path patterns
     TOOL_TO_MODULE = {
         # Dataset operations (vdb, dsource, snapshot, bookmark, vdb-group, timeflow, source)
-        "vdb_tool": "dataset_endpoints_tool",
+        "vdb_tool": "vdb_endpoints_tool",
         "vdb_group_tool": "dataset_endpoints_tool",
         "dsource_tool": "dataset_endpoints_tool",
         "snapshot_tool": "dataset_endpoints_tool",
