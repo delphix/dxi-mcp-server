@@ -2,11 +2,12 @@
 Configuration module for DCT MCP Server
 """
 
-import logging
 import os
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from dct_mcp_server.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_dct_config() -> Dict[str, Any]:
