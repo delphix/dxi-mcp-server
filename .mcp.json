@@ -2,18 +2,47 @@
   "mcpServers": {
     "atlassian": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/mcp"]
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.atlassian.com/v1/mcp"
+      ]
     },
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp"]
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ]
     },
     "github": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token"
       }
+    },
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        "DCT_API_KEY=1.SfCCldsawKUFbd9YfVFldWyveqHdfcCWxXfkA1Kq7Jjcz8hGjgsuM4tow9QJIEGj",
+        "-e",
+        "DCT_BASE_URL=https://dct-sho.dlpxdc.co",
+        "-e",
+        "DCT_TOOLSET=self_service",
+        "-e",
+        "DCT_VERIFY_SSL=false",
+        "-e",
+        "DCT_LOG_LEVEL=DEBUG",
+        "dct-mcp-server:local"
+      ]
     }
   }
 }
