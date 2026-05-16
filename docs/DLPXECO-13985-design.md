@@ -197,6 +197,38 @@ Test matrix for evaluating LLM (Claude) behaviour with the 3-tool Dynamic mode:
 
 **Recommendation**: Dynamic mode is preferred for new deployments and exploratory use cases because it eliminates maintenance lag when DCT adds API endpoints and reduces per-operation token cost for discovery workflows. Auto mode remains preferable for high-frequency production workflows where the LLM repeatedly calls the same known grouped-tool actions, as it avoids the List+Get round-trips before each Execute. Operators should choose based on their primary use pattern; both modes are fully supported and co-exist as `DCT_TOOLSET` values.
 
+### Pros and Cons
+
+**Auto Mode (`DCT_TOOLSET=auto`)**
+
+| | Detail |
+|---|---|
+| **Pro** | Token-efficient for high-frequency known operations — no List+Get round-trips; LLM calls grouped tool directly |
+| **Pro** | Curated tool descriptions give the LLM richer context about related operations (e.g., all VDB actions in one tool) |
+| **Pro** | Lower interaction latency — 1 LLM call instead of 2–3 for a known operation |
+| **Pro** | Battle-tested in production; existing toolsets are well-exercised and validated |
+| **Pro** | Full VS Code Copilot support without restart limitations for fixed toolset use |
+| **Con** | Requires manual code changes (Python + `.txt` config) every time DCT adds new API endpoints |
+| **Con** | Lags DCT API releases; new endpoints inaccessible until the next MCP server release cycle |
+| **Con** | Tool count balloons after enabling multiple toolsets (~70+ tools exposed simultaneously), increasing LLM context size |
+| **Con** | Not suited for exploratory workflows ("what can this DCT deployment support?") |
+| **Con** | `tools/list_changed` MCP notifications required for runtime toolset hot-switching; VS Code Copilot requires chat restart |
+
+**Dynamic Mode (`DCT_TOOLSET=dynamic`)**
+
+| | Detail |
+|---|---|
+| **Pro** | Zero maintenance when DCT adds new endpoints — OpenAPI spec drives discovery automatically at startup |
+| **Pro** | Always reflects the live DCT API surface; no MCP server update needed after DCT releases |
+| **Pro** | Fixed tool count (always 3) regardless of DCT API scope — no context window bloat |
+| **Pro** | Schema validation before dispatch catches malformed LLM requests before any DCT network call |
+| **Pro** | No hot-switch complexity; 3 static tools always present; fully compatible with VS Code Copilot without restart |
+| **Con** | Extra LLM round-trips (1–2 List+Get calls) before Execute for operations the LLM hasn't seen in the session |
+| **Con** | Higher token cost for discovery phase (~1500–3000 tokens for a List call) compared to a direct grouped-tool call |
+| **Con** | LLM must interpret raw OpenAPI schema (from Get) rather than curated, human-written tool descriptions |
+| **Con** | Requires DCT host reachability at startup for freshest spec (mitigated by cache and bundled fallback, but adds startup dependency) |
+| **Con** | New approach — less battle-tested than the existing Auto mode toolsets; evaluation matrix needed before broad rollout |
+
 ### 8. Migration Path (QR-2 Compliance)
 
 Operators migrating from Auto mode to Dynamic mode:
