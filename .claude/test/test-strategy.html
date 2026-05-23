@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DCT MCP Server — Automated Test Strategy</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2028;
+    --panel-2: #232b35;
+    --border: #2d3742;
+    --text: #d5dde6;
+    --muted: #8a96a3;okay
+    --accent: #4fc3f7;
+    --accent-2: #81d4fa;
+    --good: #66bb6a;
+    --warn: #ffa726;
+    --bad: #ef5350;
+    --code-bg: #0a0e13;
+    --code-text: #c8d4e0;
+    --tag-unit: #66bb6a;
+    --tag-int: #ffa726;
+    --tag-func: #ab47bc;
+    --tag-e2e: #ef5350;
+    --tag-llm: #7e57c2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header {
+    background: linear-gradient(135deg, #1a2028 0%, #0f1419 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 32px 48px 24px;
+  }
+  header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  header .meta { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  header .meta span { margin-right: 16px; }
+  nav {
+    position: sticky; top: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 0 48px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    z-index: 10;
+  }
+  nav button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 14px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  main { padding: 32px 48px 80px; max-width: 1200px; }
+  section { display: none; }
+  section.active { display: block; animation: fadeIn 0.2s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2 { font-size: 22px; font-weight: 600; margin: 0 0 16px; color: var(--text); }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 12px; color: var(--accent-2); }
+  h4 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; color: var(--text); }
+  p { margin: 0 0 12px; }
+  ul, ol { padding-left: 22px; margin: 0 0 12px; }
+  li { margin-bottom: 4px; }
+  code { background: var(--code-bg); color: var(--code-text); padding: 2px 6px; border-radius: 3px; font-family: "SF Mono", Monaco, monospace; font-size: 12px; }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    border: 1px solid var(--border);
+    font-family: "SF Mono", Monaco, monospace;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-highlight {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(79, 195, 247, 0.2);
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 768px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    main { padding: 24px 20px; }
+    header { padding: 24px 20px; }
+    nav { padding: 0 20px; }
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:hover td { background: var(--panel-2); }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0f1419;
+  }
+  .tag-unit { background: var(--tag-unit); }
+  .tag-int { background: var(--tag-int); }
+  .tag-func { background: var(--tag-func); color: white; }
+  .tag-e2e { background: var(--tag-e2e); color: white; }
+  .tag-llm { background: var(--tag-llm); color: white; }
+  .tag-good { background: var(--good); }
+  .tag-warn { background: var(--warn); }
+  .tag-bad { background: var(--bad); color: white; }
+  .tag-star { background: var(--accent); }
+
+  .layer {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.2s;
+  }
+  .layer-star { border-color: var(--accent); }
+  .layer-header {
+    padding: 16px 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  .layer-header:hover { background: var(--panel-2); }
+  .layer-header h3 { margin: 0; }
+  .layer-body { padding: 0 20px 20px; display: none; }
+  .layer.open .layer-body { display: block; }
+  .layer-stats { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .chevron { color: var(--muted); transition: transform 0.2s; }
+  .layer.open .chevron { transform: rotate(90deg); }
+
+  .flow-diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--code-text);
+  }
+
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 8px; top: 8px; bottom: 8px;
+    width: 2px;
+    background: var(--border);
+  }
+  .phase {
+    position: relative;
+    margin-bottom: 20px;
+    padding-left: 12px;
+  }
+  .phase::before {
+    content: "";
+    position: absolute;
+    left: -24px; top: 6px;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+  }
+  .phase h4 { margin: 0 0 4px; color: var(--accent-2); }
+  .phase .duration { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+  .stat-value { font-size: 24px; font-weight: 600; color: var(--accent); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .checklist li { list-style: none; position: relative; padding-left: 24px; }
+  .checklist li::before {
+    content: "✓";
+    position: absolute; left: 0; top: 0;
+    color: var(--good); font-weight: 600;
+  }
+  .crosslist li { list-style: none; position: relative; padding-left: 24px; }
+  .crosslist li::before {
+    content: "✕";
+    position: absolute; left: 0; top: 0;
+    color: var(--bad); font-weight: 600;
+  }
+
+  .callout {
+    background: rgba(79, 195, 247, 0.08);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .callout-warn {
+    background: rgba(255, 167, 38, 0.08);
+    border-left-color: var(--warn);
+  }
+  .callout-bad {
+    background: rgba(239, 83, 80, 0.08);
+    border-left-color: var(--bad);
+  }
+  .callout-good {
+    background: rgba(102, 187, 106, 0.08);
+    border-left-color: var(--good);
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .split > div {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .split .split-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  .split .split-q {
+    color: var(--accent);
+    font-size: 13px;
+    font-style: italic;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  @media (max-width: 768px) {
+    .split { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DCT MCP Server — Automated Test Strategy</h1>
+  <div class="sub">Replacing manual Claude Desktop verification with a layered automated test suite</div>
+  <div class="meta">
+    <span><strong>Status:</strong> Proposal</span>
+    <span><strong>Repo:</strong> delphix/dxi-mcp-server</span>
+    <span><strong>Date:</strong> 2026-05-22</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <button class="active" data-target="overview">Overview</button>
+  <button data-target="current">Current State</button>
+  <button data-target="architecture">Architecture</button>
+  <button data-target="workflows">Workflow Tests</button>
+  <button data-target="layers">Test Layers</button>
+  <button data-target="stub">dct_stub</button>
+  <button data-target="cli">CLI Runner</button>
+  <button data-target="llm">LLM Testing</button>
+  <button data-target="changes">Changes Needed</button>
+  <button data-target="triggers">When Tests Run</button>
+  <button data-target="roadmap">Roadmap</button>
+  <button data-target="success">Success Criteria</button>
+</nav>
+
+<main>
+
+<!-- OVERVIEW -->
+<section id="overview" class="active">
+  <h2>Overview</h2>
+
+  <div class="card">
+    <h3>The Problem</h3>
+    <p>Every code change is verified by hand through Claude Desktop. A developer manually drives prompts from <code>.claude/test/testing/&lt;toolset&gt;.md</code>, visually inspects responses, and writes a free-text report. This doesn't scale, isn't reproducible, doesn't gate merges, and requires a live DCT instance.</p>
+  </div>
+
+  <div class="card card-highlight">
+    <h3>The Core Insight — Two Different Questions</h3>
+    <p>The manual Claude Desktop check is actually answering two different questions at once. Conflating them is what makes the process so heavy.</p>
+    <div class="split">
+      <div>
+        <div class="split-title">Question 1: Regression</div>
+        <p style="font-size:13px;margin:0">Given input X, does the workflow chain still produce Y after a code change?</p>
+        <div class="split-q">Answered by: scripted workflow tests, no LLM</div>
+      </div>
+      <div>
+        <div class="split-title">Question 2: AI usability</div>
+        <p style="font-size:13px;margin:0">Can an AI figure out how to use these tools from descriptions alone?</p>
+        <div class="split-q">Answered by: LLM-driven exploratory tests</div>
+      </div>
+    </div>
+    <p style="margin-top:12px"><strong>Solve them separately.</strong> Regression goes in CI on every PR. AI usability is an optional, local-only, pre-release check.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="stat-value">~60%</div>
+      <div class="stat-label">Unit (mocked client)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">~25%</div>
+      <div class="stat-label">Integration (respx)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">~15%</div>
+      <div class="stat-label">Functional + workflows</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">~3 wks</div>
+      <div class="stat-label">Budget to fully ship</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>The centerpiece is workflow translation.</strong> Each multi-step chain in <code>.claude/test/testing/*.md</code> becomes one deterministic Python test driven through <code>fastmcp.Client</code> over stdio, with a stateful <code>dct_stub</code> standing in for DCT. ~30–40 workflow tests replace the entire manual playbook.
+  </div>
+
+  <h3>Summary — what every layer achieves</h3>
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>What it proves</th><th>Needs DCT?</th><th>Triggered by</th><th>Blocks merge?</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="tag tag-unit">1 Unit</span></td><td>Action routing, params, confirmation state, config parsing</td><td>No</td><td>Every save / PR</td><td><span class="tag tag-good">Yes</span></td></tr>
+      <tr><td><span class="tag tag-int">2 Integration</span></td><td>HTTP wire: URLs, auth header, retries, timeouts</td><td>No (respx)</td><td>Every push / PR</td><td><span class="tag tag-good">Yes</span></td></tr>
+      <tr><td><span class="tag tag-func">3a Registration</span></td><td>Right tools per persona</td><td>No (dct_stub)</td><td>Every PR</td><td><span class="tag tag-good">Yes</span></td></tr>
+      <tr><td><span class="tag tag-func">3b Workflows ★</span></td><td><strong>Replaces manual Claude Desktop playbook</strong> — every .md chain as a deterministic test</td><td>No (dct_stub)</td><td>Every PR</td><td><span class="tag tag-good">Yes</span></td></tr>
+      <tr><td><span class="tag tag-func">3c Confirmation</span></td><td>Two-step destructive-op contract over MCP wire</td><td>No (dct_stub)</td><td>Every PR</td><td><span class="tag tag-good">Yes</span></td></tr>
+      <tr><td><span class="tag tag-e2e">4 Real DCT</span></td><td>Real API contract, auth, latency against cloned DCT</td><td>Yes</td><td>GitHub UI / skill / CLI</td><td><span class="tag tag-warn">No (advisory)</span></td></tr>
+      <tr><td><span class="tag tag-llm">5 LLM-driven</span></td><td>AI usability of tool surface</td><td>No</td><td>LM Studio, local-only</td><td><span class="tag tag-warn">No (advisory)</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Three invocation paths — one CLI under the hood</h3>
+  <div class="flow-diagram">                  ┌──────────────────────────────────┐
+                  │   src/dct_mcp_server/testing/    │
+                  │   cli.py  (the actual logic)     │
+                  └──────────────┬───────────────────┘
+                                 │
+        ┌────────────────────────┼───────────────────────────┐
+        │                        │                            │
+        ▼                        ▼                            ▼
+   ┌──────────┐         ┌─────────────────┐         ┌──────────────────┐
+   │   CLI    │         │ GitHub Actions  │         │ Claude Code skill│
+   │ (terminal│         │  workflow yaml  │         │ /dct-mcp-test    │
+   └──────────┘         └─────────────────┘         └──────────────────┘</div>
+
+  <h3>Cost summary</h3>
+  <table>
+    <thead><tr><th>Item</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Layers 1–3 in CI</td><td>$0 (free GitHub Actions tier)</td></tr>
+      <tr><td>Layer 4 in CI</td><td>$0 CI cost; cloned DCT is existing infra</td></tr>
+      <tr><td>Layer 5 (LM Studio)</td><td>$0 (local hardware)</td></tr>
+      <tr><td>Anthropic API key for E2E</td><td><strong>Not needed</strong> — designed around this constraint</td></tr>
+      <tr><td>Claude Desktop license</td><td><strong>Not needed</strong> for testing anymore</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- CURRENT STATE -->
+<section id="current">
+  <h2>Current State</h2>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>What exists</h3>
+      <ul class="checklist">
+        <li><code>.claude/test/testing.md</code> — manual playbook</li>
+        <li><code>.claude/test/test-infra.md</code> — Track 2 specs automated suite that was never built</li>
+        <li><code>.claude/test/testing/*.md</code> — 6 scenario files containing the workflows</li>
+        <li><code>requirements.txt:33-34</code> — pytest deps listed but commented out</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What doesn't exist</h3>
+      <ul class="crosslist">
+        <li><code>tests/</code> directory</li>
+        <li><code>conftest.py</code> or pytest config</li>
+        <li><code>.github/workflows/</code> — no CI at all</li>
+        <li>Any HTTP mocking infrastructure</li>
+        <li>Any merge gate on broken code</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Test Seams Already Present</h3>
+    <p>The codebase is well-shaped for testing — these are natural injection points already there:</p>
+    <table>
+      <thead><tr><th>Seam</th><th>Location</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td>HTTP chokepoint</td><td><code>dct_client/client.py:77</code></td><td>Mock for unit tests</td></tr>
+        <tr><td>Config loading</td><td><code>config/config.py:9</code></td><td>Env var injection</td></tr>
+        <tr><td>Toolset parser</td><td><code>config/loader.py</code></td><td>@lru_cache — clear between tests</td></tr>
+        <tr><td>Tool registration</td><td><code>tools/__init__.py:50</code></td><td>Test with fresh FastMCP app</td></tr>
+        <tr><td>MCP transport</td><td>FastMCP stdio</td><td>Drive via fastmcp.Client subprocess</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>Three layers in CI form the <strong>regression gate</strong>. One optional layer runs locally to answer the <strong>AI-usability</strong> question.</p>
+
+  <div class="flow-diagram">┌──────────────────────────────────────────────────────────────┐
+│  Layer 1 — Unit (in-process, mocked client)                  │
+│  tool fn → MagicMock(DCTAPIClient).make_request              │
+│  ~60% of tests · seconds                                     │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 2 — Integration (in-process, mocked HTTP)             │
+│  tool fn → DCTAPIClient → httpx → respx intercept            │
+│  ~25% of tests · seconds                                     │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 3 — Functional (subprocess + stub DCT)                │
+│   3a. Toolset registration (5 personas, parametrized)        │
+│   3b. ★ Workflow tests — .md scenarios translated to Python  │
+│   3c. Confirmation handshake over MCP wire                   │
+│  ~15% of tests · ~60 seconds                                 │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 4 — E2E vs. real cloned DCT                           │
+│  Same workflows, real instance, on-demand via GitHub UI      │
+│  Manual trigger primary; nightly cron optional               │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 5 — LLM-driven (LOCAL ONLY, optional)                 │
+│  LM Studio → MCP server → dct_stub                           │
+│  AI-usability check · not in CI · not blocking               │
+└──────────────────────────────────────────────────────────────┘</div>
+
+  <div class="card card-highlight">
+    <h3>Layer 3b is the centerpiece</h3>
+    <p>Workflow tests translate each chain in your existing <code>.claude/test/testing/*.md</code> files into one deterministic Python test. This is what directly replaces the manual Claude Desktop playbook.</p>
+  </div>
+
+  <h3>Why three layers in CI?</h3>
+  <p>Each layer catches a class of bugs the others can't see:</p>
+  <ul>
+    <li><strong>Unit</strong> proves routing logic, but says nothing about whether the HTTP request you'd build is correct.</li>
+    <li><strong>Integration</strong> proves the wire format (URLs, headers, retries), but says nothing about whether the server even boots.</li>
+    <li><strong>Functional</strong> proves the server boots, registers the right tools, and works over MCP stdio — including full multi-step workflows.</li>
+  </ul>
+</section>
+
+<!-- WORKFLOWS -->
+<section id="workflows">
+  <h2>Workflow Tests — The Centerpiece</h2>
+
+  <div class="card card-highlight">
+    <h3>The pattern in one paragraph</h3>
+    <p>Each multi-step chain in <code>.claude/test/testing/&lt;toolset&gt;.md</code> becomes one Python test function. The chaining ("that VDB" → previous result) becomes a Python variable. Each step is a real MCP call over stdio via <code>fastmcp.Client</code>. Each step is verified at the wire level via <code>dct_stub.received_request(...)</code>. No LLM in the loop — deterministic, fast, reproducible.</p>
+  </div>
+
+  <h3>Example — translating self_service.md lines 12–17</h3>
+  <p>The original manual prompts:</p>
+<pre>1. Search for all VDBs
+2. Get the details of the first VDB from the previous result
+3. Start that VDB
+4. Stop that VDB</pre>
+
+  <p>The translated test:</p>
+<pre># tests/functional/workflows/test_vdb_lifecycle.py
+async def test_vdb_lifecycle_start_stop(mcp_client, dct_stub):
+    # Step 1 — Search for all VDBs
+    vdbs = await mcp_client.call_tool("vdb_tool", {"action": "search"})
+    assert vdbs["items"], "search returned no VDBs"
+    vdb_id = vdbs["items"][0]["id"]
+
+    # Step 2 — Get details of the first one
+    details = await mcp_client.call_tool("vdb_tool", {"action": "get", "vdbId": vdb_id})
+    assert details["id"] == vdb_id
+
+    # Step 3 — Start that VDB
+    await mcp_client.call_tool("vdb_tool", {"action": "start", "vdbId": vdb_id})
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
+
+    # Step 4 — Stop that VDB
+    await mcp_client.call_tool("vdb_tool", {"action": "stop", "vdbId": vdb_id})
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")</pre>
+
+  <h3>Mapping: scenario files → workflow tests</h3>
+  <div class="card">
+<pre>.claude/test/testing/self_service.md
+├── lines 12–17  (vdb_tool: search→get→start→stop)    → test_vdb_lifecycle.py
+├── lines 18–23  (vdb_tool: refresh variants)          → test_vdb_refresh.py
+├── lines 24–28  (vdb_tool: rollback variants)         → test_vdb_rollback.py
+├── lines 30–47  (vdb_group_tool full lifecycle)       → test_vdb_group_lifecycle.py
+├── lines 49–53  (dsource_tool)                        → test_dsource.py
+├── lines 55–64  (snapshot_tool)                       → test_snapshot.py
+├── lines 66–75  (bookmark_tool + delete confirmation) → test_bookmark_lifecycle.py
+├── lines 77–81  (job_tool + abandon confirmation)     → test_job.py
+└── lines 83–93  (timeflow_tool + delete confirmation) → test_timeflow.py</pre>
+    <p style="margin-top:12px">Same shape for the other 4 toolset scenario files. Total: <strong>~30–40 workflow tests</strong> replace the entire manual playbook.</p>
+  </div>
+
+  <div class="callout-good callout">
+    <strong>Why scripted, not LLM-driven, for the regression gate:</strong> "Did the workflow break?" is a deterministic question. An LLM driver introduces randomness exactly when you want the opposite. Reserve LLMs for the separate, optional question: "Can an AI use these tools?" — see the LLM Testing tab.
+  </div>
+</section>
+
+<!-- LAYERS -->
+<section id="layers">
+  <h2>Test Layers (click to expand)</h2>
+
+  <div class="layer">
+    <div class="layer-header" onclick="this.parentElement.classList.toggle('open')">
+      <div>
+        <h3><span class="tag tag-unit">Layer 1</span> Unit Tests</h3>
+        <div class="layer-stats">~60% of suite · runtime: seconds · run on every save</div>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="layer-body">
+      <h4>What this layer proves</h4>
+      <p>Action routing inside grouped tools, parameter building, the confirmation two-step flow, config/toolset/.txt parsing.</p>
+      <h4>How</h4>
+      <p>Mock <code>DCTAPIClient.make_request()</code> and call tool functions directly in-process.</p>
+<pre>async def test_delete_vdb_requires_confirmation():
+    client = MagicMock(spec=DCTAPIClient)
+    client.make_request = AsyncMock(return_value={"job_id": "j-1"})
+    register_tools(app, client)
+
+    r1 = vdb_tool(action="delete_vdb", vdbId="vdb-1")
+    assert r1["status"] == "confirmation_required"
+    client.make_request.assert_not_called()
+
+    r2 = vdb_tool(action="delete_vdb", vdbId="vdb-1", confirmed=True)
+    client.make_request.assert_called_once_with("DELETE", "/vdbs/vdb-1", ...)</pre>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div class="layer-header" onclick="this.parentElement.classList.toggle('open')">
+      <div>
+        <h3><span class="tag tag-int">Layer 2</span> Integration Tests</h3>
+        <div class="layer-stats">~25% of suite · runtime: seconds · run on every push</div>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="layer-body">
+      <h4>What this layer proves</h4>
+      <ul>
+        <li>URL built right (base URL join, <code>/dct/v3/</code> prefix, no double slashes)</li>
+        <li>Auth header has the <code>apk </code> prefix</li>
+        <li>4xx fails fast, 5xx retries with exponential backoff</li>
+        <li>Connection errors retry</li>
+        <li>Query-param serialization and timeout config</li>
+      </ul>
+      <h4>How</h4>
+      <p><code>respx</code> intercepts <code>httpx</code> calls at the socket. No subprocess, no stub server.</p>
+<pre>@respx.mock
+async def test_5xx_retries_with_backoff(monkeypatch):
+    monkeypatch.setenv("DCT_BASE_URL", "https://dct.test")
+    monkeypatch.setenv("DCT_API_KEY", "k")
+    route = respx.get("https://dct.test/dct/v3/vdbs").mock(side_effect=[
+        Response(503), Response(503), Response(200, json={"items": []}),
+    ])
+    result = await DCTAPIClient().make_request("GET", "vdbs")
+    assert route.call_count == 3</pre>
+    </div>
+  </div>
+
+  <div class="layer open layer-star">
+    <div class="layer-header" onclick="this.parentElement.classList.toggle('open')">
+      <div>
+        <h3><span class="tag tag-func">Layer 3</span> Functional Tests <span class="tag tag-star">★ centerpiece</span></h3>
+        <div class="layer-stats">~15% of suite · runtime: ~60s total · run on every PR</div>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="layer-body">
+      <h4>3a — Toolset registration</h4>
+      <p>Parametrized over all 5 personas; verifies the right tools are exposed.</p>
+<pre>@pytest.mark.parametrize("toolset,expected", [
+    ("self_service", {"vdb_tool", "vdb_group_tool", "dsource_tool",
+                      "snapshot_tool", "bookmark_tool", "job_tool", "timeflow_tool"}),
+    ("continuous_data_admin", {...}),
+    ...
+])
+async def test_toolset_registers_expected_tools(toolset, expected, dct_stub):
+    ...</pre>
+
+      <h4>3b — Workflow tests (the centerpiece)</h4>
+      <p>One test per chain in <code>.claude/test/testing/*.md</code>. See the Workflow Tests tab.</p>
+
+      <h4>3c — Confirmation handshake</h4>
+      <p>Proves the two-step <code>confirmation_required</code> → <code>confirmed=True</code> contract works over the MCP wire.</p>
+<pre>async def test_delete_vdb_two_step_over_mcp(dct_stub):
+    async with mcp_client(dct_stub, toolset="self_service") as c:
+        r1 = await c.call_tool("vdb_tool", {"action": "delete_vdb", "vdbId": "v-1"})
+        assert "confirmation_required" in r1.content[0].text
+        assert not dct_stub.received_request("DELETE", "/dct/v3/vdbs/v-1")
+
+        await c.call_tool("vdb_tool",
+            {"action": "delete_vdb", "vdbId": "v-1", "confirmed": True})
+        assert dct_stub.received_request("DELETE", "/dct/v3/vdbs/v-1")</pre>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div class="layer-header" onclick="this.parentElement.classList.toggle('open')">
+      <div>
+        <h3><span class="tag tag-e2e">Layer 4</span> E2E vs. real cloned DCT</h3>
+        <div class="layer-stats">On-demand via GitHub UI · optional nightly cron · advisory only</div>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="layer-body">
+      <p>Reuses the Layer 3 workflow tests but points <code>DCT_BASE_URL</code> at your persistent cloned DCT instance instead of <code>dct_stub</code>. Triggered manually via GitHub Actions UI; nightly cron is optional.</p>
+
+      <h4>Prerequisite check</h4>
+      <p>The cloned DCT must be reachable from GitHub-hosted runner IPs. If it's VPN-only:</p>
+      <ul>
+        <li>Expose it via a tunnel (Cloudflare Tunnel, ngrok) for tests</li>
+        <li>Or use a self-hosted GitHub runner inside the network that hosts the DCT</li>
+        <li>Or fall back to local-only execution (developer runs <code>pytest tests/e2e</code> on a VPN-connected machine)</li>
+      </ul>
+
+      <h4>One-time setup</h4>
+      <ol>
+        <li>Repo settings → Secrets → add <code>DCT_TEST_BASE_URL</code> and <code>DCT_TEST_API_KEY</code></li>
+        <li>Confirm cloned DCT has stable known fixture data (env, dSource, snapshot)</li>
+      </ol>
+
+      <div class="callout"><strong>One runner, two contexts.</strong> Both local and CI invoke the same CLI — <code>dct-mcp-test</code>. See the CLI Runner tab for details.</div>
+
+      <h4>Workflow file</h4>
+<pre># .github/workflows/e2e-real-dct.yml
+name: e2e-real-dct
+on:
+  workflow_dispatch:             # primary: run on demand from GitHub UI
+  schedule:
+    - cron: "0 6 * * *"          # optional: passive drift detection
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      DCT_BASE_URL: ${{ secrets.DCT_TEST_BASE_URL }}
+      DCT_API_KEY: ${{ secrets.DCT_TEST_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[test]"
+      - run: dct-mcp-test --layer e2e    # same command devs run locally
+      - name: Notify on failure
+        if: failure()
+        run: # post to Slack/email — does NOT fail any PR</pre>
+
+      <h4>Cleanup strategy (critical for persistent DCT)</h4>
+      <p>Because the DCT clone persists between runs, anything tests create must be cleaned up — even on failure.</p>
+      <ul>
+        <li>Every test tags its created resources with <code>E2E_RUN_TAG</code> (e.g. <code>e2e-12345</code>)</li>
+        <li>A separate <code>tests/e2e/cleanup/test_purge.py</code> module runs as an <code>if: always()</code> step</li>
+        <li>Cleanup finds everything matching the current run ID and deletes it</li>
+        <li>Crashed runs still get cleaned up — the cleanup step is forced to run</li>
+      </ul>
+
+      <h4>Test file shape</h4>
+<pre>import os
+RUN_TAG = os.environ["E2E_RUN_TAG"]
+
+@pytest.mark.real_dct
+async def test_vdb_search_returns_results(real_mcp_client):
+    result = await real_mcp_client.call_tool("vdb_tool", {"action": "search"})
+    assert result["items"]
+
+@pytest.mark.real_dct
+async def test_create_bookmark_with_cleanup_tag(real_mcp_client):
+    vdb_id = (await real_mcp_client.call_tool(
+        "vdb_tool", {"action": "search"}))["items"][0]["id"]
+    await real_mcp_client.call_tool("bookmark_tool", {
+        "action": "create",
+        "name": f"{RUN_TAG}-bookmark-1",   # tag in the name
+        "vdbId": vdb_id,
+    })
+    # No need to delete here — cleanup step handles it</pre>
+
+      <h4>Triggering it</h4>
+      <table>
+        <tbody>
+          <tr><td><strong>Manual via GitHub UI (primary)</strong></td><td>GitHub → Actions → <code>e2e-real-dct</code> → "Run workflow"</td></tr>
+          <tr><td>Nightly cron (optional)</td><td>Enable the schedule line for passive drift detection</td></tr>
+          <tr><td>Local dev (same CLI)</td><td><code>dct-mcp-test --base-url &lt;url&gt; --api-key &lt;key&gt;</code></td></tr>
+        </tbody>
+      </table>
+
+      <h4>What Layer 4 catches that Layer 3 doesn't</h4>
+      <ul class="checklist">
+        <li>Real DCT API contract drift (endpoint shape changes upstream)</li>
+        <li>Real auth/permission issues against real ACLs</li>
+        <li>Network/timeout behavior under real latency</li>
+        <li>State that only exists on a real engine (snapshots, timeflows)</li>
+      </ul>
+
+      <div class="callout">Layer 4 is a periodic confidence check, not a per-commit gate. Layer 3 still runs on every PR; Layer 4 runs when you want extra assurance.</div>
+    </div>
+  </div>
+
+  <div class="layer">
+    <div class="layer-header" onclick="this.parentElement.classList.toggle('open')">
+      <div>
+        <h3><span class="tag tag-llm">Layer 5</span> LLM-driven (LOCAL ONLY, optional)</h3>
+        <div class="layer-stats">Not in CI · not blocking · pre-release exploratory</div>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="layer-body">
+      <p>Drives the MCP server with a local LLM via LM Studio. Answers the AI-usability question, not the regression question. Free, local, no API key — but with tradeoffs. See the LLM Testing tab for full detail.</p>
+    </div>
+  </div>
+</section>
+
+<!-- DCT STUB -->
+<section id="stub">
+  <h2>The <code>dct_stub</code> Component</h2>
+
+  <div class="card">
+    <p>A fake DCT server that runs inside the pytest process so functional and workflow tests don't need a real DCT instance.</p>
+  </div>
+
+  <h3>Why a stub (not a mock)</h3>
+  <table>
+    <thead><tr><th>Option</th><th>Problem</th></tr></thead>
+    <tbody>
+      <tr><td>Point at real DCT</td><td>Slow, needs creds, side effects, flaky, can't run in CI</td></tr>
+      <tr><td>Mock <code>httpx</code> in the MCP server</td><td>Doesn't work — respx patches the test process, not the subprocess</td></tr>
+      <tr><td><strong>Run a fake DCT in the test process</strong></td><td><span class="tag tag-good">✓ chosen</span> server makes real HTTP calls, but they land on the stub</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Data flow</h3>
+  <div class="flow-diagram">   pytest process                       subprocess (MCP server)
+   ┌──────────────────────┐            ┌─────────────────────┐
+   │ test function        │            │ vdb_tool(...)       │
+   │  │                   │  stdio     │  │                  │
+   │  ▼                   │ ◀────────▶ │  ▼                  │
+   │ fastmcp.Client       │            │ DCTAPIClient        │
+   │                      │            │  │  httpx →         │
+   │ dct_stub ◀───────────┼── HTTP ────┤  DCT_BASE_URL       │
+   │ (Starlette, port=0)  │            │  http://127.0.0.1   │
+   └──────────────────────┘            └─────────────────────┘</div>
+
+  <h3>What it needs to support (for workflow tests)</h3>
+  <ul>
+    <li><strong>Stateful canned data</strong> — <code>vdbs/search</code> returns the same fixture every time, so "the first VDB" is always <code>v-1</code>. No randomness.</li>
+    <li><strong>Endpoint coverage</strong> — every endpoint the workflow chains touch (~30–40 routes across all toolsets)</li>
+    <li><strong>Request recorder</strong> — <code>stub.received_request("POST", "/dct/v3/vdbs/v-1/start")</code> lets tests assert exactly what the server sent</li>
+    <li><strong>Per-test response overrides</strong> — for negative cases ("what if start returns 503?") fixtures can swap responses</li>
+    <li><strong><code>/dct/static/api-external.yaml</code></strong> — so the OpenAPI bootstrap in <code>toolsgenerator/driver.py</code> doesn't fail</li>
+  </ul>
+
+  <h3>Skeleton</h3>
+<pre># tests/fixtures/dct_stub.py
+class DctStub:
+    def __init__(self):
+        self.requests = []  # records everything the MCP server sends
+        self.response_overrides = {}
+
+    async def vdbs_search(self, req):
+        self.requests.append(("POST", "/dct/v3/vdbs/search", await req.json()))
+        return JSONResponse({"items": [{"id": "v-1", "name": "fake-vdb"}]})
+
+    async def vdb_start(self, req):
+        path = req.url.path
+        self.requests.append(("POST", path, None))
+        if path in self.response_overrides:
+            return self.response_overrides[path]
+        return JSONResponse({"job_id": "j-1"})
+
+    def received_request(self, method, path):
+        return any(r[0] == method and r[1] == path for r in self.requests)
+
+@pytest.fixture
+def dct_stub():
+    stub = DctStub()
+    app = Starlette(routes=[
+        Route("/dct/v3/vdbs/search", stub.vdbs_search, methods=["POST"]),
+        Route("/dct/v3/vdbs/{vdb_id}/start", stub.vdb_start, methods=["POST"]),
+        Route("/dct/v3/vdbs/{vdb_id}/stop", stub.vdb_start, methods=["POST"]),
+        # ... ~30 more routes
+        Route("/dct/static/api-external.yaml", lambda r: PlainTextResponse(STUB_YAML)),
+    ])
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    stub.url = f"http://127.0.0.1:{port}"
+    yield stub
+    server.should_exit = True</pre>
+</section>
+
+<!-- CLI RUNNER -->
+<section id="cli">
+  <h2>The <code>dct-mcp-test</code> CLI — One Runner, Both Contexts</h2>
+
+  <div class="card card-highlight">
+    <p>A single Python CLI tool that wraps pytest with the right flags, env vars, run-tag generation, and cleanup. Registered as a <code>[project.scripts]</code> entry point so <code>pip install -e ".[test]"</code> puts <code>dct-mcp-test</code> on your <code>$PATH</code>. <strong>Local invocation and CI invocation are identical.</strong></p>
+  </div>
+
+  <h3>Usage examples</h3>
+
+  <div class="split">
+    <div>
+      <div class="split-title">Local</div>
+<pre># Flags
+dct-mcp-test \
+  --base-url https://my-dct \
+  --api-key abc123
+
+# Or env vars
+export DCT_BASE_URL=https://my-dct
+export DCT_API_KEY=abc123
+dct-mcp-test
+
+# Single workflow
+dct-mcp-test --workflow vdb_lifecycle
+
+# Specific layer
+dct-mcp-test --layer unit</pre>
+    </div>
+    <div>
+      <div class="split-title">CI (GitHub Actions)</div>
+<pre>- run: dct-mcp-test --layer e2e
+  env:
+    DCT_BASE_URL: ${{ secrets.DCT_TEST_BASE_URL }}
+    DCT_API_KEY: ${{ secrets.DCT_TEST_API_KEY }}</pre>
+      <p style="font-size:13px;color:var(--muted);margin-top:12px">Identical command. CI just provides env vars from GitHub Secrets. No drift between environments.</p>
+    </div>
+  </div>
+
+  <h3>Available layers</h3>
+  <table>
+    <thead><tr><th>Layer</th><th>Needs credentials?</th><th>Runtime</th><th>What it tests</th></tr></thead>
+    <tbody>
+      <tr><td><code>--layer unit</code></td><td>No</td><td>Seconds</td><td>Action routing, mocked client</td></tr>
+      <tr><td><code>--layer integration</code></td><td>No</td><td>Seconds</td><td>HTTP wire (URLs, headers, retries)</td></tr>
+      <tr><td><code>--layer functional</code></td><td>No</td><td>~60s</td><td>Subprocess + dct_stub workflows</td></tr>
+      <tr><td><code>--layer e2e</code></td><td><strong>Yes</strong></td><td>~2–5 min</td><td>Real cloned DCT</td></tr>
+      <tr><td><code>--layer all</code></td><td>Yes</td><td>~5–8 min</td><td>Everything in sequence</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What it does internally</h3>
+  <ol>
+    <li>Resolves credentials from flags or <code>DCT_BASE_URL</code> / <code>DCT_API_KEY</code> env vars</li>
+    <li>Generates a unique <code>E2E_RUN_TAG=e2e-{uuid8}-{timestamp}</code> for the run</li>
+    <li>Maps <code>--layer</code> to pytest paths + markers</li>
+    <li>Runs pytest with the right arguments</li>
+    <li>Always runs the cleanup pass at the end (unless <code>--no-cleanup</code>)</li>
+    <li>Exits with pytest's exit code</li>
+  </ol>
+
+  <h3>Implementation (~50 lines)</h3>
+<pre># src/dct_mcp_server/testing/cli.py
+import os, subprocess, sys, time, uuid
+import click
+
+@click.command()
+@click.option("--base-url", envvar="DCT_BASE_URL", help="DCT base URL")
+@click.option("--api-key", envvar="DCT_API_KEY", help="DCT API key")
+@click.option("--layer",
+    type=click.Choice(["unit", "integration", "functional", "e2e", "all"]),
+    default="e2e", help="Test layer to run")
+@click.option("--workflow", help="Filter to workflows matching this name")
+@click.option("--no-cleanup", is_flag=True, help="Skip cleanup (DANGER on persistent DCT)")
+def main(base_url, api_key, layer, workflow, no_cleanup):
+    """Run the DCT MCP Server test suite."""
+    env = os.environ.copy()
+
+    if layer in ("e2e", "functional", "all"):
+        if not base_url or not api_key:
+            click.echo("--base-url and --api-key required for this layer", err=True)
+            sys.exit(2)
+        env["DCT_BASE_URL"] = base_url
+        env["DCT_API_KEY"] = api_key
+        env["E2E_RUN_TAG"] = f"e2e-{uuid.uuid4().hex[:8]}-{int(time.time())}"
+
+    paths_by_layer = {
+        "unit": ["tests/unit"],
+        "integration": ["tests/integration"],
+        "functional": ["tests/functional"],
+        "e2e": ["tests/e2e"],
+        "all": ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
+    }
+    args = ["pytest", *paths_by_layer[layer], "-v"]
+    if layer == "e2e":
+        args.extend(["-m", "real_dct"])
+    if workflow:
+        args.extend(["-k", workflow])
+
+    result = subprocess.run(args, env=env)
+
+    if layer in ("e2e", "all") and not no_cleanup:
+        click.echo("\n--- Running cleanup ---")
+        subprocess.run(["pytest", "tests/e2e/cleanup", "-v"], env=env)
+
+    sys.exit(result.returncode)</pre>
+
+  <h3>Registration in <code>pyproject.toml</code></h3>
+<pre>[project.scripts]
+dct-mcp-test = "dct_mcp_server.testing.cli:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "respx>=0.20",
+    "starlette>=0.30",
+    "uvicorn>=0.27",
+    "syrupy>=4.0",
+    "click>=8.0",        # for the CLI
+]</pre>
+
+  <h3>Why this design</h3>
+  <table>
+    <thead><tr><th>Property</th><th>Benefit</th></tr></thead>
+    <tbody>
+      <tr><td>Single entry point</td><td>Same command works locally and in CI — no drift between environments</td></tr>
+      <tr><td>Env-var fallback</td><td>CI uses GitHub Secrets via env; local can use either env or flags</td></tr>
+      <tr><td>Layer selection</td><td>Devs run just unit tests fast, or e2e when validating against real DCT</td></tr>
+      <tr><td>Forced cleanup</td><td>Even if tests crash, the CLI runs the cleanup pass before exiting</td></tr>
+      <tr><td>Standard pytest under the hood</td><td>All pytest features (<code>-k</code>, <code>-x</code>, <code>--pdb</code>) still accessible</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout-good callout">
+    <strong>This is the answer to "how do we run tests with or without GitHub?"</strong> — there's just one runner, used the same way in both contexts.
+  </div>
+
+  <h3>Third invocation path — the Claude Code skill</h3>
+  <div class="card card-highlight">
+    <p>The same CLI is also wrapped by a project-local Claude Code skill so it can be invoked from inside any Claude Code session via <code>/dct-mcp-test</code>. Three invocation paths, one implementation.</p>
+  </div>
+
+  <h4>Location</h4>
+  <p><code>.claude/skills/dct-mcp-test/SKILL.md</code></p>
+
+<pre>---
+name: dct-mcp-test
+description: Run the DCT MCP Server test suite against a DCT instance. Args: &lt;localhost|remote|URL&gt; [--name &lt;label&gt;] [--api-key &lt;key&gt;] [--layer e2e|unit|integration|functional|all] [--workflow &lt;name&gt;]
+---
+
+When the user invokes /dct-mcp-test:
+
+## 1. Parse args
+- First positional: "localhost", "remote", or a literal URL
+- --name: optional, descriptive label
+- --api-key: required for e2e/functional (or read DCT_API_KEY env)
+- --layer: default "e2e"
+- --workflow: optional filter
+
+## 2. Resolve base URL
+- "localhost" → http://localhost:8443 (or DCT_LOCAL_URL env)
+- "remote" → ask user, or read DCT_REMOTE_URL env
+- URL string → use as-is
+
+## 3. Invoke via Bash
+   dct-mcp-test --base-url &lt;url&gt; --api-key &lt;key&gt; --layer &lt;layer&gt;
+
+## 4. Stream output
+- Show pytest output as it runs
+- On failure, offer to read the failing test, propose a fix, re-run</pre>
+
+  <h4>Usage examples</h4>
+<pre>/dct-mcp-test localhost --api-key abc123
+/dct-mcp-test remote --name staging-clone-1 --api-key xyz789
+/dct-mcp-test https://my-dct.example.com --api-key xyz789
+/dct-mcp-test localhost --api-key abc123 --workflow vdb_lifecycle
+/dct-mcp-test remote --api-key xyz --layer all</pre>
+
+  <h4>Why three paths, not just one</h4>
+  <table>
+    <thead><tr><th>Concern</th><th>Where it lives</th></tr></thead>
+    <tbody>
+      <tr><td>Pytest invocation, env vars, cleanup pass</td><td>CLI (one place to maintain)</td></tr>
+      <tr><td>GitHub Actions yaml</td><td>Calls CLI</td></tr>
+      <tr><td>Chat-based invocation, URL aliasing, interactive debug</td><td>Skill (calls CLI)</td></tr>
+    </tbody>
+  </table>
+
+  <h4>What the skill adds beyond just typing the CLI command</h4>
+  <ul class="checklist">
+    <li>URL aliasing — <code>localhost</code>/<code>remote</code> shortcuts instead of memorizing URLs</li>
+    <li>Stays in Claude Code — no terminal context switch; results in chat</li>
+    <li>Failure triage — Claude can read the failing test, propose a fix, edit it, and re-run the skill in one session</li>
+    <li>Discoverability — <code>/dct-mcp-test</code> appears in slash-command autocomplete</li>
+  </ul>
+
+  <div class="callout">CI still uses the bare CLI because workflows aren't conversational. Local + interactive use prefers the skill. Both end up calling the same Python function.</div>
+</section>
+
+<!-- LLM TESTING -->
+<section id="llm">
+  <h2>Why Not Claude Desktop / LLM-Driven for the Regression Gate</h2>
+  <p>The question keeps coming up: "can we just automate Claude Desktop?" The honest answer is no, and the reasons are worth recording so we don't relitigate them later.</p>
+
+  <div class="card callout-bad">
+    <h3 style="color:var(--bad);margin-top:0">Claude Desktop GUI automation — rejected</h3>
+    <table>
+      <thead><tr><th>Concern</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Closed Electron app</td><td>No official automation API; Playwright/AppleScript driving relies on DOM that changes between releases</td></tr>
+        <tr><td>Slow</td><td>~10s per click; one scenario file would take 15+ minutes</td></tr>
+        <tr><td>Zero new signal</td><td>Claude Desktop's only unique behavior is the LLM picking tools — and Desktop's LLM is the same Claude you'd hit via API more cleanly</td></tr>
+        <tr><td>Brittle in CI</td><td>Headless GUI in GitHub Actions is its own infrastructure project</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card callout-bad">
+    <h3 style="color:var(--bad);margin-top:0">Claude API as the driver — blocked by license + cost</h3>
+    <table>
+      <thead><tr><th>Concern</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Requires explicit API key</strong></td>
+          <td>Anthropic API (console.anthropic.com) is a separate product from Claude Enterprise (claude.ai with SSO). The Enterprise license covers humans using the UI; it does <strong>not</strong> include programmatic API access by default.</td>
+        </tr>
+        <tr>
+          <td>No key currently available</td>
+          <td>Would need to be provisioned by IT/admin under the enterprise contract, or set up via AWS Bedrock / GCP Vertex AI if those exist in the org</td>
+        </tr>
+        <tr>
+          <td>Real cost</td>
+          <td>Per scenario run: ~$2.40 without prompt caching, ~$0.50–$0.80 with caching. Full nightly run (5 toolsets): ~$12 uncached, ~$3–4 cached. Monthly: <strong>$30–$360</strong> depending on cadence and caching strategy</td>
+        </tr>
+        <tr>
+          <td>Noisy signal for regression testing</td>
+          <td>An LLM driver can fail a test because <em>it</em> got confused, not because the code regressed. This blurs failure attribution and makes flake triage expensive.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card callout-good">
+    <h3 style="color:var(--good);margin-top:0">LM Studio (local LLM) — useful, but for a different purpose</h3>
+    <p>LM Studio exposes an OpenAI-compatible HTTP API on <code>localhost:1234/v1</code>. Any code that talks to OpenAI talks to LM Studio with a base-URL swap.</p>
+
+<pre>from openai import OpenAI
+client = OpenAI(base_url="http://localhost:1234/v1", api_key="not-needed")
+response = client.chat.completions.create(
+    model="qwen2.5-coder-32b-instruct",
+    tools=[mcp_tool_to_openai_schema(t) for t in tools],
+    messages=[{"role": "user", "content": scenario}],
+)</pre>
+
+    <h4>Pros</h4>
+    <ul class="checklist">
+      <li>$0 monetary cost</li>
+      <li>No API key required</li>
+      <li>Runs offline, fully private</li>
+      <li>Free for unlimited runs</li>
+    </ul>
+
+    <h4>Cons / tradeoffs</h4>
+    <table>
+      <thead><tr><th>Concern</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Model quality dictates tool-use reliability</td>
+          <td>Qwen 2.5 Coder 32B = good. Llama 3.3 70B = very good. Llama 3.1 8B default = marginal. Anything &lt;7B = unreliable.</td>
+        </tr>
+        <tr>
+          <td>Hardware bound</td>
+          <td>32B model needs ~20GB RAM; 70B needs ~40GB+. On 16GB you're stuck with smaller models that misfire on multi-step chains.</td>
+        </tr>
+        <tr>
+          <td>Cannot run in GitHub Actions</td>
+          <td>GitHub-hosted runners have no GPU and limited RAM. Would require a self-hosted runner with LM Studio always running — real infra work.</td>
+        </tr>
+        <tr>
+          <td>Slower than hosted APIs</td>
+          <td>5–30 tok/s on a Mac vs 50–100 tok/s for Claude API</td>
+        </tr>
+        <tr>
+          <td>Noisier signal</td>
+          <td>Same failure-attribution problem as Claude API — was it the code or the model?</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Good for</h4>
+    <ul class="checklist">
+      <li><strong>Pre-release exploratory testing.</strong> Run before a release, see whether the AI navigates the toolsurface naturally. Catches confusing action names, vague parameter descriptions, ambiguous tool overlap.</li>
+      <li><strong>Local sanity check after refactoring tool schemas.</strong> If you renamed actions or changed descriptions, LM Studio tells you if you broke discoverability.</li>
+      <li><strong>Demo or showcase without cloud dependencies.</strong></li>
+    </ul>
+
+    <h4>Not good for</h4>
+    <ul class="crosslist">
+      <li>The CI regression gate. Use scripted workflow tests for that — deterministic, fast, free, runs anywhere.</li>
+      <li>Replacing the manual playbook on a per-PR basis. Signal too noisy, infra too heavy.</li>
+    </ul>
+  </div>
+
+  <h3>The architectural separation</h3>
+  <div class="split">
+    <div>
+      <div class="split-title">Regression gate</div>
+      <p style="font-size:13px;margin:0 0 8px">Runs on every PR</p>
+      <ul style="font-size:13px;margin:0;padding-left:18px">
+        <li>Layers 1–3</li>
+        <li>Scripted, deterministic</li>
+        <li>No LLM in the loop</li>
+        <li>$0 cost</li>
+      </ul>
+      <div class="split-q">"Did the workflow break?"</div>
+    </div>
+    <div>
+      <div class="split-title">AI-usability check</div>
+      <p style="font-size:13px;margin:0 0 8px">Runs ad-hoc, local only</p>
+      <ul style="font-size:13px;margin:0;padding-left:18px">
+        <li>Layer 5</li>
+        <li>LLM-driven, exploratory</li>
+        <li>LM Studio (no API key)</li>
+        <li>$0 cost</li>
+      </ul>
+      <div class="split-q">"Can an AI use this tool?"</div>
+    </div>
+  </div>
+
+  <div class="callout-good callout">
+    <strong>Layer 5 is completely optional.</strong> The regression-prevention goal — the one motivating this entire project — is fully met by Layers 1–3 alone. Layer 5 only adds value if/when you specifically want to test AI usability separately.
+  </div>
+</section>
+
+<!-- CHANGES NEEDED -->
+<section id="changes">
+  <h2>Concrete Changes Needed</h2>
+
+  <div class="card">
+    <h3>1. <code>pyproject.toml</code></h3>
+<pre>[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "respx>=0.20",
+    "starlette>=0.30",
+    "uvicorn>=0.27",
+    "syrupy>=4.0",       # snapshot testing for response shapes
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"</pre>
+  </div>
+
+  <div class="card">
+    <h3>2. <code>requirements.txt</code></h3>
+    <p>Uncomment lines 33–34, or rely on the <code>pyproject.toml</code> test extra.</p>
+  </div>
+
+  <div class="card">
+    <h3>3. New <code>tests/</code> directory</h3>
+<pre>tests/
+├── conftest.py                              # shared fixtures, cache clearing
+├── unit/
+│   ├── test_vdb_tool.py
+│   ├── ... (one per *_endpoints_tool.py)
+│   ├── test_loader.py
+│   └── test_confirmation.py
+├── integration/
+│   ├── conftest.py
+│   ├── test_client_transport.py
+│   ├── test_client_retry.py
+│   ├── test_client_timeout.py
+│   └── test_tool_to_wire.py
+├── functional/
+│   ├── conftest.py
+│   ├── test_server_starts.py
+│   ├── test_toolset_registration.py         # Layer 3a
+│   ├── test_confirmation_handshake.py       # Layer 3c
+│   └── workflows/                            # Layer 3b — ★ centerpiece
+│       ├── test_vdb_lifecycle.py
+│       ├── test_vdb_refresh.py
+│       ├── test_vdb_rollback.py
+│       ├── test_vdb_group_lifecycle.py
+│       ├── test_dsource.py
+│       ├── test_snapshot.py
+│       ├── test_bookmark_lifecycle.py
+│       ├── test_job.py
+│       ├── test_timeflow.py
+│       └── ... (one per scenario chain across all .md files)
+├── llm_local/                                # Layer 5 — optional, local-only
+│   ├── README.md                             # how to run with LM Studio
+│   └── test_ai_usability_smoke.py
+└── fixtures/
+    ├── dct_stub.py                          # stateful stub server
+    └── responses/
+        ├── vdbs_search.json
+        ├── vdbs_v1.json
+        ├── jobs_search.json
+        └── ...</pre>
+  </div>
+
+  <div class="card">
+    <h3>4. <code>.github/workflows/test.yml</code></h3>
+<pre>name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[test]"
+      - run: pytest tests/unit tests/integration -v
+      - run: pytest tests/functional -v</pre>
+    <p>Mark as required check in branch protection. Layer 5 tests are explicitly excluded from CI.</p>
+  </div>
+
+  <div class="card">
+    <h3>5. The CLI tool</h3>
+    <p>New file: <code>src/dct_mcp_server/testing/cli.py</code> (~50 lines, click-based). See the CLI Runner tab for full implementation.</p>
+    <p>Add to <code>pyproject.toml</code>:</p>
+<pre>[project.scripts]
+dct-mcp-test = "dct_mcp_server.testing.cli:main"</pre>
+    <p>After <code>pip install -e ".[test]"</code>, the <code>dct-mcp-test</code> command is on your <code>$PATH</code>.</p>
+  </div>
+
+  <div class="card">
+    <h3>6. The Claude Code skill</h3>
+    <p>New file: <code>.claude/skills/dct-mcp-test/SKILL.md</code> — wraps the CLI for invocation as <code>/dct-mcp-test ...</code> from any Claude Code session. See the CLI Runner tab for the full skill spec.</p>
+  </div>
+
+  <div class="card">
+    <h3>7. Layer 4 workflow</h3>
+    <p>New file: <code>.github/workflows/e2e-real-dct.yml</code> with <code>workflow_dispatch</code> trigger. See the Test Layers tab → Layer 4 for the full yaml.</p>
+    <p>One-time setup: add <code>DCT_TEST_BASE_URL</code> and <code>DCT_TEST_API_KEY</code> to GitHub repo Secrets.</p>
+  </div>
+
+  <div class="card">
+    <h3>8. Optional Layer 5 runner</h3>
+    <p><code>scripts/run-llm-local-tests.sh</code>:</p>
+<pre>#!/usr/bin/env bash
+# Requires LM Studio running with a tool-use-capable model loaded.
+export OPENAI_API_BASE="http://localhost:1234/v1"
+export OPENAI_API_KEY="lm-studio"
+pytest tests/llm_local -v "$@"</pre>
+    <p>Run manually before releases. Not part of CI.</p>
+  </div>
+
+  <div class="card">
+    <h3>9. Documentation updates</h3>
+    <ul>
+      <li><code>.claude/test/testing.md</code> — point to this strategy doc; mark manual playbook as exploratory only</li>
+      <li><code>README.md</code> — add a Testing section: <code>pip install -e ".[test]" &amp;&amp; dct-mcp-test --layer unit</code></li>
+    </ul>
+  </div>
+</section>
+
+<!-- TRIGGERS -->
+<section id="triggers">
+  <h2>When Tests Run</h2>
+
+  <table>
+    <thead>
+      <tr><th>Trigger</th><th>What runs</th><th>Invocation</th><th>Blocking?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>While coding</td>
+        <td>Layer 1 (unit)</td>
+        <td><code>dct-mcp-test --layer unit</code></td>
+        <td><span class="tag tag-warn">No</span></td>
+      </tr>
+      <tr>
+        <td>Pre-push hook</td>
+        <td>Layer 1 (unit)</td>
+        <td><code>dct-mcp-test --layer unit</code></td>
+        <td><span class="tag tag-good">Yes (local)</span></td>
+      </tr>
+      <tr>
+        <td>Every push / PR</td>
+        <td>Layers 1–3 (unit + integration + functional)</td>
+        <td>GitHub Actions calls <code>dct-mcp-test</code></td>
+        <td><span class="tag tag-bad">Yes — merge gate</span></td>
+      </tr>
+      <tr>
+        <td>On-demand vs. real DCT</td>
+        <td>Layer 4 (real cloned DCT)</td>
+        <td>GitHub UI <code>workflow_dispatch</code>, <code>/dct-mcp-test localhost ...</code>, or CLI direct</td>
+        <td><span class="tag tag-warn">No (advisory)</span></td>
+      </tr>
+      <tr>
+        <td>Optional nightly</td>
+        <td>Layer 4</td>
+        <td>GitHub Actions cron</td>
+        <td><span class="tag tag-warn">No (advisory)</span></td>
+      </tr>
+      <tr>
+        <td>Pre-release AI usability</td>
+        <td>Layer 5 (LM Studio)</td>
+        <td><code>scripts/run-llm-local-tests.sh</code></td>
+        <td><span class="tag tag-warn">No (advisory)</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>The PR merge gate (row 3) is what replaces manual Claude Desktop verification.</strong> Layer 4 (row 4) covers the real-DCT validation you currently do by hand.
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <h2>Migration Roadmap</h2>
+  <p>Phased so workflow coverage lands as early as possible. Each phase is independently shippable.</p>
+
+  <div class="timeline">
+    <div class="phase">
+      <h4>Phase 1 — Foundation</h4>
+      <div class="duration">Day 1</div>
+      <ul>
+        <li>Add test extra to <code>pyproject.toml</code></li>
+        <li>Create <code>tests/conftest.py</code> with mock-client + FastMCP app fixtures</li>
+        <li>Write one unit test for <code>vdb_tool</code> to prove the pattern</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 2 — <code>dct_stub</code> + first workflow</h4>
+      <div class="duration">Days 2–3</div>
+      <ul>
+        <li>Build <code>tests/fixtures/dct_stub.py</code> with stateful canned responses, request recorder, ~10 routes</li>
+        <li>Write <code>test_vdb_lifecycle.py</code> — the highest-traffic chain</li>
+        <li>Write <code>test_toolset_registration.py</code> (5 personas, parametrized)</li>
+      </ul>
+      <p><strong>Deliverable:</strong> one workflow + persona registration verified end-to-end without DCT</p>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 3 — CI wiring</h4>
+      <div class="duration">Day 4</div>
+      <ul>
+        <li>Add <code>.github/workflows/test.yml</code></li>
+        <li>Enable branch protection requiring the tests check</li>
+      </ul>
+      <p><strong>Deliverable:</strong> merge gate live</p>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 4 — Integration coverage</h4>
+      <div class="duration">Day 5</div>
+      <ul>
+        <li>Add <code>respx</code> retry/auth/timeout tests against <code>DCTAPIClient</code></li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 5 — Workflow translation</h4>
+      <div class="duration">Days 6–10</div>
+      <ul>
+        <li>One PR per scenario .md file, translating each chain into a workflow test</li>
+        <li>Expand <code>dct_stub</code> route coverage as new workflows demand</li>
+      </ul>
+      <p><strong>Deliverable:</strong> every workflow in <code>.claude/test/testing/*.md</code> is now a passing test</p>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 6 — Backfill unit tests</h4>
+      <div class="duration">Days 11–13</div>
+      <ul>
+        <li>One test file per <code>*_endpoints_tool.py</code> (9 files)</li>
+        <li>Cover action routing + confirmation flow per tool</li>
+        <li>Add <code>test_loader.py</code>, <code>test_confirmation.py</code></li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 7 — Snapshot assertions</h4>
+      <div class="duration">Day 14</div>
+      <ul>
+        <li>Wire <code>syrupy</code> into workflow tests</li>
+        <li>Capture response-shape snapshots; future drift breaks tests</li>
+      </ul>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 8 — <code>dct-mcp-test</code> CLI + skill</h4>
+      <div class="duration">Day 15</div>
+      <ul>
+        <li>Build <code>src/dct_mcp_server/testing/cli.py</code> (click-based)</li>
+        <li>Register as <code>[project.scripts]</code> entry point in <code>pyproject.toml</code></li>
+        <li>Create <code>.claude/skills/dct-mcp-test/SKILL.md</code></li>
+        <li>Update CI workflow to invoke <code>dct-mcp-test</code> instead of raw <code>pytest</code></li>
+      </ul>
+      <p><strong>Deliverable:</strong> three invocation paths (CLI / CI / skill) all hit the same runner</p>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 9 — Layer 4 wiring</h4>
+      <div class="duration">Days 16–17</div>
+      <ul>
+        <li>Confirm cloned DCT reachability from GitHub-hosted runners (or set up tunnel/self-hosted runner)</li>
+        <li>Add <code>DCT_TEST_BASE_URL</code> and <code>DCT_TEST_API_KEY</code> to GitHub Secrets</li>
+        <li>Create <code>tests/e2e/</code> with <code>@pytest.mark.real_dct</code> markers</li>
+        <li>Build <code>tests/e2e/cleanup/test_purge.py</code> using <code>E2E_RUN_TAG</code></li>
+        <li>Add <code>.github/workflows/e2e-real-dct.yml</code> with <code>workflow_dispatch</code> trigger</li>
+      </ul>
+      <p><strong>Deliverable:</strong> real-DCT validation runnable from GitHub UI, Claude Code skill, or CLI</p>
+    </div>
+
+    <div class="phase">
+      <h4>Phase 10 — Optional Layer 5</h4>
+      <div class="duration">Later, if desired</div>
+      <ul>
+        <li>Wire <code>tests/llm_local/</code> against LM Studio</li>
+        <li>Document the recommended model + RAM requirements</li>
+        <li>Use pre-release, not pre-merge</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    Total realistic budget: <strong>~3 working weeks</strong> to fully replace manual verification. Phases 1–3 alone deliver the merge gate in 4 days. Phase 9 closes the real-DCT validation gap that Claude Desktop currently fills.
+  </div>
+</section>
+
+<!-- SUCCESS CRITERIA -->
+<section id="success">
+  <h2>Success Criteria</h2>
+
+  <div class="card">
+    <h3>After Phase 5 (merge gate replaces manual playbook)</h3>
+    <ol class="checklist">
+      <li><code>pytest</code> runs locally with no DCT credentials and no network</li>
+      <li>Every PR shows a CI status check; merges to <code>main</code> require it to pass</li>
+      <li>Every chain in <code>.claude/test/testing/*.md</code> has an equivalent Python workflow test</li>
+      <li>Each persona toolset has at least one functional test verifying tool registration</li>
+      <li>The confirmation two-step contract has one functional test per confirmation level</li>
+      <li>The <code>.claude/test/testing.md</code> manual playbook is reduced to exploratory testing only — never a regression check</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>After Phase 8 (unified runner)</h3>
+    <ol class="checklist">
+      <li><code>dct-mcp-test</code> is on the <code>$PATH</code> after <code>pip install -e ".[test]"</code></li>
+      <li><code>/dct-mcp-test</code> works from any Claude Code session</li>
+      <li>CI workflow yaml uses the same <code>dct-mcp-test</code> command developers use locally</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>After Phase 9 (real-DCT validation)</h3>
+    <ol class="checklist">
+      <li>Real-DCT E2E runnable from GitHub UI <code>workflow_dispatch</code></li>
+      <li>Same suite runnable locally via <code>dct-mcp-test --base-url ... --api-key ...</code></li>
+      <li>Same suite runnable via <code>/dct-mcp-test localhost --api-key ...</code> from Claude Code</li>
+      <li>Cleanup pass deletes everything tagged with the run ID, even on test failure</li>
+      <li>Tool response shapes captured as syrupy snapshots; drift breaks CI</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>Out of Scope</h3>
+    <ul class="crosslist">
+      <li>Performance / load testing</li>
+      <li>Testing against multiple DCT versions in parallel</li>
+      <li>Property-based / fuzz testing of tool inputs</li>
+      <li>Visual regression of MCP client UIs</li>
+      <li>Claude Desktop GUI automation (see LLM Testing tab)</li>
+      <li>Claude API as a CI test driver (see LLM Testing tab)</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<script>
+  const buttons = document.querySelectorAll('nav button');
+  const sections = document.querySelectorAll('main section');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      sections.forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+</script>
+
+</body>
+</html>
