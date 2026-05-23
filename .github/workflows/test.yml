@@ -1,0 +1,32 @@
+name: tests
+
+# CI gate for every PR and every push to main.
+# Runs Layers 1-3 (unit + integration + functional). No DCT credentials needed
+# — the functional layer uses an in-process stub. Layer 4 (real DCT E2E) lives
+# in a separate workflow with workflow_dispatch and is not on the merge path.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package + test extras
+        run: pip install -e ".[test]"
+
+      # The CLI is installed by pip as a [project.scripts] entry point and
+      # is the same command developers run locally.
+      - name: Run CI layers (unit + integration + functional)
+        run: dct-mcp-test --layer ci

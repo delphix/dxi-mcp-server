@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 dct-mcp-server = "dct_mcp_server.main:main"
+dct-mcp-test = "dct_mcp_server.testing.cli:main"
 
 [project.optional-dependencies]
 test = [
@@ -22,6 +23,7 @@ test = [
     "respx>=0.20",
     "starlette>=0.30",
     "uvicorn>=0.27",
+    "click>=8.0",
 ]
 
 [build-system]
