@@ -1,0 +1,54 @@
+name: e2e-real-dct
+
+# Layer 4 — runs the e2e smoke tests against a real DCT instance.
+#
+# NOT on the merge path. Failures here are advisory: they alert that the real
+# DCT has drifted from our expectations, but do not block PRs.
+#
+# Prerequisite:
+#   - DCT_TEST_BASE_URL and DCT_TEST_API_KEY must be set in repo Secrets.
+#   - The DCT instance must be reachable from GitHub-hosted runners (public
+#     internet). If it's only reachable from your local network, either:
+#       * Expose it via a tunnel (Cloudflare Tunnel, ngrok), or
+#       * Use a self-hosted GitHub runner inside the network.
+#
+# Local equivalent (no GitHub needed):
+#   dct-mcp-test --base-url <url> --api-key <key> --layer e2e
+# or via the Claude Code skill:
+#   /dct-mcp-test localhost --api-key <key>
+
+on:
+  workflow_dispatch:           # primary: run on demand from the GitHub UI
+  # Uncomment when you want passive nightly drift detection:
+  # schedule:
+  #   - cron: "0 6 * * *"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package + test extras
+        run: pip install -e ".[test]"
+
+      - name: Run Layer 4 against real DCT
+        env:
+          DCT_BASE_URL: ${{ secrets.DCT_TEST_BASE_URL }}
+          DCT_API_KEY:  ${{ secrets.DCT_TEST_API_KEY }}
+        run: dct-mcp-test --layer e2e
+
+      # Cleanup is part of `dct-mcp-test --layer e2e` itself — no explicit step.
+      # It runs tests/e2e/cleanup/ inside the CLI with the same env.
+
+      - name: Mark failure as advisory
+        if: failure()
+        run: |
+          echo "::warning::Layer 4 (real DCT) failed — this is advisory and does NOT block PRs."
+          echo "Triage with: dct-mcp-test --layer e2e --base-url <url> --api-key <key> -v"

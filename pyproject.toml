@@ -37,3 +37,6 @@ packages = ["src/dct_mcp_server"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "real_dct: tests that require a live DCT instance (DCT_BASE_URL + DCT_API_KEY env vars)",
+]

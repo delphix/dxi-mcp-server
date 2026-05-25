@@ -13,11 +13,16 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _set_test_env(monkeypatch):
+def _set_test_env(monkeypatch, request):
     """
     Ensure DCT_API_KEY and DCT_BASE_URL are set for any test that instantiates
     DCTAPIClient. Tests can override via their own monkeypatch.setenv calls.
+
+    Skipped for tests marked @pytest.mark.real_dct so the real DCT credentials
+    passed via env / CLI flow through to the e2e fixtures unchanged.
     """
+    if request.node.get_closest_marker("real_dct"):
+        return
     monkeypatch.setenv("DCT_API_KEY", "test-api-key")
     monkeypatch.setenv("DCT_BASE_URL", "https://dct.test")
     monkeypatch.setenv("DCT_VERIFY_SSL", "false")
