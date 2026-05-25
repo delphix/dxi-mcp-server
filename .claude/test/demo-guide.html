@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DCT MCP Server Test Suite — Demo Guide</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2028;
+    --panel-2: #232b35;
+    --border: #2d3742;
+    --text: #d5dde6;
+    --muted: #8a96a3;
+    --accent: #4fc3f7;
+    --accent-2: #81d4fa;
+    --good: #66bb6a;
+    --warn: #ffa726;
+    --bad: #ef5350;
+    --star: #ffd54f;
+    --code-bg: #0a0e13;
+    --code-text: #c8d4e0;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header {
+    background: linear-gradient(135deg, #1a2028 0%, #0f1419 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 36px 48px 28px;
+  }
+  header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 15px; max-width: 720px; }
+  header .meta { margin-top: 14px; font-size: 12px; color: var(--muted); }
+  header .meta span { margin-right: 18px; }
+  header .meta .pill {
+    display: inline-block;
+    background: var(--good);
+    color: var(--bg);
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    margin-right: 10px;
+  }
+  nav {
+    position: sticky; top: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 0 48px;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    z-index: 10;
+  }
+  nav button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 14px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  main { padding: 32px 48px 80px; max-width: 1200px; }
+  section { display: none; }
+  section.active { display: block; animation: fadeIn 0.2s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h2 { font-size: 24px; font-weight: 600; margin: 0 0 16px; color: var(--text); }
+  h3 { font-size: 17px; font-weight: 600; margin: 26px 0 12px; color: var(--accent-2); }
+  h4 { font-size: 14px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
+  p { margin: 0 0 12px; }
+  ul, ol { padding-left: 22px; margin: 0 0 12px; }
+  li { margin-bottom: 4px; }
+  code { background: var(--code-bg); color: var(--code-text); padding: 2px 6px; border-radius: 3px; font-family: "SF Mono", Monaco, monospace; font-size: 12px; }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+    border: 1px solid var(--border);
+    font-family: "SF Mono", Monaco, monospace;
+  }
+  pre .cmt { color: #6a7480; font-style: italic; }
+  pre .ok { color: var(--good); }
+  pre .warn { color: var(--warn); }
+  pre .err { color: var(--bad); }
+  pre .em { color: var(--accent); font-weight: 600; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-star {
+    border-color: var(--star);
+    box-shadow: 0 0 0 1px rgba(255, 213, 79, 0.25);
+  }
+  .card-warn {
+    background: rgba(255, 167, 38, 0.06);
+    border-left: 3px solid var(--warn);
+  }
+  .card-good {
+    background: rgba(102, 187, 106, 0.06);
+    border-left: 3px solid var(--good);
+  }
+  .card-bad {
+    background: rgba(239, 83, 80, 0.06);
+    border-left: 3px solid var(--bad);
+  }
+  .card-accent {
+    background: rgba(79, 195, 247, 0.06);
+    border-left: 3px solid var(--accent);
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:hover td { background: var(--panel-2); }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0f1419;
+  }
+  .t-unit { background: var(--good); }
+  .t-int { background: var(--warn); }
+  .t-func { background: #ab47bc; color: white; }
+  .t-e2e { background: var(--bad); color: white; }
+  .t-good { background: var(--good); }
+  .t-warn { background: var(--warn); }
+  .t-bad { background: var(--bad); color: white; }
+  .t-star { background: var(--star); }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+  .stat-value { font-size: 28px; font-weight: 600; color: var(--accent); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .checklist li, .crosslist li { list-style: none; position: relative; padding-left: 24px; }
+  .checklist li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--good); font-weight: 600; }
+  .crosslist li::before { content: "✕"; position: absolute; left: 0; top: 0; color: var(--bad); font-weight: 600; }
+
+  .flow-diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 12.5px;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--code-text);
+  }
+
+  /* Demo script step blocks */
+  .step {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px 20px 70px;
+    margin-bottom: 18px;
+  }
+  .step .timer {
+    position: absolute;
+    left: 16px; top: 18px;
+    width: 44px; height: 44px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.1;
+  }
+  .step h3 { margin-top: 0; }
+  .step .say {
+    background: rgba(79, 195, 247, 0.08);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-style: italic;
+    color: var(--accent-2);
+  }
+  .step .do {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 14px 0 6px;
+    font-weight: 600;
+  }
+  .step .expect {
+    background: rgba(102, 187, 106, 0.07);
+    border-left: 3px solid var(--good);
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+
+  .layer-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .layer-card.star { border-color: var(--star); box-shadow: 0 0 0 1px rgba(255, 213, 79, 0.2); }
+  .layer-card h3 { margin-top: 0; }
+  .layer-card .meta-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .layer-card .meta-cell {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: 8px 12px;
+  }
+  .layer-card .meta-cell .k { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+  .layer-card .meta-cell .v { color: var(--text); font-size: 14px; margin-top: 2px; }
+
+  .three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 18px 0;
+  }
+  .path-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .path-card h4 { margin: 0 0 8px; color: var(--accent-2); }
+  .path-card .icon {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--bg);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  @media (max-width: 900px) {
+    .three-col { grid-template-columns: 1fr; }
+    main { padding: 24px 20px; }
+    header { padding: 24px 20px; }
+    nav { padding: 0 20px; }
+    .step { padding-left: 20px; }
+    .step .timer { position: static; margin-bottom: 10px; display: inline-flex; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DCT MCP Server Test Suite — Demo Guide</h1>
+  <div class="sub">Everything you need to run a confident 10-minute demo: what to say, what to run, what to expect, and the wow moments to land on.</div>
+  <div class="meta">
+    <span><span class="pill">PoC complete</span></span>
+    <span><strong>Branch:</strong> dlpx/pr/chaitali/test-suite-poc</span>
+    <span><strong>Built over:</strong> 4 days</span>
+    <span><strong>Demo length:</strong> ~10 min</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <button class="active" data-target="hero">Overview</button>
+  <button data-target="script">Demo Script</button>
+  <button data-target="architecture">Architecture</button>
+  <button data-target="layer1">Layer 1 — Unit</button>
+  <button data-target="layer2">Layer 2 — Integration</button>
+  <button data-target="layer3">Layer 3 — Functional ★</button>
+  <button data-target="layer4">Layer 4 — Real DCT</button>
+  <button data-target="paths">Invocation Paths</button>
+  <button data-target="coverage">Coverage Map</button>
+  <button data-target="break">The Break Demo</button>
+  <button data-target="cheat">Cheat Sheet</button>
+  <button data-target="next">What's Next</button>
+</nav>
+
+<main>
+
+<!-- HERO / OVERVIEW -->
+<section id="hero" class="active">
+  <h2>What you're about to show</h2>
+
+  <div class="card card-accent">
+    <p style="font-size:15px;margin:0"><strong>Today</strong>, every code change is verified by hand through Claude Desktop — 70 prompts, 30+ minutes of human attention, no merge gate.</p>
+    <p style="font-size:15px;margin:8px 0 0"><strong>After this PoC ships</strong>, every PR auto-runs 8 tests in 9 seconds, blocks the merge button if anything regresses, and runs against real DCT on demand. Zero monthly cost. No Anthropic API key. No Claude Desktop license needed.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-value">4</div><div class="stat-label">layers covered in PoC</div></div>
+    <div class="stat"><div class="stat-value">11</div><div class="stat-label">tests written</div></div>
+    <div class="stat"><div class="stat-value">9.3s</div><div class="stat-label">full CI suite runtime</div></div>
+    <div class="stat"><div class="stat-value">5</div><div class="stat-label">commits on branch</div></div>
+    <div class="stat"><div class="stat-value">3</div><div class="stat-label">invocation paths</div></div>
+    <div class="stat"><div class="stat-value">$0</div><div class="stat-label">monthly CI cost</div></div>
+  </div>
+
+  <h3>What's on the branch</h3>
+<pre><span class="cmt">$ git log --oneline main..HEAD</span>
+26a8c60  Day 4 — Layer 4 real-DCT smoke + on-demand workflow
+8d0e85a  Day 3 — dct-mcp-test CLI + Claude Code skill + GitHub Actions
+2b1f18c  Day 2 — Layer 3 (functional: registration, workflow, confirmation)
+2fc1cfd  Day 1 — Layers 1 (unit) and 2 (integration) of test suite
+e845d53  Strategy design + interactive HTML report</pre>
+
+  <h3>The three wow moments to land</h3>
+  <ol>
+    <li><strong>The workflow test</strong> — open <code>self_service.md</code> and <code>test_vdb_lifecycle.py</code> side by side. Show that the manual playbook step-by-step matches the deterministic Python test step-by-step.</li>
+    <li><strong>The break demo</strong> — introduce a one-line regression, watch CI fail with a precise error message, fix it, watch green.</li>
+    <li><strong>The three paths</strong> — same command works in terminal, GitHub Actions, and Claude Code chat. Change behavior once, every path follows.</li>
+  </ol>
+</section>
+
+<!-- DEMO SCRIPT -->
+<section id="script">
+  <h2>The 10-Minute Demo Script</h2>
+  <p>Each step has the timing, what to say, what to run, and what to expect on screen.</p>
+
+  <div class="step">
+    <div class="timer">0:00<br>30s</div>
+    <h3>Set the stage</h3>
+    <div class="say">"Today every code change goes through Claude Desktop by hand — I drive ~70 prompts, eyeball responses, write a report. Doesn't scale, doesn't gate merges, can't run in CI. We built a replacement over the past 4 days. Let me walk you through it."</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">0:30<br>30s</div>
+    <h3>Show the branch</h3>
+    <div class="do">Run</div>
+<pre>git log --oneline main..HEAD</pre>
+    <div class="expect">Five commits — strategy doc + Day 1 through Day 4. ~600 lines of test code.</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">1:00<br>60s</div>
+    <h3>Layer 1 — Unit</h3>
+    <div class="say">"Unit tests prove action routing inside the grouped tools. The DCTAPIClient is mocked — no HTTP, no DCT, runs in a second."</div>
+    <div class="do">Run</div>
+<pre>dct-mcp-test --layer unit</pre>
+    <div class="expect"><strong>2 tests, ~1s, green.</strong> Open <code>tests/unit/test_job_tool.py</code> while it's running and walk through the mock pattern.</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">2:00<br>90s</div>
+    <h3>Layer 2 — Integration</h3>
+    <div class="say">"Integration tests prove HTTP wire behavior — URLs, auth headers, retry logic. Unit tests can't see this because they mock above HTTP."</div>
+    <div class="do">Run</div>
+<pre>dct-mcp-test --layer integration</pre>
+    <div class="expect"><strong>3 tests, ~3s, green.</strong> The retry test sleeps 1s+2s for real backoff — that's intentional, the test exercises actual retry timing.</div>
+    <div class="say">"This one — <code>test_client_sends_apk_prefixed_auth_header</code> — catches a subtle class of bug. Our client prepends 'apk ' to the API key. If someone refactors and drops the prefix, every auth fails. This test catches it in 50ms."</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">3:30<br>2 min</div>
+    <h3>Layer 3 — Functional <span class="tag t-star">★ THE WOW</span></h3>
+    <div class="say">"This is what directly replaces Claude Desktop. Full MCP-stdio workflows against an in-process fake DCT. Read this slowly."</div>
+    <div class="do">Run</div>
+<pre>dct-mcp-test --layer functional</pre>
+    <div class="expect"><strong>3 tests, ~5s, green.</strong> Now open two files side by side:</div>
+    <ul>
+      <li><code>.claude/test/testing/self_service.md</code> lines 12–17</li>
+      <li><code>tests/functional/workflows/test_vdb_lifecycle.py</code></li>
+    </ul>
+    <div class="say">"This .md file is what I run by hand today. Search VDBs, get the first one, start it, stop it. The Python file is the same scenario, deterministic. Every step is a real MCP call over stdio to the actual dct-mcp-server subprocess. The fake DCT — dct_stub — records every HTTP request and we assert the right endpoint got hit."</div>
+    <div class="say">"When a workflow test fails, the message tells you exactly which DCT endpoint never got hit. That's a level of precision Claude Desktop can never give us."</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">5:30<br>90s</div>
+    <h3>Layer 4 — Real DCT</h3>
+    <div class="say">"Layer 4 is the same shape — but pointed at a real DCT instead of the stub. I'm running against my localhost DCT right now."</div>
+    <div class="do">Run</div>
+<pre>export DCT_API_KEY=&lt;your-key&gt;
+dct-mcp-test --base-url https://localhost --layer e2e</pre>
+    <div class="expect"><strong>3 tests (2 smoke + 1 cleanup placeholder), ~2–5s, green.</strong></div>
+    <div class="say">"These are read-only smoke tests. They prove the server boots against real DCT and the API contract still matches. When we add destructive workflows later, the cleanup pass uses a per-run tag to delete everything created — even if tests crash."</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">7:00<br>90s</div>
+    <h3>The Break Demo <span class="tag t-bad">★ THE EMOTIONAL MOMENT</span></h3>
+    <div class="do">Edit <code>src/dct_mcp_server/tools/dataset_endpoints_tool.py</code> line 2705</div>
+<pre><span class="cmt"># Change:</span>
+return make_api_request('POST', '/vdbs/search', params=params, json_body=body)
+<span class="cmt"># To:</span>
+return make_api_request('POST', '/vdbs/search-BROKEN', params=params, json_body=body)</pre>
+    <div class="do">Run</div>
+<pre>dct-mcp-test --layer functional</pre>
+    <div class="expect"><strong>test_vdb_lifecycle FAILS</strong> with <code>Missing DCT calls: {('POST', '/dct/v3/vdbs/search')}</code></div>
+    <div class="say">"One typo. CI catches it. Today this would silently land on main, and somebody would catch it when their workflow stops working. Now the merge button stays grey."</div>
+    <div class="do">Revert, re-run — all green.</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">8:30<br>60s</div>
+    <h3>Three invocation paths</h3>
+    <div class="say">"Same command works in three places."</div>
+<pre><span class="cmt"># 1. Terminal (you just did)</span>
+dct-mcp-test --layer ci
+
+<span class="cmt"># 2. GitHub Actions yaml</span>
+cat .github/workflows/test.yml
+
+<span class="cmt"># 3. Claude Code skill</span>
+/dct-mcp-test localhost --api-key &lt;key&gt; --layer e2e</pre>
+    <div class="say">"Change behavior once in the CLI source. Every path follows. No drift between local dev and CI."</div>
+  </div>
+
+  <div class="step">
+    <div class="timer">9:30<br>30s</div>
+    <h3>Wrap</h3>
+    <div class="say">"PoC ready. If approved, the full rollout — translating all ~30 workflows from the manual .md files into deterministic tests — is roughly 3 working weeks. After that, manual Claude Desktop testing is for exploration, not regression."</div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture at a Glance</h2>
+
+  <h3>The three test layers + Layer 4 (real DCT)</h3>
+  <div class="flow-diagram">┌────────────────────────────────────────────────────────────────┐
+│ Layer 1 — Unit            in-process, mocked DCTAPIClient       │
+│ ~60% surface              tests/unit/                            │
+│ runs every save           &lt;1s                                    │
+├────────────────────────────────────────────────────────────────┤
+│ Layer 2 — Integration     in-process, respx-mocked HTTP          │
+│ ~25% surface              tests/integration/                     │
+│ runs every push           ~3s                                    │
+├────────────────────────────────────────────────────────────────┤
+│ Layer 3 — Functional ★    subprocess + dct_stub (fake DCT)       │
+│ ~15% surface              tests/functional/                      │
+│ runs every PR             ~5s                                    │
+│   3a. toolset registration   per-persona tool surface check      │
+│   3b. workflow tests         .md scenarios translated to Python  │
+│   3c. confirmation handshake destructive-op two-step over wire   │
+├────────────────────────────────────────────────────────────────┤
+│ Layer 4 — Real DCT        subprocess + REAL DCT                  │
+│ on-demand                 tests/e2e/                             │
+│ workflow_dispatch + CLI   ~2-5s                                  │
+└────────────────────────────────────────────────────────────────┘</div>
+
+  <h3>How the test infrastructure is built</h3>
+  <div class="flow-diagram">   pytest process                       subprocess (MCP server)
+   ┌──────────────────────┐            ┌─────────────────────┐
+   │ test function        │            │ vdb_tool(...)       │
+   │  │                   │  stdio     │  │                  │
+   │  ▼                   │ ◀────────▶ │  ▼                  │
+   │ fastmcp.Client       │            │ DCTAPIClient        │
+   │                      │            │  │  httpx →         │
+   │ dct_stub ◀───────────┼── HTTP ────┤  DCT_BASE_URL       │
+   │ (Starlette, port=0)  │            │  http://127.0.0.1   │
+   └──────────────────────┘            └─────────────────────┘
+                                       (or real DCT for Layer 4)</div>
+
+  <h3>File map of what was built</h3>
+<pre>dxi-mcp-server/
+├── pyproject.toml                                         [+10 lines]
+│   └── [project.optional-dependencies].test = [pytest, respx,
+│       starlette, uvicorn, click]
+│   └── [project.scripts] dct-mcp-test entry point
+│   └── [tool.pytest.ini_options] real_dct marker
+│
+├── src/dct_mcp_server/testing/cli.py                      [NEW ~120 lines]
+│   └── click-based runner; maps --layer to pytest paths + markers
+│
+├── tests/
+│   ├── conftest.py                                        [NEW]
+│   │   └── mock_dct_client fixture; autouse env (skips real_dct)
+│   │
+│   ├── unit/test_job_tool.py                              [NEW]   2 tests
+│   │
+│   ├── integration/test_client_retry.py                   [NEW]   3 tests
+│   │
+│   ├── functional/
+│   │   ├── conftest.py                                    [NEW]
+│   │   │   └── dct_stub + mcp_client_self_service fixtures
+│   │   ├── test_toolset_registration.py                   [NEW]   1 test
+│   │   ├── test_confirmation_handshake.py                 [NEW]   1 test
+│   │   └── workflows/test_vdb_lifecycle.py                [NEW]   1 test
+│   │
+│   ├── fixtures/dct_stub.py                               [NEW ~145 lines]
+│   │   └── Starlette stub with VDB routes + request recorder
+│   │
+│   └── e2e/
+│       ├── conftest.py                                    [NEW]
+│       │   └── real_mcp_client fixture (no stub, real DCT)
+│       ├── test_vdb_smoke.py                              [NEW]   2 tests
+│       └── cleanup/test_purge.py                          [NEW]   1 test
+│
+├── .claude/skills/dct-mcp-test/SKILL.md                   [NEW]
+│   └── /dct-mcp-test skill for Claude Code
+│
+└── .github/workflows/
+    ├── test.yml                                           [NEW]
+    │   └── CI on every push/PR — runs dct-mcp-test --layer ci
+    └── e2e-real-dct.yml                                   [NEW]
+        └── workflow_dispatch for on-demand real-DCT runs</pre>
+</section>
+
+<!-- LAYER 1 -->
+<section id="layer1">
+  <h2><span class="tag t-unit">Layer 1</span> Unit Tests</h2>
+
+  <div class="layer-card">
+    <h3>What it proves</h3>
+    <p>Action routing inside the grouped tools (e.g. <code>vdb_tool</code>, <code>job_tool</code>), parameter validation, and missing-param guards. Tool functions are called directly in-process with a mocked <code>DCTAPIClient</code>.</p>
+
+    <div class="meta-row">
+      <div class="meta-cell"><div class="k">Tests in PoC</div><div class="v">2</div></div>
+      <div class="meta-cell"><div class="k">Runtime</div><div class="v">~1 second</div></div>
+      <div class="meta-cell"><div class="k">Needs DCT?</div><div class="v">No</div></div>
+      <div class="meta-cell"><div class="k">Needs network?</div><div class="v">No</div></div>
+    </div>
+
+    <h4>How it's built</h4>
+<pre>import dct_mcp_server.tools.job_endpoints_tool as job_module
+
+def test_job_tool_search_routes_to_jobs_search_endpoint(mock_dct_client):
+    <span class="cmt"># Set the tool module's `client` global to a mock</span>
+    job_module.client = mock_dct_client
+    mock_dct_client.make_request.return_value = {"items": [{"id": "j-1"}]}
+
+    <span class="cmt"># Call the tool function directly (it's sync, wrapped by async_to_sync)</span>
+    result = job_module.job_tool(action="search", limit=10, sort="-start_time")
+
+    <span class="cmt"># Assert the mock was called with the right HTTP shape</span>
+    mock_dct_client.make_request.assert_called_once()
+    call_args = mock_dct_client.make_request.call_args
+    assert call_args.args[0] == "POST"
+    assert call_args.args[1] == "/jobs/search"
+    assert call_args.kwargs["params"]["limit"] == 10</pre>
+
+    <h4>The mock client fixture</h4>
+<pre><span class="cmt"># tests/conftest.py</span>
+@pytest.fixture
+def mock_dct_client():
+    client = MagicMock()
+    client.make_request = AsyncMock(return_value={"items": []})
+    return client</pre>
+
+    <h4>Live command</h4>
+<pre>$ dct-mcp-test --layer unit
+<span class="ok">tests/unit/test_job_tool.py::test_job_tool_search_routes_to_jobs_search_endpoint PASSED
+tests/unit/test_job_tool.py::test_job_tool_get_requires_job_id PASSED
+======================== 2 passed in 0.85s ========================</span></pre>
+
+    <h4>Value</h4>
+    <ul class="checklist">
+      <li>Fastest feedback — run on every save while coding</li>
+      <li>Catches refactor regressions instantly: "I changed action dispatch and broke a path"</li>
+      <li>No DCT, no network, no flakes — purely deterministic</li>
+      <li>Easy to scale: one test file per <code>*_endpoints_tool.py</code> module in the full rollout</li>
+    </ul>
+  </div>
+</section>
+
+<!-- LAYER 2 -->
+<section id="layer2">
+  <h2><span class="tag t-int">Layer 2</span> Integration Tests</h2>
+
+  <div class="layer-card">
+    <h3>What it proves</h3>
+    <p>The HTTP wire behavior of <code>DCTAPIClient</code> — URL construction, the <code>apk </code> auth header prefix, 4xx-vs-5xx-vs-connection-error retry logic, timeout configuration. Real client, mocked HTTP.</p>
+
+    <div class="meta-row">
+      <div class="meta-cell"><div class="k">Tests in PoC</div><div class="v">3</div></div>
+      <div class="meta-cell"><div class="k">Runtime</div><div class="v">~3 seconds</div></div>
+      <div class="meta-cell"><div class="k">Needs DCT?</div><div class="v">No (respx)</div></div>
+      <div class="meta-cell"><div class="k">Needs network?</div><div class="v">No</div></div>
+    </div>
+
+    <h4>How it's built</h4>
+<pre>@respx.mock
+async def test_client_retries_on_5xx_then_succeeds():
+    route = respx.get("https://dct.test/dct/v3/jobs").mock(side_effect=[
+        httpx.Response(503, json={"error": "unavailable"}),
+        httpx.Response(503, json={"error": "unavailable"}),
+        httpx.Response(200, json={"items": [{"id": "j-1"}]}),
+    ])
+    client = DCTAPIClient()
+    result = await client.make_request("GET", "jobs")
+    assert route.call_count == 3, "should have retried twice before succeeding"
+    assert result == {"items": [{"id": "j-1"}]}</pre>
+
+    <p>The <code>respx</code> library patches <code>httpx</code> at the socket layer — the request travels through all the real client code, just doesn't leave the test process.</p>
+
+    <h4>The auth-header test (highest-value)</h4>
+<pre>@respx.mock
+async def test_client_sends_apk_prefixed_auth_header():
+    route = respx.get("https://dct.test/dct/v3/jobs").mock(
+        return_value=httpx.Response(200, json={"items": []})
+    )
+    client = DCTAPIClient()
+    await client.make_request("GET", "jobs")
+    sent = route.calls.last.request
+    assert sent.headers["authorization"] == "apk test-api-key"</pre>
+
+    <h4>Live command</h4>
+<pre>$ dct-mcp-test --layer integration
+<span class="ok">tests/integration/test_client_retry.py::test_client_retries_on_5xx_then_succeeds PASSED
+tests/integration/test_client_retry.py::test_client_does_not_retry_on_4xx PASSED
+tests/integration/test_client_retry.py::test_client_sends_apk_prefixed_auth_header PASSED
+======================== 3 passed in 3.07s ========================</span></pre>
+    <p style="font-size:13px;color:var(--muted)">The 3s runtime is real exponential backoff being exercised: 1s + 2s = 3s of sleep between retry attempts.</p>
+
+    <h4>Value</h4>
+    <ul class="checklist">
+      <li>Catches wire-level regressions unit tests can't see — URLs, headers, retry counts</li>
+      <li>Proves auth prefix is preserved through refactors</li>
+      <li>Validates retry timing actually waits (catches "retry without backoff")</li>
+      <li>No DCT needed but proves the client would talk to real DCT correctly</li>
+    </ul>
+  </div>
+</section>
+
+<!-- LAYER 3 -->
+<section id="layer3">
+  <h2><span class="tag t-func">Layer 3</span> Functional Tests <span class="tag t-star">★ centerpiece</span></h2>
+
+  <div class="card card-star">
+    <p style="margin:0"><strong>This is what directly replaces manual Claude Desktop testing.</strong> Full MCP-stdio workflows running against the real <code>dct-mcp-server</code> subprocess, with an in-process fake DCT (<code>dct_stub</code>) standing in for the real thing.</p>
+  </div>
+
+  <h3>Three test files cover three concerns</h3>
+
+  <div class="layer-card">
+    <h3>3a — Toolset registration</h3>
+    <p>The MCP server boots with <code>DCT_TOOLSET=self_service</code> and we ask it what tools it exposes. Catches "I edited <code>config/toolsets/*.txt</code> and broke a persona without noticing."</p>
+<pre>EXPECTED_SELF_SERVICE_TOOLS = {
+    "data_tool", "snapshot_bookmark_tool", "timeflow_tool",
+    "data_connection_tool", "job_tool",
+}
+
+async def test_self_service_registers_expected_tools(mcp_client_self_service):
+    tools = await mcp_client_self_service.list_tools()
+    names = {t.name for t in tools}
+    missing = EXPECTED_SELF_SERVICE_TOOLS - names
+    assert not missing, f"self_service is missing: {missing}"</pre>
+  </div>
+
+  <div class="layer-card star">
+    <h3>3b — Workflow ★ (the headline test)</h3>
+    <p>The exact replacement for hand-driving Claude Desktop. Translates <code>.claude/test/testing/self_service.md</code> lines 12–17 (search → get → start → stop) into one deterministic Python test.</p>
+<pre>async def test_vdb_lifecycle_search_get_start_stop(
+    mcp_client_self_service, dct_stub
+):
+    <span class="cmt"># Step 1 — Search for all VDBs</span>
+    search_result = await mcp_client_self_service.call_tool(
+        "data_tool", {"action": "search_vdbs", "limit": 10}
+    )
+    assert dct_stub.received_request("POST", "/dct/v3/vdbs/search")
+    items = _payload(search_result).get("items", [])
+    vdb_id = items[0]["id"]
+
+    <span class="cmt"># Step 2 — Get that VDB's details</span>
+    get_result = await mcp_client_self_service.call_tool(
+        "data_tool", {"action": "get_vdb", "vdb_id": vdb_id}
+    )
+    assert dct_stub.received_request("GET", f"/dct/v3/vdbs/{vdb_id}")
+
+    <span class="cmt"># Step 3 — Start that VDB</span>
+    await mcp_client_self_service.call_tool(
+        "data_tool", {"action": "start_vdb", "vdb_id": vdb_id}
+    )
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
+
+    <span class="cmt"># Step 4 — Stop that VDB (requires confirmation, so we pre-confirm)</span>
+    await mcp_client_self_service.call_tool(
+        "data_tool",
+        {"action": "stop_vdb", "vdb_id": vdb_id, "confirmed": True}
+    )
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")</pre>
+
+    <p>The "that VDB" chaining from the .md file becomes the <code>vdb_id</code> Python variable. Every step is a real MCP call. Every step is verified at the wire level.</p>
+  </div>
+
+  <div class="layer-card">
+    <h3>3c — Confirmation handshake</h3>
+    <p>Proves the destructive-op two-step contract survives end-to-end through MCP stdio. First call returns <code>confirmation_required</code> without hitting DCT; second call with <code>confirmed=True</code> actually issues the destructive request.</p>
+<pre>async def test_delete_vdb_two_step_confirmation(mcp_client_self_service, dct_stub):
+    vdb_id = "v-1"
+
+    <span class="cmt"># Step 1 — first call must NOT execute</span>
+    first = await mcp_client_self_service.call_tool(
+        "data_tool", {"action": "delete_vdb", "vdb_id": vdb_id}
+    )
+    body = _payload(first)
+    assert body.get("status") == "confirmation_required"
+    assert body.get("confirmation_level") == "manual"
+    assert not dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/delete")
+
+    <span class="cmt"># Step 2 — confirmed=True triggers the actual call</span>
+    await mcp_client_self_service.call_tool(
+        "data_tool", {"action": "delete_vdb", "vdb_id": vdb_id, "confirmed": True}
+    )
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/delete")</pre>
+  </div>
+
+  <h3>How the dct_stub works</h3>
+<pre><span class="cmt"># tests/fixtures/dct_stub.py</span>
+class DctStub:
+    def __init__(self):
+        self.requests = []  # records every (method, path, body)
+
+    async def vdbs_search(self, request):
+        await self._record(request)
+        return JSONResponse({"items": _FIXTURE_VDBS})
+
+    async def vdb_job_action(self, request):
+        await self._record(request)
+        return JSONResponse({"job": {"id": "j-1"}})
+
+    def received_request(self, method, path):
+        return any(m == method and p == path for m, p, _ in self.requests)</pre>
+
+  <h3>Live command</h3>
+<pre>$ dct-mcp-test --layer functional
+<span class="ok">tests/functional/test_confirmation_handshake.py::test_delete_vdb_two_step_confirmation PASSED
+tests/functional/test_toolset_registration.py::test_self_service_registers_expected_tools PASSED
+tests/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_start_stop PASSED
+======================== 3 passed in 5.36s ========================</span></pre>
+
+  <h3>Value</h3>
+  <ul class="checklist">
+    <li><strong>Replaces Claude Desktop on a per-PR basis</strong> — no more manual driving of prompts</li>
+    <li>Catches workflow regressions: search/get/start/stop chains that silently break</li>
+    <li>Verifies the confirmation safety net actually works (auditable, not eyeballed)</li>
+    <li>Catches "I broke a persona's toolset config" instantly</li>
+    <li>Scales: every chain in <code>.claude/test/testing/*.md</code> becomes one test file</li>
+  </ul>
+
+  <div class="card card-warn" style="margin-top:18px">
+    <h4 style="margin-top:0;color:var(--warn)">Real production fragility this layer already caught</h4>
+    <p style="margin:0">While building the workflow test, it surfaced a latent bug: <code>async_to_sync</code> in the tool modules calls <code>asyncio.run()</code> in a per-call thread, which closes the event loop between MCP calls. The cached <code>httpx.AsyncClient</code> dies on the next call. The retry loop recovers, but each call ends up on the wire twice.</p>
+    <p style="margin:8px 0 0">Manual Claude Desktop testing never would have surfaced this — but the workflow test sees it instantly via duplicate stub recordings. <strong>Worth a follow-up PR after the demo.</strong></p>
+  </div>
+</section>
+
+<!-- LAYER 4 -->
+<section id="layer4">
+  <h2><span class="tag t-e2e">Layer 4</span> Real DCT End-to-End</h2>
+
+  <div class="layer-card">
+    <h3>What it proves</h3>
+    <p>The MCP server can boot pointed at a real DCT instance, register tools correctly, and execute API calls against the real DCT API. No stub — real HTTP, real auth, real responses.</p>
+
+    <div class="meta-row">
+      <div class="meta-cell"><div class="k">Tests in PoC</div><div class="v">2 smoke + 1 cleanup</div></div>
+      <div class="meta-cell"><div class="k">Runtime</div><div class="v">~2–5s (localhost)</div></div>
+      <div class="meta-cell"><div class="k">Needs DCT?</div><div class="v">Yes</div></div>
+      <div class="meta-cell"><div class="k">Blocks PRs?</div><div class="v">No (advisory)</div></div>
+    </div>
+
+    <h4>The two smoke tests</h4>
+<pre>@pytest.mark.real_dct
+async def test_server_boots_and_registers_tools_against_real_dct(real_mcp_client):
+    <span class="cmt"># Server starts against real DCT, registers data_tool</span>
+    tools = await real_mcp_client.list_tools()
+    names = {t.name for t in tools}
+    assert "data_tool" in names
+
+
+@pytest.mark.real_dct
+async def test_vdb_search_against_real_dct(real_mcp_client):
+    <span class="cmt"># vdbs/search returns expected envelope shape (items can be empty list)</span>
+    result = await real_mcp_client.call_tool(
+        "data_tool", {"action": "search_vdbs", "limit": 10}
+    )
+    body = _payload(result)
+    assert "items" in body
+    assert isinstance(body["items"], list)</pre>
+
+    <h4>The cleanup placeholder</h4>
+    <p>PoC tests are read-only so cleanup is a no-op. Scaffold exists for when destructive workflows are added — every created resource gets tagged with <code>E2E_RUN_TAG</code> (e.g. <code>e2e-a1b2c3d4-1716...</code>) and the cleanup pass searches for and deletes anything matching the current run's tag. Forced to run via <code>if: always()</code> in CI so crashed runs still clean up.</p>
+
+    <h4>How to run it</h4>
+<pre>$ export DCT_API_KEY=apk-your-key-here
+$ dct-mcp-test --base-url https://localhost --layer e2e
+<span class="em">E2E_RUN_TAG = e2e-a1b2c3d4-1716...</span>
+→ pytest tests/e2e -v -m real_dct
+<span class="ok">tests/e2e/test_vdb_smoke.py::test_server_boots_and_registers_tools_against_real_dct PASSED
+tests/e2e/test_vdb_smoke.py::test_vdb_search_against_real_dct PASSED</span>
+→ cleanup: pytest tests/e2e/cleanup
+<span class="ok">tests/e2e/cleanup/test_purge.py::test_cleanup_is_a_noop_in_poc_phase PASSED
+======================== 3 passed in 4.21s ========================</span></pre>
+
+    <h4>Value</h4>
+    <ul class="checklist">
+      <li>Catches real DCT API contract drift (Delphix changes a response shape)</li>
+      <li>Validates real auth (API key format change, ACL drift)</li>
+      <li>Exercises real network/latency/timeout behavior</li>
+      <li>Bulletproof cleanup (per-run tag + forced execution) keeps the persistent DCT clean</li>
+    </ul>
+  </div>
+
+  <div class="card card-warn">
+    <p style="margin:0"><strong>Why not on every PR?</strong> Real DCT is slower than the stub, requires reachable network, and adds flake risk (real transient errors). Layer 3 (the stub-based functional tests) is what gates merges. Layer 4 is a periodic confidence check, not a per-commit gate.</p>
+  </div>
+</section>
+
+<!-- INVOCATION PATHS -->
+<section id="paths">
+  <h2>Three Invocation Paths — One CLI Under the Hood</h2>
+
+  <div class="flow-diagram">                  ┌──────────────────────────────────────────┐
+                  │  src/dct_mcp_server/testing/cli.py       │
+                  │  (the actual implementation)             │
+                  └──────────────┬───────────────────────────┘
+                                 │
+       ┌─────────────────────────┼──────────────────────────────┐
+       │                         │                               │
+       ▼                         ▼                               ▼
+  Terminal CLI            GitHub Actions                Claude Code skill
+  $ dct-mcp-test          - run: dct-mcp-test           /dct-mcp-test
+    --layer ci              --layer ci                    localhost --api-key ...</div>
+
+  <div class="three-col">
+    <div class="path-card">
+      <h4><span class="icon">1</span>Terminal CLI</h4>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Local dev, ad-hoc debugging</p>
+<pre style="font-size:11.5px">$ dct-mcp-test --layer ci
+$ dct-mcp-test \
+    --base-url https://localhost \
+    --api-key apk-xxx \
+    --layer e2e</pre>
+      <p style="font-size:12px">Installed by <code>pip install -e ".[test]"</code> as a <code>[project.scripts]</code> entry point. Always on PATH after install.</p>
+    </div>
+
+    <div class="path-card">
+      <h4><span class="icon">2</span>GitHub Actions</h4>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Auto on every PR; manual for Layer 4</p>
+<pre style="font-size:11.5px"># test.yml — every push/PR
+- run: dct-mcp-test --layer ci
+
+# e2e-real-dct.yml — manual trigger
+on: workflow_dispatch
+- run: dct-mcp-test --layer e2e</pre>
+      <p style="font-size:12px">Free GitHub-hosted runners. No secrets for CI; only Layer 4 reads from <code>secrets.DCT_TEST_*</code>.</p>
+    </div>
+
+    <div class="path-card">
+      <h4><span class="icon">3</span>Claude Code skill</h4>
+      <p style="font-size:13px;color:var(--muted);margin-top:0">Interactive testing from chat</p>
+<pre style="font-size:11.5px">/dct-mcp-test
+/dct-mcp-test localhost
+  --api-key apk-xxx
+/dct-mcp-test https://my-dct.com
+  --api-key xyz --layer e2e</pre>
+      <p style="font-size:12px"><code>.claude/skills/dct-mcp-test/SKILL.md</code> wraps the CLI with URL aliasing and interactive failure triage — Claude can read failing tests and propose fixes.</p>
+    </div>
+  </div>
+
+  <div class="card card-good">
+    <p style="margin:0"><strong>The unifying principle:</strong> all three paths route through the same Python function <code>dct_mcp_server.testing.cli.main</code>. Change behavior once — every path follows. No drift between what runs locally and what runs in CI.</p>
+  </div>
+</section>
+
+<!-- COVERAGE MAP -->
+<section id="coverage">
+  <h2>Coverage Map — Which Layer Catches Which Bug</h2>
+  <p>Each bug class has the right layer to catch it. The cost of catching a bug is lowest at the leftmost layer that can see it.</p>
+
+  <table>
+    <thead>
+      <tr><th>Bug class</th><th>Caught by</th><th>Real-world example</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Tool action routing wrong</td><td><span class="tag t-unit">Unit</span></td><td><code>vdb_tool(action="search")</code> calls <code>/vdbs/list</code> instead</td></tr>
+      <tr><td><code>build_params</code> drops a field</td><td><span class="tag t-unit">Unit</span></td><td><code>limit=10</code> not forwarded to the HTTP call</td></tr>
+      <tr><td>Missing-param guard removed</td><td><span class="tag t-unit">Unit</span></td><td><code>get_vdb()</code> sent to API with no vdb_id</td></tr>
+      <tr><td>URL has double slash</td><td><span class="tag t-int">Integration</span></td><td>Stray trailing slash in <code>DCT_BASE_URL</code> → <code>https://dct//dct/v3/...</code></td></tr>
+      <tr><td>Auth header missing <code>apk </code></td><td><span class="tag t-int">Integration</span></td><td>Refactor accidentally drops the prefix; every call → 401</td></tr>
+      <tr><td>5xx not retried</td><td><span class="tag t-int">Integration</span></td><td>Transient DCT blip fails the whole workflow</td></tr>
+      <tr><td>4xx incorrectly retried</td><td><span class="tag t-int">Integration</span></td><td>401s burning DCT rate limit, masking real auth failure</td></tr>
+      <tr><td>Connection error not handled</td><td><span class="tag t-int">Integration</span></td><td>Bad DNS / DCT down → cryptic failure instead of clean error</td></tr>
+      <tr><td>Edited .txt broke a persona</td><td><span class="tag t-func">Functional 3a</span></td><td>Removing a <code># TOOL</code> header silently drops a tool from a toolset</td></tr>
+      <tr><td>Multi-step workflow regression</td><td><span class="tag t-func">Functional 3b</span></td><td><code>start_vdb</code> no longer reaches DCT after a refactor</td></tr>
+      <tr><td>Confirmation step skipped</td><td><span class="tag t-func">Functional 3c</span></td><td><code>delete_vdb</code> directly executes — destructive op without consent</td></tr>
+      <tr><td>Server doesn't boot</td><td><span class="tag t-func">Functional</span></td><td>Bad config in <code>self_service.txt</code> crashes startup</td></tr>
+      <tr><td>MCP response shape changed</td><td><span class="tag t-func">Functional</span></td><td><code>items</code> key renamed to <code>data</code> → silent client breakage</td></tr>
+      <tr><td>Real DCT API contract drift</td><td><span class="tag t-e2e">Real DCT</span></td><td>Delphix changes the response envelope upstream</td></tr>
+      <tr><td>Real auth/permission issue</td><td><span class="tag t-e2e">Real DCT</span></td><td>API key format changed or ACL drift</td></tr>
+      <tr><td>Real timeout/latency surprise</td><td><span class="tag t-e2e">Real DCT</span></td><td>Stub is fast, real DCT might have slow snapshots/timeflows</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- BREAK DEMO -->
+<section id="break">
+  <h2>The Break Demo — The Emotional Moment</h2>
+
+  <div class="card card-bad">
+    <p style="margin:0"><strong>The goal:</strong> show that a one-line regression is caught instantly with a clear, actionable error message. This is what makes the value of CI visceral.</p>
+  </div>
+
+  <h3>Step 1 — Make the breaking change</h3>
+  <p>Open <code>src/dct_mcp_server/tools/dataset_endpoints_tool.py</code>, find the <code>search_vdbs</code> action (around line 2705), and change:</p>
+<pre>return make_api_request('POST', <span class="ok">'/vdbs/search'</span>, params=params, json_body=body)</pre>
+  <p>to:</p>
+<pre>return make_api_request('POST', <span class="err">'/vdbs/search-BROKEN'</span>, params=params, json_body=body)</pre>
+
+  <h3>Step 2 — Run the functional suite</h3>
+<pre>$ dct-mcp-test --layer functional</pre>
+
+  <h3>Step 3 — Watch CI catch it with a precise message</h3>
+<pre><span class="err">FAILED tests/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_start_stop</span>
+
+    @pytest.mark.asyncio
+    async def test_vdb_lifecycle_search_get_start_stop(mcp_client_self_service, dct_stub):
+        ...
+        seen = {(m, p) for m, p, _ in dct_stub.requests}
+        expected = {
+            ("POST", "/dct/v3/vdbs/search"),
+            ...
+        }
+&gt;       assert expected.issubset(seen), f"Missing DCT calls: {expected - seen}"
+<span class="err">E       AssertionError: Missing DCT calls: {('POST', '/dct/v3/vdbs/search')}</span></pre>
+
+  <div class="card card-accent">
+    <p style="margin:0"><strong>Note the precision.</strong> The error message tells you exactly which DCT endpoint the server never sent. That's a level of feedback Claude Desktop can never give you — the AI either notices something's wrong, or it doesn't.</p>
+  </div>
+
+  <h3>Step 4 — Revert and verify recovery</h3>
+<pre>$ git checkout src/dct_mcp_server/tools/dataset_endpoints_tool.py
+$ dct-mcp-test --layer functional
+<span class="ok">======================== 3 passed in 5.36s ========================</span></pre>
+
+  <h3>What to say while doing it</h3>
+  <div class="card card-accent" style="font-style:italic;color:var(--accent-2)">
+    "One typo. CI catches it in 5 seconds. Today this would land on main silently and someone would discover it next time they tried that workflow — by which point someone else might have edited the same file, and you'd have to bisect to find which change broke what. Now the merge button stays grey until the typo is fixed."
+  </div>
+</section>
+
+<!-- CHEAT SHEET -->
+<section id="cheat">
+  <h2>Cheat Sheet</h2>
+  <p>Every command you'll run during the demo, in order, copy-paste ready.</p>
+
+  <h3>Setup (once)</h3>
+<pre>cd /Users/chaitalisathyanarayana/new_code_base/DCT_MCP_SERVER/dxi-mcp-server
+git checkout dlpx/pr/chaitali/test-suite-poc
+pip install -e ".[test]"</pre>
+
+  <h3>Show what's on the branch</h3>
+<pre>git log --oneline main..HEAD</pre>
+
+  <h3>Fast feedback (per layer)</h3>
+<pre>dct-mcp-test --layer unit          <span class="cmt"># ~1s, 2 tests</span>
+dct-mcp-test --layer integration   <span class="cmt"># ~3s, 3 tests</span>
+dct-mcp-test --layer functional    <span class="cmt"># ~5s, 3 tests</span></pre>
+
+  <h3>CI gate (everything that's safe without DCT)</h3>
+<pre>dct-mcp-test --layer ci            <span class="cmt"># ~9s, 8 tests — what GitHub Actions runs</span></pre>
+
+  <h3>Real DCT (localhost)</h3>
+<pre>export DCT_API_KEY=apk-your-key-here
+dct-mcp-test --base-url https://localhost --layer e2e</pre>
+
+  <h3>Via Claude Code skill</h3>
+<pre>/dct-mcp-test https://localhost --api-key apk-your-key-here --layer e2e</pre>
+
+  <h3>The break demo</h3>
+<pre><span class="cmt"># 1. Edit src/dct_mcp_server/tools/dataset_endpoints_tool.py ~line 2705
+#    Change '/vdbs/search' to '/vdbs/search-BROKEN'</span>
+
+dct-mcp-test --layer functional    <span class="cmt"># FAILS with clear message</span>
+
+<span class="cmt"># 2. Revert</span>
+git checkout src/dct_mcp_server/tools/dataset_endpoints_tool.py
+
+dct-mcp-test --layer functional    <span class="cmt"># green again</span></pre>
+
+  <h3>Show the CI workflow yaml</h3>
+<pre>cat .github/workflows/test.yml</pre>
+
+  <h3>If something fails during the demo</h3>
+<pre><span class="cmt"># Show extra detail with -v</span>
+dct-mcp-test --layer functional -v
+
+<span class="cmt"># Specific test</span>
+dct-mcp-test --layer functional --workflow vdb_lifecycle</pre>
+</section>
+
+<!-- NEXT -->
+<section id="next">
+  <h2>What's Next — Full Rollout After Approval</h2>
+
+  <p>The PoC is the first 4 days of a roughly 3-week full rollout. Each phase is independently shippable.</p>
+
+  <table>
+    <thead>
+      <tr><th>Phase</th><th>Duration</th><th>Deliverable</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Phase 1 — Foundation</td><td>Day 1</td><td>pytest infra, first unit test</td><td><span class="tag t-good">✓ done</span></td></tr>
+      <tr><td>Phase 2 — dct_stub + first workflow</td><td>Days 2–3</td><td>Functional layer working</td><td><span class="tag t-good">✓ done</span></td></tr>
+      <tr><td>Phase 3 — CI wiring</td><td>Day 4</td><td>GitHub Actions workflow</td><td><span class="tag t-good">✓ done</span></td></tr>
+      <tr><td>Phase 4 — Integration coverage</td><td>Day 5</td><td>Wire-level safety net</td><td><span class="tag t-good">✓ done</span></td></tr>
+      <tr><td>Phase 5 — Workflow translation</td><td>Days 6–10</td><td>All ~30 chains from <code>.claude/test/testing/*.md</code> as Python tests</td><td><span class="tag t-warn">pending approval</span></td></tr>
+      <tr><td>Phase 6 — Backfill unit tests</td><td>Days 11–13</td><td>One file per <code>*_endpoints_tool.py</code></td><td><span class="tag t-warn">pending approval</span></td></tr>
+      <tr><td>Phase 7 — Snapshot assertions</td><td>Day 14</td><td>Response-shape regression net (syrupy)</td><td><span class="tag t-warn">pending approval</span></td></tr>
+      <tr><td>Phase 8 — CLI + skill</td><td>Day 15</td><td>Unified runner</td><td><span class="tag t-good">✓ done</span></td></tr>
+      <tr><td>Phase 9 — Layer 4 wiring</td><td>Days 16–17</td><td>Real-DCT validation end-to-end</td><td><span class="tag t-good">✓ scaffold done</span></td></tr>
+      <tr><td>Phase 10 — Optional Layer 5</td><td>Later</td><td>LM Studio AI-usability check</td><td><span class="tag t-warn">optional</span></td></tr>
+    </tbody>
+  </table>
+
+  <p>After Phase 5 lands, the <code>.claude/test/testing.md</code> manual playbook becomes exploratory testing only — never a regression check.</p>
+
+  <h3>Open questions for the team</h3>
+  <ul>
+    <li>Is the cloned DCT reachable from GitHub-hosted runners? (Determines whether Layer 4 can run in CI vs. workflow_dispatch only.)</li>
+    <li>Who owns test data hygiene on the cloned DCT?</li>
+    <li>Do we want nightly Layer 4 cron, or workflow_dispatch only?</li>
+    <li>Is the production <code>async_to_sync</code> event-loop bug worth a follow-up PR? (Caught by Layer 3 — easy fix, separate change.)</li>
+  </ul>
+
+  <div class="card card-good">
+    <p style="margin:0"><strong>If approved today:</strong> Phase 5 starts tomorrow. Phase 5 + 6 + 7 = ~10 more working days. After that, every PR is gated and manual Claude Desktop testing is fully retired from the regression path.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+  const buttons = document.querySelectorAll('nav button');
+  const sections = document.querySelectorAll('main section');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      sections.forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.target).classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+</script>
+
+</body>
+</html>
