@@ -13,12 +13,9 @@ import os
 
 import pytest
 
+from tests.e2e._helpers import call_tool_tolerant, payload as _payload
+
 pytestmark = [pytest.mark.real_dct, pytest.mark.asyncio]
-
-
-def _payload(result):
-    sc = result.structured_content or {}
-    return sc.get("result", sc)
 
 
 async def test_purge_tagged_resources(real_mcp_client):
@@ -29,9 +26,8 @@ async def test_purge_tagged_resources(real_mcp_client):
 
     # Bookmarks are fully manageable in self_service (create + delete), so they are
     # the resource the L4 mutation test creates — purge any named with this run tag.
-    res = await real_mcp_client.call_tool("bookmark_tool", {"action": "search", "limit": 500})
-    if res.is_error:
-        pytest.skip(f"bookmark search unavailable on this DCT: {res}")
+    # (Skips cleanly if the DCT license forbids bookmarks — then nothing was created.)
+    res = await call_tool_tolerant(real_mcp_client, "bookmark_tool", {"action": "search", "limit": 500})
 
     leftovers = [
         b for b in _payload(res).get("items", [])
@@ -39,11 +35,15 @@ async def test_purge_tagged_resources(real_mcp_client):
     ]
     for b in leftovers:
         await real_mcp_client.call_tool(
-            "bookmark_tool", {"action": "delete", "bookmark_id": b["id"], "confirmed": True}
+            "bookmark_tool",
+            {"action": "delete", "bookmark_id": b["id"], "confirmed": True},
+            raise_on_error=False,
         )
 
     # Best-effort verify nothing tagged remains (don't hard-fail cleanup on a race).
-    after = await real_mcp_client.call_tool("bookmark_tool", {"action": "search", "limit": 500})
+    after = await real_mcp_client.call_tool(
+        "bookmark_tool", {"action": "search", "limit": 500}, raise_on_error=False
+    )
     if not after.is_error:
         still = [b for b in _payload(after).get("items", []) if run_tag in (b.get("name") or "")]
         assert not still, f"purge left tagged bookmarks behind: {[b['id'] for b in still]}"

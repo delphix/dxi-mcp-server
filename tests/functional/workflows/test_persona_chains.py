@@ -23,55 +23,10 @@ required.
 import re
 
 import pytest
-import yaml
-from pathlib import Path
 
-from tests._support import config_cases as cc
-from tests.fixtures.dct_stub import DctStub
-
-SPEC_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "api-external.yaml"
-
-
-@pytest.fixture
-async def persona_tools(dct_stub: DctStub, monkeypatch):
-    """
-    Build generated tools wired to a real DCTAPIClient pointed at the stub.
-
-    Returns a factory: `make(toolset) -> {tool_name: func}`. Restores tool_factory
-    globals and closes the client on teardown.
-    """
-    import dct_mcp_server.tools.core.tool_factory as tf
-    from dct_mcp_server.dct_client.client import DCTAPIClient
-
-    monkeypatch.setenv("DCT_BASE_URL", dct_stub.url)
-    monkeypatch.setenv("DCT_API_KEY", "test")
-    monkeypatch.setenv("DCT_VERIFY_SSL", "false")
-
-    saved_spec, saved_client = tf._openapi_spec, tf._dct_client
-    tf._openapi_spec = yaml.safe_load(SPEC_PATH.read_text())
-    client = DCTAPIClient()
-    tf._dct_client = client
-
-    generated: dict = {}
-
-    def make(toolset: str) -> dict:
-        if toolset not in generated:
-            generated[toolset] = {n: f for f, n in tf.generate_tools_for_toolset(toolset)}
-        return generated[toolset]
-
-    yield make
-
-    await client.close()
-    tf._openapi_spec = saved_spec
-    tf._dct_client = saved_client
-
-
-def _path_for(toolset: str, tool: str, action: str):
-    """Look up (method, path) for an action from the config oracle (verifies it's real)."""
-    for m, p, a in cc.tools_for(toolset)[tool]:
-        if a == action:
-            return m, p
-    raise AssertionError(f"{toolset}/{tool} has no action {action!r}")
+# `persona_tools` fixture + `persona_path_for` helper now live in the shared
+# tests/functional/conftest.py so the CDA functional files can reuse them.
+from tests.functional.conftest import persona_path_for as _path_for
 
 
 async def _search_get_chain(tools, dct_stub, toolset, tool):

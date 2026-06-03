@@ -14,13 +14,9 @@ are absent. Run via:
 import pytest
 
 from tests._support import config_cases
+from tests.e2e._helpers import call_tool_tolerant, payload as _payload
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.asyncio]
-
-
-def _payload(result):
-    sc = result.structured_content or {}
-    return sc.get("result", sc)
 
 
 # Read-only "search" actions for each self_service tool (POST /<resource>/search).
@@ -49,8 +45,7 @@ async def test_read_only_search_returns_well_shaped_response(real_mcp_client, to
     Each resource's search returns a well-shaped paginated response from the real
     DCT. The list may be empty (fresh DCT) — we assert SHAPE, not contents.
     """
-    result = await real_mcp_client.call_tool(tool, {"action": "search", "limit": 5})
-    assert not result.is_error, f"{tool} search failed against real DCT: {result}"
+    result = await call_tool_tolerant(real_mcp_client, tool, {"action": "search", "limit": 5})
     body = _payload(result)
     assert isinstance(body, dict), f"{tool} search returned non-dict: {body!r}"
     assert "items" in body, f"{tool} search response missing 'items': {body}"
@@ -59,12 +54,10 @@ async def test_read_only_search_returns_well_shaped_response(real_mcp_client, to
 
 async def test_vdb_get_roundtrip_if_any_exist(real_mcp_client):
     """If the DCT has any VDBs, GET the first one and confirm its id echoes back."""
-    search = await real_mcp_client.call_tool("vdb_tool", {"action": "search", "limit": 1})
-    assert not search.is_error
+    search = await call_tool_tolerant(real_mcp_client, "vdb_tool", {"action": "search", "limit": 1})
     items = _payload(search).get("items", [])
     if not items:
         pytest.skip("no VDBs on this DCT — nothing to round-trip (not a failure)")
     vdb_id = items[0]["id"]
-    got = await real_mcp_client.call_tool("vdb_tool", {"action": "get", "vdb_id": vdb_id})
-    assert not got.is_error, f"vdb get failed: {got}"
+    got = await call_tool_tolerant(real_mcp_client, "vdb_tool", {"action": "get", "vdb_id": vdb_id})
     assert _payload(got).get("id") == vdb_id

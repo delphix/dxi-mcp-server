@@ -18,16 +18,12 @@ import pytest
 from fastmcp import Client
 
 from tests._support import config_cases
+from tests.e2e._helpers import call_tool_tolerant, payload as _payload
 from tests.e2e.conftest import build_real_transport
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.asyncio]
 
 _TOOLSET = "continuous_data_admin"
-
-
-def _payload(result):
-    sc = result.structured_content or {}
-    return sc.get("result", sc)
 
 
 # Derived from the SAME config the server reads, so this stays in sync with the
@@ -60,8 +56,7 @@ async def test_cda_read_only_search_well_shaped(cda_mcp_client, tool):
     Each CDA resource's search returns a well-shaped paginated response from the real
     DCT. The list may be empty — we assert SHAPE, not contents.
     """
-    result = await cda_mcp_client.call_tool(tool, {"action": "search", "limit": 5})
-    assert not result.is_error, f"{tool} search failed against real DCT: {result}"
+    result = await call_tool_tolerant(cda_mcp_client, tool, {"action": "search", "limit": 5})
     body = _payload(result)
     assert isinstance(body, dict), f"{tool} search returned non-dict: {body!r}"
     assert "items" in body, f"{tool} search response missing 'items': {body}"

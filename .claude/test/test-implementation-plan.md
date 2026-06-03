@@ -35,9 +35,9 @@ workflows for non-self_service will reuse the in-process/seeded approach (or aut
 | L0 | Foundations (cleanup + scaffolding + param helpers) | ☑ done |
 | L1 | Layer 1 — Unit | ☑ done (156 tests, 0 xfail/skip) |
 | L2 | Layer 2 — Integration | ☑ done (29 tests, ~0.09s) |
-| L3 | Layer 3 — Functional (3a reg, 3b workflows, 3c confirm) | ☑ done — all personas (CI layer 1053 passed) |
-| L4 | Layer 4 — E2E (real DCT) | ◑ code-complete (11 tests); live run pending |
-| L5 | Layer 5 — LLM-driven (Claude Code CLI) | ◑ code-complete (8 tests); live run pending |
+| L3 | Layer 3 — Functional (3a reg, 3b workflows, 3c confirm) | ☑ done — all personas. CDA brought to parity 2026-06-03: +57 confirmation-handshake cases (test_confirmation_handshake_cda.py) + 5 workflow chains (test_cda_workflows.py), in-process generated tools vs stub. CI layer now ~1116. |
+| L4 | Layer 4 — E2E (real DCT) | ☑ LIVE-VERIFIED 2026-06-03: read-only 22 passed / 3 skipped (CDA admin surface all pass; vdb_group+bookmark skip = DCT license). Hardened for license + fastmcp raise_on_error. Mutations pending engine details. |
+| L5 | Layer 5 — LLM-driven (Claude Code CLI) | ◑ pipeline LIVE-VERIFIED 2026-06-03 (CDA engine discoverability passed, ~18s; claude authed, MCP+stream-json parse work). Full 14-case sweep not yet run. |
 | L6 | CI & enforcement (CI runs tests; required-check optional/deferred) | ☐ not started — **LAST**, after all test layers |
 
 > **Focus for now: building tests (L0–L5).** All CI / GitHub-Actions wiring and any
