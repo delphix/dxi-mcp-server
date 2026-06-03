@@ -60,7 +60,7 @@ dct-mcp-test --layer unit
 
 Expected: **2 tests, ~1s, green.**
 
-Open `tests/unit/test_job_tool.py` while it runs.
+Open `tests/demo/unit/test_job_tool.py` while it runs.
 
 > "Each tool function has actions like `search`, `get`, `delete`. We mock the HTTP client, call the function directly, assert it would have hit the right endpoint. This is what catches refactor bugs."
 
@@ -74,7 +74,7 @@ dct-mcp-test --layer integration
 
 Expected: **3 tests, ~3s, green.** (Retry test takes 3s of real sleeps — that's exponential backoff being exercised.)
 
-Open `tests/integration/test_client_retry.py`.
+Open `tests/demo/integration/test_client_retry.py`.
 
 > "This one — `test_client_sends_apk_prefixed_auth_header` — catches a subtle class of bug. Our DCTAPIClient prepends `apk ` to the API key. If someone refactors and accidentally drops the prefix, every auth fails. This test would catch it in 50ms."
 
@@ -90,13 +90,13 @@ Expected: **3 tests, ~5s, green.**
 
 Open two files side by side:
 - `.claude/test/testing/self_service.md` lines 12–17
-- `tests/functional/workflows/test_vdb_lifecycle.py`
+- `tests/demo/functional/workflows/test_vdb_lifecycle.py`
 
 > "This `.md` file is what I run by hand today. Search VDBs, get the first one, start it, stop it. The Python file is the same scenario, deterministic. Every step is a real MCP call over stdio to the actual `dct-mcp-server` subprocess. The fake DCT — `dct_stub` — records every HTTP request and we assert the right endpoint got hit."
 
 Then show:
-- `tests/functional/test_toolset_registration.py` — proves the right tools register
-- `tests/functional/test_confirmation_handshake.py` — proves the two-step destructive-op contract
+- `tests/demo/functional/test_toolset_registration.py` — proves the right tools register
+- `tests/demo/functional/test_confirmation_handshake.py` — proves the two-step destructive-op contract
 
 > "When a workflow test fails, the message tells you exactly which DCT endpoint never got hit. That's a level of precision Claude Desktop can never give us."
 
@@ -115,7 +115,7 @@ Expected: **3 tests (2 smoke + 1 cleanup), ~2–5s, green.**
 
 ### 7:00 — The Break Demo (90s, the emotional moment)
 
-Edit `src/dct_mcp_server/tools/dataset_endpoints_tool.py` line 2705:
+Edit `src/dct_mcp_server/tools/dataset_endpoints_tool.py` line 470 (the `vdb_tool` `action="search"` branch):
 
 ```python
 # Change this line:
@@ -163,7 +163,7 @@ cat .github/workflows/test.yml
 
 ## 4. What each layer covers
 
-### Layer 1 — Unit (`tests/unit/`)
+### Layer 1 — Unit (`tests/demo/unit/`)
 
 | Field | Value |
 |---|---|
@@ -176,7 +176,7 @@ cat .github/workflows/test.yml
 | How it's built | `MagicMock(spec=DCTAPIClient)` with `AsyncMock` on `make_request`; set as module global; call tool function directly |
 | Value | Fastest feedback. Run every save. |
 
-### Layer 2 — Integration (`tests/integration/`)
+### Layer 2 — Integration (`tests/demo/integration/`)
 
 | Field | Value |
 |---|---|
@@ -189,7 +189,7 @@ cat .github/workflows/test.yml
 | How it's built | `respx.mock` decorator + real `DCTAPIClient` + canned `httpx.Response` objects |
 | Value | Wire-level safety net. Things unit tests can't see. |
 
-### Layer 3 — Functional ★ (`tests/functional/`)
+### Layer 3 — Functional ★ (`tests/demo/functional/`)
 
 | Field | Value |
 |---|---|
@@ -198,11 +198,11 @@ cat .github/workflows/test.yml
 | Needs DCT? | No (`dct_stub`) |
 | Needs network? | No (loopback HTTP) |
 | What it proves | Full MCP stdio works; toolsets register correctly per persona; multi-step workflows succeed end-to-end; confirmation handshake survives the wire |
-| What it catches | "I edited config/toolsets/*.txt and broke a persona", "delete_vdb skips the confirmation step", "the workflow chain has a regression" |
+| What it catches | "I edited config/toolsets/*.txt and broke a persona", "stop skips the confirmation step", "the workflow chain has a regression" |
 | How it's built | `Starlette` stub on `127.0.0.1` + `uvicorn` threaded + `fastmcp.Client` with `StdioTransport` subprocess + `dct_stub.received_request(method, path)` assertions |
 | Value | **This is what replaces Claude Desktop.** Highest-impact layer. |
 
-### Layer 4 — Real DCT (`tests/e2e/`)
+### Layer 4 — Real DCT (`tests/demo/e2e/`)
 
 | Field | Value |
 |---|---|
@@ -256,12 +256,12 @@ Change behavior once in `cli.py`. Every path follows. No drift between local and
 | 5xx not retried | Integration | Transient DCT blip causes whole workflow to fail |
 | 4xx incorrectly retried | Integration | 401s burning DCT rate limit |
 | Edited `.txt` broke a persona | Functional 3a | Removing a `# TOOL` header silently drops a tool |
-| Multi-step workflow regression | Functional 3b | `start_vdb` no longer reaches DCT |
-| Two-step confirmation broken | Functional 3c | `delete_vdb` skips confirmation |
+| Multi-step workflow regression | Functional 3b | `vdb_tool(action="start")` no longer reaches DCT |
+| Two-step confirmation broken | Functional 3c | `vdb_tool(action="stop")` skips confirmation |
 | Server doesn't boot for a persona | Functional 3a | Bad config in `self_service.txt` |
 | Real DCT API contract drift | Real DCT | Delphix changes the response envelope |
 | Real auth doesn't work | Real DCT | API key format changed |
-| AI can't navigate tool schema | (Out of scope — future Layer 5 with LM Studio) | |
+| AI can't navigate tool schema / op didn't really happen | (Future Layer 5 — Claude Code CLI vs. real DCT, act→verify) | |
 
 ---
 
@@ -290,6 +290,9 @@ dct-mcp-test --layer functional    # ~5s, 3 tests
 # === CI gate (Layers 1-3, no DCT needed) ===
 dct-mcp-test --layer ci            # ~9s, 8 tests — what GitHub runs
 
+# === The whole curated showcase (tests/demo/) ===
+dct-mcp-test --layer demo          # unit+integration+functional pass; e2e+llm skip without creds
+
 # === Real DCT (Layer 4) ===
 export DCT_API_KEY=<your-apk-key>
 dct-mcp-test --base-url https://localhost --layer e2e
@@ -298,7 +301,7 @@ dct-mcp-test --base-url https://localhost --layer e2e
 /dct-mcp-test https://localhost --api-key <key> --layer e2e
 
 # === The break demo ===
-# 1. Edit src/dct_mcp_server/tools/dataset_endpoints_tool.py line 2705:
+# 1. Edit src/dct_mcp_server/tools/dataset_endpoints_tool.py line 470:
 #    change '/vdbs/search' to '/vdbs/search-BROKEN'
 # 2. Run:
 dct-mcp-test --layer functional    # FAILS — clear error message
@@ -319,7 +322,7 @@ The PoC is the first 4 days of a roughly 3-week full rollout:
 | 7 | 1 day | Add snapshot assertions on tool response shapes |
 | 8 | done in PoC | CLI + skill |
 | 9 | 2 days | Wire `e2e-real-dct.yml` to a network-reachable DCT |
-| 10 (optional) | later | LM Studio local AI-usability check |
+| 10 (optional) | later | Layer 5 — Claude Code CLI vs. real DCT, act→verify |
 
 After phase 5, manual Claude Desktop testing is reduced to exploratory use only.
 

@@ -1,38 +1,49 @@
 """
-Layer 4 cleanup pass — invoked by `dct-mcp-test` after every --layer e2e run,
-even on test failure. Uses E2E_RUN_TAG to find and delete any resources the
-e2e tests created during this run.
+Layer 4 cleanup — purge everything tagged with the current E2E_RUN_TAG.
 
-PoC stage: the smoke tests in tests/e2e/test_vdb_smoke.py are read-only, so
-cleanup is a no-op. This file exists as the scaffold for when destructive
-e2e workflows are added (delete created VDBs, bookmarks, tags, etc.).
+Invoked by `dct-mcp-test --layer e2e` AFTER the e2e tests (always, even on failure),
+so a crashed mutation run still cleans up. Read-only / no-op while the e2e suite is
+read-only; becomes active once mutation tests create tagged resources.
 
-When destructive tests are added:
-  - Every created resource must be tagged with f"{E2E_RUN_TAG}-<purpose>"
-    (e.g. in the resource name or via tags)
-  - This module searches for everything tagged with the current run id and
-    deletes it
-  - Forced to run via `if: always()` in CI so crashed runs still clean up
+Convention: every resource a mutation test creates is NAMED with the run tag
+(e.g. f"{E2E_RUN_TAG}-bookmark") so this pass can find and delete it.
 """
 
 import os
 
 import pytest
 
+pytestmark = [pytest.mark.real_dct, pytest.mark.asyncio]
 
-@pytest.mark.real_dct
-@pytest.mark.asyncio
-async def test_cleanup_is_a_noop_in_poc_phase(real_mcp_client):
-    """
-    Placeholder cleanup test. Confirms that we have an E2E_RUN_TAG and the
-    real MCP client is reachable. Will grow into actual purge logic when
-    destructive e2e workflows are introduced.
-    """
+
+def _payload(result):
+    sc = result.structured_content or {}
+    return sc.get("result", sc)
+
+
+async def test_purge_tagged_resources(real_mcp_client):
     run_tag = os.environ.get("E2E_RUN_TAG")
-    assert run_tag, "E2E_RUN_TAG must be set by the CLI before cleanup runs"
-    assert run_tag.startswith("e2e-"), f"unexpected E2E_RUN_TAG format: {run_tag}"
+    assert run_tag and run_tag.startswith("e2e-"), (
+        f"E2E_RUN_TAG must be set by the CLI before cleanup; got {run_tag!r}"
+    )
 
-    # Sanity check: client is still alive after the test pass — proves the
-    # cleanup step has a live connection to DCT for future delete calls.
-    tools = await real_mcp_client.list_tools()
-    assert tools, "real_mcp_client lost its connection before cleanup ran"
+    # Bookmarks are fully manageable in self_service (create + delete), so they are
+    # the resource the L4 mutation test creates — purge any named with this run tag.
+    res = await real_mcp_client.call_tool("bookmark_tool", {"action": "search", "limit": 500})
+    if res.is_error:
+        pytest.skip(f"bookmark search unavailable on this DCT: {res}")
+
+    leftovers = [
+        b for b in _payload(res).get("items", [])
+        if run_tag in (b.get("name") or "")
+    ]
+    for b in leftovers:
+        await real_mcp_client.call_tool(
+            "bookmark_tool", {"action": "delete", "bookmark_id": b["id"], "confirmed": True}
+        )
+
+    # Best-effort verify nothing tagged remains (don't hard-fail cleanup on a race).
+    after = await real_mcp_client.call_tool("bookmark_tool", {"action": "search", "limit": 500})
+    if not after.is_error:
+        still = [b for b in _payload(after).get("items", []) if run_tag in (b.get("name") or "")]
+        assert not still, f"purge left tagged bookmarks behind: {[b['id'] for b in still]}"

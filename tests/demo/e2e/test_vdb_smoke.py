@@ -20,20 +20,33 @@ def _payload(result):
     return sc.get("result", sc)
 
 
+# Tools generated dynamically from self_service.txt at runtime against real DCT.
+# Names come straight from `# TOOL N: <name>` headers in config/toolsets/self_service.txt.
+EXPECTED_SELF_SERVICE_TOOLS_REAL = {
+    "vdb_tool",
+    "vdb_group_tool",
+    "dsource_tool",
+    "snapshot_tool",
+    "bookmark_tool",
+    "job_tool",
+    "timeflow_tool",
+}
+
+
 @pytest.mark.real_dct
 @pytest.mark.asyncio
 async def test_server_boots_and_registers_tools_against_real_dct(real_mcp_client):
     """
-    The most basic smoke test: the MCP server starts, completes its OpenAPI
-    download/generation against the real DCT, and exposes the data_tool.
-    If THIS fails, nothing else in Layer 4 can pass.
+    The most basic smoke test: the MCP server starts, downloads the OpenAPI
+    spec from the real DCT, generates tools dynamically, and exposes the full
+    self_service surface. If THIS fails, nothing else in Layer 4 can pass.
     """
     tools = await real_mcp_client.list_tools()
     names = {t.name for t in tools}
-    assert names, "MCP server registered zero tools against real DCT"
-    # data_tool is the VDB-domain entry point under self_service
-    assert "data_tool" in names, (
-        f"data_tool missing — registered tools were: {sorted(names)}"
+    missing = EXPECTED_SELF_SERVICE_TOOLS_REAL - names
+    assert not missing, (
+        f"self_service is missing tools against real DCT: {missing}\n"
+        f"Registered tools were: {sorted(names)}"
     )
 
 
@@ -46,9 +59,9 @@ async def test_vdb_search_against_real_dct(real_mcp_client):
     not specific contents.
     """
     result = await real_mcp_client.call_tool(
-        "data_tool", {"action": "search_vdbs", "limit": 10}
+        "vdb_tool", {"action": "search", "limit": 10}
     )
-    assert not result.is_error, f"search_vdbs failed against real DCT: {result}"
+    assert not result.is_error, f"vdb_tool search failed against real DCT: {result}"
 
     body = _payload(result)
     assert "items" in body, (

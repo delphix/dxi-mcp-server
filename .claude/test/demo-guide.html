@@ -383,7 +383,7 @@ e845d53  Strategy design + interactive HTML report</pre>
     <div class="say">"Unit tests prove action routing inside the grouped tools. The DCTAPIClient is mocked — no HTTP, no DCT, runs in a second."</div>
     <div class="do">Run</div>
 <pre>dct-mcp-test --layer unit</pre>
-    <div class="expect"><strong>2 tests, ~1s, green.</strong> Open <code>tests/unit/test_job_tool.py</code> while it's running and walk through the mock pattern.</div>
+    <div class="expect"><strong>2 tests, ~1s, green.</strong> Open <code>tests/demo/unit/test_job_tool.py</code> while it's running and walk through the mock pattern.</div>
   </div>
 
   <div class="step">
@@ -405,7 +405,7 @@ e845d53  Strategy design + interactive HTML report</pre>
     <div class="expect"><strong>3 tests, ~5s, green.</strong> Now open two files side by side:</div>
     <ul>
       <li><code>.claude/test/testing/self_service.md</code> lines 12–17</li>
-      <li><code>tests/functional/workflows/test_vdb_lifecycle.py</code></li>
+      <li><code>tests/demo/functional/workflows/test_vdb_lifecycle.py</code></li>
     </ul>
     <div class="say">"This .md file is what I run by hand today. Search VDBs, get the first one, start it, stop it. The Python file is the same scenario, deterministic. Every step is a real MCP call over stdio to the actual dct-mcp-server subprocess. The fake DCT — dct_stub — records every HTTP request and we assert the right endpoint got hit."</div>
     <div class="say">"When a workflow test fails, the message tells you exactly which DCT endpoint never got hit. That's a level of precision Claude Desktop can never give us."</div>
@@ -425,7 +425,7 @@ dct-mcp-test --base-url https://localhost --layer e2e</pre>
   <div class="step">
     <div class="timer">7:00<br>90s</div>
     <h3>The Break Demo <span class="tag t-bad">★ THE EMOTIONAL MOMENT</span></h3>
-    <div class="do">Edit <code>src/dct_mcp_server/tools/dataset_endpoints_tool.py</code> line 2705</div>
+    <div class="do">Edit <code>src/dct_mcp_server/tools/dataset_endpoints_tool.py</code> line 470 (the <code>vdb_tool</code> <code>action="search"</code> branch)</div>
 <pre><span class="cmt"># Change:</span>
 return make_api_request('POST', '/vdbs/search', params=params, json_body=body)
 <span class="cmt"># To:</span>
@@ -466,22 +466,22 @@ cat .github/workflows/test.yml
   <h3>The three test layers + Layer 4 (real DCT)</h3>
   <div class="flow-diagram">┌────────────────────────────────────────────────────────────────┐
 │ Layer 1 — Unit            in-process, mocked DCTAPIClient       │
-│ ~60% surface              tests/unit/                            │
+│ ~60% surface              tests/demo/unit/                            │
 │ runs every save           &lt;1s                                    │
 ├────────────────────────────────────────────────────────────────┤
 │ Layer 2 — Integration     in-process, respx-mocked HTTP          │
-│ ~25% surface              tests/integration/                     │
+│ ~25% surface              tests/demo/integration/                     │
 │ runs every push           ~3s                                    │
 ├────────────────────────────────────────────────────────────────┤
 │ Layer 3 — Functional ★    subprocess + dct_stub (fake DCT)       │
-│ ~15% surface              tests/functional/                      │
+│ ~15% surface              tests/demo/functional/                      │
 │ runs every PR             ~5s                                    │
 │   3a. toolset registration   per-persona tool surface check      │
 │   3b. workflow tests         .md scenarios translated to Python  │
 │   3c. confirmation handshake destructive-op two-step over wire   │
 ├────────────────────────────────────────────────────────────────┤
 │ Layer 4 — Real DCT        subprocess + REAL DCT                  │
-│ on-demand                 tests/e2e/                             │
+│ on-demand                 tests/demo/e2e/                             │
 │ workflow_dispatch + CLI   ~2-5s                                  │
 └────────────────────────────────────────────────────────────────┘</div>
 
@@ -586,8 +586,8 @@ def mock_dct_client():
 
     <h4>Live command</h4>
 <pre>$ dct-mcp-test --layer unit
-<span class="ok">tests/unit/test_job_tool.py::test_job_tool_search_routes_to_jobs_search_endpoint PASSED
-tests/unit/test_job_tool.py::test_job_tool_get_requires_job_id PASSED
+<span class="ok">tests/demo/unit/test_job_tool.py::test_job_tool_search_routes_to_jobs_search_endpoint PASSED
+tests/demo/unit/test_job_tool.py::test_job_tool_get_requires_job_id PASSED
 ======================== 2 passed in 0.85s ========================</span></pre>
 
     <h4>Value</h4>
@@ -643,9 +643,9 @@ async def test_client_sends_apk_prefixed_auth_header():
 
     <h4>Live command</h4>
 <pre>$ dct-mcp-test --layer integration
-<span class="ok">tests/integration/test_client_retry.py::test_client_retries_on_5xx_then_succeeds PASSED
-tests/integration/test_client_retry.py::test_client_does_not_retry_on_4xx PASSED
-tests/integration/test_client_retry.py::test_client_sends_apk_prefixed_auth_header PASSED
+<span class="ok">tests/demo/integration/test_client_retry.py::test_client_retries_on_5xx_then_succeeds PASSED
+tests/demo/integration/test_client_retry.py::test_client_does_not_retry_on_4xx PASSED
+tests/demo/integration/test_client_retry.py::test_client_sends_apk_prefixed_auth_header PASSED
 ======================== 3 passed in 3.07s ========================</span></pre>
     <p style="font-size:13px;color:var(--muted)">The 3s runtime is real exponential backoff being exercised: 1s + 2s = 3s of sleep between retry attempts.</p>
 
@@ -673,8 +673,8 @@ tests/integration/test_client_retry.py::test_client_sends_apk_prefixed_auth_head
     <h3>3a — Toolset registration</h3>
     <p>The MCP server boots with <code>DCT_TOOLSET=self_service</code> and we ask it what tools it exposes. Catches "I edited <code>config/toolsets/*.txt</code> and broke a persona without noticing."</p>
 <pre>EXPECTED_SELF_SERVICE_TOOLS = {
-    "data_tool", "snapshot_bookmark_tool", "timeflow_tool",
-    "data_connection_tool", "job_tool",
+    "vdb_tool", "vdb_group_tool", "dsource_tool",
+    "snapshot_tool", "bookmark_tool", "job_tool", "timeflow_tool",
 }
 
 async def test_self_service_registers_expected_tools(mcp_client_self_service):
@@ -692,7 +692,7 @@ async def test_self_service_registers_expected_tools(mcp_client_self_service):
 ):
     <span class="cmt"># Step 1 — Search for all VDBs</span>
     search_result = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "search_vdbs", "limit": 10}
+        "vdb_tool", {"action": "search", "limit": 10}
     )
     assert dct_stub.received_request("POST", "/dct/v3/vdbs/search")
     items = _payload(search_result).get("items", [])
@@ -700,20 +700,20 @@ async def test_self_service_registers_expected_tools(mcp_client_self_service):
 
     <span class="cmt"># Step 2 — Get that VDB's details</span>
     get_result = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "get_vdb", "vdb_id": vdb_id}
+        "vdb_tool", {"action": "get", "vdb_id": vdb_id}
     )
     assert dct_stub.received_request("GET", f"/dct/v3/vdbs/{vdb_id}")
 
     <span class="cmt"># Step 3 — Start that VDB</span>
     await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "start_vdb", "vdb_id": vdb_id}
+        "vdb_tool", {"action": "start", "vdb_id": vdb_id}
     )
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
 
     <span class="cmt"># Step 4 — Stop that VDB (requires confirmation, so we pre-confirm)</span>
     await mcp_client_self_service.call_tool(
-        "data_tool",
-        {"action": "stop_vdb", "vdb_id": vdb_id, "confirmed": True}
+        "vdb_tool",
+        {"action": "stop", "vdb_id": vdb_id, "confirmed": True}
     )
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")</pre>
 
@@ -722,24 +722,24 @@ async def test_self_service_registers_expected_tools(mcp_client_self_service):
 
   <div class="layer-card">
     <h3>3c — Confirmation handshake</h3>
-    <p>Proves the destructive-op two-step contract survives end-to-end through MCP stdio. First call returns <code>confirmation_required</code> without hitting DCT; second call with <code>confirmed=True</code> actually issues the destructive request.</p>
-<pre>async def test_delete_vdb_two_step_confirmation(mcp_client_self_service, dct_stub):
+    <p>Proves the destructive-op two-step contract survives end-to-end through MCP stdio. First call returns <code>confirmation_required</code> without hitting DCT; second call with <code>confirmed=True</code> actually issues the request. Here we use the <code>stop</code> action (<code>standard</code> confirmation level).</p>
+<pre>async def test_stop_vdb_two_step_confirmation(mcp_client_self_service, dct_stub):
     vdb_id = "v-1"
 
     <span class="cmt"># Step 1 — first call must NOT execute</span>
     first = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "delete_vdb", "vdb_id": vdb_id}
+        "vdb_tool", {"action": "stop", "vdb_id": vdb_id}
     )
     body = _payload(first)
     assert body.get("status") == "confirmation_required"
-    assert body.get("confirmation_level") == "manual"
-    assert not dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/delete")
+    assert body.get("confirmation_level") == "standard"
+    assert not dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")
 
     <span class="cmt"># Step 2 — confirmed=True triggers the actual call</span>
     await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "delete_vdb", "vdb_id": vdb_id, "confirmed": True}
+        "vdb_tool", {"action": "stop", "vdb_id": vdb_id, "confirmed": True}
     )
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/delete")</pre>
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")</pre>
   </div>
 
   <h3>How the dct_stub works</h3>
@@ -761,9 +761,9 @@ class DctStub:
 
   <h3>Live command</h3>
 <pre>$ dct-mcp-test --layer functional
-<span class="ok">tests/functional/test_confirmation_handshake.py::test_delete_vdb_two_step_confirmation PASSED
-tests/functional/test_toolset_registration.py::test_self_service_registers_expected_tools PASSED
-tests/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_start_stop PASSED
+<span class="ok">tests/demo/functional/test_confirmation_handshake.py::test_stop_vdb_two_step_confirmation PASSED
+tests/demo/functional/test_toolset_registration.py::test_self_service_registers_expected_tools PASSED
+tests/demo/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_start_stop PASSED
 ======================== 3 passed in 5.36s ========================</span></pre>
 
   <h3>Value</h3>
@@ -800,17 +800,17 @@ tests/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_
     <h4>The two smoke tests</h4>
 <pre>@pytest.mark.real_dct
 async def test_server_boots_and_registers_tools_against_real_dct(real_mcp_client):
-    <span class="cmt"># Server starts against real DCT, registers data_tool</span>
+    <span class="cmt"># Server starts against real DCT, registers vdb_tool</span>
     tools = await real_mcp_client.list_tools()
     names = {t.name for t in tools}
-    assert "data_tool" in names
+    assert "vdb_tool" in names
 
 
 @pytest.mark.real_dct
 async def test_vdb_search_against_real_dct(real_mcp_client):
     <span class="cmt"># vdbs/search returns expected envelope shape (items can be empty list)</span>
     result = await real_mcp_client.call_tool(
-        "data_tool", {"action": "search_vdbs", "limit": 10}
+        "vdb_tool", {"action": "search", "limit": 10}
     )
     body = _payload(result)
     assert "items" in body
@@ -823,11 +823,11 @@ async def test_vdb_search_against_real_dct(real_mcp_client):
 <pre>$ export DCT_API_KEY=apk-your-key-here
 $ dct-mcp-test --base-url https://localhost --layer e2e
 <span class="em">E2E_RUN_TAG = e2e-a1b2c3d4-1716...</span>
-→ pytest tests/e2e -v -m real_dct
-<span class="ok">tests/e2e/test_vdb_smoke.py::test_server_boots_and_registers_tools_against_real_dct PASSED
-tests/e2e/test_vdb_smoke.py::test_vdb_search_against_real_dct PASSED</span>
-→ cleanup: pytest tests/e2e/cleanup
-<span class="ok">tests/e2e/cleanup/test_purge.py::test_cleanup_is_a_noop_in_poc_phase PASSED
+→ pytest tests/demo/e2e -v -m real_dct
+<span class="ok">tests/demo/e2e/test_vdb_smoke.py::test_server_boots_and_registers_tools_against_real_dct PASSED
+tests/demo/e2e/test_vdb_smoke.py::test_vdb_search_against_real_dct PASSED</span>
+→ cleanup: pytest tests/demo/e2e/cleanup
+<span class="ok">tests/demo/e2e/cleanup/test_purge.py::test_cleanup_is_a_noop_in_poc_phase PASSED
 ======================== 3 passed in 4.21s ========================</span></pre>
 
     <h4>Value</h4>
@@ -913,15 +913,15 @@ on: workflow_dispatch
     <tbody>
       <tr><td>Tool action routing wrong</td><td><span class="tag t-unit">Unit</span></td><td><code>vdb_tool(action="search")</code> calls <code>/vdbs/list</code> instead</td></tr>
       <tr><td><code>build_params</code> drops a field</td><td><span class="tag t-unit">Unit</span></td><td><code>limit=10</code> not forwarded to the HTTP call</td></tr>
-      <tr><td>Missing-param guard removed</td><td><span class="tag t-unit">Unit</span></td><td><code>get_vdb()</code> sent to API with no vdb_id</td></tr>
+      <tr><td>Missing-param guard removed</td><td><span class="tag t-unit">Unit</span></td><td><code>vdb_tool(action="get")</code> sent to API with no vdb_id</td></tr>
       <tr><td>URL has double slash</td><td><span class="tag t-int">Integration</span></td><td>Stray trailing slash in <code>DCT_BASE_URL</code> → <code>https://dct//dct/v3/...</code></td></tr>
       <tr><td>Auth header missing <code>apk </code></td><td><span class="tag t-int">Integration</span></td><td>Refactor accidentally drops the prefix; every call → 401</td></tr>
       <tr><td>5xx not retried</td><td><span class="tag t-int">Integration</span></td><td>Transient DCT blip fails the whole workflow</td></tr>
       <tr><td>4xx incorrectly retried</td><td><span class="tag t-int">Integration</span></td><td>401s burning DCT rate limit, masking real auth failure</td></tr>
       <tr><td>Connection error not handled</td><td><span class="tag t-int">Integration</span></td><td>Bad DNS / DCT down → cryptic failure instead of clean error</td></tr>
       <tr><td>Edited .txt broke a persona</td><td><span class="tag t-func">Functional 3a</span></td><td>Removing a <code># TOOL</code> header silently drops a tool from a toolset</td></tr>
-      <tr><td>Multi-step workflow regression</td><td><span class="tag t-func">Functional 3b</span></td><td><code>start_vdb</code> no longer reaches DCT after a refactor</td></tr>
-      <tr><td>Confirmation step skipped</td><td><span class="tag t-func">Functional 3c</span></td><td><code>delete_vdb</code> directly executes — destructive op without consent</td></tr>
+      <tr><td>Multi-step workflow regression</td><td><span class="tag t-func">Functional 3b</span></td><td><code>vdb_tool(action="start")</code> no longer reaches DCT after a refactor</td></tr>
+      <tr><td>Confirmation step skipped</td><td><span class="tag t-func">Functional 3c</span></td><td><code>vdb_tool(action="stop")</code> directly executes — destructive op without consent</td></tr>
       <tr><td>Server doesn't boot</td><td><span class="tag t-func">Functional</span></td><td>Bad config in <code>self_service.txt</code> crashes startup</td></tr>
       <tr><td>MCP response shape changed</td><td><span class="tag t-func">Functional</span></td><td><code>items</code> key renamed to <code>data</code> → silent client breakage</td></tr>
       <tr><td>Real DCT API contract drift</td><td><span class="tag t-e2e">Real DCT</span></td><td>Delphix changes the response envelope upstream</td></tr>
@@ -940,7 +940,7 @@ on: workflow_dispatch
   </div>
 
   <h3>Step 1 — Make the breaking change</h3>
-  <p>Open <code>src/dct_mcp_server/tools/dataset_endpoints_tool.py</code>, find the <code>search_vdbs</code> action (around line 2705), and change:</p>
+  <p>Open <code>src/dct_mcp_server/tools/dataset_endpoints_tool.py</code>, find the <code>vdb_tool</code> <code>action="search"</code> branch (around line 470), and change:</p>
 <pre>return make_api_request('POST', <span class="ok">'/vdbs/search'</span>, params=params, json_body=body)</pre>
   <p>to:</p>
 <pre>return make_api_request('POST', <span class="err">'/vdbs/search-BROKEN'</span>, params=params, json_body=body)</pre>
@@ -949,7 +949,7 @@ on: workflow_dispatch
 <pre>$ dct-mcp-test --layer functional</pre>
 
   <h3>Step 3 — Watch CI catch it with a precise message</h3>
-<pre><span class="err">FAILED tests/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_start_stop</span>
+<pre><span class="err">FAILED tests/demo/functional/workflows/test_vdb_lifecycle.py::test_vdb_lifecycle_search_get_start_stop</span>
 
     @pytest.mark.asyncio
     async def test_vdb_lifecycle_search_get_start_stop(mcp_client_self_service, dct_stub):
@@ -998,6 +998,9 @@ dct-mcp-test --layer functional    <span class="cmt"># ~5s, 3 tests</span></pre>
   <h3>CI gate (everything that's safe without DCT)</h3>
 <pre>dct-mcp-test --layer ci            <span class="cmt"># ~9s, 8 tests — what GitHub Actions runs</span></pre>
 
+  <h3>The whole curated showcase (tests/demo/)</h3>
+<pre>dct-mcp-test --layer demo          <span class="cmt"># runs the full 10-minute walkthrough; e2e+llm skip without creds</span></pre>
+
   <h3>Real DCT (localhost)</h3>
 <pre>export DCT_API_KEY=apk-your-key-here
 dct-mcp-test --base-url https://localhost --layer e2e</pre>
@@ -1006,7 +1009,7 @@ dct-mcp-test --base-url https://localhost --layer e2e</pre>
 <pre>/dct-mcp-test https://localhost --api-key apk-your-key-here --layer e2e</pre>
 
   <h3>The break demo</h3>
-<pre><span class="cmt"># 1. Edit src/dct_mcp_server/tools/dataset_endpoints_tool.py ~line 2705
+<pre><span class="cmt"># 1. Edit src/dct_mcp_server/tools/dataset_endpoints_tool.py ~line 470
 #    Change '/vdbs/search' to '/vdbs/search-BROKEN'</span>
 
 dct-mcp-test --layer functional    <span class="cmt"># FAILS with clear message</span>
@@ -1047,7 +1050,7 @@ dct-mcp-test --layer functional --workflow vdb_lifecycle</pre>
       <tr><td>Phase 7 — Snapshot assertions</td><td>Day 14</td><td>Response-shape regression net (syrupy)</td><td><span class="tag t-warn">pending approval</span></td></tr>
       <tr><td>Phase 8 — CLI + skill</td><td>Day 15</td><td>Unified runner</td><td><span class="tag t-good">✓ done</span></td></tr>
       <tr><td>Phase 9 — Layer 4 wiring</td><td>Days 16–17</td><td>Real-DCT validation end-to-end</td><td><span class="tag t-good">✓ scaffold done</span></td></tr>
-      <tr><td>Phase 10 — Optional Layer 5</td><td>Later</td><td>LM Studio AI-usability check</td><td><span class="tag t-warn">optional</span></td></tr>
+      <tr><td>Phase 10 — Optional Layer 5</td><td>Later</td><td>Claude Code CLI vs. real DCT — act→verify</td><td><span class="tag t-warn">optional</span></td></tr>
     </tbody>
   </table>
 

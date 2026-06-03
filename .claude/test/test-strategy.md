@@ -31,7 +31,7 @@ We want: a test suite that runs on every push/PR, fails fast on regressions, req
 | **3b — Workflow tests ★** | Multi-step chains over MCP stdio | **Replaces the manual Claude Desktop playbook** — every `.md` scenario as a deterministic test | No (dct_stub) | Every PR | Yes |
 | **3c — Confirmation handshake** | Two-step `confirmation_required` → `confirmed=True` over MCP wire | Regressions in destructive-op safety net | No (dct_stub) | Every PR | Yes |
 | **4 — Real-DCT E2E** | Workflows against the cloned DCT | Real API contract drift, real auth, real latency | Yes | Manual via GitHub UI / Claude Code skill / CLI | No (advisory) |
-| **5 — LLM-driven (optional)** | AI can navigate the tool surface | Confusing action names, vague descriptions | No (dct_stub) | LM Studio, local-only | No (advisory) |
+| **5 — LLM-driven E2E (optional)** | AI can navigate the toolsurface **and** the operation actually took effect on a real DCT | Confusing action names + outcomes that *report* success but never persisted (async job never finished) | **Yes — real DCT (localhost or cloned)** | Claude Code CLI, local-only | No (advisory) |
 
 **Invocation paths — all hit the same `dct-mcp-test` CLI:**
 
@@ -47,8 +47,8 @@ We want: a test suite that runs on every push/PR, fails fast on regressions, req
 |---|---|
 | Layers 1–3 in CI | $0 (free GitHub Actions tier) |
 | Layer 4 in CI | $0 CI cost; cloned DCT is your existing infra |
-| Layer 5 (LM Studio) | $0 (local hardware) |
-| Anthropic API key for E2E | **Not needed** — explicitly designed around this constraint |
+| Layer 5 — Claude Code CLI driver | Consumes your existing Claude subscription / enterprise usage; **no separate metered Anthropic API key** |
+| Anthropic API key (metered console.anthropic.com) for E2E | **Not needed** — explicitly designed around this constraint; the Claude Code CLI path uses subscription auth instead |
 | Claude Desktop license | **Not needed** for testing anymore (only exploratory use) |
 
 **Before vs. after:**
@@ -125,9 +125,10 @@ Three layers in CI (regression gate), plus one optional local layer (AI usabilit
    │  Same workflows, real instance, on-demand via GitHub UI      │
    │  Manual trigger primary; nightly cron optional               │
    ├──────────────────────────────────────────────────────────────┤
-   │  Layer 5 — LLM-driven (LOCAL ONLY, optional)                 │
-   │  LM Studio → MCP server → dct_stub                           │
-   │  AI-usability check · not in CI · not blocking               │
+   │  Layer 5 — LLM-driven E2E (LOCAL ONLY, optional)             │
+   │  Claude Code CLI → MCP server → REAL DCT                     │
+   │  NL task → act → wait for job → verify outcome               │
+   │  not in CI · not blocking                                    │
    └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -423,6 +424,42 @@ If you change how the test suite runs, you change the CLI. CI yaml and the skill
 
 CI still uses the bare CLI because workflows aren't conversational. Local + interactive use prefers the skill.
 
+### 4.4 Layer 5 — LLM-driven E2E against real DCT
+
+Layer 5 answers a question no scripted layer can: **given only a plain-English task and the tool schemas, can an AI discover the right tool, call it correctly, and did the operation actually take effect on a real DCT?** It is local-only, advisory, and never a merge gate — but unlike the original stub-only design, it now runs against a **real DCT** (a local dev instance or the cloned DCT server) because the whole point is to prove the outcome *persisted*, not just that a tool returned `200`.
+
+**Driver: Claude Code CLI.** The product's real target is Claude, so driving Layer 5 with the Claude Code CLI gives the most faithful discoverability signal — and it authenticates with the existing Claude subscription/enterprise session, sidestepping the metered-API-key objection in §7.
+
+The CLI runs headless and emits the full tool-call trace, which is what the test asserts on:
+
+```bash
+claude -p "Provision a VDB named e2e-llm-{tag} from the first available dSource" \
+  --mcp-config dct-real.json \
+  --strict-mcp-config \
+  --allowedTools "mcp__delphix-dct__*" \
+  --permission-mode bypassPermissions \
+  --append-system-prompt-file .claude/test/llm-driver-preprompt.md \
+  --output-format stream-json
+```
+
+`dct-real.json` points the `dct-mcp-server` at the **real** `DCT_BASE_URL` (localhost or cloned), not `dct_stub`.
+
+**The act → verify pattern (mandatory for every Layer 5 test).** A tool returning success is not proof — DCT provisioning is asynchronous and a "success" may only mean *the job was submitted*. So every test is two phases, and the verification reads state through an **independent** path:
+
+| Phase | Example |
+|---|---|
+| 1. Act | Claude is told *"provision a VDB named X"* → it discovers and calls `vdb_tool(action="provision_*", ...)` |
+| 2. Wait | The submitted job is polled to a terminal state (see pre-prompt below) before any judgement |
+| 3. Verify | A separate `vdb_tool(action="search")` / `list` confirms a VDB named X **actually exists** and is `RUNNING` |
+
+A test passes only if phase 3 confirms the real-world effect. This catches the worst failure mode — a tool that *looks* like it worked but left nothing behind.
+
+**The job-completion pre-prompt.** Because the operations are async, the LLM driver must not declare success on submission. A standard system pre-prompt (`--append-system-prompt-file`) instructs it to **poll the job to a terminal state before reporting pass/fail**. The canonical text lives in [`testing.md`](testing.md#job-completion-pre-prompt) so all three tracks (manual Claude, the skill, and Layer 5) share one rule. In essence: *after any operation that returns a `job_id` / `job` reference, call `job_tool(action="get")` until the job reaches `COMPLETED` (pass) or `FAILED`/`CANCELED` (fail); never treat job submission alone as success; only then run the verification step.*
+
+**Cleanup.** Layer 5 creates real objects, so it reuses Layer 4's tagging + purge: every created object is tagged with `E2E_RUN_TAG`, and `tests/e2e/cleanup/test_purge.py` runs `if: always()` to delete them. Run Layer 5 **only** against a disposable/cloned DCT or a local dev instance — never a shared persistent one without the purge step.
+
+**Why this is distinct from Layer 4.** Layer 4 is *scripted* real-DCT E2E (deterministic calls, the regression-confidence check). Layer 5 is *LLM-driven* real-DCT E2E (Claude chooses the tools from natural language). Same backend, different question: Layer 4 asks "does the workflow still work?"; Layer 5 asks "can an AI drive it, and did it really happen?". Layer 5's signal is noisier (it's an LLM), which is exactly why it stays advisory.
+
 ---
 
 ## 5. Layer 3b — Workflow Tests (the heart of the suite)
@@ -524,39 +561,18 @@ The question keeps coming up: "can we just automate Claude Desktop?" The honest 
 | **Real cost** | Per scenario run: ~$2.40 without prompt caching, ~$0.50–$0.80 with caching. Full nightly run (5 toolsets): ~$12 uncached, ~$3–4 cached. Monthly: $30–$360 depending on cadence and caching strategy |
 | **Noisy signal for regression testing** | An LLM driver can fail a test because *it* got confused, not because the code regressed. This blurs the failure attribution and makes flake triage expensive |
 
-### LM Studio (local LLM) — useful, but for a different purpose
+### Claude Code CLI — the adopted Layer 5 driver
 
-LM Studio exposes an OpenAI-compatible HTTP API on `localhost:1234/v1`. Any code that talks to OpenAI talks to LM Studio with a base-URL swap.
+The objection above is specifically about the **metered Anthropic API** (`console.anthropic.com`, per-token billing, separate key provisioning) being used as the **regression gate**. None of that applies to using the **Claude Code CLI** as the *advisory* Layer 5 driver:
 
-**Pros**
-
-- $0 monetary cost
-- No API key required
-- Runs offline, fully private
-- Free for unlimited runs
-
-**Cons / tradeoffs**
-
-| Concern | Detail |
+| Original objection (metered API as gate) | Why it doesn't apply to Claude Code CLI for Layer 5 |
 |---|---|
-| Model quality dictates tool-use reliability | Qwen 2.5 Coder 32B = good. Llama 3.3 70B = very good. Llama 3.1 8B default = marginal. Anything <7B = unreliable. |
-| Hardware bound | 32B model needs ~20GB RAM; 70B needs ~40GB+. On 16GB you're stuck with smaller models that misfire on multi-step chains. |
-| Cannot run in GitHub Actions | GitHub-hosted runners have no GPU and limited RAM. Would require a self-hosted runner with LM Studio always running — that's real infra work. |
-| Slower than hosted APIs | 5–30 tok/s on a Mac vs 50–100 tok/s for the Claude API |
-| Noisier signal | Same failure-attribution problem as Claude API — was it the code, or the model? |
+| Needs a separately-provisioned API key | CLI uses the developer's existing Claude subscription / enterprise session — the same auth already in use |
+| Per-token cost on every PR | Layer 5 is pre-release/local and advisory, not per-PR; runs are occasional |
+| Noisy signal pollutes the merge gate | Layer 5 is explicitly *not* a gate — noise is acceptable for an advisory usability check |
+| Brittle GUI automation (Claude Desktop) | CLI is headless and scriptable (`claude -p --output-format stream-json`) — no DOM driving |
 
-### What LM Studio is good for (and what it's not)
-
-**Good for:**
-
-- **Pre-release exploratory testing.** A developer fires it up before a release, runs the workflows, sees whether the AI can navigate the toolsurface naturally. Catches things like confusing action names, vague parameter descriptions, ambiguous tool overlap.
-- **Local sanity check after refactoring tool schemas.** If you renamed actions or changed descriptions, LM Studio tells you if you broke discoverability.
-- **Demo / showcasing without cloud dependencies.**
-
-**Not good for:**
-
-- The CI regression gate. Use scripted workflow tests for that — deterministic, fast, free, runs anywhere.
-- Replacing the manual Claude Desktop playbook on a per-PR basis. The signal is too noisy and the infra to run it in CI is too heavy.
+It is also the **most faithful** signal available: the production target is Claude, so testing discoverability with Claude measures exactly what users experience — no local stand-in model to misfire and muddy the result. See §4.4 for the run shape.
 
 ### The architectural separation
 
@@ -566,12 +582,13 @@ LM Studio exposes an OpenAI-compatible HTTP API on `localhost:1234/v1`. Any code
    │ (runs on every PR)          │   │ (runs ad-hoc, local)        │
    │                             │   │                             │
    │ Layers 1–3                  │   │ Layer 5                     │
-   │ Scripted, deterministic     │   │ LLM-driven, exploratory     │
-   │ No LLM in the loop          │   │ LM Studio (no API key)      │
-   │ $0 cost                     │   │ $0 cost                     │
+   │ Scripted, deterministic     │   │ LLM-driven, act → verify    │
+   │ No LLM in the loop          │   │ Claude Code CLI · real DCT  │
+   │ $0 cost                     │   │ Subscription usage          │
    │                             │   │                             │
    │ Answers:                    │   │ Answers:                    │
-   │  "did the workflow break?"  │   │  "can an AI use this tool?" │
+   │  "did the workflow break?"  │   │  "can AI use it — and did   │
+   │                             │   │   it really happen?"        │
    └────────────────────────────┘   └────────────────────────────┘
 ```
 
@@ -637,9 +654,11 @@ tests/
 │       ├── test_job.py
 │       ├── test_timeflow.py
 │       └── ... (one per scenario chain across all toolset .md files)
-├── llm_local/                                # Layer 5 — optional, local-only
-│   ├── README.md                             # how to run with LM Studio
-│   └── test_ai_usability_smoke.py
+├── llm_local/                                # Layer 5 — optional, local-only, REAL DCT
+│   ├── README.md                             # how to run via the Claude Code CLI
+│   ├── conftest.py                           # spawns `claude -p`, parses stream-json tool trace
+│   ├── test_ai_usability_smoke.py            # discoverability: did Claude pick the right tool?
+│   └── test_provision_verify.py              # act → wait for job → verify VDB exists on real DCT
 └── fixtures/
     ├── dct_stub.py                          # stateful stub server
     └── responses/
@@ -679,14 +698,23 @@ Mark as required check in branch protection. Layer 5 tests are explicitly exclud
 
 ```bash
 #!/usr/bin/env bash
-# Run LLM-driven AI-usability checks against a local LM Studio instance.
-# Requires LM Studio running with a tool-use-capable model loaded.
-export OPENAI_API_BASE="http://localhost:1234/v1"
-export OPENAI_API_KEY="lm-studio"
+# Run LLM-driven E2E (Layer 5) against a REAL DCT (localhost or cloned).
+# Driver: Claude Code CLI — uses your existing Claude session, no metered API key.
+set -euo pipefail
+
+: "${DCT_BASE_URL:?set DCT_BASE_URL to a localhost or cloned DCT}"
+: "${DCT_API_KEY:?set DCT_API_KEY}"
+export E2E_RUN_TAG="e2e-llm-$(date +%s)"
+
+# Tests shell out to `claude -p ... --output-format stream-json`
+# with --append-system-prompt-file .claude/test/llm-driver-preprompt.md
 pytest tests/llm_local -v "$@"
+
+# Always purge what the run created on the real DCT (reuses Layer 4 cleanup)
+pytest tests/e2e/cleanup -v
 ```
 
-Run manually before releases. Not part of CI.
+Run manually before releases against a disposable/cloned DCT. Not part of CI.
 
 ### 8.6 Documentation updates
 
@@ -704,7 +732,7 @@ Run manually before releases. Not part of CI.
 | Every push / PR | Layers 1–3 (unit + integration + functional incl. workflows) | GitHub Actions calls `dct-mcp-test` | **Yes — merge gate** |
 | On-demand against real DCT | Layer 4 (real cloned DCT) | GitHub Actions `workflow_dispatch`, or `/dct-mcp-test localhost --api-key ...` from Claude Code, or CLI direct | No (advisory) |
 | Optional nightly | Layer 4 | GitHub Actions cron | No (advisory) |
-| Pre-release AI usability | Layer 5 (LM Studio) | `scripts/run-llm-local-tests.sh` | No (advisory) |
+| Pre-release AI usability + real-effect check | Layer 5 (Claude Code CLI vs. real DCT) | `scripts/run-llm-local-tests.sh` | No (advisory) |
 
 The PR merge gate (line 3) is what replaces manual Claude Desktop verification. Layer 4 covers the real-DCT validation you currently do by hand.
 
@@ -766,8 +794,10 @@ Phased so workflow coverage lands as early as possible. Each phase is independen
 - **Deliverable:** real-DCT validation runnable from GitHub UI, Claude Code skill, or CLI
 
 ### Phase 10 — Optional Layer 5 (later)
-- Wire `tests/llm_local/` against LM Studio
-- Document the recommended model + RAM requirements
+- Wire `tests/llm_local/` to drive the MCP server against a **real** localhost/cloned DCT via the **Claude Code CLI** (`claude -p --output-format stream-json`)
+- Implement the **act → wait-for-job → verify** pattern; reuse `E2E_RUN_TAG` + `tests/e2e/cleanup` for teardown
+- Ship the shared job-completion pre-prompt (`.claude/test/llm-driver-preprompt.md`, documented in `testing.md`)
+- Document the required Claude Code CLI auth and `--mcp-config` setup
 - Use pre-release, not pre-merge
 
 Total realistic budget: **~3 working weeks** to fully replace manual verification. Phases 1–3 alone deliver the merge gate in 4 days. Phase 9 closes the real-DCT gap that Claude Desktop currently fills.

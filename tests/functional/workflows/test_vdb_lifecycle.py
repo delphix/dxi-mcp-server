@@ -1,83 +1,62 @@
 """
-Layer 3b — VDB lifecycle workflow test.
+Layer 3b — VDB lifecycle workflow.
 
-Translates `.claude/test/testing/self_service.md` lines 12-15 into a
-deterministic Python test:
+Translates `.claude/test/testing/self_service.md` prompts 1-6 into a
+deterministic, multi-step MCP test over the stdio wire:
 
     1. Search for all VDBs
     2. Get the details of the first VDB from the previous result
     3. Start that VDB
-    4. Stop that VDB
+    4. Stop that VDB        (standard confirmation -> pre-confirmed)
+    5. Enable that VDB
+    6. Disable that VDB     (standard confirmation -> pre-confirmed)
 
-The "that VDB" chaining becomes a Python variable. Each step is a real MCP
-call over stdio against the spawned dct-mcp-server subprocess. Each step is
-verified at the wire level via dct_stub.received_request.
-
-This is the test that DIRECTLY replaces the manual Claude Desktop playbook
-for this workflow.
+"that VDB" -> a Python variable carried across steps. Each step asserts no
+error AND the exact (method, wire-path) the server sent to DCT.
 """
 
 import pytest
 
-
-def _payload(result):
-    """Extract the tool's JSON response dict from a fastmcp CallToolResult.
-
-    fastmcp 3.x wraps the tool's dict return value as {"result": <dict>}
-    inside structured_content. Unwrap that one level so test code sees the
-    raw DCT response shape.
-    """
-    sc = result.structured_content or {}
-    return sc.get("result", sc)
+from tests.functional.workflows._helpers import payload, first_id
 
 
 @pytest.mark.asyncio
-async def test_vdb_lifecycle_search_get_start_stop(mcp_client_self_service, dct_stub):
-    # --- Step 1 — Search for all VDBs ---
-    search_result = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "search_vdbs", "limit": 10}
-    )
-    assert not search_result.is_error, f"search_vdbs failed: {search_result}"
+async def test_vdb_lifecycle(mcp_client_self_service, dct_stub):
+    client = mcp_client_self_service
+
+    # Prompt 1 — Search for all VDBs.
+    res = await client.call_tool("vdb_tool", {"action": "search", "limit": 10})
+    assert not res.is_error, f"search failed: {res}"
     assert dct_stub.received_request("POST", "/dct/v3/vdbs/search")
+    vdb_id = first_id(res)
+    assert vdb_id == "v-1", "stub must return v-1 first (deterministic fixture)"
 
-    items = _payload(search_result).get("items", [])
-    assert items, "search_vdbs returned no VDBs from the stub"
-    vdb_id = items[0]["id"]
-    assert vdb_id == "v-1", "stub should always return v-1 first (deterministic fixture)"
-
-    # --- Step 2 — Get the first VDB's details ---
-    get_result = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "get_vdb", "vdb_id": vdb_id}
-    )
-    assert not get_result.is_error
-    assert _payload(get_result).get("id") == vdb_id
+    # Prompt 2 — Get the first VDB's details.
+    res = await client.call_tool("vdb_tool", {"action": "get", "vdb_id": vdb_id})
+    assert not res.is_error
+    assert payload(res).get("id") == vdb_id
     assert dct_stub.received_request("GET", f"/dct/v3/vdbs/{vdb_id}")
 
-    # --- Step 3 — Start that VDB ---
-    start_result = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "start_vdb", "vdb_id": vdb_id}
-    )
-    assert not start_result.is_error
+    # Prompt 3 — Start that VDB.
+    res = await client.call_tool("vdb_tool", {"action": "start", "vdb_id": vdb_id})
+    assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
 
-    # --- Step 4 — Stop that VDB ---
-    # stop_vdb requires `standard` confirmation per manual_confirmation.txt,
-    # so we pre-confirm to bypass the handshake (which has its own test).
-    stop_result = await mcp_client_self_service.call_tool(
-        "data_tool", {"action": "stop_vdb", "vdb_id": vdb_id, "confirmed": True}
+    # Prompt 4 — Stop that VDB (standard confirmation -> pre-confirm).
+    res = await client.call_tool(
+        "vdb_tool", {"action": "stop", "vdb_id": vdb_id, "confirmed": True}
     )
-    assert not stop_result.is_error
+    assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")
 
-    # Sanity check — every expected endpoint was hit at least once.
-    # Membership rather than exact sequence: the production async_to_sync wrapper
-    # uses asyncio.run() per call which closes the event loop between MCP calls,
-    # so each call can retry once after the first attempt loses its response.
-    seen = {(m, p) for m, p, _ in dct_stub.requests}
-    expected = {
-        ("POST", "/dct/v3/vdbs/search"),
-        ("GET", f"/dct/v3/vdbs/{vdb_id}"),
-        ("POST", f"/dct/v3/vdbs/{vdb_id}/start"),
-        ("POST", f"/dct/v3/vdbs/{vdb_id}/stop"),
-    }
-    assert expected.issubset(seen), f"Missing DCT calls: {expected - seen}"
+    # Prompt 5 — Enable that VDB.
+    res = await client.call_tool("vdb_tool", {"action": "enable", "vdb_id": vdb_id})
+    assert not res.is_error
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/enable")
+
+    # Prompt 6 — Disable that VDB (standard confirmation -> pre-confirm).
+    res = await client.call_tool(
+        "vdb_tool", {"action": "disable", "vdb_id": vdb_id, "confirmed": True}
+    )
+    assert not res.is_error
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/disable")

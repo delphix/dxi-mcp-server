@@ -438,8 +438,13 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
     Returns:
         List of module names (e.g., ["dataset_endpoints_tool", "job_endpoints_tool"])
     """
-    # Mapping from logical tool names to implementation modules
-    # Based on which module implements APIs for which path patterns
+    # Mapping from logical tool names to implementation modules.
+    # IMPORTANT: these module names match what the OpenAPI generator writes at runtime
+    # (driver.py `_get_module_for_path` -> "<module>_tool.py", e.g. environment_endpoints_tool,
+    # compliance_endpoints_tool, admin_endpoints_tool). They are NOT stale just because the
+    # pre-built fallback file was removed from the repo — the generated module in $TEMP fills the
+    # required_modules filter. Do not delete entries here without checking the generator, or you
+    # will silently drop tools for that persona when dynamic generation succeeds.
     TOOL_TO_MODULE = {
         # Dataset operations (vdb, dsource, snapshot, bookmark, vdb-group, timeflow, source)
         "vdb_tool": "dataset_endpoints_tool",

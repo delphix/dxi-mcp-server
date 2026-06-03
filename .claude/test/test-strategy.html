@@ -367,7 +367,7 @@
       <tr><td><span class="tag tag-func">3b Workflows ★</span></td><td><strong>Replaces manual Claude Desktop playbook</strong> — every .md chain as a deterministic test</td><td>No (dct_stub)</td><td>Every PR</td><td><span class="tag tag-good">Yes</span></td></tr>
       <tr><td><span class="tag tag-func">3c Confirmation</span></td><td>Two-step destructive-op contract over MCP wire</td><td>No (dct_stub)</td><td>Every PR</td><td><span class="tag tag-good">Yes</span></td></tr>
       <tr><td><span class="tag tag-e2e">4 Real DCT</span></td><td>Real API contract, auth, latency against cloned DCT</td><td>Yes</td><td>GitHub UI / skill / CLI</td><td><span class="tag tag-warn">No (advisory)</span></td></tr>
-      <tr><td><span class="tag tag-llm">5 LLM-driven</span></td><td>AI usability of tool surface</td><td>No</td><td>LM Studio, local-only</td><td><span class="tag tag-warn">No (advisory)</span></td></tr>
+      <tr><td><span class="tag tag-llm">5 LLM-driven E2E</span></td><td>AI can navigate the toolsurface <strong>and</strong> the operation actually took effect (async job finished + verified)</td><td><strong>Yes — real DCT (localhost or cloned)</strong></td><td>Claude Code CLI, local-only</td><td><span class="tag tag-warn">No (advisory)</span></td></tr>
     </tbody>
   </table>
 
@@ -391,8 +391,8 @@
     <tbody>
       <tr><td>Layers 1–3 in CI</td><td>$0 (free GitHub Actions tier)</td></tr>
       <tr><td>Layer 4 in CI</td><td>$0 CI cost; cloned DCT is existing infra</td></tr>
-      <tr><td>Layer 5 (LM Studio)</td><td>$0 (local hardware)</td></tr>
-      <tr><td>Anthropic API key for E2E</td><td><strong>Not needed</strong> — designed around this constraint</td></tr>
+      <tr><td>Layer 5 — Claude Code CLI driver</td><td>Uses your existing Claude subscription / enterprise usage; <strong>no separate metered API key</strong></td></tr>
+      <tr><td>Metered Anthropic API key for E2E</td><td><strong>Not needed</strong> — designed around this constraint; the CLI path uses subscription auth</td></tr>
       <tr><td>Claude Desktop license</td><td><strong>Not needed</strong> for testing anymore</td></tr>
     </tbody>
   </table>
@@ -464,9 +464,9 @@
 │  Same workflows, real instance, on-demand via GitHub UI      │
 │  Manual trigger primary; nightly cron optional               │
 ├──────────────────────────────────────────────────────────────┤
-│  Layer 5 — LLM-driven (LOCAL ONLY, optional)                 │
-│  LM Studio → MCP server → dct_stub                           │
-│  AI-usability check · not in CI · not blocking               │
+│  Layer 5 — LLM-driven E2E (LOCAL ONLY, optional)             │
+│  Claude Code CLI → MCP server → REAL DCT                     │
+│  NL task → act → wait for job → verify · not in CI           │
 └──────────────────────────────────────────────────────────────┘</div>
 
   <div class="card card-highlight">
@@ -742,13 +742,13 @@ async def test_create_bookmark_with_cleanup_tag(real_mcp_client):
   <div class="layer">
     <div class="layer-header" onclick="this.parentElement.classList.toggle('open')">
       <div>
-        <h3><span class="tag tag-llm">Layer 5</span> LLM-driven (LOCAL ONLY, optional)</h3>
-        <div class="layer-stats">Not in CI · not blocking · pre-release exploratory</div>
+        <h3><span class="tag tag-llm">Layer 5</span> LLM-driven E2E against real DCT (LOCAL ONLY, optional)</h3>
+        <div class="layer-stats">Not in CI · not blocking · pre-release · real DCT</div>
       </div>
       <span class="chevron">▶</span>
     </div>
     <div class="layer-body">
-      <p>Drives the MCP server with a local LLM via LM Studio. Answers the AI-usability question, not the regression question. Free, local, no API key — but with tradeoffs. See the LLM Testing tab for full detail.</p>
+      <p>Drives the MCP server with the <strong>Claude Code CLI</strong> (headless <code>claude -p --output-format stream-json</code>) against a <strong>real DCT</strong> (localhost or cloned). Each test follows <strong>act → wait for job → verify</strong>: Claude discovers and calls the tool from a plain-English task, polls the job to completion, then an independent read confirms the effect (e.g. provision a VDB, then <code>search</code> to confirm it exists). Answers the AI-usability question <em>and</em> proves the operation persisted — not the regression question. See the LLM Testing tab for full detail.</p>
     </div>
   </div>
 </section>
@@ -1075,65 +1075,17 @@ When the user invokes /dct-mcp-test:
     </table>
   </div>
 
-  <div class="card callout-good">
-    <h3 style="color:var(--good);margin-top:0">LM Studio (local LLM) — useful, but for a different purpose</h3>
-    <p>LM Studio exposes an OpenAI-compatible HTTP API on <code>localhost:1234/v1</code>. Any code that talks to OpenAI talks to LM Studio with a base-URL swap.</p>
 
-<pre>from openai import OpenAI
-client = OpenAI(base_url="http://localhost:1234/v1", api_key="not-needed")
-response = client.chat.completions.create(
-    model="qwen2.5-coder-32b-instruct",
-    tools=[mcp_tool_to_openai_schema(t) for t in tools],
-    messages=[{"role": "user", "content": scenario}],
-)</pre>
-
-    <h4>Pros</h4>
+  <div class="card card-highlight">
+    <h3>Claude Code CLI — the adopted Layer 5 driver</h3>
+    <p>The rejection above is specifically about the <strong>metered Anthropic API</strong> (<code>console.anthropic.com</code>, per-token billing, separate key) as the <strong>regression gate</strong>. None of it applies to using the <strong>Claude Code CLI</strong> as the <em>advisory</em> Layer 5 driver:</p>
     <ul class="checklist">
-      <li>$0 monetary cost</li>
-      <li>No API key required</li>
-      <li>Runs offline, fully private</li>
-      <li>Free for unlimited runs</li>
+      <li><strong>No separate key</strong> — the CLI uses the developer's existing Claude subscription / enterprise session.</li>
+      <li><strong>No per-PR cost</strong> — Layer 5 is pre-release and occasional, not a gate.</li>
+      <li><strong>Noise is acceptable</strong> — it's explicitly advisory, never blocking.</li>
+      <li><strong>Headless &amp; scriptable</strong> — <code>claude -p --output-format stream-json</code>, no brittle GUI driving.</li>
     </ul>
-
-    <h4>Cons / tradeoffs</h4>
-    <table>
-      <thead><tr><th>Concern</th><th>Detail</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>Model quality dictates tool-use reliability</td>
-          <td>Qwen 2.5 Coder 32B = good. Llama 3.3 70B = very good. Llama 3.1 8B default = marginal. Anything &lt;7B = unreliable.</td>
-        </tr>
-        <tr>
-          <td>Hardware bound</td>
-          <td>32B model needs ~20GB RAM; 70B needs ~40GB+. On 16GB you're stuck with smaller models that misfire on multi-step chains.</td>
-        </tr>
-        <tr>
-          <td>Cannot run in GitHub Actions</td>
-          <td>GitHub-hosted runners have no GPU and limited RAM. Would require a self-hosted runner with LM Studio always running — real infra work.</td>
-        </tr>
-        <tr>
-          <td>Slower than hosted APIs</td>
-          <td>5–30 tok/s on a Mac vs 50–100 tok/s for Claude API</td>
-        </tr>
-        <tr>
-          <td>Noisier signal</td>
-          <td>Same failure-attribution problem as Claude API — was it the code or the model?</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h4>Good for</h4>
-    <ul class="checklist">
-      <li><strong>Pre-release exploratory testing.</strong> Run before a release, see whether the AI navigates the toolsurface naturally. Catches confusing action names, vague parameter descriptions, ambiguous tool overlap.</li>
-      <li><strong>Local sanity check after refactoring tool schemas.</strong> If you renamed actions or changed descriptions, LM Studio tells you if you broke discoverability.</li>
-      <li><strong>Demo or showcase without cloud dependencies.</strong></li>
-    </ul>
-
-    <h4>Not good for</h4>
-    <ul class="crosslist">
-      <li>The CI regression gate. Use scripted workflow tests for that — deterministic, fast, free, runs anywhere.</li>
-      <li>Replacing the manual playbook on a per-PR basis. Signal too noisy, infra too heavy.</li>
-    </ul>
+    <p>It is also the <strong>most faithful</strong> signal available: the production target is Claude, so testing discoverability with Claude measures exactly what users experience — no local stand-in model to misfire and muddy the result.</p>
   </div>
 
   <h3>The architectural separation</h3>
@@ -1150,15 +1102,15 @@ response = client.chat.completions.create(
       <div class="split-q">"Did the workflow break?"</div>
     </div>
     <div>
-      <div class="split-title">AI-usability check</div>
-      <p style="font-size:13px;margin:0 0 8px">Runs ad-hoc, local only</p>
+      <div class="split-title">AI-usability + real-effect check</div>
+      <p style="font-size:13px;margin:0 0 8px">Runs ad-hoc, local only, against real DCT</p>
       <ul style="font-size:13px;margin:0;padding-left:18px">
         <li>Layer 5</li>
-        <li>LLM-driven, exploratory</li>
-        <li>LM Studio (no API key)</li>
-        <li>$0 cost</li>
+        <li>LLM-driven, act → verify</li>
+        <li>Claude Code CLI (subscription auth)</li>
+        <li>Real DCT (localhost / cloned)</li>
       </ul>
-      <div class="split-q">"Can an AI use this tool?"</div>
+      <div class="split-q">"Can an AI use this tool — and did it really happen?"</div>
     </div>
   </div>
 
@@ -1225,9 +1177,11 @@ addopts = "-ra --strict-markers"</pre>
 │       ├── test_job.py
 │       ├── test_timeflow.py
 │       └── ... (one per scenario chain across all .md files)
-├── llm_local/                                # Layer 5 — optional, local-only
-│   ├── README.md                             # how to run with LM Studio
-│   └── test_ai_usability_smoke.py
+├── llm_local/                                # Layer 5 — optional, local-only, REAL DCT
+│   ├── README.md                             # how to run via the Claude Code CLI
+│   ├── conftest.py                           # spawns `claude -p`, parses stream-json tool trace
+│   ├── test_ai_usability_smoke.py            # discoverability: did Claude pick the right tool?
+│   └── test_provision_verify.py              # act → wait for job → verify VDB exists on real DCT
 └── fixtures/
     ├── dct_stub.py                          # stateful stub server
     └── responses/
@@ -1281,13 +1235,19 @@ dct-mcp-test = "dct_mcp_server.testing.cli:main"</pre>
 
   <div class="card">
     <h3>8. Optional Layer 5 runner</h3>
-    <p><code>scripts/run-llm-local-tests.sh</code>:</p>
+    <p><code>scripts/run-llm-local-tests.sh</code> — drives a <strong>real</strong> DCT; default driver is the Claude Code CLI:</p>
 <pre>#!/usr/bin/env bash
-# Requires LM Studio running with a tool-use-capable model loaded.
-export OPENAI_API_BASE="http://localhost:1234/v1"
-export OPENAI_API_KEY="lm-studio"
-pytest tests/llm_local -v "$@"</pre>
-    <p>Run manually before releases. Not part of CI.</p>
+# LLM-driven E2E against a REAL DCT (localhost or cloned).
+# Driver: Claude Code CLI — existing Claude session, no metered key.
+set -euo pipefail
+: "${DCT_BASE_URL:?set to a localhost or cloned DCT}"
+: "${DCT_API_KEY:?set DCT_API_KEY}"
+export E2E_RUN_TAG="e2e-llm-$(date +%s)"
+# Tests shell out to: claude -p ... --output-format stream-json
+#   --append-system-prompt-file .claude/test/llm-driver-preprompt.md
+pytest tests/llm_local -v "$@"
+pytest tests/e2e/cleanup -v   # always purge what the run created</pre>
+    <p>Run manually before releases against a disposable/cloned DCT. Not part of CI.</p>
   </div>
 
   <div class="card">
@@ -1339,8 +1299,8 @@ pytest tests/llm_local -v "$@"</pre>
         <td><span class="tag tag-warn">No (advisory)</span></td>
       </tr>
       <tr>
-        <td>Pre-release AI usability</td>
-        <td>Layer 5 (LM Studio)</td>
+        <td>Pre-release AI usability + real-effect check</td>
+        <td>Layer 5 (Claude Code CLI vs. real DCT)</td>
         <td><code>scripts/run-llm-local-tests.sh</code></td>
         <td><span class="tag tag-warn">No (advisory)</span></td>
       </tr>
@@ -1455,8 +1415,9 @@ pytest tests/llm_local -v "$@"</pre>
       <h4>Phase 10 — Optional Layer 5</h4>
       <div class="duration">Later, if desired</div>
       <ul>
-        <li>Wire <code>tests/llm_local/</code> against LM Studio</li>
-        <li>Document the recommended model + RAM requirements</li>
+        <li>Drive <code>tests/llm_local/</code> against a <strong>real</strong> localhost/cloned DCT via the <strong>Claude Code CLI</strong> (<code>claude -p --output-format stream-json</code>)</li>
+        <li>Implement <strong>act → wait-for-job → verify</strong>; reuse <code>E2E_RUN_TAG</code> + <code>tests/e2e/cleanup</code></li>
+        <li>Ship the shared job-completion pre-prompt (<code>.claude/test/llm-driver-preprompt.md</code>)</li>
         <li>Use pre-release, not pre-merge</li>
       </ul>
     </div>

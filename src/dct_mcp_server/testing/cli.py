@@ -23,29 +23,40 @@ import click
 # --layer name → pytest paths.
 # "ci" is the merge-gate suite (no DCT credentials needed).
 # "e2e" hits a real DCT instance and requires --base-url + --api-key.
-# "all" runs everything in sequence (also requires DCT creds).
+# "llm" is Layer 5 — LLM-driven E2E via the Claude Code CLI against a real DCT.
+# "all" runs everything in sequence (also requires DCT creds). It excludes "llm"
+# on purpose: Layer 5 is advisory, needs the `claude` CLI, and may mutate.
 _LAYER_PATHS: dict[str, list[str]] = {
     "unit":        ["tests/unit"],
     "integration": ["tests/integration"],
     "functional":  ["tests/functional"],
     "ci":          ["tests/unit", "tests/integration", "tests/functional"],
     "e2e":         ["tests/e2e"],
+    "llm":         ["tests/llm_local"],
     "all":         ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
+    "demo":        ["tests/demo"],
 }
 
-_LAYERS_NEEDING_DCT = {"e2e", "all"}
+# Marker passed to pytest -m for layers that select a subset by marker.
+_LAYER_MARKERS: dict[str, str] = {
+    "e2e": "real_dct",
+    "llm": "llm_driven",
+    "demo": "demo",
+}
+
+_LAYERS_NEEDING_DCT = {"e2e", "llm", "all"}
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--base-url",
     envvar="DCT_BASE_URL",
-    help="DCT base URL (or set DCT_BASE_URL). Required for --layer e2e/all.",
+    help="DCT base URL (or set DCT_BASE_URL). Required for --layer e2e/llm/all.",
 )
 @click.option(
     "--api-key",
     envvar="DCT_API_KEY",
-    help="DCT API key (or set DCT_API_KEY). Required for --layer e2e/all.",
+    help="DCT API key (or set DCT_API_KEY). Required for --layer e2e/llm/all.",
 )
 @click.option(
     "--layer",
@@ -97,8 +108,8 @@ def main(
 
     # Build pytest args. -v always; -k filters; --tb=long if verbose.
     pytest_args = [sys.executable, "-m", "pytest", *paths, "-v"]
-    if layer == "e2e":
-        pytest_args.extend(["-m", "real_dct"])
+    if layer in _LAYER_MARKERS:
+        pytest_args.extend(["-m", _LAYER_MARKERS[layer]])
     if workflow:
         pytest_args.extend(["-k", workflow])
     if verbose:

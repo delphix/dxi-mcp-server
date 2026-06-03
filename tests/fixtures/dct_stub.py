@@ -46,6 +46,38 @@ _FIXTURE_VDBS = [
 ]
 
 
+def _generic_item(resource: str, item_id: Optional[str] = None,
+                  parent_id: Optional[str] = None) -> Dict[str, Any]:
+    """A deterministic canned object for the catch-all routes.
+
+    Stable per-resource id (e.g. vg-1 for vdb-groups) so `search` ->
+    `items[0]["id"]` chains predictably across workflow steps.
+    """
+    prefixes = {
+        "vdb-groups": "vg",
+        "vdb-group": "vg",
+        "dsources": "ds",
+        "dsource": "ds",
+        "snapshots": "snap",
+        "snapshot": "snap",
+        "bookmarks": "bk",
+        "bookmark": "bk",
+        "jobs": "j",
+        "job": "j",
+        "timeflows": "tf",
+        "timeflow": "tf",
+        "tag": "tag",
+    }
+    prefix = prefixes.get(resource, resource[:3] if resource else "x")
+    rid = item_id or f"{prefix}-1"
+    obj: Dict[str, Any] = {"id": rid, "name": f"{prefix}-{rid}"}
+    if resource in ("jobs", "job"):
+        obj["status"] = "RUNNING"
+    if parent_id is not None:
+        obj["parent_id"] = parent_id
+    return obj
+
+
 class DctStub:
     """A fake DCT API. Records every request and serves canned responses."""
 
@@ -97,6 +129,69 @@ class DctStub:
         await self._record(request)
         return JSONResponse({"job": {"id": "j-2", "status": "STARTED"}})
 
+    async def ack(self, request: Request) -> JSONResponse:
+        """
+        Generic 2xx acknowledgement for action endpoints (rollback, disable,
+        tags/delete, bookmark/timeflow update+delete, etc.). Records the request
+        and returns a completed-job body so the tool call succeeds.
+        """
+        await self._record(request)
+        return JSONResponse({"job": {"id": "j-ack", "status": "COMPLETED"}})
+
+    # ---- Catch-all (workflow scope) --------------------------------------
+    #
+    # Added for Phase L3/3b workflow tests. Serves every OTHER /dct/v3/...
+    # endpoint (vdb-groups, dsources, snapshots, bookmarks, jobs, timeflows
+    # and their sub-resources) with shape-appropriate canned data, so a
+    # search -> get -> action chain works end-to-end. The explicit routes
+    # above still win (Starlette matches in declaration order), so the demo's
+    # v-1-centric VDB lifecycle is untouched.
+    #
+    # IMPORTANT: this only matches the /dct/v3 prefix, so /dct/static/...
+    # (the OpenAPI bootstrap) still 404s and the server keeps using the
+    # pre-built tool modules — exactly as before.
+
+    async def catch_all(self, request: Request) -> JSONResponse:
+        await self._record(request)
+        path = request.url.path  # e.g. /dct/v3/vdb-groups/vg-1/snapshots
+        method = request.method
+        # Strip the /dct/v3 prefix, split into segments.
+        rel = path[len("/dct/v3"):].lstrip("/")
+        segs = [s for s in rel.split("/") if s]
+
+        # POST .../search -> a list with a stable first item.
+        if method == "POST" and segs and segs[-1] == "search":
+            resource = segs[-2] if len(segs) >= 2 else "item"
+            return JSONResponse({"items": [_generic_item(resource), _generic_item(resource, "2")]})
+
+        # GET sub-resource lists / detail blobs.
+        if method == "GET" and segs:
+            tail = segs[-1]
+            if tail in ("snapshots", "bookmarks", "tags", "vdb-groups"):
+                # Parent id is segs[-2] when present.
+                parent = segs[-2] if len(segs) >= 2 else tail
+                return JSONResponse({"items": [_generic_item(tail.rstrip("s"), parent_id=parent)]})
+            if tail in ("runtime", "timeflow_range", "timeflowSnapshotDayRange"):
+                return JSONResponse({tail: {"start": "2024-01-01T00:00:00.000Z",
+                                            "end": "2024-01-02T00:00:00.000Z"}})
+            if tail in ("find_by_location", "find_by_timestamp"):
+                return JSONResponse({"items": [_generic_item("snapshot")]})
+            if tail == "timeflows":
+                # GET /timeflows (list) -> items.
+                return JSONResponse({"items": [_generic_item("timeflow")]})
+            # GET /{resource}/{id} -> single object with the requested id.
+            obj_id = segs[-1]
+            resource = segs[-2] if len(segs) >= 2 else "item"
+            return JSONResponse(_generic_item(resource.rstrip("s"), obj_id))
+
+        # POST /{resource} (no sub-path) -> create -> object with a new id.
+        if method == "POST" and len(segs) == 1:
+            return JSONResponse({"id": "new-1", "name": f"{segs[0].rstrip('s')}-new-1"})
+
+        # Everything else: actions (start/stop/refresh/rollback/lock/abandon/
+        # repair/add_tags/...), PATCH, DELETE -> a completed-job ack.
+        return JSONResponse({"job": {"id": "j-x", "status": "COMPLETED"}})
+
 
 def _free_port() -> int:
     """Bind ephemeral, immediately release — the port is then ours to use."""
@@ -116,9 +211,30 @@ def build_app(stub: DctStub) -> Starlette:
             # data_tool uses POST /vdbs/{id}/delete (with manual confirmation),
             # not DELETE /vdbs/{id} — match the production endpoint.
             Route("/dct/v3/vdbs/{vdbId}/delete", stub.vdb_delete, methods=["POST"]),
-            # Anything else (including /dct/static/api-external.yaml) → 404.
-            # That is intentional: the OpenAPI bootstrap fails fast, MCP server
-            # falls back to pre-built tools, and we get a clean toolset.
+            # --- Confirmation-gated self_service endpoints (3c) ---
+            Route("/dct/v3/vdbs/{vdbId}/disable", stub.ack, methods=["POST"]),
+            Route("/dct/v3/vdbs/{vdbId}/rollback_by_timestamp", stub.ack, methods=["POST"]),
+            Route("/dct/v3/vdbs/{vdbId}/rollback_by_snapshot", stub.ack, methods=["POST"]),
+            Route("/dct/v3/vdbs/{vdbId}/rollback_from_bookmark", stub.ack, methods=["POST"]),
+            Route("/dct/v3/vdbs/{vdbId}/tags/delete", stub.ack, methods=["POST"]),
+            Route("/dct/v3/vdb-groups/{vdbGroupId}/rollback", stub.ack, methods=["POST"]),
+            Route("/dct/v3/vdb-groups/{vdbGroupId}/tags/delete", stub.ack, methods=["POST"]),
+            Route("/dct/v3/snapshots/{snapshotId}/tags/delete", stub.ack, methods=["POST"]),
+            Route("/dct/v3/bookmarks/{bookmarkId}", stub.ack, methods=["PATCH", "DELETE"]),
+            Route("/dct/v3/bookmarks/{bookmarkId}/tags/delete", stub.ack, methods=["POST"]),
+            Route("/dct/v3/timeflows/{timeflowId}", stub.ack, methods=["DELETE"]),
+            Route("/dct/v3/timeflows/{timeflowId}/tags/delete", stub.ack, methods=["POST"]),
+            # --- Workflow catch-all (3b) ---
+            # Last route: handles every other /dct/v3 endpoint for the workflow
+            # chains (vdb-groups, dsources, snapshots, bookmarks, jobs,
+            # timeflows + sub-resources). Declared LAST so all explicit routes
+            # above win. Does NOT match /dct/static/... so the OpenAPI bootstrap
+            # still 404s and the pre-built tools remain the active toolset.
+            Route("/dct/v3/{rest:path}", stub.catch_all,
+                  methods=["GET", "POST", "PATCH", "DELETE", "PUT"]),
+            # Anything outside /dct/v3 (including /dct/static/api-external.yaml)
+            # → 404. That is intentional: the OpenAPI bootstrap fails fast, MCP
+            # server falls back to pre-built tools, and we get a clean toolset.
         ]
     )
 

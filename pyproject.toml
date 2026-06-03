@@ -39,4 +39,6 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "real_dct: tests that require a live DCT instance (DCT_BASE_URL + DCT_API_KEY env vars)",
+    "llm_driven: Layer 5 tests driven by the Claude Code CLI (also require a live DCT and the `claude` CLI)",
+    "demo: curated showcase tests for the 10-minute demo walkthrough (tests/demo/)",
 ]

@@ -9,25 +9,27 @@ every PR runs this and a missing tool fails CI.
 
 NOTE on naming: the dct_stub does not serve /dct/static/api-external.yaml, so
 the OpenAPI tool generator fails on startup and the server falls back to the
-pre-built tool modules. The pre-built `dataset_endpoints_tool.py` consolidates
-VDB / dSource / snapshot / bookmark domains into broader grouped tools
-(`data_tool`, `snapshot_bookmark_tool`, `timeflow_tool`) rather than the
-per-resource names in the toolset .txt file. We assert against the actual
-registered surface — a fuller test against the dynamically-generated names
-would need the stub to serve a real OpenAPI yaml (future work).
+pre-built tool modules. The pre-built `dataset_endpoints_tool.py` exposes
+per-resource grouped tools (`vdb_tool`, `vdb_group_tool`, `dsource_tool`,
+`snapshot_tool`, `bookmark_tool`, `timeflow_tool`) plus `job_tool` from the job
+module. We assert against the actual registered surface — a fuller test against
+the dynamically-generated names would need the stub to serve a real OpenAPI yaml
+(future work).
 """
 
 import pytest
 
 
-# Tools the pre-built fallback registers for self_service. Includes the dataset
-# module's consolidated tools plus job_tool from the job module.
+# Tools the pre-built fallback registers for self_service: the dataset module's
+# per-resource grouped tools plus job_tool from the job module.
 EXPECTED_SELF_SERVICE_TOOLS = {
-    "data_tool",
-    "snapshot_bookmark_tool",
-    "timeflow_tool",
-    "data_connection_tool",
+    "vdb_tool",
+    "vdb_group_tool",
+    "dsource_tool",
+    "snapshot_tool",
+    "bookmark_tool",
     "job_tool",
+    "timeflow_tool",
 }
 
 
