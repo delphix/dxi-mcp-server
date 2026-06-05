@@ -4,13 +4,15 @@ Meta-tools for DCT MCP Server toolset discovery and selection.
 These tools are available in "auto" mode (DCT_TOOLSET=auto) and allow
 the LLM to dynamically discover and work with available toolsets.
 
-Meta-tools (6):
+Meta-tools (8):
 - list_available_toolsets: List all available toolsets with descriptions
 - get_toolset_tools: Get detailed list of tools in a specific toolset
 - enable_toolset: Enable a toolset at runtime (no restart required)
 - disable_toolset: Disable current toolset, return to auto mode
 - check_operation_confirmation: Check if operation needs confirmation
 - execute_action: Execute any DCT action directly without tool list refresh
+- find_endpoint: Fuzzy-match user intent against the OpenAPI spec
+- get_spec_chunk: Resolve a $ref pointer from the cached OpenAPI spec
 
 Runtime Registration Pattern (GitHub MCP Server style):
 - Pre-load all tool modules into ToolInventory at startup
@@ -39,6 +41,13 @@ from .tool_factory import (
     register_toolset_tools,
     get_cached_spec,
 )
+from .endpoint_discovery import (
+    build_corpus_from_spec,
+    extract_hot_keywords_from_spec,
+    rank_candidates,
+)
+
+HARD_LIMIT = 25
 
 logger = logging.getLogger(__name__)
 
@@ -124,9 +133,12 @@ def list_available_toolsets() -> Dict[str, Any]:
             "toolsets": toolsets_list,
             "total_count": len(toolsets_list),
             "instructions": (
-                "Use 'get_toolset_tools' with a toolset name to see the detailed list of tools. "
-                "Use 'enable_toolset' to register domain tools, or 'execute_action' to call any "
-                "action directly without enabling a toolset."
+                "For a single user-intent request, prefer 'find_endpoint' first — it fuzzy-matches "
+                "the user's query against the OpenAPI spec and returns the best endpoint(s) with a "
+                "suggested_toolset hint. Use 'get_spec_chunk' to resolve $ref pointers (parameters, "
+                "schemas) on demand. Otherwise use 'get_toolset_tools' to browse a toolset, "
+                "'enable_toolset' to register domain tools, or 'execute_action' to call any action "
+                "directly without enabling a toolset."
             ),
         }
     except Exception as e:
@@ -247,7 +259,7 @@ async def enable_toolset(toolset_name: str, ctx: Context) -> Dict[str, Any]:
             "status": "enabled",
             "description": metadata.get("description", "No description"),
             "tools_registered": tools_registered,
-            "total_available_tools": tools_registered + 6,  # domain tools + 6 meta-tools
+            "total_available_tools": tools_registered + 8,  # domain tools + 8 meta-tools
             "previous_toolset": previous_toolset,
             "message": f"Toolset '{toolset_name}' is now active with {tools_registered} domain tools. No restart required.",
         }
@@ -279,7 +291,7 @@ async def disable_toolset(ctx: Context) -> Dict[str, Any]:
             return {
                 "status": "already_minimal",
                 "message": "No toolset is currently active. Already in meta-tools only mode.",
-                "remaining_tools": 6,
+                "remaining_tools": 8,
             }
 
         disabled_name = _current_toolset
@@ -298,8 +310,8 @@ async def disable_toolset(ctx: Context) -> Dict[str, Any]:
             "status": "disabled",
             "disabled_toolset": disabled_name,
             "tools_removed": tools_removed,
-            "remaining_tools": 6,
-            "message": f"Toolset '{disabled_name}' disabled. Now in auto mode with 6 meta-tools.",
+            "remaining_tools": 8,
+            "message": f"Toolset '{disabled_name}' disabled. Now in auto mode with 8 meta-tools.",
         }
     except Exception as e:
         logger.error(f"Error in disable_toolset: {e}")
@@ -540,14 +552,195 @@ async def execute_action(
         return {"error": str(e)}
 
 
+@log_tool_execution
+def find_endpoint(
+    query: str,
+    method_types: Optional[List[str]] = None,
+    limit: int = 10,
+    min_score: float = 0.15,
+) -> Dict[str, Any]:
+    """
+    Find the best-matching DCT API endpoint(s) for a free-text user intent
+    by fuzzy-matching against the cached OpenAPI spec.
+
+    The OpenAPI spec is the source of truth. Each candidate result includes
+    method, path, operation_id, summary, tags, score, confirmation level,
+    and a `suggested_toolset` hint pointing to the persona that exposes the
+    endpoint (if any) — call enable_toolset() with that name, or use
+    execute_action() directly if you already have the path.
+
+    Use `get_spec_chunk(ref)` afterwards to resolve any $ref pointers
+    (parameters, schemas, requestBodies) on demand.
+
+    Args:
+        query: Free-text user intent (e.g. "list all compliance connectors")
+        method_types: Optional HTTP method filter, e.g. ["GET"], ["POST"].
+            When ["GET"] is given, POST /*/search endpoints are also included
+            (semantically read-equivalent).
+        limit: Max candidates to return (default 10, hard cap 25).
+        min_score: Drop candidates below this score (default 0.15).
+
+    Returns:
+        {"candidates": [...], "source": "openapi_spec", ...} on success, or
+        {"error": "...", "candidates": []} on failure.
+    """
+    if not query or not query.strip():
+        return {
+            "error": "query is required",
+            "hint": "Provide a free-text user intent, e.g. 'list all compliance connectors'",
+            "candidates": [],
+        }
+
+    spec = get_cached_spec()
+    if spec is None:
+        return {
+            "error": "OpenAPI spec not available; cannot perform fuzzy discovery.",
+            "hint": "Spec is cached at startup; ensure DCT_BASE_URL is reachable.",
+            "candidates": [],
+        }
+
+    capped_limit = max(1, min(int(limit) if limit else 10, HARD_LIMIT))
+
+    try:
+        corpus = build_corpus_from_spec(spec)
+        hot = extract_hot_keywords_from_spec(spec)
+        ranked = rank_candidates(
+            corpus, query, method_types, float(min_score), capped_limit, hot
+        )
+    except Exception as e:
+        logger.error(f"find_endpoint ranking failed: {e}", exc_info=True)
+        return {"error": str(e), "candidates": []}
+
+    available_toolsets = get_available_toolsets()
+    enriched: List[Dict[str, Any]] = []
+    for cand in ranked:
+        method, path = cand["method"], cand["path"]
+        try:
+            confirmation = get_confirmation_for_operation(method, path)
+            level = confirmation.get("level", "none")
+        except Exception as ce:
+            logger.warning(f"confirmation lookup failed for {method} {path}: {ce}")
+            level = "none"
+
+        suggested_toolset = None
+        for ts in available_toolsets:
+            try:
+                grouped = load_toolset_grouped_apis(ts)
+            except Exception:
+                continue
+            for tool_info in grouped.values():
+                for api in tool_info.get("apis", []):
+                    if api.get("method") == method and api.get("path") == path:
+                        suggested_toolset = ts
+                        break
+                if suggested_toolset:
+                    break
+            if suggested_toolset:
+                break
+
+        enriched.append({
+            "score": cand["score"],
+            "method": method,
+            "path": path,
+            "operation_id": cand.get("operation_id", ""),
+            "summary": cand.get("summary", ""),
+            "tags": cand.get("tags", []),
+            "requires_confirmation": level != "none",
+            "confirmation_level": level,
+            "suggested_toolset": suggested_toolset,
+        })
+
+    logger.info(
+        f"find_endpoint query='{query}' method_types={method_types} "
+        f"returned={len(enriched)} source=openapi_spec"
+    )
+
+    if not enriched:
+        return {
+            "candidates": [],
+            "source": "openapi_spec",
+            "hint": (
+                "No fuzzy match. Try list_available_toolsets to browse personas, "
+                "or refine the query."
+            ),
+        }
+
+    return {
+        "candidates": enriched,
+        "source": "openapi_spec",
+        "count": len(enriched),
+        "instructions": (
+            "Inspect candidates and pick the best match. If suggested_toolset "
+            "is set, call enable_toolset(name) then use the domain tool, or "
+            "call execute_action(toolset_name=suggested_toolset, ...) directly. "
+            "Use get_spec_chunk(ref) to resolve $ref pointers from the spec."
+        ),
+    }
+
+
+@log_tool_execution
+def get_spec_chunk(ref: str) -> Dict[str, Any]:
+    """
+    Resolve a JSON-pointer / OpenAPI $ref against the cached spec.
+
+    Use this after find_endpoint to fetch parameter, schema, or requestBody
+    definitions on demand — e.g. resolving "#/components/parameters/limit"
+    referenced by /dsources/search.
+
+    Args:
+        ref: JSON pointer string. Accepts the leading "#/" form (standard
+             OpenAPI $ref) or a plain "/components/parameters/limit" form.
+
+    Returns:
+        {"ref": "...", "value": <resolved object>} on success, or
+        {"error": "...", "ref": "..."} on failure.
+    """
+    if not ref or not isinstance(ref, str):
+        return {"error": "ref is required (string)", "ref": ref}
+
+    spec = get_cached_spec()
+    if spec is None:
+        return {"error": "OpenAPI spec not available", "ref": ref}
+
+    pointer = ref.lstrip("#")
+    if not pointer.startswith("/"):
+        return {
+            "error": (
+                "ref must be a JSON pointer like '#/components/parameters/limit' "
+                "or '/components/parameters/limit'"
+            ),
+            "ref": ref,
+        }
+
+    parts = [
+        p.replace("~1", "/").replace("~0", "~")
+        for p in pointer.split("/")[1:]
+        if p != ""
+    ]
+
+    node: Any = spec
+    for part in parts:
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list):
+            try:
+                node = node[int(part)]
+            except (ValueError, IndexError):
+                return {"error": f"ref segment '{part}' not resolvable", "ref": ref}
+        else:
+            return {"error": f"ref segment '{part}' not found in spec", "ref": ref}
+
+    return {"ref": ref, "value": node}
+
+
 def register_meta_tools(app):
     """
-    Register the 6 meta-tools for auto mode.
+    Register the 8 meta-tools for auto mode.
 
     Args:
         app: FastMCP application instance
     """
-    logger.info("Registering 6 meta-tools for auto mode...")
+    logger.info("Registering 8 meta-tools for auto mode...")
 
     try:
         app.add_tool(list_available_toolsets, name="list_available_toolsets")
@@ -568,7 +761,13 @@ def register_meta_tools(app):
         app.add_tool(execute_action, name="execute_action")
         logger.info("  Registered: execute_action")
 
-        logger.info("Meta-tools registration completed (6 tools).")
+        app.add_tool(find_endpoint, name="find_endpoint")
+        logger.info("  Registered: find_endpoint")
+
+        app.add_tool(get_spec_chunk, name="get_spec_chunk")
+        logger.info("  Registered: get_spec_chunk")
+
+        logger.info("Meta-tools registration completed (8 tools).")
     except Exception as e:
         logger.error(f"Error registering meta-tools: {e}")
         raise
