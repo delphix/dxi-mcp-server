@@ -23,7 +23,8 @@ Runtime Registration Pattern (GitHub MCP Server style):
 
 import logging
 import re
-from typing import Dict, Any, List, Optional, Callable
+from functools import lru_cache
+from typing import Dict, Any, List, Optional, Callable, Tuple
 
 from mcp.server.fastmcp import Context
 from dct_mcp_server.config import (
@@ -31,19 +32,18 @@ from dct_mcp_server.config import (
     load_toolset_metadata,
     load_all_toolsets_metadata,
     get_tools_for_toolset,
-    get_confirmation_for_operation,
     get_modules_for_toolset,
     load_toolset_grouped_apis,
 )
 from dct_mcp_server.core.decorators import log_tool_execution
+from .dynamic_confirmation import resolve_confirmation
 from .tool_factory import (
     initialize_openapi_cache,
     register_toolset_tools,
     get_cached_spec,
 )
 from .endpoint_discovery import (
-    build_corpus_from_spec,
-    extract_hot_keywords_from_spec,
+    get_discovery_index,
     rank_candidates,
 )
 
@@ -397,7 +397,7 @@ def check_operation_confirmation(method: str, api_path: str) -> Dict[str, Any]:
         - threshold_days: Days threshold for conditional confirmation
     """
     try:
-        confirmation = get_confirmation_for_operation(method.upper(), api_path)
+        confirmation = resolve_confirmation(method.upper(), api_path)
 
         return {
             "method": method.upper(),
@@ -492,7 +492,7 @@ async def execute_action(
         path = api_info["path"]
 
         # Confirmation check for destructive operations
-        confirmation = get_confirmation_for_operation(method, path)
+        confirmation = resolve_confirmation(method, path)
         if confirmation["level"] != "none" and not confirmed:
             return {
                 "status": "confirmation_required",
@@ -552,6 +552,29 @@ async def execute_action(
         return {"error": str(e)}
 
 
+@lru_cache(maxsize=1)
+def _endpoint_toolset_index() -> Dict[Tuple[str, str], str]:
+    """Reverse index mapping (method, path) -> first toolset that exposes it.
+
+    Built once from all toolset configs. Iterating toolsets in the order
+    get_available_toolsets() returns and keeping the first writer preserves the
+    original first-match-wins behaviour of find_endpoint's nested scan, while
+    turning the per-candidate lookup into an O(1) dict access. Cached for the
+    process lifetime — toolset configs do not change during a session.
+    """
+    index: Dict[Tuple[str, str], str] = {}
+    for ts in get_available_toolsets():
+        try:
+            grouped = load_toolset_grouped_apis(ts)
+        except Exception:
+            continue
+        for tool_info in grouped.values():
+            for api in tool_info.get("apis", []):
+                key = (api.get("method"), api.get("path"))
+                index.setdefault(key, ts)
+    return index
+
+
 @log_tool_execution
 def find_endpoint(
     query: str,
@@ -599,44 +622,36 @@ def find_endpoint(
             "candidates": [],
         }
 
-    capped_limit = max(1, min(int(limit) if limit else 10, HARD_LIMIT))
+    try:
+        capped_limit = max(1, min(int(limit) if limit else 10, HARD_LIMIT))
+    except (TypeError, ValueError):
+        return {
+            "error": f"limit must be an integer, got {limit!r}",
+            "candidates": [],
+        }
 
     try:
-        corpus = build_corpus_from_spec(spec)
-        hot = extract_hot_keywords_from_spec(spec)
+        index = get_discovery_index(spec)
         ranked = rank_candidates(
-            corpus, query, method_types, float(min_score), capped_limit, hot
+            index["corpus"], query, method_types,
+            float(min_score), capped_limit, index["hot_keywords"],
         )
     except Exception as e:
         logger.error(f"find_endpoint ranking failed: {e}", exc_info=True)
         return {"error": str(e), "candidates": []}
 
-    available_toolsets = get_available_toolsets()
+    toolset_index = _endpoint_toolset_index()
     enriched: List[Dict[str, Any]] = []
     for cand in ranked:
         method, path = cand["method"], cand["path"]
         try:
-            confirmation = get_confirmation_for_operation(method, path)
+            confirmation = resolve_confirmation(method, path)
             level = confirmation.get("level", "none")
         except Exception as ce:
             logger.warning(f"confirmation lookup failed for {method} {path}: {ce}")
             level = "none"
 
-        suggested_toolset = None
-        for ts in available_toolsets:
-            try:
-                grouped = load_toolset_grouped_apis(ts)
-            except Exception:
-                continue
-            for tool_info in grouped.values():
-                for api in tool_info.get("apis", []):
-                    if api.get("method") == method and api.get("path") == path:
-                        suggested_toolset = ts
-                        break
-                if suggested_toolset:
-                    break
-            if suggested_toolset:
-                break
+        suggested_toolset = toolset_index.get((method, path))
 
         enriched.append({
             "score": cand["score"],

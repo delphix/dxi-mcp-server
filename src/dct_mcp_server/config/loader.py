@@ -362,34 +362,44 @@ def get_configured_toolset() -> str:
     Environment Variable: DCT_TOOLSET
     
     Returns:
-        Toolset name or 'self_service' as default
-        
+        Toolset name or 'dynamic' as default
+
     Raises:
         ValueError: If invalid toolset name specified
     """
-    toolset = os.environ.get("DCT_TOOLSET", "self_service").lower().strip()
+    toolset = os.environ.get("DCT_TOOLSET", "dynamic").lower().strip()
     
-    if toolset == "auto":
-        return "auto"
-    
+    if toolset in ("auto", "dynamic"):
+        return toolset
+
     available = get_available_toolsets()
     if toolset not in available:
         raise ValueError(
             f"Invalid toolset: {toolset}. "
-            f"Valid values: auto, {', '.join(available)}"
+            f"Valid values: auto, dynamic, {', '.join(available)}"
         )
-    
+
     return toolset
 
 
 def is_auto_mode() -> bool:
     """
     Check if server is running in auto (dynamic discovery) mode.
-    
+
     Returns:
         True if DCT_TOOLSET=auto
     """
     return get_configured_toolset() == "auto"
+
+
+def is_dynamic_mode() -> bool:
+    """
+    Check if server is running in dynamic 2-tool mode.
+
+    Returns:
+        True if DCT_TOOLSET=dynamic
+    """
+    return get_configured_toolset() == "dynamic"
 
 
 # ============================================================================
@@ -488,9 +498,13 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         
         # Platform admin merged tool
         "admin_platform_tool": "admin_endpoints_tool",
-        
+
         # Instance tools (CDB/vCDB)
         "instance_tool": "misc_endpoints_tool",
+
+        # Dynamic 2-tool mode tools (DCT_TOOLSET=dynamic)
+        "discovery": "dynamic",
+        "execute": "dynamic",
     }
     
     # Get the tools used by this toolset
@@ -515,10 +529,11 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
 def clear_cache():
     """
     Clear all cached configuration data.
-    
+
     Call this if configuration files change during runtime.
     """
     load_toolset_apis.cache_clear()
+    load_toolset_grouped_apis.cache_clear()
     load_manual_confirmation_rules.cache_clear()
     logger.info("Configuration cache cleared")
 

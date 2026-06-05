@@ -1,0 +1,70 @@
+# Tool Grouping Configuration
+#
+# Format: path_prefix|module_name
+#
+# Maps a DCT API path prefix to the generated tool module file it belongs to.
+# Used by toolsgenerator/driver.py:_get_module_for_path to decide which
+# <module_name>_tool.py file each generated unified tool is written into.
+#
+# Matching rule: longest prefix wins (e.g. "/management/engines" beats
+# "/management"). Paths with no matching prefix fall back to "misc_endpoints".
+#
+# NOTE: The semantics of this file differ from the pre-bbe27c0 version, which
+# mapped tool_name -> path_patterns. That concern is now handled by the
+# "# TOOL N: tool_name" headers in config/toolsets/*.txt. This file only
+# controls the output filename grouping for generated tools.
+
+# -- Dataset endpoints --
+/vdbs|dataset_endpoints
+/vdb-groups|dataset_endpoints
+/dsources|dataset_endpoints
+/snapshots|dataset_endpoints
+/bookmarks|dataset_endpoints
+/sources|dataset_endpoints
+/data-connections|dataset_endpoints
+/timeflows|dataset_endpoints
+
+# -- Job endpoints --
+/jobs|job_endpoints
+
+# -- Environment endpoints --
+/environments|environment_endpoints
+/toolkits|environment_endpoints
+
+# -- Engine endpoints --
+/management/engines|engine_endpoints
+/engines|engine_endpoints
+
+# -- Compliance endpoints --
+/masking|compliance_endpoints
+/connectors|compliance_endpoints
+/executions|compliance_endpoints
+/algorithms|compliance_endpoints
+
+# -- Reports endpoints --
+/reporting|reports_endpoints
+/reports|reports_endpoints
+
+# -- IAM endpoints (accounts, roles, access-groups, tags) --
+/management/accounts|iam_endpoints
+/roles|iam_endpoints
+/access-groups|iam_endpoints
+/management/tags|iam_endpoints
+
+# -- Policy endpoints --
+/replication-profiles|policy_endpoints
+/virtualization-policies|policy_endpoints
+
+# -- Admin/Platform endpoints --
+/ai|admin_endpoints
+/management/properties|admin_endpoints
+/management/telemetry|admin_endpoints
+/management/smtp|admin_endpoints
+/management/ldap-config|admin_endpoints
+/management/saml-config|admin_endpoints
+/management/proxy-configuration|admin_endpoints
+/management/license|admin_endpoints
+
+# -- Template endpoints --
+/database-templates|template_endpoints
+/hook-templates|template_endpoints

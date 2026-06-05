@@ -74,6 +74,57 @@ def build_corpus_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _candidate_tokens(candidate: dict[str, Any]) -> frozenset[str]:
+    """Merged token set for a candidate (path + summary + operationId + tags).
+
+    This is a pure function of the candidate's static spec fields, so it can be
+    computed once at index-build time rather than per query.
+    """
+    return frozenset(
+        _path_tokens(candidate["path"])
+        | _tokenize(candidate.get("summary", ""))
+        | _tokenize(candidate.get("operation_id", ""))
+        | {t.lower() for tag in candidate.get("tags", []) for t in _TOKEN_RE.findall(tag)}
+    )
+
+
+# In-memory discovery index, memoized by spec object identity. The cached spec
+# dict is replaced (not mutated) on reload, so id(spec) changing is a reliable
+# invalidation signal without wiring into the spec-load path.
+_INDEX_CACHE: tuple[int, dict[str, Any]] | None = None
+
+
+def build_discovery_index(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build the derived structures find_endpoint needs, once per spec.
+
+    Returns a dict with:
+      - "corpus": list of candidate dicts, each carrying a precomputed
+        "tokens" frozenset (so scoring never re-tokenizes).
+      - "hot_keywords": frozenset of domain hot-keywords.
+    """
+    corpus = build_corpus_from_spec(spec)
+    for cand in corpus:
+        cand["tokens"] = _candidate_tokens(cand)
+    return {
+        "corpus": corpus,
+        "hot_keywords": extract_hot_keywords_from_spec(spec),
+    }
+
+
+def get_discovery_index(spec: dict[str, Any]) -> dict[str, Any]:
+    """Return the cached discovery index for *spec*, building it on first use.
+
+    Rebuilds only when a different spec object is passed (e.g. after a reload).
+    """
+    global _INDEX_CACHE
+    if _INDEX_CACHE is not None and _INDEX_CACHE[0] == id(spec):
+        return _INDEX_CACHE[1]
+    index = build_discovery_index(spec)
+    _INDEX_CACHE = (id(spec), index)
+    logger.info("Built endpoint discovery index: %d candidates", len(index["corpus"]))
+    return index
+
+
 def score_candidate(
     query_tokens: set[str],
     hot_keywords: frozenset[str],
@@ -82,12 +133,9 @@ def score_candidate(
     """Weighted score in [0, 1] combining keyword overlap, path similarity, and hot-keyword boost."""
     if not query_tokens:
         return 0.0
-    cand_tokens = (
-        _path_tokens(candidate["path"])
-        | _tokenize(candidate["summary"])
-        | _tokenize(candidate.get("operation_id", ""))
-        | {t.lower() for tag in candidate.get("tags", []) for t in _TOKEN_RE.findall(tag)}
-    )
+    # Reuse the precomputed token set when the candidate came from the discovery
+    # index; fall back to computing it for ad-hoc candidates (back-compat).
+    cand_tokens = candidate.get("tokens") or _candidate_tokens(candidate)
     overlap = len(query_tokens & cand_tokens) / max(len(query_tokens), 1)
     ratio = SequenceMatcher(
         None,

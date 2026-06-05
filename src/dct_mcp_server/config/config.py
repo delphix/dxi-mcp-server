@@ -8,6 +8,11 @@ from typing import Any, Dict
 
 def get_dct_config() -> Dict[str, Any]:
     """Get DCT configuration from environment variables"""
+    import tempfile
+
+    _default_spec_cache_path = os.path.join(
+        tempfile.gettempdir(), "dct_mcp_tools", "api-external-dynamic.yaml"
+    )
 
     config = {
         "api_key": os.getenv("DCT_API_KEY"),
@@ -18,7 +23,10 @@ def get_dct_config() -> Dict[str, Any]:
         "log_level": os.getenv("DCT_LOG_LEVEL", "INFO").upper(),
         "is_local_telemetry_enabled": os.getenv("IS_LOCAL_TELEMETRY_ENABLED", "false").lower()
         == "true",
-        "toolset": os.getenv("DCT_TOOLSET", "self_service").lower().strip(),
+        "toolset": os.getenv("DCT_TOOLSET", "dynamic").lower().strip(),
+        # Dynamic mode (DCT_TOOLSET=dynamic) spec cache settings
+        "spec_cache_path": os.getenv("DCT_SPEC_CACHE_PATH", _default_spec_cache_path),
+        "spec_max_age_hours": int(os.getenv("DCT_SPEC_MAX_AGE_HOURS", "24")),
     }
 
     # Validate required configuration
@@ -59,7 +67,10 @@ def print_config_help():
         "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
     )
     print(
-        "  DCT_TOOLSET      Active toolset (default: self_service). Options:"
+        "  DCT_TOOLSET      Active toolset (default: dynamic). Options:"
+    )
+    print(
+        "                   - dynamic: 2-tool mode (discovery + execute) driven by live OpenAPI spec (default)"
     )
     print(
         "                   - auto: Dynamic discovery mode with meta-tools"
@@ -78,6 +89,15 @@ def print_config_help():
     )
     print(
         "                   - reporting_insights: Read-only reporting and analytics"
+    )
+    print()
+    print("Dynamic mode (DCT_TOOLSET=dynamic) optional variables:")
+    print(
+        "  DCT_SPEC_CACHE_PATH     Path to cache the downloaded OpenAPI spec "
+        "(default: $TEMP/dct_mcp_tools/api-external-dynamic.yaml)"
+    )
+    print(
+        "  DCT_SPEC_MAX_AGE_HOURS  Hours before re-downloading the spec (default: 24)"
     )
     print()
     print("Example:")

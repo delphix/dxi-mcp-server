@@ -8,6 +8,7 @@ import tempfile
 from dct_mcp_server.config import (
     get_configured_toolset,
     is_auto_mode,
+    is_dynamic_mode,
     get_available_toolsets,
     load_toolset_metadata,
     get_modules_for_toolset,
@@ -79,7 +80,18 @@ def register_all_tools(app, dct_client):
         logger.info("Running in AUTO mode - registering meta-tools with runtime switching support")
         register_meta_tools_only(app, dct_client)
         return
-    
+
+    # In dynamic mode, register only the 2 discovery+execute tools
+    if toolset == "dynamic":
+        logger.info("Running in DYNAMIC mode - registering discovery + execute tools")
+        try:
+            from .core.dynamic import register_dynamic_tools
+            register_dynamic_tools(app, dct_client)
+        except Exception as exc:
+            logger.error("Failed to register dynamic tools: %s", exc, exc_info=True)
+            raise
+        return
+
     # Fixed toolset mode - register only the tools for this toolset
     logger.info(f"Running in FIXED mode with toolset: {toolset}")
     

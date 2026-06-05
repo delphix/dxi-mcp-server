@@ -22,6 +22,7 @@ from dct_mcp_server.config import (
     print_config_help,
     get_configured_toolset,
     is_auto_mode,
+    is_dynamic_mode,
     get_available_toolsets,
     validate_all_configs,
 )
@@ -102,6 +103,32 @@ def setup_signal_handlers():
         loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(handle_shutdown(s)))
 
 
+async def _load_dynamic_spec(app: FastMCP) -> None:
+    """
+    Load and cache the DCT OpenAPI spec for dynamic mode.
+
+    Runs load_and_cache_spec() in a thread pool (it uses synchronous requests).
+    The parsed spec is held in the spec_cache module-level cache and read by the
+    discovery and execute tools via spec_cache.get_cached_spec() at request time.
+
+    Raises MCPError if the spec cannot be downloaded from DCT (no bundled fallback).
+    """
+    try:
+        from .tools.core.spec_cache import load_and_cache_spec
+        logger.info("Dynamic mode: loading OpenAPI spec…")
+        spec = await asyncio.to_thread(load_and_cache_spec)
+        path_count = len(spec.get("paths", {}))
+        logger.info(
+            "Dynamic mode: OpenAPI spec loaded (%d paths) and cached for discovery/execute tools.",
+            path_count,
+        )
+    except MCPError:
+        raise
+    except Exception as exc:
+        logger.error("Dynamic mode: unexpected error loading spec: %s", exc, exc_info=True)
+        raise MCPError(f"SPEC_LOAD_FAILED: {exc}") from exc
+
+
 async def async_main():
     """Async main entry point"""
     # Signal handlers are now set up in main() before the loop runs
@@ -112,12 +139,15 @@ async def async_main():
         logger.info(f"DCT MCP Server initialized with base URL: {dct_client.base_url}")
 
         # Log toolset configuration
+        toolset = "dynamic"
         try:
             toolset = get_configured_toolset()
             available = get_available_toolsets()
             if is_auto_mode():
                 logger.info(f"Toolset mode: AUTO (meta-tools only)")
                 logger.info(f"Available toolsets for discovery: {available}")
+            elif is_dynamic_mode():
+                logger.info("Toolset mode: DYNAMIC (discovery + execute — 2-tool architecture)")
             else:
                 logger.info(f"Toolset mode: FIXED ({toolset})")
                 # Validate configuration files
@@ -128,11 +158,17 @@ async def async_main():
             logger.warning(f"Could not determine toolset configuration: {e}")
 
         # Generate fresh tools from DCT API (non-blocking — runs in thread pool)
+        # This path is for the existing persona-based toolsets only; dynamic mode
+        # uses spec_cache.load_and_cache_spec() below instead.
         try:
             await asyncio.to_thread(generate_tools_from_openapi)
             logger.info("Successfully generated fresh tools from DCT API")
         except Exception as e:
             logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
+
+        # Dynamic mode: load and cache the OpenAPI spec before tool registration
+        if is_dynamic_mode():
+            await _load_dynamic_spec(app)
 
         # Dynamically register all tools
         from .tools import register_all_tools
