@@ -37,6 +37,63 @@ logger = logging.getLogger(__name__)
 _openapi_spec: Optional[Dict[str, Any]] = None
 _dct_client = None  # DCT API client reference
 
+# Valid VDB/dSource hook types from VirtualizationHooks schema in api-external.yaml.
+# The Delphix Engine silently ignores unknown keys, so we normalize camelCase
+# variants (which the LLM/user often produces) to the spec's snake_case form
+# and reject anything we can't map. See DLPXECO-13799.
+_VALID_HOOK_TYPES = frozenset({
+    "pre_refresh", "post_refresh",
+    "pre_self_refresh", "post_self_refresh",
+    "pre_rollback", "post_rollback",
+    "configure_clone",
+    "pre_snapshot", "post_snapshot",
+    "pre_start", "post_start",
+    "pre_stop", "post_stop",
+})
+
+
+def _camel_to_snake(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def _normalize_hooks_in_body(json_body: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Rewrite camelCase hook keys (e.g. configureClone) to snake_case in place.
+
+    Returns an error dict if a hook key is neither a known snake_case nor a
+    recognizable camelCase variant — surfaces typos/unknown hooks loudly
+    instead of letting the engine drop them silently.
+    """
+    if not isinstance(json_body, dict):
+        return None
+    hooks = json_body.get("hooks")
+    if not isinstance(hooks, dict) or not hooks:
+        return None
+
+    rewritten: Dict[str, Any] = {}
+    for key, value in hooks.items():
+        if key in _VALID_HOOK_TYPES:
+            target = key
+        elif _camel_to_snake(key) in _VALID_HOOK_TYPES:
+            target = _camel_to_snake(key)
+        else:
+            return {
+                "error": (
+                    f"Unknown hook type '{key}' in 'hooks'. Valid hook types are: "
+                    f"{sorted(_VALID_HOOK_TYPES)}."
+                ),
+                "valid_hook_types": sorted(_VALID_HOOK_TYPES),
+            }
+        if target in rewritten:
+            return {
+                "error": (
+                    f"Duplicate hook type after normalization: '{key}' -> "
+                    f"'{target}' collides with another key in 'hooks'."
+                ),
+            }
+        rewritten[target] = value
+    json_body["hooks"] = rewritten
+    return None
+
 
 # =============================================================================
 # OPENAPI SPEC CACHING
@@ -406,7 +463,11 @@ Returns:
             query_params = {}
         else:
             query_params = remaining
-        
+
+        hook_err = _normalize_hooks_in_body(json_body)
+        if hook_err:
+            return hook_err
+
         return await _dct_client.make_request(
             method,
             final_path,
