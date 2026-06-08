@@ -1,10 +1,15 @@
 """
-Dynamic-mode confirmation resolver for auto mode (DCT_TOOLSET=auto).
+Spec-derived confirmation resolver for auto mode (DCT_TOOLSET=auto only).
 
-In auto/dynamic mode the server exposes the *entire* OpenAPI spec, not just the
+Note: this is distinct from the ``dynamic`` toolset (DCT_TOOLSET=dynamic),
+which has its own confirmation gate in ``tools/core/confirmation_resolver.py``
+backed by ``manual_confirmation.txt``. The spec-derived logic here applies
+*only* when DCT_TOOLSET=auto.
+
+In auto mode the server exposes the *entire* OpenAPI spec, not just the
 hand-curated persona endpoints. The static rule file
 ``config/mappings/manual_confirmation.txt`` predates that and only covers a
-fraction of those endpoints, so it cannot be the source of truth for dynamic
+fraction of those endpoints, so it cannot be the source of truth for auto
 mode.
 
 This module derives the confirmation requirement straight from the spec:
@@ -22,7 +27,7 @@ read/search endpoints would be gated, which is not the intent.
 
 ``resolve_confirmation()`` is the single mode-aware entry point: it uses this
 spec-derived logic when DCT_TOOLSET=auto and falls back to the static txt rules
-for the fixed persona toolsets (preserving their existing behaviour).
+for every other toolset (preserving their existing behaviour).
 """
 
 from typing import Any, Dict, Optional
@@ -128,8 +133,8 @@ def get_confirmation_for_operation_dynamic(
 def resolve_confirmation(method: str, path: str) -> Dict[str, Any]:
     """Mode-aware confirmation lookup.
 
-    Auto/dynamic mode derives the requirement from the OpenAPI spec; fixed
-    persona toolsets keep using the static ``manual_confirmation.txt`` rules.
+    Auto mode (DCT_TOOLSET=auto) derives the requirement from the OpenAPI spec;
+    every other toolset keeps using the static ``manual_confirmation.txt`` rules.
     """
     try:
         toolset = get_dct_config().get("toolset", "")

@@ -194,8 +194,10 @@ def _download_spec(
     """
     Download the DCT OpenAPI spec via HTTP GET.
 
-    Attempts one retry on transient failures.  Returns None (non-fatal) on any
-    error so the caller can fall through to the bundled spec.
+    Attempts one retry on transient failures. Returns None on any error so the
+    caller can fall through to a fresh on-disk cache if one exists. There is no
+    bundled-spec fallback: if neither a download nor a fresh cache is available,
+    load_and_cache_spec() raises MCPError("SPEC_LOAD_FAILED").
     """
     if not base_url:
         logger.warning("DCT_BASE_URL not set — cannot download OpenAPI spec")

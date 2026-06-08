@@ -157,18 +157,21 @@ async def async_main():
         except Exception as e:
             logger.warning(f"Could not determine toolset configuration: {e}")
 
-        # Generate fresh tools from DCT API (non-blocking — runs in thread pool)
-        # This path is for the existing persona-based toolsets only; dynamic mode
-        # uses spec_cache.load_and_cache_spec() below instead.
-        try:
-            await asyncio.to_thread(generate_tools_from_openapi)
-            logger.info("Successfully generated fresh tools from DCT API")
-        except Exception as e:
-            logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
-
-        # Dynamic mode: load and cache the OpenAPI spec before tool registration
+        # Generate fresh tools from DCT API (non-blocking — runs in thread pool).
+        # This path is for the existing persona-based toolsets only and is
+        # skipped in dynamic mode, which registers only discovery/execute and
+        # sources its spec from spec_cache.load_and_cache_spec() instead —
+        # running the generator there would be wasted work (an extra spec
+        # download + filesystem churn that no registered tool consumes).
         if is_dynamic_mode():
+            # Dynamic mode: load and cache the OpenAPI spec before tool registration
             await _load_dynamic_spec(app)
+        else:
+            try:
+                await asyncio.to_thread(generate_tools_from_openapi)
+                logger.info("Successfully generated fresh tools from DCT API")
+            except Exception as e:
+                logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
 
         # Dynamically register all tools
         from .tools import register_all_tools
