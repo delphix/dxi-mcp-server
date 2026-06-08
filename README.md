@@ -82,7 +82,8 @@ All configuration methods use these environment variables:
 - `DCT_TIMEOUT` - Request timeout in seconds (default: `30`)
 - `DCT_MAX_RETRIES` - Maximum retry attempts (default: `3`)
 - `DCT_TOOLSET` - Toolset to load (see [Toolsets](#toolsets) section below)
-  - `self_service` (default) - Basic VDB operations (7 tools)
+  - `dynamic` (default) - 2-tool mode (`discovery` + `execute`) driven by the live DCT OpenAPI spec
+  - `self_service` - Basic VDB operations (7 tools)
   - `auto` - Dynamic discovery with 5 meta-tools for runtime switching
   - `self_service_provision` - Self-service + provisioning (14 tools)
   - `continuous_data_admin` - Full DBA operations (22 tools)
@@ -138,7 +139,7 @@ See below for the full JSON configuration examples for each client.
 }
 ```
 
-> **Tip**: Use `"DCT_TOOLSET": "self_service"` (default) for basic VDB operations, or `"auto"` for dynamic toolset discovery, or `"continuous_data_admin"` for full DBA operations.
+> **Tip**: The default `"DCT_TOOLSET": "dynamic"` exposes the full DCT API through two tools (`discovery` + `execute`). Use `"self_service"` for a curated set of basic VDB operations, `"auto"` for runtime toolset discovery, or `"continuous_data_admin"` for full DBA operations.
 
 **Option 2: Using Python directly**
 ```json
@@ -433,7 +434,8 @@ The server organizes tools into **persona-based toolsets** designed for specific
 
 | Toolset | Tools | Target Users | Description |
 |---------|-------|--------------|-------------|
-| `self_service` | 7 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop, timeflows (default) |
+| `dynamic` | 2 tools | All users | Full DCT API via `discovery` + `execute`, driven by the live OpenAPI spec (default) |
+| `self_service` | 7 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop, timeflows |
 | `auto` | 5 meta-tools | All users | Dynamic discovery mode - start minimal, enable toolsets at runtime |
 | `self_service_provision` | 14 tools | Dev leads | Self-service + VDB provisioning, toolkits, templates, policies |
 | `continuous_data_admin` | 22 tools | DBAs | Full data management: VDBs, dSources, snapshots, policies, staging, toolkits, vaults, diagnostics |

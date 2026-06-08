@@ -26,10 +26,10 @@ import requests
 from dct_mcp_server.config import (
     load_toolset_apis,
     load_toolset_grouped_apis,
-    get_confirmation_for_operation,
 )
 from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.core.decorators import log_tool_execution
+from .dynamic_confirmation import resolve_confirmation
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +274,7 @@ def _create_tool_function(
     docstring = "\n".join(docstring_parts)
     
     # Check confirmation requirements
-    confirmation = get_confirmation_for_operation(method, api_path)
+    confirmation = resolve_confirmation(method, api_path)
     needs_confirmation = confirmation["level"] != "none"
     
     # Create the actual function
@@ -369,7 +369,7 @@ def _create_grouped_tool_function(
             operation = path_item.get(method.lower(), {})
         
         summary = operation.get("summary", action_name) if operation else action_name
-        confirmation = get_confirmation_for_operation(method, path)
+        confirmation = resolve_confirmation(method, path)
         
         action_registry[action_name] = {
             "method": method,
