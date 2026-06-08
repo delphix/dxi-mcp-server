@@ -114,23 +114,22 @@ def _write_mcp_config(toolset: str) -> Path:
             "DCT_BASE_URL and DCT_API_KEY are required for Layer 5 — run via "
             "`dct-mcp-test --layer llm --base-url ... --api-key ...`"
         )
-    config = {
-        "mcpServers": {
-            MCP_SERVER_NAME: {
-                "command": sys.executable,
-                "args": ["-m", "dct_mcp_server.main"],
-                "env": {
-                    "DCT_API_KEY": api_key,
-                    "DCT_BASE_URL": base_url,
-                    "DCT_TOOLSET": toolset,
-                    "DCT_VERIFY_SSL": "false",
-                    "DCT_LOG_LEVEL": "ERROR",
-                    "DCT_TIMEOUT": "30",
-                    "DCT_MAX_RETRIES": "3",
-                },
-            }
-        }
+    server_env = {
+        "DCT_API_KEY": api_key,
+        "DCT_BASE_URL": base_url,
+        "DCT_TOOLSET": toolset,
+        "DCT_VERIFY_SSL": "false",
+        "DCT_LOG_LEVEL": "ERROR",
+        "DCT_TIMEOUT": "30",
+        "DCT_MAX_RETRIES": "3",
     }
+    # Propagate TMPDIR so the spawned server's tool generation ($TEMP/dct_mcp_tools)
+    # can be isolated per run — lets a second live run avoid racing the shared temp dir.
+    if os.environ.get("TMPDIR"):
+        server_env["TMPDIR"] = os.environ["TMPDIR"]
+    config = {"mcpServers": {MCP_SERVER_NAME: {
+        "command": sys.executable, "args": ["-m", "dct_mcp_server.main"], "env": server_env,
+    }}}
     fd, path = tempfile.mkstemp(prefix=f"dct-mcp-{toolset}-", suffix=".json")
     with os.fdopen(fd, "w") as f:
         json.dump(config, f)
