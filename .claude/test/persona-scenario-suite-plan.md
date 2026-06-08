@@ -12,7 +12,22 @@
 
 ## STATUS
 
-**State:** S0 DONE 2026-06-08. Safe-run proven (live run leaves `src/` clean). Next: S1.
+**State:** S0 + S1 DONE 2026-06-08. Framework live-validated (2 self_service read scenarios passed via
+Claude, src clean). Next: **S2** (self_service suite) — and add Tier-2 act→verify for mutations.
+
+### How to run the scenario suite (the S1 framework)
+```bash
+set -a; source .env.local; set +a
+SCENARIO_PERSONAS=self_service SCENARIO_LIMIT=5 \
+  .venv-live/bin/python -m pytest tests/llm_local/test_scenarios.py -m scenario -v
+# knobs: SCENARIO_PERSONAS (csv, required) · SCENARIO_MUTATIONS=1 · SCENARIO_LIMIT=N · SCENARIO_IDS=csv
+```
+Catalog: `tests/_support/scenarios.py` (parses `.claude/test/testing/<persona>.md` → 904 prompts across
+6 personas; read/mutation classified). Harness: `tests/llm_local/test_scenarios.py` (Tier-1 verify =
+expected tool used + license-skip). KNOWN LIMITATIONS to address in S2+: (a) first-verb tier
+classification mis-labels compound prompts like "List … then refresh" as read — refine per-scenario or
+smarter classifier before enabling mutations broadly; (b) chained "that VDB"/"previous result" prompts
+run as independent calls (Tier-1 still holds since Claude re-discovers; true session replay is future work).
 
 ### SAFE-RUN RECIPE (use this for ALL live runs — no more commit/restore)
 The repo is an editable install, so booting the server live regenerates tools into `src/`. Avoid that
@@ -31,7 +46,7 @@ generated modules landed in `/tmp/.../dct_mcp_tools/`.
 | Phase | What | State |
 |---|---|---|
 | S0 | Safe-run venv + `llm_driver_for(toolset)` factory + `license_blocked()` helper | ☑ DONE 2026-06-08 |
-| S1 | Scenario catalog (from testing/*.md) + verification model | ☐ |
+| S1 | Scenario catalog (904 prompts) + Tier-1 verifier + env-selected harness | ☑ DONE 2026-06-08 |
 | S2 | self_service scenario suite (live) | ☐ |
 | S3 | continuous_data_admin scenario suite (live) — **priority persona** | ☐ |
 | S4 | platform_admin, reporting_insights, self_service_provision, auto | ☐ |
