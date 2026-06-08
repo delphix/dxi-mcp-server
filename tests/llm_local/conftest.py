@@ -199,3 +199,45 @@ def llm_driver(dct_mcp_config: Path) -> Callable[..., DriverResult]:
 def llm_driver_cda(dct_mcp_config_cda: Path) -> Callable[..., DriverResult]:
     """Run a natural-language task through the Claude Code CLI (continuous_data_admin)."""
     return _make_driver(dct_mcp_config_cda)
+
+
+# --- S0: per-persona driver factory + Claude-side license tolerance ----------
+
+LICENSE_MARKER = "License does not permit"
+
+
+def license_blocked(result: DriverResult) -> bool:
+    """
+    True if the run hit a DCT license restriction (a tool returned
+    "License does not permit operations on <X>"). Scenario tests should skip
+    (resource not licensed on this DCT), not fail.
+    """
+    blob = (result.raw or "") + " " + (result.final_text or "")
+    return LICENSE_MARKER in blob
+
+
+@pytest.fixture
+def llm_driver_for():
+    """
+    Factory fixture: `llm_driver_for()(toolset) -> run(task)` for ANY toolset.
+
+        drive = llm_driver_for()
+        result = drive("platform_admin")("List the registered engines")
+
+    Writes a temp MCP config per toolset (skips the test if creds/claude absent),
+    caches per toolset, and cleans up all temp configs on teardown.
+    """
+    configs: dict[str, Path] = {}
+
+    def make(toolset: str) -> Callable[..., DriverResult]:
+        if toolset not in configs:
+            configs[toolset] = _write_mcp_config(toolset)
+        return _make_driver(configs[toolset])
+
+    yield make
+
+    for path in configs.values():
+        try:
+            os.unlink(path)
+        except OSError:
+            pass

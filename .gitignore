@@ -56,3 +56,4 @@ mcp_server_setup_logfile.txt
 
 # Git worktrees (project-local isolation)
 .worktrees/
+.venv-live/
