@@ -10,6 +10,20 @@
 
 ---
 
+## ▶ NEXT SESSION (resume 2026-06-09): LIVE MUTATION TESTING with real engine + MySQL hosts
+Goal: exercise the real write paths on the disposable DCT — engine registration and MySQL
+dSource link/provision — via Claude (act → wait for job → independent verify).
+Inputs the user will provide:
+- **`E2E_ENGINE_JSON`** — engine connection payload → runs the built `test_act_verify_cda.py::
+  test_ai_registers_engine_then_verifies_then_unregisters` (currently skipped without it).
+- **MySQL host details** — for dSource link/provision scenarios (mssql/appdata link paths). These
+  Tier-2 act→verify scenarios are NOT built yet — author them next (mirror the vdb-tag/engine-tag
+  pattern: act → job-wait → independent verify → cleanup). The catalog already has the prompts
+  (continuous_data_admin mutation-tier: dsource_link_*, provision_*).
+Reminders: run live via `.venv-live/bin/dct-mcp-test` (safe-run; reinstall venv if src changed);
+`set -a; source .env.local; set +a`; use `--mutations` / `LLM_ALLOW_MUTATION=1` / `E2E_ALLOW_MUTATION=1`
+on the DISPOSABLE DCT only.
+
 ## STATUS
 
 **State:** ✅ **S0–S5 ALL DONE 2026-06-08 — persona scenario suite COMPLETE.** Any persona's prompts run
