@@ -33,6 +33,7 @@ _LAYER_PATHS: dict[str, list[str]] = {
     "ci":          ["tests/unit", "tests/integration", "tests/functional"],
     "e2e":         ["tests/e2e"],
     "llm":         ["tests/llm_local"],
+    "scenarios":   ["tests/llm_local/test_scenarios.py"],
     "all":         ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
     "demo":        ["tests/demo"],
 }
@@ -41,10 +42,15 @@ _LAYER_PATHS: dict[str, list[str]] = {
 _LAYER_MARKERS: dict[str, str] = {
     "e2e": "real_dct",
     "llm": "llm_driven",
+    "scenarios": "scenario",
     "demo": "demo",
 }
 
-_LAYERS_NEEDING_DCT = {"e2e", "llm", "all"}
+_LAYERS_NEEDING_DCT = {"e2e", "llm", "scenarios", "all"}
+
+# IMPORTANT for live layers (e2e/llm/scenarios): run this CLI from the non-editable
+# safe-run venv so the server generates tools into $TEMP, not src/:
+#     .venv-live/bin/dct-mcp-test --layer scenarios --persona continuous_data_admin
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -70,6 +76,27 @@ _LAYERS_NEEDING_DCT = {"e2e", "llm", "all"}
     help="Filter to workflows matching this name (passed to pytest as -k).",
 )
 @click.option(
+    "--persona",
+    help="For --layer scenarios: comma-separated personas to run "
+         "(e.g. self_service,continuous_data_admin). Sets SCENARIO_PERSONAS.",
+)
+@click.option(
+    "--mutations",
+    is_flag=True,
+    help="For --layer scenarios: include mutation-tier prompts (default: read-only).",
+)
+@click.option(
+    "--scenario-limit",
+    type=int,
+    default=0,
+    help="For --layer scenarios: cap scenarios per persona (0 = no cap).",
+)
+@click.option(
+    "--report",
+    type=click.Path(),
+    help="Write a JUnit-XML report to this path (machine-readable pass/skip/fail).",
+)
+@click.option(
     "--no-cleanup",
     is_flag=True,
     help="Skip the e2e cleanup pass. Dangerous on a persistent DCT — leaves orphaned resources.",
@@ -84,6 +111,10 @@ def main(
     api_key: str | None,
     layer: str,
     workflow: str | None,
+    persona: str | None,
+    mutations: bool,
+    scenario_limit: int,
+    report: str | None,
     no_cleanup: bool,
     verbose: bool,
 ) -> None:
@@ -91,6 +122,20 @@ def main(
 
     env = os.environ.copy()
     paths = _LAYER_PATHS[layer]
+
+    # The scenario layer is persona-driven: --persona selects which catalogs to run.
+    if layer == "scenarios":
+        if not persona:
+            raise click.UsageError(
+                "--layer scenarios requires --persona (e.g. --persona self_service,"
+                "continuous_data_admin). Available: self_service, self_service_provision, "
+                "continuous_data_admin, platform_admin, reporting_insights, auto."
+            )
+        env["SCENARIO_PERSONAS"] = persona
+        if mutations:
+            env["SCENARIO_MUTATIONS"] = "1"
+        if scenario_limit:
+            env["SCENARIO_LIMIT"] = str(scenario_limit)
 
     # E2E layers need DCT credentials; refuse to run silently against an
     # empty target. Generate a run tag so the cleanup pass can find what
@@ -114,6 +159,8 @@ def main(
         pytest_args.extend(["-k", workflow])
     if verbose:
         pytest_args.extend(["--tb=long"])
+    if report:
+        pytest_args.extend([f"--junit-xml={report}"])
 
     click.secho(f"→ {' '.join(pytest_args)}", fg="green")
     result = subprocess.run(pytest_args, env=env)

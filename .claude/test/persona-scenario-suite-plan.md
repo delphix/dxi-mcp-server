@@ -12,11 +12,22 @@
 
 ## STATUS
 
-**State:** S0–S4 DONE 2026-06-08. All persona read catalogs run live via Claude. Totals across personas:
-self_service 23P/9S, CDA 157P/10S/3xf, S4 (platform/reporting/provision/auto) 199P/12S/11xf. Tier-2
-act→verify validated (self_service vdb-tag, admin engine-tag). Next: **S5** (runner + cleanup + report).
-FINDINGS: discoverability gaps for vault_tool / admin_platform_tool / diagnostic_tool (names don't match
-prompt language) — see S3/S4 sections + `_KNOWN_ISSUES`.
+**State:** ✅ **S0–S5 ALL DONE 2026-06-08 — persona scenario suite COMPLETE.** Any persona's prompts run
+live via Claude against the real DCT with verified output. Totals: self_service 23P/9S, CDA 157P/10S/3xf,
+platform/reporting/provision/auto 199P/12S/11xf. Tier-2 act→verify validated (self_service vdb-tag, admin
+engine-tag). Runner shipped. FINDINGS: discoverability gaps for vault_tool / admin_platform_tool /
+diagnostic_tool (names don't match prompt language) — see `_KNOWN_ISSUES` + [[tool-discoverability-findings]].
+
+### Run it (the S5 runner — use the safe-run venv for live layers)
+```bash
+set -a; source .env.local; set +a
+.venv-live/bin/dct-mcp-test --layer scenarios --persona continuous_data_admin           # read-only
+.venv-live/bin/dct-mcp-test --layer scenarios --persona self_service --mutations         # incl. mutations
+.venv-live/bin/dct-mcp-test --layer scenarios --persona platform_admin --scenario-limit 10 \
+    --report report.xml                                                                  # capped + JUnit report
+```
+`--persona` (csv) → SCENARIO_PERSONAS · `--mutations` → SCENARIO_MUTATIONS=1 · `--scenario-limit N` ·
+`--report file.xml` (JUnit). Cleanup (tests/e2e/cleanup) runs automatically after.
 
 ### How to run the scenario suite (the S1 framework)
 ```bash
@@ -53,7 +64,7 @@ generated modules landed in `/tmp/.../dct_mcp_tools/`.
 | S2 | self_service scenario suite (live) | ☑ DONE 2026-06-08 — read catalog 23 passed / 9 skipped(license) / 0 failed; Tier-2 vdb-tag act→verify passed |
 | S3 | continuous_data_admin scenario suite (live) — **priority persona** | ☑ DONE 2026-06-08 — read 157 passed / 10 skipped(license) / 3 xfail; engine-tag act→verify passed |
 | S4 | platform_admin, reporting_insights, self_service_provision, auto | ☑ DONE 2026-06-08 — 199 passed / 12 skipped / 11 xfail (9 discoverability gaps, 2 chained) |
-| S5 | runner (`dct-mcp-test`) + per-persona cleanup + pass/fail/skip report | ☐ |
+| S5 | runner (`dct-mcp-test --layer scenarios`) + cleanup + JUnit report | ☑ DONE 2026-06-08 |
 
 ---
 
@@ -172,9 +183,12 @@ Delivered: `.venv-live` non-editable install (generation → `$TEMP`, src untouc
   diagnostic_tool→NetBackup/DSP). With 13-22 tools per persona, Claude Code defers them behind ToolSearch,
   so name/description quality directly gates usability. Recommend improving these tool descriptions.
 
-### S5 — runner + cleanup + report  (~1 day)
-- `dct-mcp-test --layer scenarios --toolset <persona>` (or `--all`). Per-persona purge keyed on
-  `E2E_RUN_TAG`. A pass/skip/fail report per persona (the PR test-report artifact).
+### S5 — runner + cleanup + report  ✓ DONE 2026-06-08
+- `dct-mcp-test` gained a **`scenarios`** layer + `--persona` (csv), `--mutations`, `--scenario-limit`,
+  `--report` (JUnit-XML). Cleanup (`tests/e2e/cleanup`, E2E_RUN_TAG purge) runs automatically after
+  (scenarios is in `_LAYERS_NEEDING_DCT`). Run via the `.venv-live` console script so generation stays
+  in `$TEMP` (safe-run). Smoke-verified end-to-end: 1 scenario passed, cleanup ran, JUnit report written,
+  src clean.
 
 ---
 
