@@ -47,6 +47,21 @@ _KNOWN_ISSUES = {
         "DISCOVERABILITY GAP: Claude's tool-search did not surface vault_tool for 'List Hashicorp vaults'",
     "continuous_data_admin-408":
         "DISCOVERABILITY GAP: vault_tool not selected for 'Search Hashicorp vaults'",
+    # S4 (platform_admin / reporting_insights) — same two classes:
+    # (A) DISCOVERABILITY GAPS — tool exists+generates but Claude's tool-search doesn't surface it
+    #     because the tool name doesn't match the prompt's domain language.
+    "platform_admin-155": "DISCOVERABILITY GAP: admin_platform_tool not surfaced for 'LLM models'",
+    "platform_admin-174": "DISCOVERABILITY GAP: vault_tool not surfaced for 'Hashicorp vaults'",
+    "platform_admin-175": "DISCOVERABILITY GAP: vault_tool not surfaced for 'Hashicorp vaults'",
+    "platform_admin-176": "DISCOVERABILITY GAP: vault_tool not surfaced for 'Hashicorp vault details'",
+    "platform_admin-182": "DISCOVERABILITY GAP: vault_tool (kerberos-configs) not surfaced for 'Kerberos configurations'",
+    "platform_admin-183": "DISCOVERABILITY GAP: vault_tool (kerberos-configs) not surfaced for 'Kerberos configurations'",
+    "platform_admin-184": "DISCOVERABILITY GAP: vault_tool (kerberos-configs) not surfaced for 'Kerberos configuration details'",
+    "platform_admin-187": "DISCOVERABILITY GAP: diagnostic_tool not surfaced for 'NetBackup connectivity'",
+    "platform_admin-192": "DISCOVERABILITY GAP: diagnostic_tool not surfaced for 'DSP network test result'",
+    # (B) chained prompts ('that tag') — no antecedent in isolated execution.
+    "reporting_insights-78": "chained prompt ('that tag') has no antecedent when run in isolation",
+    "reporting_insights-79": "chained prompt ('that tag') has no antecedent when run in isolation",
 }
 
 _PERSONAS = [p.strip() for p in os.environ.get("SCENARIO_PERSONAS", "").split(",") if p.strip()]

@@ -12,8 +12,11 @@
 
 ## STATUS
 
-**State:** S0 + S1 DONE 2026-06-08. Framework live-validated (2 self_service read scenarios passed via
-Claude, src clean). Next: **S2** (self_service suite) — and add Tier-2 act→verify for mutations.
+**State:** S0–S4 DONE 2026-06-08. All persona read catalogs run live via Claude. Totals across personas:
+self_service 23P/9S, CDA 157P/10S/3xf, S4 (platform/reporting/provision/auto) 199P/12S/11xf. Tier-2
+act→verify validated (self_service vdb-tag, admin engine-tag). Next: **S5** (runner + cleanup + report).
+FINDINGS: discoverability gaps for vault_tool / admin_platform_tool / diagnostic_tool (names don't match
+prompt language) — see S3/S4 sections + `_KNOWN_ISSUES`.
 
 ### How to run the scenario suite (the S1 framework)
 ```bash
@@ -49,7 +52,7 @@ generated modules landed in `/tmp/.../dct_mcp_tools/`.
 | S1 | Scenario catalog (904 prompts) + Tier-1 verifier + env-selected harness | ☑ DONE 2026-06-08 |
 | S2 | self_service scenario suite (live) | ☑ DONE 2026-06-08 — read catalog 23 passed / 9 skipped(license) / 0 failed; Tier-2 vdb-tag act→verify passed |
 | S3 | continuous_data_admin scenario suite (live) — **priority persona** | ☑ DONE 2026-06-08 — read 157 passed / 10 skipped(license) / 3 xfail; engine-tag act→verify passed |
-| S4 | platform_admin, reporting_insights, self_service_provision, auto | ☐ |
+| S4 | platform_admin, reporting_insights, self_service_provision, auto | ☑ DONE 2026-06-08 — 199 passed / 12 skipped / 11 xfail (9 discoverability gaps, 2 chained) |
 | S5 | runner (`dct-mcp-test`) + per-persona cleanup + pass/fail/skip report | ☐ |
 
 ---
@@ -153,8 +156,21 @@ Delivered: `.venv-live` non-editable install (generation → `$TEMP`, src untouc
   2. **Chained prompt** (#161 "that vCDB"): no antecedent in isolated execution → Claude asks. Known
      limitation of independent-prompt execution; true session replay is future work.
 
-### S4 — remaining personas (live)  (~2–3 days)
-- platform_admin (198), reporting_insights (79), self_service_provision (139), auto (57 — meta-tool flows).
+### S4 — remaining personas (live)  ✓ DONE 2026-06-08
+- Read catalogs for platform_admin / reporting_insights / self_service_provision / auto (222 read-tier)
+  run live: **199 passed / 12 skipped (license) / 11 xfail** (~1h53m). self_service_provision + auto:
+  clean (no failures). auto verified leniently (meta-tool mode; assert Claude drove some tool).
+- The 11 xfail = documented findings (in `_KNOWN_ISSUES`), same two classes as S3:
+  * **DISCOVERABILITY GAPS (9):** Claude's tool-search did not surface a tool whose NAME doesn't match
+    the prompt's domain language — even though the tool exists + generates:
+      - `vault_tool` (Hashicorp vaults #174-176; **also owns kerberos-configs** #182-184)
+      - `admin_platform_tool` ("LLM models" #155)
+      - `diagnostic_tool` ("NetBackup connectivity" #187, "DSP network test" #192)
+  * **CHAINED (2):** reporting_insights #78/#79 "that tag" — no antecedent in isolation.
+- **ACTIONABLE PRODUCT THEME (across S3+S4):** several tools are unreachable via natural language because
+  their names/descriptions don't reflect what they do (vault_tool→kerberos, admin_platform_tool→AI/LLM,
+  diagnostic_tool→NetBackup/DSP). With 13-22 tools per persona, Claude Code defers them behind ToolSearch,
+  so name/description quality directly gates usability. Recommend improving these tool descriptions.
 
 ### S5 — runner + cleanup + report  (~1 day)
 - `dct-mcp-test --layer scenarios --toolset <persona>` (or `--all`). Per-persona purge keyed on
