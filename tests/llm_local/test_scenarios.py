@@ -88,10 +88,21 @@ def test_scenario(llm_driver_for, scenario):
     # tool from the .md header: those groupings are imperfect (e.g. "VDB groups" prompts
     # are filed under data_tool but DCT exposes them via group_tool — Claude is right to
     # use group_tool). `scenario.tool` is kept for reporting only.
-    persona_tools = set(config_cases.tools_for(scenario.persona))
-    used_persona_tools = result.tools_used & persona_tools
-    assert used_persona_tools, (
-        f"{scenario.id} [{scenario.tier}] Claude used NO {scenario.persona} tool "
-        f"(refusal/hallucination?). tools_used={sorted(result.tools_used)}\n"
-        f"  prompt: {scenario.prompt}\n  answer: {result.final_text[:200]}"
-    )
+    try:
+        persona_tools = set(config_cases.tools_for(scenario.persona))
+    except (FileNotFoundError, KeyError):
+        # 'auto' has no toolset .txt — it's meta-tool mode (enable_toolset/etc.).
+        # There we can only assert Claude drove SOME tool (navigated the surface).
+        persona_tools = None
+
+    if persona_tools is None:
+        assert result.tools_used, (
+            f"{scenario.id} [{scenario.tier}] Claude used NO tool at all (refusal/hallucination?).\n"
+            f"  prompt: {scenario.prompt}\n  answer: {result.final_text[:200]}"
+        )
+    else:
+        assert result.tools_used & persona_tools, (
+            f"{scenario.id} [{scenario.tier}] Claude used NO {scenario.persona} tool "
+            f"(refusal/hallucination?). tools_used={sorted(result.tools_used)}\n"
+            f"  prompt: {scenario.prompt}\n  answer: {result.final_text[:200]}"
+        )
