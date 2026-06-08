@@ -48,7 +48,7 @@ generated modules landed in `/tmp/.../dct_mcp_tools/`.
 | S0 | Safe-run venv + `llm_driver_for(toolset)` factory + `license_blocked()` helper | ☑ DONE 2026-06-08 |
 | S1 | Scenario catalog (904 prompts) + Tier-1 verifier + env-selected harness | ☑ DONE 2026-06-08 |
 | S2 | self_service scenario suite (live) | ☑ DONE 2026-06-08 — read catalog 23 passed / 9 skipped(license) / 0 failed; Tier-2 vdb-tag act→verify passed |
-| S3 | continuous_data_admin scenario suite (live) — **priority persona** | ☐ |
+| S3 | continuous_data_admin scenario suite (live) — **priority persona** | ☑ DONE 2026-06-08 — read 157 passed / 10 skipped(license) / 3 xfail; engine-tag act→verify passed |
 | S4 | platform_admin, reporting_insights, self_service_provision, auto | ☐ |
 | S5 | runner (`dct-mcp-test`) + per-persona cleanup + pass/fail/skip report | ☐ |
 
@@ -137,9 +137,21 @@ Delivered: `.venv-live` non-editable install (generation → `$TEMP`, src untouc
 - LEARNINGS for later personas: (a) verify prompts must NOT contain the identifier being checked;
   (b) assert the OUTCOME (key present in a full listing) not the mechanism (which action).
 
-### S3 — continuous_data_admin suite (live) — PRIORITY  (~2–3 days)
-- The admin persona (431 prompts). Group into ~40–60 runnable scenarios. Engine register/unregister
-  needs `E2E_ENGINE_JSON`. This is the biggest and most important slice.
+### S3 — continuous_data_admin suite (live) — PRIORITY  ✓ DONE 2026-06-08
+- Read catalog (170 read-tier prompts) run live: **157 passed / 10 skipped (license) / 3 xfail**
+  (~98% of non-skipped). Run took ~1h40m.
+- Tier-1 robustness fix: assert Claude used a tool BELONGING to the persona (config_cases), not the
+  imperfect .md-header tool. (Root cause: "VDB groups" prompts filed under data_tool, but DCT exposes
+  them via group_tool — Claude is right.)
+- Admin Tier-2 act→verify (`test_act_verify_cda.py`): engine-tag PASSED live (tag→independent verify→
+  cleanup). engine register→verify→unregister gated on `E2E_ENGINE_JSON` (skips until provided).
+- **FINDINGS (real, recorded as xfail in test_scenarios.py `_KNOWN_ISSUES`):**
+  1. **Discoverability gap — `vault_tool`** (#407/#408): `vault_tool` exists + generates with
+     `list/search_hashicorp_vaults`, but Claude's tool-search did NOT surface/select it for "Hashicorp
+     vaults" (with 22 CDA tools, Claude Code defers tools + uses ToolSearch). Actionable: improve
+     vault_tool name/description discoverability. ← the kind of signal Layer 5 exists to catch.
+  2. **Chained prompt** (#161 "that vCDB"): no antecedent in isolated execution → Claude asks. Known
+     limitation of independent-prompt execution; true session replay is future work.
 
 ### S4 — remaining personas (live)  (~2–3 days)
 - platform_admin (198), reporting_insights (79), self_service_provision (139), auto (57 — meta-tool flows).

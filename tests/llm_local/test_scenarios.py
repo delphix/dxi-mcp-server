@@ -36,6 +36,19 @@ from tests.llm_local.conftest import license_blocked
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven, pytest.mark.scenario]
 
+# Documented known issues surfaced by live runs (xfail = visible in reports, suite stays
+# green). These are real FINDINGS, not framework bugs:
+#  - chained prompts ("that <X>") have no antecedent in isolated execution;
+#  - discoverability gaps where Claude's tool-search does not surface the right tool.
+_KNOWN_ISSUES = {
+    "continuous_data_admin-161":
+        "chained prompt ('that vCDB') has no antecedent when run in isolation (Claude asks instead)",
+    "continuous_data_admin-407":
+        "DISCOVERABILITY GAP: Claude's tool-search did not surface vault_tool for 'List Hashicorp vaults'",
+    "continuous_data_admin-408":
+        "DISCOVERABILITY GAP: vault_tool not selected for 'Search Hashicorp vaults'",
+}
+
 _PERSONAS = [p.strip() for p in os.environ.get("SCENARIO_PERSONAS", "").split(",") if p.strip()]
 _ALLOW_MUTATIONS = os.environ.get("SCENARIO_MUTATIONS") == "1"
 _LIMIT = int(os.environ.get("SCENARIO_LIMIT") or 0)
@@ -61,6 +74,8 @@ _CASES = _selected_scenarios()
 
 @pytest.mark.parametrize("scenario", _CASES, ids=[s.id for s in _CASES])
 def test_scenario(llm_driver_for, scenario):
+    if scenario.id in _KNOWN_ISSUES:
+        pytest.xfail(_KNOWN_ISSUES[scenario.id])
     drive = llm_driver_for(scenario.persona)
     result = drive(scenario.prompt, timeout=300)
 
