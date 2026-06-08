@@ -17,6 +17,8 @@ import os
 
 import pytest
 
+from tests.llm_local.conftest import license_blocked
+
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven]
 
 _MUTATION = os.environ.get("LLM_ALLOW_MUTATION") == "1"
@@ -34,6 +36,8 @@ def test_ai_creates_bookmark_then_independently_verifies(llm_driver):
         f"operation has fully completed before telling me the result.",
         timeout=600,
     )
+    if license_blocked(result):
+        pytest.skip("DCT license does not permit bookmark operations")
     if "no vdb" in result.final_text.lower() or "no virtual database" in result.final_text.lower():
         pytest.skip("Claude reports no VDB available to bookmark (not a failure)")
 
@@ -43,14 +47,59 @@ def test_ai_creates_bookmark_then_independently_verifies(llm_driver):
     )
 
     # --- VERIFY via an INDEPENDENT read ---
-    verify = llm_driver(
-        f"Search the bookmarks for one named '{name}' and tell me whether it exists."
-    )
-    actions = verify.actions_for("bookmark_tool")
-    assert any(a in ("search", "get", "list") for a in actions), (
-        f"verification did not perform an independent bookmark read; actions: {actions}"
+    # The name must NOT appear in the verify prompt, else Claude echoes it regardless of
+    # existence. Ask for the full list and assert the run-tagged name shows up.
+    verify = llm_driver("List all bookmarks in the system, showing each bookmark's name.")
+    if license_blocked(verify):
+        pytest.skip("DCT license does not permit bookmark operations")
+    assert "bookmark_tool" in verify.tools_used, (
+        f"verification did not read bookmarks; tools: {sorted(verify.tools_used)}"
     )
     assert name in verify.final_text, (
-        f"independent verification did not confirm bookmark {name!r} exists. "
+        f"independent verification did not find bookmark {name!r} in the list. "
         f"Claude's answer: {verify.final_text[:400]}"
     )
+
+
+@pytest.mark.skipif(not _MUTATION, reason="LLM_ALLOW_MUTATION=1 not set — tags a real VDB")
+def test_ai_tags_vdb_then_independently_verifies_then_cleans_up(llm_driver):
+    """
+    act -> independent verify -> cleanup on a LICENSED resource (VDB tags), so it runs
+    on DCTs that don't license bookmarks. A unique run-tagged key makes it self-cleaning
+    and collision-free. Independent verification = a SEPARATE Claude call re-reads the
+    tags (not trusting the act call's own claim).
+    """
+    run_tag = os.environ.get("E2E_RUN_TAG", "e2e-llm-local")
+    key, val = f"e2e_{run_tag.replace('-', '_')}", "scenario"
+
+    # --- ACT ---
+    act = llm_driver(
+        f"Add the tag {key}={val} to the first VDB in the system. Wait until it is applied, "
+        f"then confirm.",
+        timeout=300,
+    )
+    if license_blocked(act):
+        pytest.skip("DCT license does not permit VDB tag operations")
+    if "no vdb" in act.final_text.lower() or "no virtual database" in act.final_text.lower():
+        pytest.skip("Claude reports no VDB available to tag (not a failure)")
+    assert "vdb_tool" in act.tools_used, (
+        f"Claude did not use vdb_tool to tag. Tools: {sorted(act.tools_used)}\n{act.final_text[:300]}"
+    )
+    assert "add_tags" in act.actions_for("vdb_tool"), (
+        f"Claude did not call add_tags; actions: {act.actions_for('vdb_tool')}"
+    )
+
+    # --- INDEPENDENT VERIFY (fresh call re-reads the tags) ---
+    # Do NOT put the key in the prompt (else Claude echoes it regardless). Ask for ALL
+    # tags and assert our run-tagged key shows up — that only happens if it truly exists.
+    # Don't constrain WHICH read action Claude uses (search may return tags inline).
+    verify = llm_driver("List every tag currently on the first VDB, showing each tag's key and value.")
+    assert "vdb_tool" in verify.tools_used, (
+        f"verification did not read the VDB via vdb_tool; tools: {sorted(verify.tools_used)}"
+    )
+    assert key in verify.final_text, (
+        f"independent verify did not find tag {key!r} on the VDB. Claude's answer: {verify.final_text[:400]}"
+    )
+
+    # --- CLEANUP (remove the tag) ---
+    llm_driver(f"Remove the tag {key} from the first VDB.")

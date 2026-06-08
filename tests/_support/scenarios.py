@@ -39,6 +39,16 @@ _READ_VERBS = {
     "count", "display", "describe", "fetch", "retrieve", "check",
 }
 
+# Mutation verbs used to catch COMPOUND read-prefixed prompts, e.g.
+# "List the snapshots for that VDB, then refresh it ...". If a read-prefixed prompt
+# contains one of these after a "then"/"and"/";"/"," it actually mutates.
+_MUTATION_VERBS = {
+    "provision", "create", "delete", "remove", "start", "stop", "enable", "disable",
+    "refresh", "rollback", "roll back", "add", "register", "unregister", "update",
+    "abandon", "repair", "lock", "unlock", "link", "apply", "set ", "unset",
+    "snapshot", "purge", "import", "attach", "detach", "assign", "revoke",
+}
+
 
 @dataclass(frozen=True)
 class Scenario:
@@ -54,8 +64,16 @@ class Scenario:
 
 
 def _classify(prompt: str) -> str:
-    first = re.sub(r"[^a-z]", "", prompt.strip().split(" ", 1)[0].lower())
-    return "read" if first in _READ_VERBS else "mutation"
+    p = prompt.lower()
+    first = re.sub(r"[^a-z]", "", p.split(" ", 1)[0])
+    if first not in _READ_VERBS:
+        return "mutation"
+    # Compound read-prefixed prompt that then mutates (e.g. "List ... then refresh it").
+    # Look past the first clause for a mutation verb.
+    tail = re.split(r"\bthen\b|\band\b|;|,", p, maxsplit=1)
+    if len(tail) > 1 and any(v in tail[1] for v in _MUTATION_VERBS):
+        return "mutation"
+    return "read"
 
 
 @lru_cache(maxsize=None)
