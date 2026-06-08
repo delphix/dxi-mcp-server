@@ -275,8 +275,8 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # Step 3 — Validate required parameters
         # ---------------------------------------------------------------- #
         validation_error = _validate_required_params(
-            operation, path_params or {}, query_params or {}, body or {},
-            resolved_path=resolved_path,
+            operation, path_params or {}, query_params or {}, body,
+            resolved_path=resolved_path, spec=spec,
         )
         if validation_error:
             return validation_error
@@ -322,7 +322,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 method=method_upper,
                 endpoint=resolved_path,
                 params=query_params or None,
-                json=body or None,
+                json=body if body is not None else None,
             )
             return {
                 "status": "success",
@@ -597,8 +597,9 @@ def _validate_required_params(
     operation: dict[str, Any],
     path_params: dict[str, Any],
     query_params: dict[str, Any],
-    body: dict[str, Any],
+    body: dict[str, Any] | None,
     resolved_path: str = "",
+    spec: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """
     Check that all required parameters are present.
@@ -630,11 +631,11 @@ def _validate_required_params(
 
     # Check required body fields
     request_body = operation.get("requestBody", {}) or {}
-    if request_body.get("required", False) and not body:
+    if request_body.get("required", False) and body is None:
         missing.append("requestBody")
     elif body is not None and request_body:
         # Check individual required properties in the body schema
-        _check_required_body_fields(request_body, body, missing)
+        _check_required_body_fields(request_body, body, missing, spec)
 
     if missing:
         return {
@@ -650,14 +651,26 @@ def _check_required_body_fields(
     request_body: dict[str, Any],
     body: dict[str, Any],
     missing: list[str],
+    spec: dict[str, Any] | None = None,
 ) -> None:
-    """Extract required property names from requestBody.content schema and check against body."""
+    """Extract required property names from requestBody.content schema and check against body.
+
+    Real DCT requestBody schemas are ``$ref`` pointers (e.g.
+    ``#/components/schemas/ProvisionVDBByTimestampParameters``) which carry no
+    inline ``required`` key, so the schema is resolved against the spec before
+    its required fields are read. Without this the check is a silent no-op for
+    every mutating endpoint.
+    """
     try:
         content = request_body.get("content", {}) or {}
         for media_type, media_obj in content.items():
             if not isinstance(media_obj, dict):
                 continue
             schema = media_obj.get("schema", {}) or {}
+            if spec is not None:
+                schema, _ = _resolve_refs(schema, spec, depth=0, visited=frozenset())
+                if not isinstance(schema, dict):
+                    break
             required_fields = schema.get("required", []) or []
             for field in required_fields:
                 if field not in body:
@@ -719,7 +732,7 @@ def _resolve_refs(
                 resolved_target, spec, depth + 1, visited | {ref}
             )
             return resolved, truncated
-        except (KeyError, TypeError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             return {
                 "status": "error",
                 "code": "SCHEMA_REF_NOT_FOUND",
