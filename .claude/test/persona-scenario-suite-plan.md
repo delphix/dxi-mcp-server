@@ -10,7 +10,14 @@
 
 ---
 
-## ▶ NEXT SESSION (resume 2026-06-09): LIVE MUTATION TESTING with real engine + MySQL hosts
+## ✅ LIVE MUTATION RESULTS (2026-06-09) — engine + MySQL fully validated
+
+- **Engine register → verify → unregister** PASSED (85s) via `test_act_verify_cda.py`
+- **MySQL environments (both source + target) added** PASSED via `test_act_verify_mysql.py`
+- **MySQL AppData dSource link on target → verify → cleanup** PASSED (~17 min total)
+- All src/ clean (safe-run venv working throughout)
+
+## PREVIOUS NEXT SESSION (now done)
 Goal: exercise the real write paths on the disposable DCT — engine registration and MySQL
 dSource link/provision — via Claude (act → wait for job → independent verify).
 Inputs the user will provide:
