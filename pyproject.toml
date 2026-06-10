@@ -18,6 +18,9 @@ dct-mcp-server = "dct_mcp_server.main:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "black>=24.0",
+    "ruff>=0.6",
 ]
 
 [build-system]
@@ -28,5 +31,52 @@ build-backend = "hatchling.build"
 packages = ["src/dct_mcp_server"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", ".claude/test/generated-test"]
 pythonpath = ["src"]
+
+# Coverage is gated on the dynamic-mode feature modules this work owns. The
+# pre-built *_endpoints_tool.py modules are auto-generated fallback boilerplate
+# (~4k statements, regenerated from the OpenAPI spec at runtime) and are not
+# meaningfully unit-testable, so they are excluded from the gate rather than
+# dragging the measured total down. Integration-only entrypoints (main.py,
+# the HTTP client, telemetry session) are likewise out of scope for unit tests.
+[tool.coverage.run]
+source = ["dct_mcp_server"]
+branch = false
+
+[tool.coverage.report]
+include = [
+    "*/tools/core/dynamic.py",
+    "*/tools/core/spec_cache.py",
+    "*/tools/core/dynamic_confirmation.py",
+    "*/tools/core/confirmation_resolver.py",
+    "*/tools/core/endpoint_discovery.py",
+]
+show_missing = true
+fail_under = 80
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Lint scope is the shipped package + tests. Excluded:
+#  - *_endpoints_tool.py: auto-generated fallback boilerplate (regenerated at runtime)
+#  - evals/: developer-only evaluation harnesses, not shipped or run in CI
+extend-exclude = [
+    "src/dct_mcp_server/tools/*_endpoints_tool.py",
+    "evals",
+]
+
+[tool.ruff.lint]
+# Baseline rule set: pyflakes (F) + a subset of pycodestyle (E). Kept
+# intentionally lean so the gate is enforceable today without a large cleanup.
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py modules re-export their package's public API; the imports look
+# unused to pyflakes but are intentional.
+"__init__.py" = ["F401"]

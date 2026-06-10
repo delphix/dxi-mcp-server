@@ -251,7 +251,6 @@ def _run_execute_dry_scenario(
     expect_no_confirmation = scenario.get("expect_no_confirmation", False)
 
     # Substitute path params
-    import re
     resolved_path = path
     for k, v in path_params.items():
         resolved_path = resolved_path.replace(f"{{{k}}}", str(v))
@@ -296,7 +295,7 @@ def _run_execute_dry_scenario(
 
 def run_all_scenarios(dry_run: bool = True) -> list[ScenarioResult]:
     """Run all 10 scenarios and return results."""
-    print(f"\nLoading OpenAPI spec…")
+    print("\nLoading OpenAPI spec…")
     spec = _load_spec()
     if spec is None:
         print("  ERROR: Could not load OpenAPI spec. Aborting.")
@@ -354,36 +353,36 @@ def _write_eval_results(results: list[ScenarioResult], output_path: Path) -> Non
     recommendation = _compute_recommendation(success_rate)
 
     lines: list[str] = []
-    lines.append(f"# DLPXECO-13984 LLM Evaluation Results")
-    lines.append(f"")
+    lines.append("# DLPXECO-13984 LLM Evaluation Results")
+    lines.append("")
     lines.append(f"**Run date**: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
-    lines.append(f"**Harness**: evals/llm_eval_harness.py")
-    lines.append(f"**Mode**: dry-run (discovery + confirmation resolver)")
-    lines.append(f"")
-    lines.append(f"## Summary")
-    lines.append(f"")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|--------|-------|")
+    lines.append("**Harness**: evals/llm_eval_harness.py")
+    lines.append("**Mode**: dry-run (discovery + confirmation resolver)")
+    lines.append("")
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
     lines.append(f"| Total scenarios | {total_count} |")
     lines.append(f"| Passed | {success_count} |")
     lines.append(f"| Failed | {total_count - success_count} |")
     lines.append(f"| Success rate | {success_rate:.0%} |")
     lines.append(f"| Recommendation | **{recommendation}** |")
-    lines.append(f"")
-    lines.append(f"## Per-Scenario Results")
-    lines.append(f"")
-    lines.append(f"| ID | Scenario | Status | Notes |")
-    lines.append(f"|----|----------|--------|-------|")
+    lines.append("")
+    lines.append("## Per-Scenario Results")
+    lines.append("")
+    lines.append("| ID | Scenario | Status | Notes |")
+    lines.append("|----|----------|--------|-------|")
     for r in results:
         status_str = "PASS" if r.status == "success" else "FAIL"
         notes = (r.failure_reason or "").replace("|", " ").replace("\n", " ")[:80]
         lines.append(f"| {r.scenario_id} | {r.name} | {status_str} | {notes} |")
 
-    lines.append(f"")
-    lines.append(f"### Step: implement")
-    lines.append(f"")
-    lines.append(f"Eval harness run completed.")
-    lines.append(f"")
+    lines.append("")
+    lines.append("### Step: implement")
+    lines.append("")
+    lines.append("Eval harness run completed.")
+    lines.append("")
 
     output_path.write_text("\n".join(lines) + "\n")
     print(f"\nEval results written to: {output_path}")

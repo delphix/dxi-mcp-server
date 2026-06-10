@@ -63,14 +63,16 @@ def build_corpus_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             if not isinstance(op, dict):
                 continue
-            out.append({
-                "method": method.upper(),
-                "path": path,
-                "operation_id": op.get("operationId", "") or "",
-                "summary": op.get("summary", "") or "",
-                "description": op.get("description", "") or "",
-                "tags": op.get("tags", []) or [],
-            })
+            out.append(
+                {
+                    "method": method.upper(),
+                    "path": path,
+                    "operation_id": op.get("operationId", "") or "",
+                    "summary": op.get("summary", "") or "",
+                    "description": op.get("description", "") or "",
+                    "tags": op.get("tags", []) or [],
+                }
+            )
     return out
 
 
@@ -158,7 +160,8 @@ def rank_candidates(
     """Return up to `limit` scored candidates sorted by (-score, len(path))."""
     qtokens = _tokenize(query)
     methods_norm = {
-        m.upper() for m in (method_types or [])
+        m.upper()
+        for m in (method_types or [])
         if m and m.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}
     }
 
@@ -179,7 +182,9 @@ def rank_candidates(
         try:
             s = score_candidate(qtokens, hot_keywords, cand)
         except Exception as exc:
-            logger.warning("scoring failed for %s %s: %s", cand.get("method"), cand.get("path"), exc)
+            logger.warning(
+                "scoring failed for %s %s: %s", cand.get("method"), cand.get("path"), exc
+            )
             continue
         if s >= min_score:
             scored.append({**cand, "score": round(s, 4)})

@@ -50,6 +50,7 @@ _CACHE_META_FILENAME = ".cache-meta.json"
 # Public API
 # --------------------------------------------------------------------------- #
 
+
 def load_and_cache_spec() -> dict[str, Any]:
     """
     Download, validate, and cache the DCT OpenAPI spec.
@@ -124,6 +125,7 @@ def clear_spec_cache() -> None:
 # Private helpers
 # --------------------------------------------------------------------------- #
 
+
 def _should_use_cache(cache_path: Path, max_age_hours: int) -> bool:
     """Return True if the cache file exists and is younger than max_age_hours."""
     if not cache_path.exists():
@@ -188,9 +190,7 @@ def _load_from_disk(cache_path: Path) -> dict | None:
         return None
 
 
-def _download_spec(
-    base_url: str, api_key: str, verify_ssl: bool, timeout: int
-) -> dict | None:
+def _download_spec(base_url: str, api_key: str, verify_ssl: bool, timeout: int) -> dict | None:
     """
     Download the DCT OpenAPI spec via HTTP GET.
 
@@ -213,9 +213,7 @@ def _download_spec(
 
     for attempt in (1, 2):
         try:
-            logger.info(
-                "Downloading OpenAPI spec from %s (attempt %d)…", spec_url, attempt
-            )
+            logger.info("Downloading OpenAPI spec from %s (attempt %d)…", spec_url, attempt)
             response = requests.get(
                 spec_url,
                 headers=headers,
@@ -231,9 +229,7 @@ def _download_spec(
                     spec_url,
                 )
                 return None
-            logger.info(
-                "OpenAPI spec downloaded: %d paths", len(spec.get("paths", {}))
-            )
+            logger.info("OpenAPI spec downloaded: %d paths", len(spec.get("paths", {})))
             return spec
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else "?"
@@ -261,9 +257,7 @@ def _write_cache(cache_path: Path, spec: dict, dct_base_url: str) -> None:
         logger.info("OpenAPI spec cached to %s", cache_path)
     except OSError as exc:
         # Read-only filesystem or permission error — non-fatal, use in-memory only
-        logger.warning(
-            "Could not write spec cache to %s (non-fatal): %s", cache_path, exc
-        )
+        logger.warning("Could not write spec cache to %s (non-fatal): %s", cache_path, exc)
 
 
 def _validate_spec(spec: Any) -> bool:

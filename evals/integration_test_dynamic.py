@@ -181,7 +181,7 @@ def _write_evidence(base_url: str, spec_paths: int) -> None:
         "# DLPXECO-13984 — Integration Test Evidence (Dynamic Mode)",
         "",
         f"- **Date**: {now}",
-        f"- **Mode**: `DCT_TOOLSET=dynamic`",
+        "- **Mode**: `DCT_TOOLSET=dynamic`",
         f"- **DCT instance**: `{base_url}` (live)",
         "- **API key**: redacted",
         f"- **Spec**: downloaded from live DCT — {spec_paths} paths",

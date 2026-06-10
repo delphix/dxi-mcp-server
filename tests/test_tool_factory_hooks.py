@@ -1,7 +1,5 @@
 """Unit tests for hook-key normalization in tool_factory (DLPXECO-13799)."""
 
-import pytest
-
 from dct_mcp_server.tools.core.tool_factory import (
     _VALID_HOOK_TYPES,
     _camel_to_snake,

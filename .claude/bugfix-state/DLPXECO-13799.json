@@ -1,0 +1,16 @@
+{
+  "ticket": "DLPXECO-13799",
+  "started_at": "2026-05-08T00:00:00Z",
+  "updated_at": "2026-05-08T00:00:00Z",
+  "current_phase": "done",
+  "completed_phases": ["scope", "design", "implementation", "build", "unit-tests", "commit", "review"],
+  "awaiting_user": null,
+  "artefacts": {
+    "scope_doc": ".claude/evals/DLPXECO-13799-scope.md",
+    "design_doc": ".claude/evals/DLPXECO-13799-design.md",
+    "build_eval_doc": ".claude/evals/DLPXECO-13799-build-evaluation.md",
+    "commit_sha": "c3b31c6",
+    "review_url": "https://github.com/delphix/dxi-mcp-server/pull/72"
+  },
+  "notes": "VDB/dSource hook updates: camelCase hook keys silently dropped by engine. Fix in tool_factory.py grouped_tool by normalizing top-level 'hooks' dict keys. Pre-built vdb_tool has no update_vdb action — fix only needed in dynamic factory."
+}

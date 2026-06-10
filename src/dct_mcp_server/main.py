@@ -144,7 +144,7 @@ async def async_main():
             toolset = get_configured_toolset()
             available = get_available_toolsets()
             if is_auto_mode():
-                logger.info(f"Toolset mode: AUTO (meta-tools only)")
+                logger.info("Toolset mode: AUTO (meta-tools only)")
                 logger.info(f"Available toolsets for discovery: {available}")
             elif is_dynamic_mode():
                 logger.info("Toolset mode: DYNAMIC (discovery + execute — 2-tool architecture)")

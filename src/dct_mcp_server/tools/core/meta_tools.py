@@ -24,7 +24,7 @@ Runtime Registration Pattern (GitHub MCP Server style):
 import logging
 import re
 from functools import lru_cache
-from typing import Dict, Any, List, Optional, Callable, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 
 from mcp.server.fastmcp import Context
 from dct_mcp_server.config import (
@@ -32,7 +32,6 @@ from dct_mcp_server.config import (
     load_toolset_metadata,
     load_all_toolsets_metadata,
     get_tools_for_toolset,
-    get_modules_for_toolset,
     load_toolset_grouped_apis,
 )
 from dct_mcp_server.core.decorators import log_tool_execution
@@ -94,7 +93,9 @@ def initialize_tool_inventory(app, dct_client):
             "loaded": False,
         }
 
-    logger.info(f"Tool inventory initialized with {len(_tool_inventory)} toolsets (dynamic generation)")
+    logger.info(
+        f"Tool inventory initialized with {len(_tool_inventory)} toolsets (dynamic generation)"
+    )
 
 
 @log_tool_execution
@@ -122,12 +123,14 @@ def list_available_toolsets() -> Dict[str, Any]:
 
         toolsets_list = []
         for name, metadata in sorted(toolsets_metadata.items()):
-            toolsets_list.append({
-                "name": name,
-                "description": metadata.get("description", "No description available"),
-                "tool_count": metadata.get("tool_count", 0),
-                "primary_use_case": metadata.get("primary_use_case", "General use"),
-            })
+            toolsets_list.append(
+                {
+                    "name": name,
+                    "description": metadata.get("description", "No description available"),
+                    "tool_count": metadata.get("tool_count", 0),
+                    "primary_use_case": metadata.get("primary_use_case", "General use"),
+                }
+            )
 
         return {
             "toolsets": toolsets_list,
@@ -327,23 +330,25 @@ def _register_toolset_tools(toolset_name: str) -> int:
         return 0
 
     before_tools = set()
-    if hasattr(_app, '_tool_manager') and _app._tool_manager:
+    if hasattr(_app, "_tool_manager") and _app._tool_manager:
         before_tools = set(_app._tool_manager._tools.keys())
-    elif hasattr(_app, 'local_provider') and _app.local_provider:
+    elif hasattr(_app, "local_provider") and _app.local_provider:
         before_tools = set(_app.local_provider._tools.keys())
 
     register_toolset_tools(_app, toolset_name, _dct_client)
 
     after_tools = set()
-    if hasattr(_app, '_tool_manager') and _app._tool_manager:
+    if hasattr(_app, "_tool_manager") and _app._tool_manager:
         after_tools = set(_app._tool_manager._tools.keys())
-    elif hasattr(_app, 'local_provider') and _app.local_provider:
+    elif hasattr(_app, "local_provider") and _app.local_provider:
         after_tools = set(_app.local_provider._tools.keys())
 
     new_tools = after_tools - before_tools
     _registered_tool_names.extend(new_tools)
 
-    logger.info(f"Toolset '{toolset_name}' enabled with {len(new_tools)} dynamically generated tools")
+    logger.info(
+        f"Toolset '{toolset_name}' enabled with {len(new_tools)} dynamically generated tools"
+    )
     return len(new_tools)
 
 
@@ -358,12 +363,12 @@ def _disable_current_toolset_internal():
 
     for tool_name in _registered_tool_names:
         try:
-            if hasattr(_app, '_tool_manager') and _app._tool_manager:
+            if hasattr(_app, "_tool_manager") and _app._tool_manager:
                 if tool_name in _app._tool_manager._tools:
                     del _app._tool_manager._tools[tool_name]
                     logger.debug(f"Removed tool: {tool_name}")
-            elif hasattr(_app, 'local_provider') and _app.local_provider:
-                if hasattr(_app.local_provider, 'remove_tool'):
+            elif hasattr(_app, "local_provider") and _app.local_provider:
+                if hasattr(_app.local_provider, "remove_tool"):
                     _app.local_provider.remove_tool(tool_name)
                     logger.debug(f"Removed tool: {tool_name}")
                 elif tool_name in _app.local_provider._tools:
@@ -429,11 +434,7 @@ def _get_confirmation_guidance(level: str) -> str:
 
 @log_tool_execution
 async def execute_action(
-    toolset_name: str,
-    tool_name: str,
-    action: str,
-    confirmed: bool = False,
-    **kwargs
+    toolset_name: str, tool_name: str, action: str, confirmed: bool = False, **kwargs
 ) -> Dict[str, Any]:
     """
     Execute any DCT API action directly — no enable_toolset or tool list refresh needed.
@@ -497,7 +498,9 @@ async def execute_action(
             return {
                 "status": "confirmation_required",
                 "confirmation_level": confirmation["level"],
-                "confirmation_message": confirmation.get("message", "Please confirm this operation."),
+                "confirmation_message": confirmation.get(
+                    "message", "Please confirm this operation."
+                ),
                 "action": action,
                 "tool": tool_name,
                 "toolset": toolset_name,
@@ -511,7 +514,7 @@ async def execute_action(
         # Substitute path parameters from kwargs
         final_path = path
         remaining = dict(kwargs)
-        for match in re.finditer(r'\{(\w+)\}', path):
+        for match in re.finditer(r"\{(\w+)\}", path):
             param_name = match.group(1)
             if param_name in remaining:
                 final_path = final_path.replace(f"{{{param_name}}}", str(remaining.pop(param_name)))
@@ -633,8 +636,12 @@ def find_endpoint(
     try:
         index = get_discovery_index(spec)
         ranked = rank_candidates(
-            index["corpus"], query, method_types,
-            float(min_score), capped_limit, index["hot_keywords"],
+            index["corpus"],
+            query,
+            method_types,
+            float(min_score),
+            capped_limit,
+            index["hot_keywords"],
         )
     except Exception as e:
         logger.error(f"find_endpoint ranking failed: {e}", exc_info=True)
@@ -653,17 +660,19 @@ def find_endpoint(
 
         suggested_toolset = toolset_index.get((method, path))
 
-        enriched.append({
-            "score": cand["score"],
-            "method": method,
-            "path": path,
-            "operation_id": cand.get("operation_id", ""),
-            "summary": cand.get("summary", ""),
-            "tags": cand.get("tags", []),
-            "requires_confirmation": level != "none",
-            "confirmation_level": level,
-            "suggested_toolset": suggested_toolset,
-        })
+        enriched.append(
+            {
+                "score": cand["score"],
+                "method": method,
+                "path": path,
+                "operation_id": cand.get("operation_id", ""),
+                "summary": cand.get("summary", ""),
+                "tags": cand.get("tags", []),
+                "requires_confirmation": level != "none",
+                "confirmation_level": level,
+                "suggested_toolset": suggested_toolset,
+            }
+        )
 
     logger.info(
         f"find_endpoint query='{query}' method_types={method_types} "
@@ -727,11 +736,7 @@ def get_spec_chunk(ref: str) -> Dict[str, Any]:
             "ref": ref,
         }
 
-    parts = [
-        p.replace("~1", "/").replace("~0", "~")
-        for p in pointer.split("/")[1:]
-        if p != ""
-    ]
+    parts = [p.replace("~1", "/").replace("~0", "~") for p in pointer.split("/")[1:] if p != ""]
 
     node: Any = spec
     for part in parts:

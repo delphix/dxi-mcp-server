@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "name": "DLPXECO-13984",
+  "domain": "feature",
+  "lite_mode": false,
+  "domain_source": "",
+  "created_at": "2026-06-02T07:39:43Z",
+  "steps": {
+    "context": "completed",
+    "vision": "completed",
+    "design": "completed",
+    "implement": "completed",
+    "build": "completed",
+    "test": "completed",
+    "validate": "completed",
+    "pr": "completed",
+    "release": "completed",
+    "retrospective": "completed"
+  },
+  "last_completed": "retrospective",
+  "next_step": ""
+}

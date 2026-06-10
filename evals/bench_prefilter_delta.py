@@ -47,7 +47,6 @@ from dct_mcp_server.tools.core.endpoint_discovery import (  # noqa: E402
     _tokenize,
     get_discovery_index,
     rank_candidates,
-    score_candidate,
 )
 
 # Representative intents spanning multiple domains (read, mutate, destructive).

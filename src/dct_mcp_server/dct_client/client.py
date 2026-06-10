@@ -5,7 +5,6 @@ DCT API Client module
 import asyncio
 import contextlib
 import importlib.metadata
-import logging
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 

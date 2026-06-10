@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "name": "DLPXECO-13921",
+  "domain": "feature",
+  "lite_mode": false,
+  "domain_source": "Jira issuetype: Task",
+  "created_at": "2026-05-07T13:19:09Z",
+  "steps": {
+    "context": "pending",
+    "vision": "pending",
+    "design": "pending",
+    "implement": "pending",
+    "build": "pending",
+    "test": "pending",
+    "validate": "pending",
+    "pr": "pending",
+    "release": "pending",
+    "retrospective": "pending"
+  },
+  "last_completed": "",
+  "next_step": "context"
+}

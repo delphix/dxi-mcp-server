@@ -23,7 +23,6 @@ import os
 import glob
 import re
 import requests
-import urllib3
 import logging
 import tempfile
 from dct_mcp_server.config.config import get_dct_config
@@ -438,7 +437,6 @@ def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
 
         for sub_schema in schema["allOf"]:
             is_ref = "$ref" in sub_schema
-            ref_name = sub_schema.get("$ref", "").split("/")[-1] if is_ref else ""
 
             # Resolve $ref in sub-schema
             if is_ref:
@@ -852,8 +850,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     
     # Build function signature
     actions_list = list(action_details.keys())
-    actions_literal = "|".join([f"'{a}'" for a in actions_list])
-    
+
     func_code = f"@log_tool_execution\nasync def {tool_name}(\n"
     func_code += f"    action: str,  # One of: {', '.join(actions_list)}\n"
 
@@ -884,7 +881,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             func_code += f"    {param_name}: Optional[{param_info['type']}] = None,\n"
 
     # Add confirmed parameter for destructive operation confirmation
-    func_code += f"    confirmed: Optional[bool] = None,\n"
+    func_code += "    confirmed: Optional[bool] = None,\n"
 
     func_code += ") -> Dict[str, Any]:\n"
     
@@ -968,7 +965,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 if param.endswith("_id"):
                     example_params.append(f"{param}='example-{param.replace('_id', '')}-123'")
                 elif param == "filter_expression":
-                    example_params.append(f"filter_expression=\"name CONTAINS 'test'\"")
+                    example_params.append("filter_expression=\"name CONTAINS 'test'\"")
                 else:
                     example_params.append(f"{param}=...")
         docstring_lines.append(f"    >>> {tool_name}({', '.join(example_params)})")
@@ -1102,10 +1099,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # Build request body BEFORE confirmation check so the review payload
         # can surface the exact values that will be sent to DCT.
         method = details["method"]
-        func_code += f"        _ctx = {{k: v for k, v in locals().items() if v is not None and not k.startswith('_')}}\n"
+        func_code += "        _ctx = {k: v for k, v in locals().items() if v is not None and not k.startswith('_')}\n"
         func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False, context=_ctx)\n"
-        func_code += f"        if conf:\n"
-        func_code += f"            return conf\n"
+        func_code += "        if conf:\n"
+        func_code += "            return conf\n"
 
         # Handle request body
         body_var = None

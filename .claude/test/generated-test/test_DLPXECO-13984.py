@@ -14,11 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import tempfile
-import types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, mock_open
+from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
 
 import pytest

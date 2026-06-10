@@ -114,6 +114,7 @@ def get_confirmation_for_operation_dynamic(
     if spec is None:
         # Lazy import avoids a circular import with tool_factory.
         from .tool_factory import get_cached_spec
+
         spec = get_cached_spec()
 
     operation = _lookup_operation(spec, method_u, path) or {}
