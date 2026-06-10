@@ -215,6 +215,28 @@ def license_blocked(result: DriverResult) -> bool:
     return LICENSE_MARKER in blob
 
 
+@pytest.fixture(scope="session")
+def llm_driver_for_session():
+    """
+    Session-scoped version of llm_driver_for — used by session-scoped fixtures
+    like cda_prereq_state. Creates configs once, cleans up at session end.
+    """
+    configs: dict[str, Path] = {}
+
+    def make(toolset: str) -> Callable[..., DriverResult]:
+        if toolset not in configs:
+            configs[toolset] = _write_mcp_config(toolset)
+        return _make_driver(configs[toolset])
+
+    yield make
+
+    for path in configs.values():
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 @pytest.fixture
 def llm_driver_for():
     """
@@ -240,3 +262,13 @@ def llm_driver_for():
             os.unlink(path)
         except OSError:
             pass
+
+
+# Re-export P0 prereq fixtures so they're auto-discovered by pytest.
+# The implementations live in prereq_checker.py; we just import here.
+from tests.llm_local.prereq_checker import (  # noqa: E402,F401
+    cda_prereq_state,
+    require_full_prereqs,
+    cda_prereqs,
+)
+# llm_driver_for_session is defined above in this file and used by cda_prereq_state
