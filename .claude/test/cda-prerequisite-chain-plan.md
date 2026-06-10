@@ -15,7 +15,7 @@
 
 | Phase | What | State |
 |---|---|---|
-| P0 | Prerequisite checker: read-only DCT health check (engine → connector → hosts → source config → dsource → vdb) | ☐ |
+| P0 | Prerequisite checker: read-only DCT health check (engine → connector → hosts → source config → dsource → vdb) | ☑ DONE 2026-06-10 — live validated (PASSED, chain reads correctly) |
 | P1 | Connector fixture layer: connector-specific fields for each type (AppData/MySQL, Oracle, MSSQL, ASE) | ☐ |
 | P2 | Setup flow (mutations): engine register → connector install → add hosts → create source config → link dsource → provision vdb | ☐ |
 | P3 | Full CDA scenario suite: all 431 prompts gated on prerequisite checker | ☐ |
