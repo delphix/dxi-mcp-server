@@ -1,5 +1,14 @@
 {
   "mcpServers": {
+    "delphix-dct": {
+        "command": "uvx",
+        "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
+        "env": {
+          "DCT_API_KEY": "5.PQKBDH7KuiU3sniLQcgHb8IfZ0IoTBQcDkBWsWqKGETnfctFBC1MO62Q5pG412Rz",
+          "DCT_BASE_URL": "https://localhost:443",
+          "DCT_TOOLSET": "dynamic"
+        }
+    },
     "atlassian": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/mcp"]

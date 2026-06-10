@@ -271,4 +271,5 @@ from tests.llm_local.prereq_checker import (  # noqa: E402,F401
     require_full_prereqs,
     cda_prereqs,
 )
+from tests.llm_local.connector_fixtures import connector_spec  # noqa: E402,F401
 # llm_driver_for_session is defined above in this file and used by cda_prereq_state
