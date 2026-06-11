@@ -35,7 +35,6 @@ _LAYER_PATHS: dict[str, list[str]] = {
     "llm":         ["tests/llm_local"],
     "scenarios":   ["tests/llm_local/test_scenarios.py"],
     "all":         ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
-    "demo":        ["tests/demo"],
 }
 
 # Marker passed to pytest -m for layers that select a subset by marker.
@@ -43,7 +42,6 @@ _LAYER_MARKERS: dict[str, str] = {
     "e2e": "real_dct",
     "llm": "llm_driven",
     "scenarios": "scenario",
-    "demo": "demo",
 }
 
 _LAYERS_NEEDING_DCT = {"e2e", "llm", "scenarios", "all"}

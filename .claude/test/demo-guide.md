@@ -58,9 +58,9 @@ Five commits. Day 1 to Day 4. ~600 lines.
 dct-mcp-test --layer unit
 ```
 
-Expected: **2 tests, ~1s, green.**
+Expected: **156 tests, ~0.3s, green.**
 
-Open `tests/demo/unit/test_job_tool.py` while it runs.
+Open `tests/unit/test_job_tool.py` while it runs.
 
 > "Each tool function has actions like `search`, `get`, `delete`. We mock the HTTP client, call the function directly, assert it would have hit the right endpoint. This is what catches refactor bugs."
 
@@ -72,9 +72,9 @@ Open `tests/demo/unit/test_job_tool.py` while it runs.
 dct-mcp-test --layer integration
 ```
 
-Expected: **3 tests, ~3s, green.** (Retry test takes 3s of real sleeps — that's exponential backoff being exercised.)
+Expected: **29 tests, ~0.1s, green.** (Retry test takes 3s of real sleeps — that's exponential backoff being exercised.)
 
-Open `tests/demo/integration/test_client_retry.py`.
+Open `tests/integration/test_client_retry.py`.
 
 > "This one — `test_client_sends_apk_prefixed_auth_header` — catches a subtle class of bug. Our DCTAPIClient prepends `apk ` to the API key. If someone refactors and accidentally drops the prefix, every auth fails. This test would catch it in 50ms."
 
@@ -86,17 +86,17 @@ Open `tests/demo/integration/test_client_retry.py`.
 dct-mcp-test --layer functional
 ```
 
-Expected: **3 tests, ~5s, green.**
+Expected: **931 tests, ~2.5 min, green.**
 
 Open two files side by side:
 - `.claude/test/testing/self_service.md` lines 12–17
-- `tests/demo/functional/workflows/test_vdb_lifecycle.py`
+- `tests/functional/workflows/test_vdb_lifecycle.py`
 
 > "This `.md` file is what I run by hand today. Search VDBs, get the first one, start it, stop it. The Python file is the same scenario, deterministic. Every step is a real MCP call over stdio to the actual `dct-mcp-server` subprocess. The fake DCT — `dct_stub` — records every HTTP request and we assert the right endpoint got hit."
 
 Then show:
-- `tests/demo/functional/test_toolset_registration.py` — proves the right tools register
-- `tests/demo/functional/test_confirmation_handshake.py` — proves the two-step destructive-op contract
+- `tests/functional/test_toolset_registration.py` — proves the right tools register
+- `tests/functional/test_confirmation_handshake.py` — proves the two-step destructive-op contract
 
 > "When a workflow test fails, the message tells you exactly which DCT endpoint never got hit. That's a level of precision Claude Desktop can never give us."
 
@@ -109,7 +109,7 @@ export DCT_API_KEY=<your-key>
 dct-mcp-test --base-url https://localhost --layer e2e
 ```
 
-Expected: **3 tests (2 smoke + 1 cleanup), ~2–5s, green.**
+Expected: **27 tests (smoke + cleanup), skip if no creds, green.**
 
 > "These are read-only smoke tests. They prove the server boots against real DCT and the API contract still matches. When we add destructive workflows in the future, the cleanup pass uses a per-run tag to delete everything we created."
 
@@ -163,7 +163,7 @@ cat .github/workflows/test.yml
 
 ## 4. What each layer covers
 
-### Layer 1 — Unit (`tests/demo/unit/`)
+### Layer 1 — Unit (`tests/unit/`)
 
 | Field | Value |
 |---|---|
@@ -176,7 +176,7 @@ cat .github/workflows/test.yml
 | How it's built | `MagicMock(spec=DCTAPIClient)` with `AsyncMock` on `make_request`; set as module global; call tool function directly |
 | Value | Fastest feedback. Run every save. |
 
-### Layer 2 — Integration (`tests/demo/integration/`)
+### Layer 2 — Integration (`tests/integration/`)
 
 | Field | Value |
 |---|---|
@@ -189,7 +189,7 @@ cat .github/workflows/test.yml
 | How it's built | `respx.mock` decorator + real `DCTAPIClient` + canned `httpx.Response` objects |
 | Value | Wire-level safety net. Things unit tests can't see. |
 
-### Layer 3 — Functional ★ (`tests/demo/functional/`)
+### Layer 3 — Functional ★ (`tests/functional/`)
 
 | Field | Value |
 |---|---|
@@ -202,7 +202,7 @@ cat .github/workflows/test.yml
 | How it's built | `Starlette` stub on `127.0.0.1` + `uvicorn` threaded + `fastmcp.Client` with `StdioTransport` subprocess + `dct_stub.received_request(method, path)` assertions |
 | Value | **This is what replaces Claude Desktop.** Highest-impact layer. |
 
-### Layer 4 — Real DCT (`tests/demo/e2e/`)
+### Layer 4 — Real DCT (`tests/e2e/`)
 
 | Field | Value |
 |---|---|
@@ -290,7 +290,7 @@ dct-mcp-test --layer functional    # ~5s, 3 tests
 # === CI gate (Layers 1-3, no DCT needed) ===
 dct-mcp-test --layer ci            # ~9s, 8 tests — what GitHub runs
 
-# === The whole curated showcase (tests/demo/) ===
+# === The whole curated showcase (tests/) ===
 dct-mcp-test --layer demo          # unit+integration+functional pass; e2e+llm skip without creds
 
 # === Real DCT (Layer 4) ===

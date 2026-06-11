@@ -1,1 +1,0 @@
-"""Layer 5 — LLM-driven E2E tests, driven by the Claude Code CLI against a real DCT."""
