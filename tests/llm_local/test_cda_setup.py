@@ -313,8 +313,11 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
     """
     Enable the dSource and take an initial snapshot so it is ACTIVE and has
     a snapshot to provision from. AppData dSources start as INACTIVE.
-    Skips if dSource is already ACTIVE/enabled with snapshots.
+    Uses direct API to verify the real DCT state (not just Claude's answer).
+    Skips if dSource is already ACTIVE with snapshots.
     """
+    import time
+
     dsources = _dsources()
     if not dsources:
         pytest.skip(
@@ -322,55 +325,97 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
         )
 
     ds = dsources[0]
-    ds_name = ds.get("name") or ds.get("id")
-    ds_status = (ds.get("status") or "").upper()
-
-    # Check if already active with snapshots
-    if ds_status in ("ACTIVE", "RUNNING"):
-        snap_count = len(_dct_get(f"dsources/{ds.get('id')}/snapshots").get("items", []))
-        if snap_count > 0:
-            pytest.skip(f"dSource {ds_name!r} already ACTIVE with {snap_count} snapshot(s)")
-
+    ds_id = ds.get("id")
+    ds_name = ds.get("name") or ds_id
     drive = llm_driver_for("continuous_data_admin")
 
-    # Enable the dSource (if INACTIVE/DISABLED)
-    if ds_status in ("INACTIVE", "DISABLED", ""):
+    def _ds_detail() -> dict:
+        base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
+        key = os.environ.get("DCT_API_KEY", "")
+        import requests as req
+        return req.get(
+            f"{base}/dct/v3/dsources/{ds_id}",
+            headers={"Authorization": f"apk {key}"},
+            verify=False, timeout=15,
+        ).json()
+
+    def _ds_snapshots() -> list:
+        base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
+        key = os.environ.get("DCT_API_KEY", "")
+        import requests as req
+        r = req.get(
+            f"{base}/dct/v3/dsources/{ds_id}/snapshots",
+            headers={"Authorization": f"apk {key}"},
+            verify=False, timeout=15,
+        )
+        return r.json().get("items", []) if r.ok else []
+
+    # Check real status via direct API
+    detail = _ds_detail()
+    ds_status = (detail.get("status") or "").upper()
+    snaps = _ds_snapshots()
+    print(f"\n  dSource {ds_name}: status={ds_status}, snapshots={len(snaps)}")
+
+    if ds_status in ("ACTIVE", "RUNNING") and snaps:
+        pytest.skip(
+            f"dSource {ds_name!r} already ACTIVE with {len(snaps)} snapshot(s)"
+        )
+
+    # Step 1: Enable the dSource via Claude (exact action name: enable_dsource)
+    if ds_status not in ("ACTIVE", "RUNNING"):
         enable = drive(
-            f"Enable the dSource named '{ds_name}'. "
-            f"Use data_tool with the appropriate enable action. "
+            f"Enable the dSource named '{ds_name}' using data_tool action=enable_dsource. "
+            f"Find its dsourceId first with a search, then call enable_dsource with that id. "
             f"Then use job_tool to poll until the job reaches COMPLETED or FAILED. "
-            f"Confirm the final status.",
+            f"Confirm the final job status.",
             timeout=600,
         )
         if license_blocked(enable):
             pytest.skip("DCT license does not permit dSource enable")
         assert "data_tool" in enable.tools_used, (
-            f"Claude did not use data_tool to enable. Tools: {sorted(enable.tools_used)}\n"
-            f"{enable.final_text[:300]}"
+            f"Claude did not use data_tool to enable dSource.\n{enable.final_text[:300]}"
         )
+        # Wait for status change (direct API check, up to 2 min)
+        for _ in range(24):
+            time.sleep(5)
+            new_status = (_ds_detail().get("status") or "").upper()
+            if new_status in ("ACTIVE", "RUNNING"):
+                print(f"  dSource status now: {new_status}")
+                break
+        else:
+            new_status = (_ds_detail().get("status") or "").upper()
+            print(f"  Warning: dSource still {new_status} after enable — proceeding anyway")
 
-    # Take an initial snapshot
+    # Step 2: Take an initial snapshot via Claude (exact action: dsource_create_snapshot)
     snap = drive(
-        f"Take a new snapshot of the dSource named '{ds_name}'. "
-        f"Use data_tool action=dsource_create_snapshot. "
+        f"Take a new snapshot of the dSource named '{ds_name}' using "
+        f"data_tool action=dsource_create_snapshot. "
+        f"Find its dsourceId first with a search, then call dsource_create_snapshot with that id. "
         f"Then use job_tool to poll until the snapshot job reaches COMPLETED or FAILED. "
-        f"Confirm the final status.",
+        f"Report the final job status.",
         timeout=600,
     )
     if license_blocked(snap):
         pytest.skip("DCT license does not permit dSource snapshot")
     assert "data_tool" in snap.tools_used, (
-        f"Claude did not use data_tool to snapshot. Tools: {sorted(snap.tools_used)}\n"
-        f"{snap.final_text[:300]}"
+        f"Claude did not use data_tool to snapshot dSource.\n{snap.final_text[:300]}"
     )
 
-    # Independent verify: dSource now has at least one snapshot
-    verify = drive(
-        f"List all snapshots for the dSource whose name contains '{ds_name.split('-')[0]}'. "
-        f"Show count and most recent snapshot's timestamp."
-    )
-    assert "snapshot" in verify.final_text.lower(), (
-        f"No snapshots found after enable+snapshot.\n{verify.final_text[:400]}"
+    # Wait for snapshot to appear (direct API, up to 3 min)
+    for _ in range(36):
+        time.sleep(5)
+        snaps = _ds_snapshots()
+        if snaps:
+            print(f"  Snapshot created: {snaps[0].get('id')}")
+            break
+    else:
+        snaps = _ds_snapshots()
+
+    # Hard assert: snapshot must exist (this is the real success criterion)
+    assert snaps, (
+        f"dSource {ds_name!r} has 0 snapshots after enable+snapshot.\n"
+        f"  Claude enable answer: {enable.final_text[:200] if 'enable' in dir() else 'N/A'}\n"
+        f"  Claude snapshot answer: {snap.final_text[:300]}"
     )
 
 
