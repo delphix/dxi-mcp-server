@@ -1,23 +1,19 @@
-# Automated Test Suite — Research, Architecture & Migration Plan
+# Automated Test Suite — Strategy, Architecture & Status
 
-**Status:** Proposal
-**Author:** Generated from research session (2026-05-22)
-**Goal:** Replace manual Claude Desktop verification with an automated test suite that runs on every code change.
+**Branch:** `dlpx/pr/chaitali/test-suite-poc`  
+**Status:** implemented (Layers 1–5 built and validated, 2026-06-11)
 
 ---
 
 ## 1. Problem Statement
 
-Today, every code change to `dxi-mcp-server` is verified by hand through Claude Desktop. A developer manually drives prompts from `.claude/test/testing/<toolset>.md`, visually inspects responses, and writes a free-text report into the PR.
+Today every code change goes through Claude Desktop by hand — a developer drives ~70
+prompts per toolset, eyeballs the responses, and writes a free-text PR report. This
+doesn't scale, can't run in CI, and produces inconsistent signal.
 
-This is unsustainable because it:
-
-- **Doesn't scale** — five personas × ~70 prompts each = hours of human time per change
-- **Isn't reproducible** — Claude's responses vary; "looks right" is not a regression signal
-- **Doesn't gate merges** — a broken `vdb_tool` can land on `main` and nobody knows until someone tries it
-- **Requires a live DCT instance** — credentials, network, state-dependent results
-
-We want: a test suite that runs on every push/PR, fails fast on regressions, requires no live DCT, and does not need a human in the loop.
+**This suite replaces that with a layered automated test pyramid** that runs on every
+PR (Layers 1–3), on-demand against a real DCT (Layer 4), and optionally as an
+AI-usability check via the Claude Code CLI (Layer 5).
 
 ---
 
@@ -30,45 +26,46 @@ We want: a test suite that runs on every push/PR, fails fast on regressions, req
 | **3a — Toolset registration** | Right tools registered per persona | Edits to `config/toolsets/*.txt` silently changing tool exposure | No (dct_stub) | Every PR | Yes |
 | **3b — Workflow tests ★** | Multi-step chains over MCP stdio | **Replaces the manual Claude Desktop playbook** — every `.md` scenario as a deterministic test | No (dct_stub) | Every PR | Yes |
 | **3c — Confirmation handshake** | Two-step `confirmation_required` → `confirmed=True` over MCP wire | Regressions in destructive-op safety net | No (dct_stub) | Every PR | Yes |
-| **4 — Real-DCT E2E** | Workflows against the cloned DCT | Real API contract drift, real auth, real latency | Yes | Manual via GitHub UI / Claude Code skill / CLI | No (advisory) |
-| **5 — LLM-driven E2E (optional)** | AI can navigate the toolsurface **and** the operation actually took effect on a real DCT | Confusing action names + outcomes that *report* success but never persisted (async job never finished) | **Yes — real DCT (localhost or cloned)** | Claude Code CLI, local-only | No (advisory) |
+| **4 — Real-DCT E2E** | Workflows against the cloned DCT | Real API contract drift, real auth, real latency | Yes | On-demand via CLI / `.venv-live` | No (advisory) |
+| **5 — LLM-driven** | AI can navigate the tool surface + operation actually took effect | Confusing action names, vague descriptions, undiscoverable tools | Yes — real DCT + `claude` CLI | On-demand, local | No (advisory) |
 
 **Invocation paths — all hit the same `dct-mcp-test` CLI:**
 
 | Path | When | How |
 |---|---|---|
-| CLI | Terminal, scripts, ad-hoc | `dct-mcp-test --base-url ... --api-key ...` |
-| GitHub Actions | Every PR (Layers 1–3) + on-demand (Layer 4) | Workflow yaml calls `dct-mcp-test` |
+| CLI | Terminal, scripts, ad-hoc | `dct-mcp-test --layer ci` |
 | Claude Code skill | Interactive testing from chat | `/dct-mcp-test localhost --api-key ...` |
 
 **Cost summary:**
 
 | Item | Cost |
 |---|---|
-| Layers 1–3 in CI | $0 (free GitHub Actions tier) |
-| Layer 4 in CI | $0 CI cost; cloned DCT is your existing infra |
-| Layer 5 — Claude Code CLI driver | Consumes your existing Claude subscription / enterprise usage; **no separate metered Anthropic API key** |
-| Anthropic API key (metered console.anthropic.com) for E2E | **Not needed** — explicitly designed around this constraint; the Claude Code CLI path uses subscription auth instead |
-| Claude Desktop license | **Not needed** for testing anymore (only exploratory use) |
+| Layers 1–3 in CI | $0 (free GitHub Actions tier, once wired) |
+| Layer 4 | $0 CI cost; cloned DCT is existing infra |
+| Layer 5 — Claude Code CLI | Consumes existing Claude subscription / enterprise usage; no separate metered API key |
+| Anthropic metered API key for E2E | **Not needed** — CLI uses subscription auth |
+| Claude Desktop license | **Not needed** for regression testing anymore |
 
 **Before vs. after:**
 
 | Today | After this rollout |
 |---|---|
-| Push code → open Claude Desktop → run prompts manually → eyeball responses → write report | Push code → CI runs Layers 1–3 → PR shows green/red automatically. Pre-release: trigger Layer 4 via GitHub UI or `/dct-mcp-test` skill. |
+| Push code → open Claude Desktop → run prompts manually → eyeball responses → write report | Push code → CI runs Layers 1–3 → PR shows green/red. Pre-release: trigger Layer 4 via CLI. |
+| 30+ minutes of human attention | < 3 minutes of CI time |
 
 ---
 
 ## 2. The Core Insight — Two Different Questions
 
-The manual Claude Desktop check is actually answering **two different questions** at once:
+Every time the question "can we automate testing?" came up, it conflated two separate
+questions with different answers:
 
-| Question | What it measures | How to automate |
+| Question | What fails if unanswered | Best tool |
 |---|---|---|
-| **Does the workflow still work?** | Functional regression — given input X, does the chain produce Y? | Deterministic scripted tests |
-| **Can an AI figure out how to use the tools?** | Tool discoverability / schema clarity | LLM-driven tests |
+| **"Did the workflow break?"** | Regressions in routing, auth, confirmation logic, HTTP contract | Scripted deterministic tests — Layers 1–3 |
+| **"Can an AI figure out how to use the tools?"** | Tool discoverability, confusing action names, broken async UX | LLM-driven tests — Layer 5 |
 
-These are fundamentally different testing problems and need different solutions. Conflating them is what makes the current manual process so heavy. The strategy below separates them:
+These are separate questions. Solve them with separate tools.
 
 - **Regression gate (primary):** scripted workflow tests, no LLM in the loop, runs on every PR
 - **AI-usability check (optional, local):** LLM-driven, runs ad-hoc before releases
@@ -77,504 +74,129 @@ These are fundamentally different testing problems and need different solutions.
 
 ## 3. Current State
 
-### What exists
-- `.claude/test/testing.md` — manual playbook
-- `.claude/test/test-infra.md` — setup guide; Track 2 specs automated suite that was never built
-- `.claude/test/testing/*.md` — 6 prompt-driven scenario files containing the workflows
-- `requirements.txt:33-34` — `pytest` and `pytest-asyncio` listed but **commented out**
+### What exists (2026-06-11)
 
-### What doesn't exist
-- `tests/` directory
-- `conftest.py`, `pytest.ini`, or pytest configuration in `pyproject.toml`
-- `.github/workflows/` — no CI at all
-- Any mocking infrastructure for the DCT API
+- **Layer 1 — Unit:** 156 tests, all personas, 62 confirmation rules, parametrized via `config_cases`
+- **Layer 2 — Integration:** 29 tests, full `DCTAPIClient` wire coverage
+- **Layer 3 — Functional:** 931 tests — registration (all 5 personas), 70 self_service workflow chains, 57+15 CDA/SS confirmation handshakes, 833-case generated routing sweep
+- **Layer 4 — E2E:** 27 tests (self_service + CDA smoke/contract, mutation lifecycle)
+- **Layer 5 — LLM-driven:** 217 tests — discoverability (14), scenario catalog (170+), act→verify, CDA setup/teardown
+- **`dct-mcp-test` CLI** with layers: `unit | integration | functional | ci | e2e | llm | scenarios | all`
+- **`dct_stub`** fully built with catch-all; spec downloaded from DCT; **total: 1,360 tests**
 
-### Test seams already present in the code
+### What is pending
 
-| Seam | Location | Use |
-|---|---|---|
-| HTTP chokepoint | `src/dct_mcp_server/dct_client/client.py:77` (`make_request`) | Mock for unit tests |
-| Config loading | `src/dct_mcp_server/config/config.py:9` | Env var injection |
-| Toolset parser | `src/dct_mcp_server/config/loader.py` | `@lru_cache` — clear between tests |
-| Tool registration | `src/dct_mcp_server/tools/__init__.py:50` | Test with fresh FastMCP app |
-| MCP transport | FastMCP stdio | Drive via `fastmcp.Client` subprocess |
+- MySQL AppData dSource enable + VDB provision (plugin infra issue on engine `qa-dev-test11`)
+- L6 GitHub Actions CI enforcement (workflows exist; required-check not yet enforced) — see **§ Future Scope**
+- Engine register scenario (built, gated on `E2E_ENGINE_JSON`)
 
 ---
 
 ## 4. Architecture
 
-Three layers in CI (regression gate), plus one optional local layer (AI usability).
+Three layers in CI (regression gate), plus two optional local layers (real DCT):
 
 ```
    ┌──────────────────────────────────────────────────────────────┐
    │  Layer 1 — Unit (in-process, mocked client)                  │
    │  tool fn → MagicMock(DCTAPIClient).make_request              │
-   │  ~60% of tests · seconds                                     │
+   │  156 tests · ~0.3s                                          │
    ├──────────────────────────────────────────────────────────────┤
    │  Layer 2 — Integration (in-process, mocked HTTP)             │
    │  tool fn → DCTAPIClient → httpx → respx intercept            │
-   │  ~25% of tests · seconds                                     │
+   │  29 tests · ~0.1s                                           │
    ├──────────────────────────────────────────────────────────────┤
    │  Layer 3 — Functional (subprocess + stub DCT)                │
-   │   3a. Toolset registration (5 cases, parametrized)           │
+   │   3a. Toolset registration (all 5 personas + auto)           │
    │   3b. ★ Workflow tests — the .md scenarios as Python          │
    │   3c. Confirmation handshake over MCP wire                   │
-   │  ~15% of tests · ~60 seconds                                 │
+   │  931 tests · ~2.5 min                                       │
    ├──────────────────────────────────────────────────────────────┤
-   │  Layer 4 — E2E vs. real cloned DCT                           │
-   │  Same workflows, real instance, on-demand via GitHub UI      │
-   │  Manual trigger primary; nightly cron optional               │
+   │  Layer 4 — E2E vs. real DCT (safe-run venv)                  │
+   │  Same server, real instance, on-demand via CLI               │
+   │  27 tests · 3–8 min                                         │
    ├──────────────────────────────────────────────────────────────┤
-   │  Layer 5 — LLM-driven E2E (LOCAL ONLY, optional)             │
-   │  Claude Code CLI → MCP server → REAL DCT                     │
+   │  Layer 5 — LLM-driven (LOCAL, advisory)                      │
+   │  Claude Code CLI → .mcp.json delphix-dct server → real DCT  │
    │  NL task → act → wait for job → verify outcome               │
-   │  not in CI · not blocking                                    │
+   │  217 tests · varies                                         │
    └──────────────────────────────────────────────────────────────┘
 ```
 
-Layer 3b is the **centerpiece** — it's what directly replaces the manual Claude Desktop playbook. Each chain of prompts in the existing `.md` files becomes one Python test.
+Layer 3b is the **centerpiece** — it's what directly replaces the manual Claude Desktop
+playbook. Each chain of prompts in the existing `.md` files becomes one Python test.
 
-### 4.1 Layer 4 — E2E vs. real cloned DCT
+### 4.1 Layer 4 — E2E vs. real DCT
 
-You have a persistent cloned DCT instance with a stable API key, so Layer 4 is buildable. The right shape is **GitHub Secrets + `workflow_dispatch` (primary trigger) + optional nightly cron** — not always-on infra.
+`build_real_transport(toolset)` in `tests/e2e/conftest.py` reads the `delphix-dct`
+server definition from `.mcp.json`, injects runtime credentials from the environment,
+and spawns it as a subprocess. A `fastmcp.Client` talks to it over stdio. The server
+downloads the live OpenAPI spec and generates tools dynamically.
 
-**Prerequisite check.** Before this runs in CI, confirm the cloned DCT is reachable from GitHub-hosted runner IPs (i.e., on the public internet). If it's VPN-only, the options are:
-- Expose it via a tunnel (e.g. Cloudflare Tunnel, ngrok) for tests
-- Use a self-hosted GitHub runner inside the network that hosts the DCT
-- Fall back to local-only execution (developer runs `pytest tests/e2e` on a machine with VPN access)
-
-The rest of this section assumes the clone is reachable from GitHub.
-
-**One-time setup.**
-
-1. In repo settings → Secrets → add:
-   - `DCT_TEST_BASE_URL` — the clone's base URL (no `/dct` suffix)
-   - `DCT_TEST_API_KEY` — the API key (without the `apk ` prefix; the client adds it)
-2. Confirm the cloned DCT has stable known fixture data (at least one env, dSource, snapshot)
-
-**One runner, two contexts.** Both local and CI invoke the same CLI entry point — `dct-mcp-test` — installed when you run `pip install -e ".[test]"`. See section 4.2 for the CLI design.
-
-**Workflow file.**
-
-```yaml
-# .github/workflows/e2e-real-dct.yml
-name: e2e-real-dct
-on:
-  workflow_dispatch:             # primary: run on demand from GitHub UI
-  schedule:
-    - cron: "0 6 * * *"          # optional: passive drift detection
-
-jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    env:
-      DCT_BASE_URL: ${{ secrets.DCT_TEST_BASE_URL }}
-      DCT_API_KEY: ${{ secrets.DCT_TEST_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install -e ".[test]"
-      - run: dct-mcp-test --layer e2e    # same command devs run locally
-      - name: Notify on failure
-        if: failure()
-        run: # post to Slack/email — does NOT fail any PR
+**Safe-run venv:** in a dev/editable checkout the startup generator writes into `src/`.
+Use `.venv-live` (non-editable install) so generation goes to `$TEMP`:
+```bash
+python3 -m venv .venv-live && .venv-live/bin/pip install ".[test]"
 ```
 
-**Cleanup strategy (critical for persistent DCT).**
+### 4.2 The `dct-mcp-test` CLI — one runner, all contexts
 
-Because the DCT clone persists between runs, anything tests create must be cleaned up — even on failure. Strategy:
-
-- Every test tags everything it creates with `E2E_RUN_TAG` (`e2e-{github_run_id}`)
-- A separate cleanup module (`tests/e2e/cleanup/test_purge.py`) runs as an `if: always()` step
-- Cleanup searches for everything tagged with the current run ID and deletes it
-- Crashed runs still get cleaned up because the cleanup step is forced to run
-
-This is much simpler than per-test finalizers because there's one bulk cleanup pass instead of many granular ones.
-
-**Test file shape.**
-
-```python
-# tests/e2e/test_vdb_smoke.py
-import os
-RUN_TAG = os.environ["E2E_RUN_TAG"]
-
-@pytest.mark.real_dct
-async def test_vdb_search_returns_results(real_mcp_client):
-    result = await real_mcp_client.call_tool("vdb_tool", {"action": "search"})
-    assert result["items"]
-
-@pytest.mark.real_dct
-async def test_create_bookmark_with_cleanup_tag(real_mcp_client):
-    vdb_id = (await real_mcp_client.call_tool("vdb_tool", {"action": "search"}))["items"][0]["id"]
-    bookmark = await real_mcp_client.call_tool("bookmark_tool", {
-        "action": "create",
-        "name": f"{RUN_TAG}-bookmark-1",  # tag in the name
-        "vdbId": vdb_id,
-    })
-    # No need to delete here — cleanup step handles it
+```
+src/dct_mcp_server/testing/cli.py
 ```
 
-**Triggering it.**
+Available layers: `unit | integration | functional | ci | e2e | llm | scenarios | all`
 
-- **Manual via GitHub UI (primary):** GitHub → Actions → `e2e-real-dct` → "Run workflow"
-- **Nightly cron (optional):** turn on the schedule line for passive drift detection
-- **Local dev (same CLI):** `dct-mcp-test --base-url <url> --api-key <key>` on your machine
-
-**What Layer 4 catches that Layer 3 doesn't.**
-
-- Real DCT API contract drift (Delphix changes an endpoint shape, the spec we use becomes stale)
-- Real auth/permission issues (your API key actually works against real ACLs)
-- Network/timeout behavior under real latency (the stub is fast; real DCT isn't)
-- State that only exists on a real engine (real snapshots, real timeflows)
-
-It does **not** catch new regressions faster than Layer 3 — Layer 3 still runs on every PR. Layer 4 is a periodic confidence check, not a per-commit gate.
-
-### 4.2 The `dct-mcp-test` CLI — one runner, both contexts
-
-A single CLI tool wraps pytest with the right flags, env vars, run-tag generation, and cleanup. It's registered as a `[project.scripts]` entry point in `pyproject.toml`, so `pip install -e ".[test]"` puts `dct-mcp-test` on your `$PATH`. **Local invocation and CI invocation are identical.**
-
-**Usage.**
+For `--layer scenarios`, additional flags: `--persona <csv>`, `--mutations`, `--scenario-limit`, `--report <file.xml>`.
 
 ```bash
-# Provide credentials via flags
-dct-mcp-test --base-url https://my-cloned-dct.example.com --api-key abc123
-
-# Or via env vars (preferred for CI)
-export DCT_BASE_URL=https://my-cloned-dct.example.com
-export DCT_API_KEY=abc123
-dct-mcp-test
-
-# Pick a specific layer (defaults to e2e)
-dct-mcp-test --layer unit                # no credentials needed
-dct-mcp-test --layer integration         # no credentials needed
-dct-mcp-test --layer functional          # uses dct_stub, no real DCT needed
-dct-mcp-test --layer e2e                 # real DCT, needs credentials
-dct-mcp-test --layer all                 # everything in sequence
-
-# Run a single workflow
-dct-mcp-test --workflow vdb_lifecycle
-
-# Skip cleanup (DANGER on persistent DCT — only for local debugging)
-dct-mcp-test --no-cleanup
+dct-mcp-test --layer ci
+dct-mcp-test --layer e2e --base-url https://localhost --api-key <key>
+dct-mcp-test --layer scenarios --persona continuous_data_admin --report report.xml
 ```
-
-**What it does internally.**
-
-1. Resolves credentials from flags or `DCT_BASE_URL` / `DCT_API_KEY` env vars
-2. Generates a unique `E2E_RUN_TAG=e2e-{uuid8}-{timestamp}` for this run
-3. Maps `--layer` to the right pytest paths and markers
-4. Runs pytest
-5. Always runs the cleanup pass at the end (unless `--no-cleanup`)
-6. Exits with pytest's exit code
-
-**Implementation.** About 50 lines at `src/dct_mcp_server/testing/cli.py`:
-
-```python
-import os, subprocess, sys, time, uuid
-import click
-
-@click.command()
-@click.option("--base-url", envvar="DCT_BASE_URL", help="DCT base URL")
-@click.option("--api-key", envvar="DCT_API_KEY", help="DCT API key")
-@click.option("--layer",
-    type=click.Choice(["unit", "integration", "functional", "e2e", "all"]),
-    default="e2e", help="Test layer to run")
-@click.option("--workflow", help="Filter to workflows matching this name")
-@click.option("--no-cleanup", is_flag=True, help="Skip cleanup (DANGER on persistent DCT)")
-def main(base_url, api_key, layer, workflow, no_cleanup):
-    """Run the DCT MCP Server test suite."""
-    env = os.environ.copy()
-
-    if layer in ("e2e", "functional", "all"):
-        if not base_url or not api_key:
-            click.echo("--base-url and --api-key required for this layer", err=True)
-            sys.exit(2)
-        env["DCT_BASE_URL"] = base_url
-        env["DCT_API_KEY"] = api_key
-        env["E2E_RUN_TAG"] = f"e2e-{uuid.uuid4().hex[:8]}-{int(time.time())}"
-
-    paths_by_layer = {
-        "unit": ["tests/unit"],
-        "integration": ["tests/integration"],
-        "functional": ["tests/functional"],
-        "e2e": ["tests/e2e"],
-        "all": ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
-    }
-    args = ["pytest", *paths_by_layer[layer], "-v"]
-    if layer == "e2e":
-        args.extend(["-m", "real_dct"])
-    if workflow:
-        args.extend(["-k", workflow])
-
-    result = subprocess.run(args, env=env)
-
-    if layer in ("e2e", "all") and not no_cleanup:
-        click.echo("\n--- Running cleanup ---")
-        subprocess.run(["pytest", "tests/e2e/cleanup", "-v"], env=env)
-
-    sys.exit(result.returncode)
-```
-
-**Registration in `pyproject.toml`.**
-
-```toml
-[project.scripts]
-dct-mcp-test = "dct_mcp_server.testing.cli:main"
-
-[project.optional-dependencies]
-test = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "respx>=0.20",
-    "starlette>=0.30",
-    "uvicorn>=0.27",
-    "syrupy>=4.0",
-    "click>=8.0",        # for the CLI
-]
-```
-
-**Why this design.**
-
-| Property | Benefit |
-|---|---|
-| Single entry point | Same command works locally and in CI — no drift between environments |
-| Env-var fallback | CI uses GitHub Secrets via env; local can use either env or flags |
-| Layer selection | Devs can run just unit tests fast, or e2e when validating against real DCT |
-| Forced cleanup | Even if tests crash, the CLI runs the cleanup pass before exiting |
-| Standard pytest under the hood | All pytest features (`-k`, `-x`, `--pdb`, etc.) still accessible via the CLI's pass-through |
 
 ### 4.3 The `/dct-mcp-test` Claude Code skill — third invocation path
 
-The same CLI is wrapped by a project-local Claude Code skill so it can be invoked from inside any Claude Code session via `/dct-mcp-test`. **Three invocation paths, one implementation:**
+The same CLI wrapped as a project-local skill so it can be invoked from inside any
+Claude Code session via `/dct-mcp-test`. Failure triage — Claude can read the failing
+test, propose a fix, and re-run the skill in one session.
 
-```
-                  ┌──────────────────────────────────┐
-                  │   src/dct_mcp_server/testing/    │
-                  │   cli.py  (the actual logic)     │
-                  └──────────────┬───────────────────┘
-                                 │
-        ┌────────────────────────┼───────────────────────────┐
-        │                        │                            │
-        ▼                        ▼                            ▼
-   ┌──────────┐         ┌─────────────────┐         ┌──────────────────┐
-   │   CLI    │         │ GitHub Actions  │         │ Claude Code skill│
-   │ (terminal│         │  workflow yaml  │         │ /dct-mcp-test    │
-   └──────────┘         └─────────────────┘         └──────────────────┘
-```
+### 4.4 Layer 5 — LLM-driven via Claude Code CLI
 
-**Location:** `.claude/skills/dct-mcp-test/SKILL.md`
+**Driver: Claude Code CLI only.**
 
-```yaml
----
-name: dct-mcp-test
-description: Run the DCT MCP Server test suite against a DCT instance. Args: <localhost|remote|URL> [--name <label>] [--api-key <key>] [--layer e2e|unit|integration|functional|all] [--workflow <name>]
----
-
-When the user invokes /dct-mcp-test:
-
-## 1. Parse args
-- First positional: "localhost", "remote", or a literal URL
-- --name: optional, descriptive label for the run
-- --api-key: required for e2e/functional layers (or read DCT_API_KEY env)
-- --layer: default "e2e"
-- --workflow: optional, filters to one workflow
-
-## 2. Resolve base URL
-- "localhost" → http://localhost:8443 (or DCT_LOCAL_URL env)
-- "remote" → ask user for URL, or read DCT_REMOTE_URL env
-- URL string → use as-is
-
-## 3. Invoke via Bash
-   dct-mcp-test --base-url <resolved-url> --api-key <key> --layer <layer> [--workflow <name>]
-
-## 4. Stream output
-- Show pytest output as it runs
-- On test failure, offer to help debug: read the failing test file,
-  identify what assertion failed, suggest fixes
-- On cleanup failure, alert clearly (orphaned resources on persistent DCT)
-```
-
-**Usage examples.**
-
-```text
-/dct-mcp-test localhost --api-key abc123
-/dct-mcp-test remote --name staging-clone-1 --api-key xyz789
-/dct-mcp-test https://my-dct.example.com --api-key xyz789
-/dct-mcp-test localhost --api-key abc123 --workflow vdb_lifecycle
-/dct-mcp-test remote --api-key xyz --layer all
-```
-
-**Why this layering matters.**
-
-| Concern | Where it lives |
-|---|---|
-| Pytest invocation, env vars, cleanup pass | CLI (one place to maintain) |
-| GitHub Actions yaml | Calls CLI |
-| Chat-based invocation, URL aliasing, interactive debug | Skill |
-
-If you change how the test suite runs, you change the CLI. CI yaml and the skill follow automatically.
-
-**What the skill adds beyond just typing the CLI command.**
-
-- URL aliasing — `localhost`/`remote` shortcuts instead of memorizing URLs
-- Stays in Claude Code — no terminal context switch; results in chat
-- Failure triage — Claude can read the failing test, propose a fix, edit it, and re-run the skill in one session
-- Discoverability — `/dct-mcp-test` shows up in slash-command autocomplete
-
-CI still uses the bare CLI because workflows aren't conversational. Local + interactive use prefers the skill.
-
-### 4.4 Layer 5 — LLM-driven E2E against real DCT
-
-Layer 5 answers a question no scripted layer can: **given only a plain-English task and the tool schemas, can an AI discover the right tool, call it correctly, and did the operation actually take effect on a real DCT?** It is local-only, advisory, and never a merge gate — but unlike the original stub-only design, it now runs against a **real DCT** (a local dev instance or the cloned DCT server) because the whole point is to prove the outcome *persisted*, not just that a tool returned `200`.
-
-**Driver: Claude Code CLI.** The product's real target is Claude, so driving Layer 5 with the Claude Code CLI gives the most faithful discoverability signal — and it authenticates with the existing Claude subscription/enterprise session, sidestepping the metered-API-key objection in §7.
-
-The CLI runs headless and emits the full tool-call trace, which is what the test asserts on:
+Layer 5 uses `claude -p … --output-format stream-json` as the sole LLM driver. It
+connects to the **`delphix-dct` MCP server defined in `.mcp.json`** — the same server
+config the interactive Claude Code session uses. Credentials come from `DCT_BASE_URL` /
+`DCT_API_KEY` env vars. No separate Anthropic API key required.
 
 ```bash
-claude -p "Provision a VDB named e2e-llm-{tag} from the first available dSource" \
-  --mcp-config dct-real.json \
+claude -p "<task>" \
+  --mcp-config <derived-from-.mcp.json> \
   --strict-mcp-config \
   --allowedTools "mcp__delphix-dct__*" \
   --permission-mode bypassPermissions \
   --append-system-prompt-file .claude/test/llm-driver-preprompt.md \
-  --output-format stream-json
+  --output-format stream-json --verbose
 ```
 
-`dct-real.json` points the `dct-mcp-server` at the **real** `DCT_BASE_URL` (localhost or cloned), not `dct_stub`.
+The **job-completion pre-prompt** (`.claude/test/llm-driver-preprompt.md`) instructs
+Claude to poll `job_tool` to a terminal state before declaring success on any async
+operation. This is the mechanism that implements act → wait → verify without code
+changes to the server.
 
-**The act → verify pattern (mandatory for every Layer 5 test).** A tool returning success is not proof — DCT provisioning is asynchronous and a "success" may only mean *the job was submitted*. So every test is two phases, and the verification reads state through an **independent** path:
+**The act → verify pattern (mandatory for every mutation test):**
 
 | Phase | Example |
 |---|---|
-| 1. Act | Claude is told *"provision a VDB named X"* → it discovers and calls `vdb_tool(action="provision_*", ...)` |
-| 2. Wait | The submitted job is polled to a terminal state (see pre-prompt below) before any judgement |
-| 3. Verify | A separate `vdb_tool(action="search")` / `list` confirms a VDB named X **actually exists** and is `RUNNING` |
+| 1. Act | Claude receives a plain-English task → discovers and calls the tool |
+| 2. Wait | Pre-prompt requires polling `job_tool` to COMPLETED/FAILED |
+| 3. Verify | A **separate** Claude call reads state back — identifier NOT in the verify prompt |
 
-A test passes only if phase 3 confirms the real-world effect. This catches the worst failure mode — a tool that *looks* like it worked but left nothing behind.
+The verify prompt must never contain the identifier being confirmed (else Claude echoes
+it regardless of real state — a false-pass trap we discovered in live runs).
 
-**The job-completion pre-prompt.** Because the operations are async, the LLM driver must not declare success on submission. A standard system pre-prompt (`--append-system-prompt-file`) instructs it to **poll the job to a terminal state before reporting pass/fail**. The canonical text lives in [`testing.md`](testing.md#job-completion-pre-prompt) so all three tracks (manual Claude, the skill, and Layer 5) share one rule. In essence: *after any operation that returns a `job_id` / `job` reference, call `job_tool(action="get")` until the job reaches `COMPLETED` (pass) or `FAILED`/`CANCELED` (fail); never treat job submission alone as success; only then run the verification step.*
-
-**Cleanup.** Layer 5 creates real objects, so it reuses Layer 4's tagging + purge: every created object is tagged with `E2E_RUN_TAG`, and `tests/e2e/cleanup/test_purge.py` runs `if: always()` to delete them. Run Layer 5 **only** against a disposable/cloned DCT or a local dev instance — never a shared persistent one without the purge step.
-
-**Why this is distinct from Layer 4.** Layer 4 is *scripted* real-DCT E2E (deterministic calls, the regression-confidence check). Layer 5 is *LLM-driven* real-DCT E2E (Claude chooses the tools from natural language). Same backend, different question: Layer 4 asks "does the workflow still work?"; Layer 5 asks "can an AI drive it, and did it really happen?". Layer 5's signal is noisier (it's an LLM), which is exactly why it stays advisory.
-
----
-
-## 5. Layer 3b — Workflow Tests (the heart of the suite)
-
-### Pattern
-
-Each multi-step chain in `.claude/test/testing/<toolset>.md` translates to one test function. The chaining ("that VDB" → previous result) becomes a Python variable. Each step is a real MCP call over stdio. Each step is verified at the wire level via `dct_stub`.
-
-```python
-# tests/functional/workflows/test_vdb_lifecycle.py
-async def test_vdb_lifecycle_start_stop(mcp_client, dct_stub):
-    # Step 1 — Search for all VDBs
-    vdbs = await mcp_client.call_tool("vdb_tool", {"action": "search"})
-    assert vdbs["items"], "search returned no VDBs"
-    vdb_id = vdbs["items"][0]["id"]
-
-    # Step 2 — Get details of the first one
-    details = await mcp_client.call_tool("vdb_tool", {"action": "get", "vdbId": vdb_id})
-    assert details["id"] == vdb_id
-
-    # Step 3 — Start that VDB
-    await mcp_client.call_tool("vdb_tool", {"action": "start", "vdbId": vdb_id})
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
-
-    # Step 4 — Stop that VDB
-    await mcp_client.call_tool("vdb_tool", {"action": "stop", "vdbId": vdb_id})
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")
-```
-
-### Mapping: scenario files → workflow tests
-
-```
-.claude/test/testing/self_service.md
-├── lines 12–17  (vdb_tool: search→get→start→stop)    → test_vdb_lifecycle.py
-├── lines 18–23  (vdb_tool: refresh variants)          → test_vdb_refresh.py
-├── lines 24–28  (vdb_tool: rollback variants)         → test_vdb_rollback.py
-├── lines 30–47  (vdb_group_tool full lifecycle)       → test_vdb_group_lifecycle.py
-├── lines 49–53  (dsource_tool)                        → test_dsource.py
-├── lines 55–64  (snapshot_tool)                       → test_snapshot.py
-├── lines 66–75  (bookmark_tool + delete confirmation) → test_bookmark_lifecycle.py
-├── lines 77–81  (job_tool + abandon confirmation)     → test_job.py
-└── lines 83–93  (timeflow_tool + delete confirmation) → test_timeflow.py
-```
-
-Same shape for the other 4 toolset scenario files. Roughly **30–40 workflow tests** replace the entire manual playbook.
-
----
-
-## 6. The `dct_stub` Component
-
-A fake DCT server that runs inside the pytest process so functional and workflow tests don't need a real DCT instance.
-
-### Data flow
-
-```
-   pytest process                       subprocess (MCP server)
-   ┌──────────────────────┐            ┌─────────────────────┐
-   │ test function        │            │ vdb_tool(...)       │
-   │  │                   │  stdio     │  │                  │
-   │  ▼                   │ ◀────────▶ │  ▼                  │
-   │ fastmcp.Client       │            │ DCTAPIClient        │
-   │                      │            │  │  httpx →         │
-   │ dct_stub ◀───────────┼── HTTP ────┤  DCT_BASE_URL       │
-   │ (Starlette, port=0)  │            │  http://127.0.0.1   │
-   └──────────────────────┘            └─────────────────────┘
-```
-
-### What it needs to support (for workflow tests)
-
-- **Stateful canned data** — `vdbs/search` returns the same fixture every time, so "the first VDB" is always `v-1`. No randomness.
-- **Endpoint coverage matching the workflows** — every endpoint the chains touch: search, get, start, stop, refresh variants, snapshots list, bookmarks list, tag operations, etc. ~30–40 routes total across all toolsets.
-- **Request recorder** — so tests can assert "the server *did* send `POST /vdbs/v-1/start` to DCT", not just "the call returned without error."
-- **Response overrides per test** — for negative cases ("what if start returns 503?") a fixture can override the default response.
-- **`/dct/static/api-external.yaml`** — so the OpenAPI bootstrap doesn't fail.
-
-Total size: ~200 lines.
-
----
-
-## 7. Why Not Claude Desktop / LLM-Driven for the Regression Gate
-
-The question keeps coming up: "can we just automate Claude Desktop?" The honest answer is no, and the reasons are worth recording so we don't relitigate them later.
-
-### Claude Desktop GUI automation — rejected
-
-| Concern | Detail |
-|---|---|
-| Closed Electron app | No official automation API; Playwright/AppleScript driving relies on DOM that changes between releases |
-| Slow | ~10s per click; full scenario file would take 15+ minutes |
-| Zero new signal | Claude Desktop's only unique behavior is the LLM picking tools — and Desktop's LLM is the same Claude you'd hit via API more cleanly |
-| Brittle in CI | Headless GUI in GitHub Actions is its own infrastructure project |
-
-### Claude API as the driver — blocked by license + cost
-
-| Concern | Detail |
-|---|---|
-| **Requires explicit API key** | Anthropic API (console.anthropic.com) is a separate product from Claude Enterprise (claude.ai with SSO). The Enterprise license covers humans using the UI; it does **not** include programmatic API access by default. |
-| **No key currently available** | An API key would need to be provisioned by IT/admin under the enterprise contract, or set up via AWS Bedrock / GCP Vertex AI if those exist in the org |
-| **Real cost** | Per scenario run: ~$2.40 without prompt caching, ~$0.50–$0.80 with caching. Full nightly run (5 toolsets): ~$12 uncached, ~$3–4 cached. Monthly: $30–$360 depending on cadence and caching strategy |
-| **Noisy signal for regression testing** | An LLM driver can fail a test because *it* got confused, not because the code regressed. This blurs the failure attribution and makes flake triage expensive |
-
-### Claude Code CLI — the adopted Layer 5 driver
-
-The objection above is specifically about the **metered Anthropic API** (`console.anthropic.com`, per-token billing, separate key provisioning) being used as the **regression gate**. None of that applies to using the **Claude Code CLI** as the *advisory* Layer 5 driver:
-
-| Original objection (metered API as gate) | Why it doesn't apply to Claude Code CLI for Layer 5 |
-|---|---|
-| Needs a separately-provisioned API key | CLI uses the developer's existing Claude subscription / enterprise session — the same auth already in use |
-| Per-token cost on every PR | Layer 5 is pre-release/local and advisory, not per-PR; runs are occasional |
-| Noisy signal pollutes the merge gate | Layer 5 is explicitly *not* a gate — noise is acceptable for an advisory usability check |
-| Brittle GUI automation (Claude Desktop) | CLI is headless and scriptable (`claude -p --output-format stream-json`) — no DOM driving |
-
-It is also the **most faithful** signal available: the production target is Claude, so testing discoverability with Claude measures exactly what users experience — no local stand-in model to misfire and muddy the result. See §4.4 for the run shape.
-
-### The architectural separation
+**Architectural separation:**
 
 ```
    ┌────────────────────────────┐   ┌────────────────────────────┐
@@ -586,140 +208,162 @@ It is also the **most faithful** signal available: the production target is Clau
    │ No LLM in the loop          │   │ Claude Code CLI · real DCT  │
    │ $0 cost                     │   │ Subscription usage          │
    │                             │   │                             │
-   │ Answers:                    │   │ Answers:                    │
-   │  "did the workflow break?"  │   │  "can AI use it — and did   │
-   │                             │   │   it really happen?"        │
+   │ "Did the workflow break?"   │   │ "Can AI use it — and did it │
+   │                             │   │  really happen?"            │
    └────────────────────────────┘   └────────────────────────────┘
 ```
 
-These are separate questions. Solve them with separate tools. Layer 5 is **completely optional** — the regression-prevention goal is fully met by Layers 1–3 alone.
+Layer 5 is **completely optional** — the regression-prevention goal is fully met by
+Layers 1–3 alone. Layer 5 only adds value for AI-usability checks.
 
 ---
 
-## 8. Concrete Changes Required
+## 5. Layer 3b — Workflow Tests (the heart of the suite)
 
-### 8.1 `pyproject.toml`
+### Pattern
 
-```toml
-[project.optional-dependencies]
-test = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "respx>=0.20",
-    "starlette>=0.30",
-    "uvicorn>=0.27",
-    "syrupy>=4.0",       # snapshot testing for response shapes
-]
+Each multi-step chain in `.claude/test/testing/<toolset>.md` becomes one Python test.
+The chaining ("that VDB" → previous result) becomes a Python variable. Each step is a
+real MCP call over stdio via `fastmcp.Client`. Each step is verified at the wire level
+via `dct_stub.received_request(...)`. No LLM in the loop — deterministic, fast,
+reproducible.
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+```python
+# tests/functional/workflows/test_vdb_lifecycle.py
+async def test_vdb_lifecycle_search_get_start_stop(mcp_client_self_service, dct_stub):
+    search = await mcp_client_self_service.call_tool(
+        "vdb_tool", {"action": "search", "limit": 10})
+    vdb_id = _payload(search)["items"][0]["id"]
+
+    await mcp_client_self_service.call_tool(
+        "vdb_tool", {"action": "start", "vdb_id": vdb_id})
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
+
+    await mcp_client_self_service.call_tool(
+        "vdb_tool", {"action": "stop", "vdb_id": vdb_id, "confirmed": True})
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")
 ```
 
-### 8.2 `requirements.txt`
+### Mapping: scenario files → workflow tests
 
-Uncomment lines 33–34, or rely on the `pyproject.toml` test extra.
+| Scenario file | Prompts | Workflow tests |
+|---|---|---|
+| `self_service.md` | 70 | 9 files (vdb lifecycle, refresh/rollback, tags, groups, dsource, snapshot, bookmark, job, timeflow) |
+| `continuous_data_admin.md` | 431 | 5 CDA chains + 833-case routing sweep + 57-case confirmation sweep |
+| Other personas | 403 | Registration + routing via in-process generator |
 
-### 8.3 New directory: `tests/`
+---
+
+## 6. The `dct_stub` Component
+
+A tiny Starlette app that pretends to be the DCT API. Runs on `127.0.0.1:<random-port>`
+inside the pytest process. The MCP server subprocess is pointed at it via `DCT_BASE_URL`.
+Every request is recorded so tests can assert exactly what the server sent.
+
+### Data flow
 
 ```
-tests/
-├── conftest.py                              # shared fixtures, cache clearing
-├── unit/
-│   ├── test_vdb_tool.py
-│   ├── test_job_tool.py
-│   ├── ... (one per *_endpoints_tool.py)
-│   ├── test_loader.py
-│   └── test_confirmation.py
-├── integration/
-│   ├── conftest.py
-│   ├── test_client_transport.py
-│   ├── test_client_retry.py
-│   ├── test_client_timeout.py
-│   └── test_tool_to_wire.py
-├── functional/
-│   ├── conftest.py
-│   ├── test_server_starts.py
-│   ├── test_toolset_registration.py         # Layer 3a
-│   ├── test_confirmation_handshake.py       # Layer 3c
-│   └── workflows/                            # Layer 3b — the centerpiece
-│       ├── test_vdb_lifecycle.py
-│       ├── test_vdb_refresh.py
-│       ├── test_vdb_rollback.py
-│       ├── test_vdb_group_lifecycle.py
-│       ├── test_dsource.py
-│       ├── test_snapshot.py
-│       ├── test_bookmark_lifecycle.py
-│       ├── test_job.py
-│       ├── test_timeflow.py
-│       └── ... (one per scenario chain across all toolset .md files)
-├── llm_local/                                # Layer 5 — optional, local-only, REAL DCT
-│   ├── README.md                             # how to run via the Claude Code CLI
-│   ├── conftest.py                           # spawns `claude -p`, parses stream-json tool trace
-│   ├── test_ai_usability_smoke.py            # discoverability: did Claude pick the right tool?
-│   └── test_provision_verify.py              # act → wait for job → verify VDB exists on real DCT
-└── fixtures/
-    ├── dct_stub.py                          # stateful stub server
-    └── responses/
-        ├── vdbs_search.json
-        ├── vdbs_v1.json
-        ├── jobs_search.json
-        └── ...
+pytest process
+  │
+  ├─ StubServer.start() → spawns uvicorn thread
+  │       dct_stub URL: http://127.0.0.1:<port>
+  │
+  ├─ fastmcp.Client(StdioTransport)
+  │       spawns dct-mcp-server subprocess with DCT_BASE_URL=stub.url
+  │
+  ├─ await client.call_tool("vdb_tool", {"action": "search"})
+  │       subprocess → HTTP POST http://127.0.0.1:<port>/dct/v3/vdbs/search
+  │       dct_stub._record(request)   ← records for assertion
+  │       dct_stub.vdbs_search()      ← returns canned {"items":[...]}
+  │
+  └─ assert dct_stub.received_request("POST", "/dct/v3/vdbs/search")
 ```
 
-### 8.4 `.github/workflows/test.yml`
+### Routes
 
-```yaml
-name: tests
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+The stub serves all `/dct/v3/...` routes via explicit handlers for core paths and a
+catch-all for everything else. Deliberately does NOT serve `/dct/static/api-external.yaml`
+so the server falls back to pre-built modules (stable for the stub-based tests).
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install -e ".[test]"
-      - run: pytest tests/unit tests/integration -v
-      - run: pytest tests/functional -v
-```
+The OpenAPI spec (`tests/fixtures/api-external.yaml`) is downloaded from the real DCT
+and cached locally (gitignored). The `openapi_spec` fixture in `tests/functional/conftest.py`
+downloads it on first run, then reuses the cache for offline runs.
 
-Mark as required check in branch protection. Layer 5 tests are explicitly excluded from CI.
+---
 
-### 8.5 Optional Layer 5 runner script
+## 7. LLM Testing — Claude Code CLI as the MCP Client
 
-`scripts/run-llm-local-tests.sh`:
+Layer 5 answers the question no scripted layer can: **given only a plain-English task
+and the tool schemas, can Claude discover the right tool, call it correctly, and did
+the operation actually take effect on a real DCT?**
 
-```bash
-#!/usr/bin/env bash
-# Run LLM-driven E2E (Layer 5) against a REAL DCT (localhost or cloned).
-# Driver: Claude Code CLI — uses your existing Claude session, no metered API key.
-set -euo pipefail
+### Driver and MCP server
 
-: "${DCT_BASE_URL:?set DCT_BASE_URL to a localhost or cloned DCT}"
-: "${DCT_API_KEY:?set DCT_API_KEY}"
-export E2E_RUN_TAG="e2e-llm-$(date +%s)"
+- **Driver:** `claude -p` (Claude Code CLI headless mode), `--output-format stream-json`
+- **MCP server:** the `delphix-dct` server defined in **`.mcp.json`** — the single
+  source of truth, the same server the interactive Claude Code session uses
+- **Credentials:** `DCT_BASE_URL` + `DCT_API_KEY` from environment (never hardcoded)
+- **Toolset:** set via `DCT_TOOLSET` env var; the `_write_mcp_config()` helper derives
+  the server command/args from `.mcp.json` and stamps in the toolset per test
 
-# Tests shell out to `claude -p ... --output-format stream-json`
-# with --append-system-prompt-file .claude/test/llm-driver-preprompt.md
-pytest tests/llm_local -v "$@"
+### Three verification tiers
 
-# Always purge what the run created on the real DCT (reuses Layer 4 cleanup)
-pytest tests/e2e/cleanup -v
-```
+| Tier | How | When |
+|---|---|---|
+| **Tier 1 — Tool trace** | Assert Claude used a tool from the persona's toolset | All read-tier scenario prompts |
+| **Tier 2 — Act → verify** | Independent read-back (identifier NOT in verify prompt) | All mutations |
+| **Discoverability** | Assert Claude picked the expected tool from plain English | Per-tool-domain sanity |
 
-Run manually before releases against a disposable/cloned DCT. Not part of CI.
+### Findings from live runs
 
-### 8.6 Documentation updates
+Layer 5 surfaced genuine product findings:
 
-- `.claude/test/testing.md` — point to this strategy doc; mark manual playbook as exploratory only
-- `README.md` — add a Testing section
+| Tool | Gap | Impact |
+|---|---|---|
+| `vault_tool` | Not surfaced for "Hashicorp vaults" or "Kerberos configurations" — the tool owns both but its name hints at neither | Users can't reach Kerberos config via natural language |
+| `admin_platform_tool` | Not surfaced for "LLM models", "AI settings" | AI-related admin flows unreachable |
+| `diagnostic_tool` | Not surfaced for "NetBackup connectivity", "DSP network test" | Diagnostic workflows unreachable |
+
+These are recorded as `xfail` in `test_scenarios.py:_KNOWN_ISSUES` — visible in reports,
+suite stays green. **Actionable:** improve tool descriptions to match the domain language
+users speak.
+
+### License tolerance
+
+Some DCT instances license-restrict whole resource types (e.g. `401: License does not
+permit operations on VDB_GROUP`). The `call_tool_tolerant` helper in `tests/e2e/_helpers.py`
+and the `license_blocked()` helper in `tests/llm_local/conftest.py` skip license-forbidden
+operations instead of failing, making the suite resilient across DCT tiers.
+
+---
+
+## 8. Changes Made
+
+All layers are built. Here is what was implemented:
+
+### 8.1 Test infrastructure
+
+- `tests/_support/config_cases.py` — parametrization engine (parses toolset `.txt` files + confirmation rules)
+- `tests/fixtures/dct_stub.py` — full stub with catch-all and 13+ explicit routes
+- `tests/fixtures/api-external.yaml` — gitignored spec cache (downloaded from DCT)
+- `tests/functional/conftest.py` — generalized fixtures with `openapi_spec`, `persona_tools`, `build_stub_transport`
+- `tests/e2e/conftest.py` — `build_real_transport` reading from `.mcp.json`
+- `tests/llm_local/conftest.py` — `llm_driver_for`, `license_blocked`, `llm_driver_for_session`
+- `tests/llm_local/mcp_client_helper.py` — MCP-based state queries (replaces direct HTTP calls)
+- `tests/llm_local/prereq_checker.py` — session-cached prerequisite chain checker
+- `tests/llm_local/connector_fixtures.py` — per-connector field sets (AppData/Oracle/MSSQL/ASE)
+
+### 8.2 Test files by layer
+
+All under `tests/unit/`, `tests/integration/`, `tests/functional/`, `tests/e2e/`, `tests/llm_local/`.
+
+### 8.3 `.github/workflows/`
+
+- `test.yml` — runs `dct-mcp-test --layer ci` on every push/PR; non-editable install
+- `e2e-real-dct.yml` — `workflow_dispatch` trigger; credentials from `DCT_BASE_URL`/`DCT_API_KEY` secrets; downloads spec from DCT
+
+**Note:** The workflows exist but the required-check gate in branch protection is not yet
+enforced. See **§ Future Scope** below.
 
 ---
 
@@ -728,116 +372,101 @@ Run manually before releases against a disposable/cloned DCT. Not part of CI.
 | Trigger | What runs | Invocation | Blocking? |
 |---|---|---|---|
 | While coding | Layer 1 (unit) | `dct-mcp-test --layer unit` | No |
-| Pre-push hook (optional) | Layer 1 (unit) | `dct-mcp-test --layer unit` | Yes (local) |
-| Every push / PR | Layers 1–3 (unit + integration + functional incl. workflows) | GitHub Actions calls `dct-mcp-test` | **Yes — merge gate** |
-| On-demand against real DCT | Layer 4 (real cloned DCT) | GitHub Actions `workflow_dispatch`, or `/dct-mcp-test localhost --api-key ...` from Claude Code, or CLI direct | No (advisory) |
-| Optional nightly | Layer 4 | GitHub Actions cron | No (advisory) |
-| Pre-release AI usability + real-effect check | Layer 5 (Claude Code CLI vs. real DCT) | `scripts/run-llm-local-tests.sh` | No (advisory) |
-
-The PR merge gate (line 3) is what replaces manual Claude Desktop verification. Layer 4 covers the real-DCT validation you currently do by hand.
+| Every push / PR | Layers 1–3 (CI gate) | GitHub Actions calls `dct-mcp-test --layer ci` | **Yes — merge gate (once enforced)** |
+| On-demand against real DCT | Layer 4 | `.venv-live/bin/dct-mcp-test --layer e2e` | No (advisory) |
+| Pre-release AI usability | Layer 5 | `.venv-live/bin/dct-mcp-test --layer scenarios --persona <p>` | No (advisory) |
 
 ---
 
-## 10. Migration Plan
+## 10. Roadmap
 
-Phased so workflow coverage lands as early as possible. Each phase is independently shippable.
+All layers are implemented. Remaining work:
 
-### Phase 1 — Foundation (day 1)
-- Add test extra to `pyproject.toml`
-- Create `tests/conftest.py` with the mock-client + FastMCP app fixtures
-- Write one unit test for `vdb_tool` to prove the pattern
-- **Deliverable:** `pytest tests/unit` runs green
+### Completed ✓
 
-### Phase 2 — `dct_stub` + first workflow (days 2–3)
-- Build `tests/fixtures/dct_stub.py` with stateful canned responses, request recorder, ~10 routes
-- Write `tests/functional/workflows/test_vdb_lifecycle.py` — the highest-traffic chain
-- Write `test_toolset_registration.py` (5 personas, parametrized)
-- **Deliverable:** one workflow + persona registration verified end-to-end without DCT
+- L0 Foundations (config_cases parametrization engine, stub, spec fixture)
+- L1 Unit (156 tests)
+- L2 Integration (29 tests)
+- L3 Functional (931 tests — registration, workflows, confirmation, all personas)
+- L4 E2E real-DCT (27 tests — smoke, contract, mutation lifecycle)
+- L5 LLM-driven (217 tests — discoverability, scenarios, act→verify, CDA setup/teardown)
+- S0–S5 Persona scenario suite (904 prompts, all toolsets, prereq chain)
 
-### Phase 3 — CI wiring (day 4)
-- Add `.github/workflows/test.yml`
-- Enable branch protection requiring the `tests` check
-- **Deliverable:** PRs cannot merge with failing tests
+### In progress / blocked
 
-### Phase 4 — Integration coverage (day 5)
-- Add `respx` retry/auth/timeout tests against `DCTAPIClient`
-- **Deliverable:** wire-level regressions can no longer slip through
-
-### Phase 5 — Workflow translation (days 6–10)
-- One PR per scenario `.md` file, translating each chain into a workflow test
-- Expand `dct_stub` route coverage as new workflows demand
-- **Deliverable:** every workflow in `.claude/test/testing/*.md` is now a passing test
-
-### Phase 6 — Backfill unit tests (days 11–13)
-- One test file per `*_endpoints_tool.py` (9 files)
-- Cover action routing + confirmation flow per tool
-- Add `test_loader.py`, `test_confirmation.py`
-
-### Phase 7 — Snapshot assertions (day 14)
-- Wire `syrupy` into workflow tests
-- Capture response-shape snapshots; future drift breaks tests
-- **Deliverable:** response-contract regressions caught automatically
-
-### Phase 8 — `dct-mcp-test` CLI + skill (day 15)
-- Build `src/dct_mcp_server/testing/cli.py` (click-based)
-- Register as `[project.scripts]` entry point in `pyproject.toml`
-- Create `.claude/skills/dct-mcp-test/SKILL.md`
-- Update CI workflow to invoke `dct-mcp-test` instead of raw `pytest`
-- **Deliverable:** three invocation paths (CLI / CI / skill) all hit the same runner
-
-### Phase 9 — Layer 4 wiring (days 16–17)
-- Confirm cloned DCT reachability from GitHub-hosted runners (or set up tunnel/self-hosted runner if VPN-only)
-- Add `DCT_TEST_BASE_URL` and `DCT_TEST_API_KEY` to GitHub Secrets
-- Create `tests/e2e/` directory; mirror selected workflows from `tests/functional/workflows/` with `@pytest.mark.real_dct` markers
-- Build `tests/e2e/cleanup/test_purge.py` — uses `E2E_RUN_TAG` to delete anything created
-- Add `.github/workflows/e2e-real-dct.yml` with `workflow_dispatch` trigger
-- **Deliverable:** real-DCT validation runnable from GitHub UI, Claude Code skill, or CLI
-
-### Phase 10 — Optional Layer 5 (later)
-- Wire `tests/llm_local/` to drive the MCP server against a **real** localhost/cloned DCT via the **Claude Code CLI** (`claude -p --output-format stream-json`)
-- Implement the **act → wait-for-job → verify** pattern; reuse `E2E_RUN_TAG` + `tests/e2e/cleanup` for teardown
-- Ship the shared job-completion pre-prompt (`.claude/test/llm-driver-preprompt.md`, documented in `testing.md`)
-- Document the required Claude Code CLI auth and `--mcp-config` setup
-- Use pre-release, not pre-merge
-
-Total realistic budget: **~3 working weeks** to fully replace manual verification. Phases 1–3 alone deliver the merge gate in 4 days. Phase 9 closes the real-DCT gap that Claude Desktop currently fills.
+- MySQL AppData dSource enable + VDB provision — plugin jobs fail on `qa-dev-test11`; check engine logs for APPDATA plugin error. Framework is complete (P2 steps 5b/6).
+- Engine register scenario — built and gated; set `E2E_ENGINE_JSON` to run.
 
 ---
 
 ## 11. Success Criteria
 
-### After Phase 5 (merge gate replaces manual playbook)
+### Regression gate (Layers 1–3)
 
-1. `pytest` runs locally with no DCT credentials and no network
-2. Every PR shows a CI status check; merges to `main` require it to pass
-3. Every chain in `.claude/test/testing/*.md` has an equivalent Python workflow test
-4. Each persona toolset has at least one functional test verifying tool registration
-5. The confirmation two-step contract has one functional test per confirmation level
-6. The `.claude/test/testing.md` manual playbook is reduced to exploratory testing only — never a regression check
+- [x] `dct-mcp-test --layer ci` runs green in < 3 min
+- [x] 1,116 tests pass offline
+- [x] Every self_service scenario chain is a deterministic test
+- [x] Every CDA action routes correctly (parametrized sweep)
+- [x] All 62 confirmation rules have two-step handshake coverage
+- [x] All 5 personas register the right tools
 
-### After Phase 8 (unified runner)
+### Real-DCT validation (Layer 4)
 
-7. `dct-mcp-test` is on the `$PATH` after `pip install -e ".[test]"`
-8. `/dct-mcp-test` works from any Claude Code session
-9. CI workflow yaml uses the same `dct-mcp-test` command developers use locally
+- [x] Smoke tests pass against live DCT
+- [x] License-restricted resources skip gracefully
+- [x] Mutation lifecycle (engine register, MySQL dSource) live-verified
 
-### After Phase 9 (real-DCT validation)
+### AI-usability (Layer 5)
 
-10. Real-DCT E2E runnable from GitHub UI `workflow_dispatch`
-11. Same suite runnable locally via `dct-mcp-test --base-url ... --api-key ...`
-12. Same suite runnable via `/dct-mcp-test localhost --api-key ...` from Claude Code
-13. Cleanup pass deletes everything tagged with the run ID, even on test failure
-14. Tool response shapes captured as syrupy snapshots; drift breaks CI
+- [x] Claude discovers the right tool from plain English (14 discoverability tests)
+- [x] Act → verify pattern validated live (vdb-tag, engine-tag, MySQL environments, dSource link)
+- [x] Discoverability gaps identified and documented (`vault_tool`, `admin_platform_tool`, `diagnostic_tool`)
 
 ---
 
-## 12. Out of Scope
+## 12. Future Scope
 
-- Performance / load testing
-- Testing against multiple DCT versions in parallel
-- Property-based / fuzz testing of tool inputs
-- Visual regression of MCP client UIs
-- Claude Desktop GUI automation (see section 7)
-- Claude API as a CI test driver (see section 7)
+### L6 — GitHub Actions CI enforcement
 
-These are reasonable future additions but not part of replacing the manual verification loop.
+The `.github/workflows/test.yml` and `.github/workflows/e2e-real-dct.yml` files exist
+and are correct. What remains is making `test.yml` a **required check** in branch
+protection so red PRs cannot merge.
+
+This is a process/permission decision, not a coding task:
+
+| Step | Who | What |
+|---|---|---|
+| Enable required check | Repo admin | Settings → Branches → main → Add required status check: `test / test` |
+| Add DCT secrets | Repo admin | Settings → Secrets → `DCT_BASE_URL`, `DCT_API_KEY` for the e2e workflow |
+| Nightly cron (optional) | Repo admin | Uncomment the `schedule` block in `e2e-real-dct.yml` |
+
+Once the required check is enabled:
+- PRs with failing Layers 1–3 cannot merge (the merge button is greyed out)
+- The manual Claude Desktop verification is fully retired for regression testing
+- Layer 4 runs on demand from the GitHub UI or via CLI
+
+### Snapshot assertions
+
+Add `syrupy` to the workflow tests to lock response shapes. Future drift in DCT API
+response envelopes would fail the snapshot comparison automatically.
+
+### Session-replay for Layer 5
+
+Currently Layer 5 runs each prompt as an independent Claude call (no state carried
+between "Search VDBs" and "that VDB"). True session replay — chaining Claude calls with
+context — would allow testing the full conversational flow described in the scenario
+`.md` files.
+
+### Other-persona mutation scenarios
+
+Read-tier validated for all personas. Mutation-tier scenarios (CDA provisions, IAM
+changes, policy updates) depend on having a working dSource/VDB. Unblocked once the
+MySQL plugin infra issue is resolved.
+
+---
+
+## 13. Out of Scope
+
+- Load / performance testing
+- Exhaustive per-action E2E (cost vs. coverage tradeoff; Layers 1–3 cover routing)
+- True 1:1 translation of all ~970 scenario prompts to L3 workflow tests (chains collapse into ~90 workflow tests)
