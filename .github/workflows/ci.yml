@@ -64,13 +64,17 @@ jobs:
             --cov-fail-under=4
       - name: Coverage summary
         if: always()
+        continue-on-error: true          # cosmetic — never fails the gate
         run: |
-          echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f coverage.xml ]; then
-            line_rate=$(grep -m1 -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*')
-            pct=$(python -c "print(f'{float('${line_rate:-0}')*100:.2f}%')")
-            echo "Total line coverage: **$pct** (floor: 4%, target: 80%)" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET
+          print("### Coverage")
+          try:
+              rate = float(ET.parse("coverage.xml").getroot().get("line-rate", 0))
+              print(f"Total line coverage: **{rate * 100:.2f}%** (floor: 4%, target: 80%)")
+          except Exception as exc:
+              print(f"(coverage.xml unavailable: {exc})")
+          PY
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
