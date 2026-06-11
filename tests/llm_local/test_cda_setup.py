@@ -31,7 +31,7 @@ import time
 
 import pytest
 
-from tests.llm_local.connector_fixtures import ConnectorSpec
+from tests.llm_local.connector_fixtures import ConnectorSpec, schema_link_hints
 from tests.llm_local.conftest import license_blocked
 from tests.llm_local.mcp_client_helper import mcp_search, payload as _mcp_payload
 from tests.llm_local.prereq_checker import require_prereq_level
@@ -238,7 +238,12 @@ def test_setup_05_dsource(connector_spec: ConnectorSpec, llm_driver_for):
     dsource_name = f"{run_tag}-ds"
     drive = llm_driver_for("continuous_data_admin")
 
+    # Combine explicit field values (from secrets) with schema hints (field docs + defaults)
+    # so Claude has both concrete values AND documentation for anything not pre-filled.
     link_detail = connector_spec.link_prompt_detail()
+    schema_hints = schema_link_hints(connector_spec.connector_type)
+    if schema_hints and not link_detail:
+        link_detail = schema_hints  # fall back to schema hints if no explicit values
 
     act = drive(
         f"Link a new {connector_spec.display_name} dSource named '{dsource_name}' "

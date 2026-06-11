@@ -1,71 +1,54 @@
 """
-P1 — Connector fixture layer.
+Connector fixture layer — loads connector topology + credentials from:
 
-Provides a `ConnectorSpec` dataclass that holds all connector-type-specific
-fields needed at each step of the CDA prerequisite chain:
-    engine → connector install → hosts → source config → dSource link → VDB provision
+  1. tests/fixtures/connectors/.secrets.yaml  (local dev, gitignored)
+  2. DCT_CONNECTOR_<TYPE>_<FIELD> env vars     (CI — GitHub Secrets)
 
-Selected via CONNECTOR_TYPE env var (default: "appdata" / MySQL plugin).
-Each preset reads from named env vars so credentials stay out of code.
-
-Supported connector types:
-    appdata   — MySQL via Delphix MySQL Plugin (PLUGIN on the engine)
-    oracle    — Oracle dSource (dsource_link_oracle)
-    mssql     — MS SQL Server (dsource_link_mssql)
-    ase       — SAP ASE / Sybase (dsource_link_ase)
+The connector schema (field docs + defaults) lives in:
+  tests/fixtures/connectors/schema.yaml       (committed, no secrets)
 
 Usage:
-    @pytest.fixture
-    def spec(connector_spec):
-        return connector_spec  # ConnectorSpec for the current CONNECTOR_TYPE
+    CONNECTOR_TYPE=mysql pytest tests/llm_local/ -m llm_driven
+    CONNECTOR_TYPE=db2   pytest tests/llm_local/ -m llm_driven
 
-    def test_something(spec):
-        print(spec.dsource_link_action)
-        print(spec.link_fields)
+    # Or point at a custom secrets file:
+    CONNECTOR_SECRETS=/path/to/my-env.yaml CONNECTOR_TYPE=mysql pytest ...
 """
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 
+_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "connectors"
+_SCHEMA_FILE = _FIXTURES_DIR / "schema.yaml"
+_DEFAULT_SECRETS = _FIXTURES_DIR / ".secrets.yaml"
+
+
+# ── Data classes ──────────────────────────────────────────────────────────────
 
 @dataclass
 class ConnectorSpec:
-    """All connector-specific fields for one connector type."""
+    """All fields needed to drive the full dSource + VDB flow for one connector."""
 
-    # Identity
-    connector_type: str                # "appdata" | "oracle" | "mssql" | "ase"
-    display_name: str                  # human label for messages
-
-    # Hosts (env vars: MYSQL_SOURCE_HOST / MYSQL_TARGET_HOST or generic)
-    source_host: str                   # source data host (r95-mys-s11.dlpxdc.co)
-    target_host: str                   # target/staging host (r95-mys-t11.dlpxdc.co)
-
-    # Environment credentials (OS SSH)
-    env_user: str                      # OS user for adding environments
-    env_password: str                  # OS password
-
-    # Link credentials (OS + DB level)
-    link_os_user: str                  # OS user for dSource link (delphix_os)
-    link_os_password: str              # OS password for link
-
-    # dSource link action + connector-specific parameters
-    dsource_link_action: str           # "dsource_link_appdata" | "dsource_link_oracle" ...
+    connector_type: str
+    display_name: str
+    source_host: str
+    target_host: str
+    env_user: str
+    env_password: str
+    link_user: str
+    link_password: str
+    dsource_link_action: str
+    provision_action: str
     link_fields: dict = field(default_factory=dict)
-    # ^ connector-specific extra fields embedded in the prompt for Claude to use
-
-    # VDB provision action + connector-specific parameters
-    provision_action: str = "provision_by_snapshot"
     provision_fields: dict = field(default_factory=dict)
-    # ^ connector-specific extra fields for VDB provision
-
-    # Toolkit/connector name to verify in toolkit_tool.search
-    connector_search_keyword: str = "appdata"
+    connector_search_keyword: str = "plugin"
 
     @property
     def source_short(self) -> str:
@@ -76,159 +59,199 @@ class ConnectorSpec:
         return self.target_host.split(".")[0]
 
     def link_prompt_detail(self) -> str:
-        """Format the connector-specific link fields for embedding in a Claude prompt."""
         if not self.link_fields:
             return ""
-        lines = [f"Use these connector-specific fields for the link:"]
+        lines = ["Use these connector-specific fields for the dSource link:"]
         for k, v in self.link_fields.items():
             lines.append(f"  {k}: {v!r}")
         return "\n".join(lines)
 
     def provision_prompt_detail(self) -> str:
-        """Format provision-specific fields for embedding in a Claude prompt."""
         if not self.provision_fields:
             return ""
-        lines = [f"Use these connector-specific fields for VDB provisioning:"]
+        lines = ["Use these connector-specific fields for VDB provisioning:"]
         for k, v in self.provision_fields.items():
             lines.append(f"  {k}: {v!r}")
         return "\n".join(lines)
 
-
-def _env(key: str, default: str = "") -> str:
-    return os.environ.get(key, default)
-
-
-def _load_appdata_spec() -> ConnectorSpec:
-    """MySQL via Delphix MySQL Plugin (AppData/PLUGIN)."""
-    return ConnectorSpec(
-        connector_type="appdata",
-        display_name="MySQL (AppData/Plugin)",
-        source_host=_env("MYSQL_SOURCE_HOST", "r95-mys-s11.dlpxdc.co"),
-        target_host=_env("MYSQL_TARGET_HOST", "r95-mys-t11.dlpxdc.co"),
-        env_user=_env("MYSQL_ENV_USER", "mysql"),
-        env_password=_env("MYSQL_ENV_PASSWORD"),
-        link_os_user=_env("MYSQL_LINK_USER", "delphix_os"),
-        link_os_password=_env("MYSQL_LINK_PASSWORD"),
-        dsource_link_action="dsource_link_appdata",
-        link_fields={
-            # MySQL plugin dSource link parameters (from PLUGIN-1 linked_source_definition)
-            "mountPath": _env("MYSQL_MOUNT_PATH", "/mnt/provision"),
-            "stagingBasedir": _env("MYSQL_STAGING_BASEDIR", "/usr"),
-            "stagingPort": int(_env("MYSQL_STAGING_PORT", "3308")),
-            "sourceUser": _env("MYSQL_DB_USER", "delphix_os"),
-            "sourcePass": _env("MYSQL_DB_PASS", _env("MYSQL_LINK_PASSWORD")),
-            "sourceip": _env("MYSQL_SOURCE_HOST", "r95-mys-s11.dlpxdc.co"),
-            "serverId": int(_env("MYSQL_SERVER_ID", "200")),
-            "dSourceType": _env("MYSQL_DSOURCE_TYPE", ""),
-        },
-        provision_action="provision_by_snapshot",
-        provision_fields={
-            # MySQL plugin VDB provision parameters (from PLUGIN-1 virtual_source_definition)
-            "vdbUser": _env("MYSQL_VDB_USER", "delphix_os"),
-            "vdbPass": _env("MYSQL_VDB_PASS", _env("MYSQL_LINK_PASSWORD")),
-            "baseDir": _env("MYSQL_VDB_BASEDIR", "/usr"),
-            "port": int(_env("MYSQL_VDB_PORT", "3309")),
-            "serverId": int(_env("MYSQL_VDB_SERVER_ID", "300")),
-            "mPath": _env("MYSQL_VDB_MOUNT_PATH", "/mnt/provision"),
-        },
-        connector_search_keyword="plugin",
-    )
+    def schema_hint(self, schema_fields: list[dict]) -> str:
+        """Format schema field docs as a hint for Claude."""
+        if not schema_fields:
+            return ""
+        lines = ["Required fields (use DCT get-defaults or these hints if unsure):"]
+        for f in schema_fields:
+            default = f.get("default") or f.get("example", "")
+            src = f.get("source", "")
+            hint = f"  {f['name']}: {f['description']}"
+            if default:
+                hint += f" (default: {default!r})"
+            if src:
+                hint += f" (from: {src})"
+            lines.append(hint)
+        return "\n".join(lines)
 
 
-def _load_oracle_spec() -> ConnectorSpec:
-    """Oracle dSource."""
-    return ConnectorSpec(
-        connector_type="oracle",
-        display_name="Oracle",
-        source_host=_env("ORACLE_SOURCE_HOST"),
-        target_host=_env("ORACLE_TARGET_HOST"),
-        env_user=_env("ORACLE_ENV_USER", "delphix"),
-        env_password=_env("ORACLE_ENV_PASSWORD"),
-        link_os_user=_env("ORACLE_LINK_USER", "delphix"),
-        link_os_password=_env("ORACLE_LINK_PASSWORD"),
-        dsource_link_action="dsource_link_oracle",
-        link_fields={
-            "db_credentials_username": _env("ORACLE_DB_USER"),
-            "db_credentials_password": _env("ORACLE_DB_PASSWORD"),
-            "oracle_jdbc_connection_string": _env("ORACLE_JDBC"),
-        },
-        provision_action="provision_by_snapshot",
-        provision_fields={
-            "mount_path": _env("ORACLE_VDB_MOUNT_PATH", "/mnt/provision"),
-        },
-        connector_search_keyword="oracle",
-    )
+# ── Loaders ───────────────────────────────────────────────────────────────────
+
+def _load_schema() -> dict:
+    if not _SCHEMA_FILE.exists():
+        return {}
+    return yaml.safe_load(_SCHEMA_FILE.read_text()) or {}
 
 
-def _load_mssql_spec() -> ConnectorSpec:
-    """MS SQL Server dSource."""
-    return ConnectorSpec(
-        connector_type="mssql",
-        display_name="MS SQL Server",
-        source_host=_env("MSSQL_SOURCE_HOST"),
-        target_host=_env("MSSQL_TARGET_HOST"),
-        env_user=_env("MSSQL_ENV_USER", "delphix"),
-        env_password=_env("MSSQL_ENV_PASSWORD"),
-        link_os_user=_env("MSSQL_LINK_USER", "delphix"),
-        link_os_password=_env("MSSQL_LINK_PASSWORD"),
-        dsource_link_action="dsource_link_mssql",
-        link_fields={},
-        provision_action="provision_by_snapshot",
-        provision_fields={},
-        connector_search_keyword="mssql",
-    )
+def _load_secrets(connector_type: str, secrets_file: Path | None = None) -> dict:
+    """
+    Load secrets for `connector_type` from:
+    1. The secrets YAML file (local dev)
+    2. DCT_CONNECTOR_<TYPE>_<FIELD> env vars (CI)
+    Returns a flat dict of field→value.
+    """
+    secrets: dict[str, Any] = {}
+
+    # 1. Secrets file
+    path = secrets_file or Path(os.environ.get("CONNECTOR_SECRETS", str(_DEFAULT_SECRETS)))
+    if path.exists():
+        data = yaml.safe_load(path.read_text()) or {}
+        secrets.update(data.get(connector_type, {}))
+
+    # 2. CI env vars override (DCT_CONNECTOR_MYSQL_ENV_PASSWORD, etc.)
+    prefix = f"DCT_CONNECTOR_{connector_type.upper()}_"
+    for key, val in os.environ.items():
+        if key.startswith(prefix):
+            field_name = key[len(prefix):].lower()
+            secrets[field_name] = val
+
+    return secrets
 
 
-def _load_ase_spec() -> ConnectorSpec:
-    """SAP ASE / Sybase dSource."""
-    return ConnectorSpec(
-        connector_type="ase",
-        display_name="SAP ASE",
-        source_host=_env("ASE_SOURCE_HOST"),
-        target_host=_env("ASE_TARGET_HOST"),
-        env_user=_env("ASE_ENV_USER", "delphix"),
-        env_password=_env("ASE_ENV_PASSWORD"),
-        link_os_user=_env("ASE_LINK_USER", "delphix"),
-        link_os_password=_env("ASE_LINK_PASSWORD"),
-        dsource_link_action="dsource_link_ase",
-        link_fields={},
-        provision_action="provision_by_snapshot",
-        provision_fields={},
-        connector_search_keyword="ase",
-    )
+def _resolve_field(value: Any, source: str, secrets: dict) -> Any:
+    """If value is None, resolve via the 'source' field (e.g. 'link_user' → secrets['link_user'])."""
+    if value is not None:
+        return value
+    if source:
+        return secrets.get(source)
+    return None
 
 
-_LOADERS = {
-    "appdata": _load_appdata_spec,
-    "oracle": _load_oracle_spec,
-    "mssql": _load_mssql_spec,
-    "ase": _load_ase_spec,
-}
+def load_connector_spec(
+    connector_type: str | None = None,
+    secrets_file: Path | None = None,
+) -> ConnectorSpec:
+    """
+    Build a ConnectorSpec for the given connector type.
 
+    Priority:
+      topology + credentials → .secrets.yaml  or  DCT_CONNECTOR_* env vars
+      field defaults/docs    → tests/fixtures/connectors/schema.yaml
+    """
+    ctype = (connector_type or os.environ.get("CONNECTOR_TYPE", "mysql")).lower()
 
-def load_connector_spec(connector_type: Optional[str] = None) -> ConnectorSpec:
-    """Load the ConnectorSpec for the given type (defaults to CONNECTOR_TYPE env var)."""
-    ctype = (connector_type or os.environ.get("CONNECTOR_TYPE", "appdata")).lower()
-    loader = _LOADERS.get(ctype)
-    if loader is None:
+    schema = _load_schema()
+    connector_schema = schema.get("connectors", {}).get(ctype)
+    if connector_schema is None:
+        supported = list(schema.get("connectors", {}).keys())
         raise ValueError(
             f"Unknown connector type {ctype!r}. "
-            f"Supported: {sorted(_LOADERS)}"
+            f"Supported in schema: {supported}. "
+            f"Add it to tests/fixtures/connectors/schema.yaml to support it."
         )
-    return loader()
+
+    secrets = _load_secrets(ctype, secrets_file)
+
+    # Topology + credentials from secrets
+    source_host  = secrets.get("source_host", "")
+    target_host  = secrets.get("target_host", "")
+    env_user     = secrets.get("env_user", "delphix")
+    env_password = secrets.get("env_password", "")
+    link_user    = secrets.get("link_user", "delphix")
+    link_password = secrets.get("link_password", "")
+
+    # Build link_fields from schema required_link_fields + secrets + defaults
+    link_fields: dict[str, Any] = {}
+    for f in connector_schema.get("required_link_fields", []):
+        name = f["name"]
+        src  = f.get("source", "")
+        default = f.get("default")
+        example = f.get("example")
+
+        # Try: explicit secret override → source resolution → default → example
+        val = (
+            secrets.get(name)
+            or secrets.get(name.lower().replace("-", "_"))
+            or _resolve_field(None, src, {
+                "source_host": source_host, "target_host": target_host,
+                "link_user": link_user, "link_password": link_password,
+            })
+            or default
+            or example
+        )
+        if val is not None:
+            link_fields[name] = val
+
+    # Build provision_fields similarly
+    provision_fields: dict[str, Any] = {}
+    for f in connector_schema.get("provision_fields", []):
+        name = f["name"]
+        src  = f.get("source", "")
+        default = f.get("default")
+        example = f.get("example")
+
+        val = (
+            secrets.get(name)
+            or secrets.get(name.lower().replace("-", "_"))
+            or _resolve_field(None, src, {
+                "link_user": link_user, "link_password": link_password,
+            })
+            or default
+            or example
+        )
+        if val is not None:
+            provision_fields[name] = val
+
+    return ConnectorSpec(
+        connector_type=ctype,
+        display_name=connector_schema.get("display_name", ctype),
+        source_host=source_host,
+        target_host=target_host,
+        env_user=env_user,
+        env_password=env_password,
+        link_user=link_user,
+        link_password=link_password,
+        dsource_link_action=connector_schema["dsource_link_action"],
+        provision_action=connector_schema.get("provision_action", "provision_by_snapshot"),
+        link_fields=link_fields,
+        provision_fields=provision_fields,
+        connector_search_keyword=connector_schema.get("connector_search_keyword", ctype),
+    )
+
+
+def schema_link_hints(connector_type: str) -> str:
+    """Return the schema's required_link_fields as a human-readable hint for Claude."""
+    schema = _load_schema()
+    fields = schema.get("connectors", {}).get(connector_type, {}).get("required_link_fields", [])
+    if not fields:
+        return ""
+    lines = ["Required fields for dSource link (use DCT get-defaults or these hints if unsure):"]
+    for f in fields:
+        hint = f"  {f['name']}: {f['description']}"
+        if f.get("default"):
+            hint += f" [default: {f['default']!r}]"
+        elif f.get("example"):
+            hint += f" [example: {f['example']!r}]"
+        if f.get("source"):
+            hint += f" [from: {f['source']}]"
+        lines.append(hint)
+    return "\n".join(lines)
 
 
 # ── pytest fixture ─────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session")
 def connector_spec() -> ConnectorSpec:
-    """
-    Session-scoped ConnectorSpec loaded from env vars.
-    Selected by CONNECTOR_TYPE (default: appdata/MySQL).
-    """
+    """Session-scoped ConnectorSpec. Selected by CONNECTOR_TYPE env var (default: mysql)."""
     spec = load_connector_spec()
     print(
-        f"\nConnectorSpec loaded: {spec.display_name} | "
+        f"\nConnectorSpec: {spec.display_name} | "
         f"source={spec.source_host} | target={spec.target_host} | "
         f"link_action={spec.dsource_link_action}"
     )

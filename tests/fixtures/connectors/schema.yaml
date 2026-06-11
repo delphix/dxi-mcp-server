@@ -1,0 +1,187 @@
+# Connector schema — committed to repo, NO secrets.
+#
+# Documents the required and optional fields for each connector type's
+# dSource link and VDB provision steps. Claude uses these as hints when
+# driving the MCP server; the test framework uses them to build prompts.
+#
+# Secrets (passwords, hostnames) live in:
+#   Local dev : tests/fixtures/connectors/.secrets.yaml  (gitignored)
+#   CI        : DCT_CONNECTOR_<TYPE>_<FIELD> env vars (GitHub Secrets)
+#
+# To add a new connector:
+#   1. Add a section here with its required_link_fields and provision_fields.
+#   2. Add the connector's secrets to .secrets.yaml (copy from .secrets.yaml.example).
+#   3. Set CONNECTOR_TYPE=<type> when running tests.
+
+connectors:
+
+  # ── MySQL via Delphix AppData/Plugin ──────────────────────────────────────
+  mysql:
+    display_name: "MySQL (AppData / Plugin)"
+    connector_search_keyword: plugin
+    dsource_link_action: dsource_link_appdata
+    provision_action: provision_by_snapshot
+    required_link_fields:
+      - name: mountPath
+        description: "Unique NFS mount directory on the staging host"
+        default: /mnt/provision
+      - name: stagingBasedir
+        description: "MySQL installation base directory on staging host (where /bin/mysql lives)"
+        example: /usr
+      - name: stagingPort
+        description: "Port for the staging MySQL instance — must differ from source"
+        example: 3308
+      - name: sourceip
+        description: "Source MySQL hostname (auto-populated from source_host)"
+        source: source_host
+      - name: sourceUser
+        description: "DB user for the staging database"
+        source: link_user
+      - name: sourcePass
+        description: "DB password for the staging database"
+        source: link_password
+      - name: serverId
+        description: "MySQL server-id for staging (must be unique on the network)"
+        example: 200
+    provision_fields:
+      - name: vdbUser
+        description: "MySQL user for the VDB instance"
+        source: link_user
+      - name: vdbPass
+        description: "MySQL password for the VDB instance"
+        source: link_password
+      - name: baseDir
+        description: "MySQL installation base directory on VDB host"
+        default: /usr
+      - name: port
+        description: "Port for the VDB MySQL instance"
+        example: 3309
+      - name: serverId
+        description: "MySQL server-id for the VDB (must be unique)"
+        example: 300
+      - name: mPath
+        description: "NFS mount path for the VDB"
+        default: /mnt/provision
+
+  # ── IBM DB2 via AppData plugin ────────────────────────────────────────────
+  db2:
+    display_name: "IBM DB2 (AppData / Plugin)"
+    connector_search_keyword: db2
+    dsource_link_action: dsource_link_appdata
+    provision_action: provision_by_snapshot
+    required_link_fields:
+      - name: mountPath
+        description: "NFS mount directory on staging host"
+        default: /mnt/provision
+      - name: stagingBasedir
+        description: "DB2 installation base directory on staging host"
+        example: /opt/ibm/db2/V11.5
+      - name: database
+        description: "DB2 database name to link"
+        example: MYDB
+      - name: port
+        description: "DB2 source port"
+        default: 50000
+      - name: sourceUser
+        description: "DB2 instance user"
+        source: link_user
+      - name: sourcePass
+        description: "DB2 instance password"
+        source: link_password
+    provision_fields:
+      - name: vdbName
+        description: "Name for the VDB database"
+        example: MYVDB
+      - name: mountPath
+        description: "NFS mount path for the VDB"
+        default: /mnt/provision
+      - name: port
+        description: "DB2 port for the VDB"
+        example: 50001
+
+  # ── PostgreSQL via AppData plugin ─────────────────────────────────────────
+  postgresql:
+    display_name: "PostgreSQL (AppData / Plugin)"
+    connector_search_keyword: postgresql
+    dsource_link_action: dsource_link_appdata
+    provision_action: provision_by_snapshot
+    required_link_fields:
+      - name: mountPath
+        description: "NFS mount directory on staging host"
+        default: /mnt/provision
+      - name: stagingBasedir
+        description: "PostgreSQL installation base directory"
+        example: /usr/pgsql-14
+      - name: database
+        description: "PostgreSQL database name to link"
+        example: mydb
+      - name: port
+        description: "PostgreSQL source port"
+        default: 5432
+      - name: sourceUser
+        description: "PostgreSQL user"
+        source: link_user
+      - name: sourcePass
+        description: "PostgreSQL password"
+        source: link_password
+    provision_fields:
+      - name: mountPath
+        description: "NFS mount path for the VDB"
+        default: /mnt/provision
+      - name: port
+        description: "PostgreSQL port for the VDB"
+        example: 5433
+
+  # ── Oracle ────────────────────────────────────────────────────────────────
+  oracle:
+    display_name: "Oracle"
+    connector_search_keyword: oracle
+    dsource_link_action: dsource_link_oracle
+    provision_action: provision_by_snapshot
+    required_link_fields:
+      - name: db_credentials_username
+        description: "Oracle DB user (SYSDBA or link user)"
+        source: link_user
+      - name: db_credentials_password
+        description: "Oracle DB password"
+        source: link_password
+      - name: oracle_jdbc_connection_string
+        description: "JDBC connection string e.g. //host:1521/SID"
+        example: "//source-host:1521/ORCL"
+      - name: mount_path
+        description: "NFS mount path on target host"
+        default: /mnt/provision
+    provision_fields:
+      - name: mount_path
+        description: "NFS mount path for the VDB"
+        default: /mnt/provision
+
+  # ── MS SQL Server ─────────────────────────────────────────────────────────
+  mssql:
+    display_name: "MS SQL Server"
+    connector_search_keyword: mssql
+    dsource_link_action: dsource_link_mssql
+    provision_action: provision_by_snapshot
+    required_link_fields:
+      - name: db_credentials_username
+        description: "SQL Server login user"
+        source: link_user
+      - name: db_credentials_password
+        description: "SQL Server login password"
+        source: link_password
+    provision_fields: []
+
+  # ── SAP ASE (Sybase) ──────────────────────────────────────────────────────
+  ase:
+    display_name: "SAP ASE (Sybase)"
+    connector_search_keyword: ase
+    dsource_link_action: dsource_link_ase
+    provision_action: provision_by_snapshot
+    required_link_fields:
+      - name: db_credentials_username
+        description: "ASE DB user"
+        source: link_user
+      - name: db_credentials_password
+        description: "ASE DB password"
+        source: link_password
+    provision_fields: []

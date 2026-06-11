@@ -60,3 +60,6 @@ mcp_server_setup_logfile.txt
 
 # OpenAPI spec cache (downloaded from DCT — do not commit)
 tests/fixtures/api-external.yaml
+
+# Connector secrets (use .secrets.yaml.example as template)
+tests/fixtures/connectors/.secrets.yaml
