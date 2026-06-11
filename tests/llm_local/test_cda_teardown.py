@@ -26,10 +26,10 @@ Run:
 import os
 
 import pytest
-import requests
 
 from tests.llm_local.conftest import license_blocked
 from tests.llm_local.connector_fixtures import ConnectorSpec
+from tests.llm_local.mcp_client_helper import mcp_search
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven]
 
@@ -38,35 +38,19 @@ _UNREGISTER_ENGINE = os.environ.get("TEARDOWN_UNREGISTER_ENGINE") == "1"
 _SKIP = "Set LLM_ALLOW_MUTATION=1 to run CDA teardown steps."
 
 
-# ── Direct API helpers ────────────────────────────────────────────────────────
-
-def _dct(method: str, path: str, body: dict | None = None) -> dict:
-    base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
-    key = os.environ.get("DCT_API_KEY", "")
-    fn = getattr(requests, method.lower())
-    r = fn(
-        f"{base}/dct/v3/{path}",
-        json=body or {},
-        headers={"Authorization": f"apk {key}"},
-        verify=False,
-        timeout=15,
-    )
-    if r.ok:
-        return r.json()
-    return {}
-
+# ── MCP-based state checks (via .mcp.json delphix-dct server) ────────────────
 
 def _vdbs() -> list:
-    return _dct("post", "vdbs/search", {"limit": 20}).get("items", [])
+    return mcp_search("data_tool", "search_vdbs")
 
 def _dsources() -> list:
-    return _dct("post", "dsources/search", {"limit": 20}).get("items", [])
+    return mcp_search("dsource_tool", "search")
 
 def _environments() -> list:
-    return _dct("post", "environments/search", {"limit": 20}).get("items", [])
+    return mcp_search("environment_source_tool", "search_environments")
 
 def _engines() -> list:
-    return _dct("post", "management/engines/search", {"limit": 10}).get("items", [])
+    return mcp_search("engine_tool", "search")
 
 
 # ── Teardown steps (reverse of setup, numbered with 'b'/'c' suffix) ───────────

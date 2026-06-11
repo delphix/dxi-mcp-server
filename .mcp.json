@@ -1,12 +1,16 @@
 {
   "mcpServers": {
     "delphix-dct": {
-        "command": "uvx",
-        "args": ["--from", "git+https://github.com/delphix/dxi-mcp-server.git", "dct-mcp-server"],
+        "command": "python",
+        "args": ["-m", "dct_mcp_server.main"],
         "env": {
-          "DCT_API_KEY": "5.PQKBDH7KuiU3sniLQcgHb8IfZ0IoTBQcDkBWsWqKGETnfctFBC1MO62Q5pG412Rz",
-          "DCT_BASE_URL": "https://localhost:443",
-          "DCT_TOOLSET": "dynamic"
+          "DCT_API_KEY": "${DCT_API_KEY}",
+          "DCT_BASE_URL": "${DCT_BASE_URL}",
+          "DCT_TOOLSET": "${DCT_TOOLSET:-continuous_data_admin}",
+          "DCT_VERIFY_SSL": "false",
+          "DCT_LOG_LEVEL": "ERROR",
+          "DCT_TIMEOUT": "30",
+          "DCT_MAX_RETRIES": "3"
         }
     },
     "atlassian": {

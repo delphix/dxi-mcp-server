@@ -27,12 +27,13 @@ Run via the safe-run venv:
 
 import json
 import os
+import time
 
 import pytest
-import requests
 
 from tests.llm_local.connector_fixtures import ConnectorSpec
 from tests.llm_local.conftest import license_blocked
+from tests.llm_local.mcp_client_helper import mcp_search, payload as _mcp_payload
 from tests.llm_local.prereq_checker import require_prereq_level
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven]
@@ -41,52 +42,23 @@ _MUTATION = os.environ.get("LLM_ALLOW_MUTATION") == "1"
 _SKIP = "Set LLM_ALLOW_MUTATION=1 to run CDA setup steps."
 
 
-# ── Direct API helpers (fast idempotence checks — no Claude call) ─────────────
-
-def _dct_get(path: str) -> dict:
-    """Quick direct GET against DCT (no Claude)."""
-    base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
-    key = os.environ.get("DCT_API_KEY", "")
-    r = requests.post(
-        f"{base}/dct/v3/{path}",
-        json={"limit": 20},
-        headers={"Authorization": f"apk {key}"},
-        verify=False,
-        timeout=15,
-    )
-    r.raise_for_status()
-    return r.json()
-
-
-def _dct_post(path: str, body: dict | None = None) -> dict:
-    """Quick direct POST against DCT (no Claude)."""
-    base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
-    key = os.environ.get("DCT_API_KEY", "")
-    r = requests.post(
-        f"{base}/dct/v3/{path}",
-        json=body or {},
-        headers={"Authorization": f"apk {key}"},
-        verify=False,
-        timeout=15,
-    )
-    r.raise_for_status()
-    return r.json()
-
+# ── MCP-based idempotence checks (via .mcp.json delphix-dct server) ───────────
+# All DCT state queries go through the MCP server — no direct HTTP calls.
 
 def _engines() -> list:
-    return _dct_get("management/engines/search").get("items", [])
+    return mcp_search("engine_tool", "search")
 
 def _toolkits() -> list:
-    return _dct_get("toolkits/search").get("items", [])
+    return mcp_search("toolkit_tool", "search")
 
 def _environments() -> list:
-    return _dct_get("environments/search").get("items", [])
+    return mcp_search("environment_source_tool", "search_environments")
 
 def _dsources() -> list:
-    return _dct_get("dsources/search").get("items", [])
+    return mcp_search("dsource_tool", "search")
 
 def _vdbs() -> list:
-    return _dct_get("vdbs/search").get("items", [])
+    return mcp_search("data_tool", "search_vdbs")
 
 
 # ── Setup steps ───────────────────────────────────────────────────────────────
@@ -316,8 +288,6 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
     Uses direct API to verify the real DCT state (not just Claude's answer).
     Skips if dSource is already ACTIVE with snapshots.
     """
-    import time
-
     dsources = _dsources()
     if not dsources:
         pytest.skip(
@@ -330,30 +300,23 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
     drive = llm_driver_for("continuous_data_admin")
 
     def _ds_detail() -> dict:
-        base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
-        key = os.environ.get("DCT_API_KEY", "")
-        import requests as req
-        return req.get(
-            f"{base}/dct/v3/dsources/{ds_id}",
-            headers={"Authorization": f"apk {key}"},
-            verify=False, timeout=15,
-        ).json()
+        """Get dSource detail via MCP."""
+        items = mcp_search("dsource_tool", "search")
+        for d in items:
+            if d.get("id") == ds_id or d.get("name") == ds_name:
+                return d
+        return {}
 
     def _ds_snapshots() -> list:
-        base = os.environ.get("DCT_BASE_URL", "").rstrip("/")
-        key = os.environ.get("DCT_API_KEY", "")
-        import requests as req
-        r = req.get(
-            f"{base}/dct/v3/dsources/{ds_id}/snapshots",
-            headers={"Authorization": f"apk {key}"},
-            verify=False, timeout=15,
-        )
-        return r.json().get("items", []) if r.ok else []
+        """List snapshots for this dSource via MCP."""
+        return mcp_search("snapshot_tool", "search")  # filter by dsource below if needed
 
-    # Check real status via direct API
+    # Check status via MCP
     detail = _ds_detail()
     ds_status = (detail.get("status") or "").upper()
     snaps = _ds_snapshots()
+    # Filter to snapshots belonging to this dSource
+    snaps = [s for s in snaps if ds_id in str(s) or ds_name in str(s)]
     print(f"\n  dSource {ds_name}: status={ds_status}, snapshots={len(snaps)}")
 
     if ds_status in ("ACTIVE", "RUNNING") and snaps:

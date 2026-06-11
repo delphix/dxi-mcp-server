@@ -47,16 +47,23 @@ def _generated_tools(request):
     """
     Generate every non-self_service persona's tools ONCE per module.
 
-    Seeds the spec cache from the fixture (so generation is offline) and tears it
+    Seeds the spec cache from the downloaded/cached api-external.yaml and tears it
     back down afterwards. Returns {toolset: {tool_name: func}}.
     """
-    import dct_mcp_server.tools.core.tool_factory as tf
     import yaml
-    from pathlib import Path
+    import dct_mcp_server.tools.core.tool_factory as tf
+    from tests.functional.conftest import _SPEC_CACHE, _download_spec
 
-    spec_path = Path(__file__).resolve().parents[1] / "fixtures" / "api-external.yaml"
+    # Load spec: prefer fresh download if DCT creds available, else use cache
+    if _SPEC_CACHE.exists():
+        spec_data = yaml.safe_load(_SPEC_CACHE.read_text())
+    else:
+        spec_data = _download_spec()
+        if spec_data is None:
+            pytest.skip("OpenAPI spec not available — set DCT_BASE_URL+DCT_API_KEY or ensure cache exists")
+
     saved_spec, saved_client = tf._openapi_spec, tf._dct_client
-    tf._openapi_spec = yaml.safe_load(spec_path.read_text())
+    tf._openapi_spec = spec_data
 
     tools_by_toolset = {}
     for ts in NON_SELF_SERVICE:

@@ -57,3 +57,6 @@ mcp_server_setup_logfile.txt
 # Git worktrees (project-local isolation)
 .worktrees/
 .venv-live/
+
+# OpenAPI spec cache (downloaded from DCT — do not commit)
+tests/fixtures/api-external.yaml
