@@ -18,8 +18,8 @@
 | P0 | Prerequisite checker: read-only DCT health check (engine → connector → hosts → source config → dsource → vdb) | ☑ DONE 2026-06-10 — live validated (PASSED, chain reads correctly) |
 | P1 | Connector fixture layer: ConnectorSpec with all link+provision fields per type | ☑ DONE 2026-06-10 |
 | P2 | 7-step setup flow: framework complete, steps 1-5 pass; 5b/6 blocked on infra | ◑ framework done, infra issue |
-| P3 | Full CDA scenario suite: all 431 prompts gated on prerequisite checker | ☐ |
-| P4 | Teardown: cleanup in reverse order | ☐ |
+| P3 | Full CDA scenario suite: all 431 prompts with smart per-tool prereq gating | ☑ DONE 2026-06-11 |
+| P4 | Teardown: reverse cleanup (VDB→dSource→envs→engine optional) | ☑ DONE 2026-06-11 |
 
 ---
 
