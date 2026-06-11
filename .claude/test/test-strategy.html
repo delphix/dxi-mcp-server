@@ -128,30 +128,50 @@
 
 <!-- CURRENT STATE -->
 <section id="currentstate">
-  <h2>Current State <span class="done-badge">BUILT</span></h2>
-  <div class="card card-good">
-    <h3>What's implemented (2026-06-11)</h3>
-    <ul class="checklist">
-      <li>Layer 1 Unit — 156 tests (all self_service actions, 62 confirmation rules, loader, config, generator)</li>
-      <li>Layer 2 Integration — 29 tests (full DCTAPIClient wire coverage)</li>
-      <li>Layer 3 Functional — 931 tests (registration all personas, 70 SS workflows, 57+15 confirmation, 833 CDA routing)</li>
-      <li>Layer 4 E2E — 27 tests (self_service + CDA smoke, contract, mutation lifecycle live-verified)</li>
-      <li>Layer 5 LLM — 217 tests (discoverability, 170 CDA scenarios, act→verify, CDA setup/teardown)</li>
-      <li>dct-mcp-test CLI — layers: unit/integration/functional/ci/e2e/llm/scenarios/all</li>
-      <li>dct_stub — full catch-all + explicit VDB/confirmation routes</li>
-      <li>OpenAPI spec — downloaded from DCT, gitignored local cache</li>
-      <li>Safe-run venv (.venv-live) — generation to $TEMP, src/ untouched on live runs</li>
-      <li>GitHub Actions workflows (test.yml + e2e-real-dct.yml) — exist, not yet enforced as required check</li>
+  <h2>Current State — Baseline before this suite was built</h2>
+  <div class="card card-bad">
+    <h3>What existed</h3>
+    <ul class="crosslist">
+      <li><strong>Manual testing only.</strong> Every code change required opening Claude Desktop, driving ~70 prompts per toolset by hand, eyeballing responses, and writing a free-text PR report.</li>
+      <li>No CI gate. PRs merged without any automated verification.</li>
+      <li>No reproducibility. "Looks right" was the signal.</li>
+      <li>No precise failure messages. "It didn't work" was the best available diagnostic.</li>
+      <li>30+ minutes of human attention per PR, per toolset.</li>
     </ul>
   </div>
   <div class="card card-warn">
-    <h3>What's pending</h3>
-    <ul>
-      <li><strong>MySQL AppData dSource enable + VDB provision:</strong> Plugin jobs fail on qa-dev-test11. Framework (P2 steps 5b/6) complete; infrastructure issue.</li>
-      <li><strong>L6 CI required-check gate:</strong> Workflows exist; branch protection not yet enforced. See Future Scope tab.</li>
-      <li><strong>Engine register scenario:</strong> Built, gated on <code>E2E_ENGINE_JSON</code>.</li>
-      <li><strong>Discoverability gaps:</strong> vault_tool / admin_platform_tool / diagnostic_tool names don't match natural language (xfail, see LLM Testing tab).</li>
+    <h3>What didn't exist</h3>
+    <ul class="crosslist">
+      <li>No pytest suite, no fixtures, no dct_stub</li>
+      <li>No CI workflow — pushes to main had no automated gate</li>
+      <li>No way to verify a git push didn't break an action, change a confirmation level, or alter the HTTP contract</li>
+      <li>No record of which DCT API endpoints are actually exercised by which tool actions</li>
     </ul>
+    <p style="margin-top:10px"><strong>The only test artifact:</strong> the scenario prompt files (<code>.claude/test/testing/&lt;toolset&gt;.md</code>) — detailed per-persona prompt lists that a human follows. These became the specification for the automated workflow tests.</p>
+  </div>
+  <div class="card card-good">
+    <h3>Test seams already present in the code</h3>
+    <p>The codebase was already structured to be testable:</p>
+    <ul class="checklist">
+      <li><code>DCTAPIClient.make_request</code> is the single HTTP boundary — injectable mock seam</li>
+      <li>Tool functions are pure Python; the <code>client</code> module-global is injectable</li>
+      <li><code>config/toolsets/*.txt</code> define the tool surface in a parseable format</li>
+      <li><code>config/mappings/manual_confirmation.txt</code> defines all destructive-op rules parseably</li>
+      <li><code>FastMCP</code> supports <code>StdioTransport</code> — enables subprocess-level integration testing</li>
+    </ul>
+  </div>
+  <div class="card card-accent">
+    <h3>Before vs. after</h3>
+    <table>
+      <thead><tr><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Open Claude Desktop, drive ~70 prompts manually, eyeball responses, write report</td><td><code>dct-mcp-test --layer ci</code> — green/red in &lt;3 min</td></tr>
+        <tr><td>30+ min of human attention per change</td><td>&lt;3 min of CI time</td></tr>
+        <tr><td>"Looks right" is the signal</td><td>Deterministic assertions; exact failure messages</td></tr>
+        <tr><td>No merge gate</td><td>Required CI check on main (once L6 enforced)</td></tr>
+        <tr><td>Live DCT required every time</td><td>Only for Layer 4 (advisory) — L1–L3 use a stub</td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
 

@@ -72,23 +72,36 @@ These are separate questions. Solve them with separate tools.
 
 ---
 
-## 3. Current State
+## 3. Current State (baseline before this suite was built)
 
-### What exists (2026-06-11)
+### What existed
 
-- **Layer 1 — Unit:** 156 tests, all personas, 62 confirmation rules, parametrized via `config_cases`
-- **Layer 2 — Integration:** 29 tests, full `DCTAPIClient` wire coverage
-- **Layer 3 — Functional:** 931 tests — registration (all 5 personas), 70 self_service workflow chains, 57+15 CDA/SS confirmation handshakes, 833-case generated routing sweep
-- **Layer 4 — E2E:** 27 tests (self_service + CDA smoke/contract, mutation lifecycle)
-- **Layer 5 — LLM-driven:** 217 tests — discoverability (14), scenario catalog (170+), act→verify, CDA setup/teardown
-- **`dct-mcp-test` CLI** with layers: `unit | integration | functional | ci | e2e | llm | scenarios | all`
-- **`dct_stub`** fully built with catch-all; spec downloaded from DCT; **total: 1,360 tests**
+- **Manual testing only.** Every code change required opening Claude Desktop, driving
+  ~70 prompts per toolset by hand, eyeballing responses, and writing a free-text PR
+  report. No CI gate, no reproducibility, no precise failure messages.
+- **Scenario prompt files** (`.claude/test/testing/<toolset>.md`) — detailed per-persona
+  prompt lists that a human follows. These are the primary test specification and the
+  source for all automated workflow tests.
+- **No automated tests of any kind.** No unit tests, no integration tests, no CI check.
+- **No way to verify** that a `git push` didn't break an action, change a confirmation
+  level, or alter the HTTP contract.
 
-### What is pending
+### What didn't exist
 
-- MySQL AppData dSource enable + VDB provision (plugin infra issue on engine `qa-dev-test11`)
-- L6 GitHub Actions CI enforcement (workflows exist; required-check not yet enforced) — see **§ Future Scope**
-- Engine register scenario (built, gated on `E2E_ENGINE_JSON`)
+- No pytest suite, no fixtures, no `dct_stub`
+- No CI workflow; PRs merged without any automated verification
+- No way to run a subset of checks quickly (e.g. "did I break the VDB tool?")
+- No record of which DCT API endpoints are actually exercised
+
+### Test seams already present in the code
+
+The codebase was already structured to be testable:
+- `DCTAPIClient.make_request` is the single HTTP boundary — easy to mock at this seam
+- Tool functions are pure Python; the `client` module-global is injectable
+- `config/toolsets/*.txt` files define the tool surface in a parseable format
+- `config/mappings/manual_confirmation.txt` defines all destructive-op rules in a
+  parseable format
+- `FastMCP` supports `StdioTransport`, enabling subprocess-level integration testing
 
 ---
 
