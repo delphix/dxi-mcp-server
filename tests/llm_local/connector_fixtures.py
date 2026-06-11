@@ -244,6 +244,83 @@ def schema_link_hints(connector_type: str) -> str:
     return "\n".join(lines)
 
 
+def write_connector_preprompt(spec: ConnectorSpec, output_path: Path | None = None) -> Path:
+    """
+    Write a connector-specific system pre-prompt to a temp file.
+    When appended to Claude's system prompt via --append-system-prompt-file,
+    Claude can handle prompts like "Link an AppData dSource using those defaults"
+    without needing the fields pre-embedded in the task prompt.
+
+    Includes:
+      - Which dSource link action and provision action to use
+      - Required fields with descriptions, defaults, and resolved values
+      - Resolved credentials (session-scoped, not committed anywhere)
+    """
+    schema = _load_schema()
+    connector_schema = schema.get("connectors", {}).get(spec.connector_type, {})
+
+    lines = [
+        f"## Active Connector Context: {spec.display_name}",
+        "",
+        f"When linking a dSource, use: data_tool action={spec.dsource_link_action}",
+        f"When provisioning a VDB, use: data_tool action={spec.provision_action}",
+        "",
+        f"Source host (read/backup): {spec.source_host}",
+        f"Target host (staging/link here): {spec.target_host}",
+        f"Environment OS user: {spec.env_user}",
+        f"Link OS user: {spec.link_user}",
+        "",
+    ]
+
+    # Link fields
+    link_fields = connector_schema.get("required_link_fields", [])
+    if link_fields:
+        lines.append("### Required fields for dSource link:")
+        for f in link_fields:
+            resolved = spec.link_fields.get(f["name"])
+            val_hint = f"value={resolved!r}" if resolved is not None else (
+                f"default={f['default']!r}" if f.get("default") else
+                f"example={f['example']!r}" if f.get("example") else "no default"
+            )
+            lines.append(f"  {f['name']}: {f['description']} [{val_hint}]")
+        lines.append("")
+
+    # Provision fields
+    prov_fields = connector_schema.get("provision_fields", [])
+    if prov_fields:
+        lines.append("### Required fields for VDB provision:")
+        for f in prov_fields:
+            resolved = spec.provision_fields.get(f["name"])
+            val_hint = f"value={resolved!r}" if resolved is not None else (
+                f"default={f['default']!r}" if f.get("default") else
+                f"example={f['example']!r}" if f.get("example") else "no default"
+            )
+            lines.append(f"  {f['name']}: {f['description']} [{val_hint}]")
+        lines.append("")
+
+    lines += [
+        "### Instructions:",
+        "- Search DCT automatically for the environment_id and repository_id on the target host.",
+        "- Use the field values listed above; fall back to DCT get-defaults for anything not listed.",
+        "- For any dSource or VDB name, use a unique run-tagged name if not specified.",
+    ]
+
+    content = "\n".join(lines)
+
+    if output_path is None:
+        import tempfile
+        fd, path_str = tempfile.mkstemp(
+            prefix=f"connector-preprompt-{spec.connector_type}-", suffix=".md"
+        )
+        import os as _os
+        with _os.fdopen(fd, "w") as fh:
+            fh.write(content)
+        return Path(path_str)
+    else:
+        output_path.write_text(content)
+        return output_path
+
+
 # ── pytest fixture ─────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session")

@@ -151,8 +151,16 @@ def _write_mcp_config(toolset: str) -> Path:
     return Path(path)
 
 
-def _make_driver(config_path: Path) -> Callable[..., DriverResult]:
-    """Build a `run(task)` closure that drives the Claude Code CLI against `config_path`."""
+def _make_driver(
+    config_path: Path,
+    extra_preprompts: list[Path] | None = None,
+) -> Callable[..., DriverResult]:
+    """
+    Build a `run(task)` closure that drives the Claude Code CLI against `config_path`.
+
+    extra_preprompts: additional --append-system-prompt-file paths (e.g. connector
+    context) appended AFTER the job-completion pre-prompt. Claude sees them all.
+    """
     exe = _require_claude_cli()
     preprompt = str(_PREPROMPT) if _PREPROMPT.exists() else None
 
@@ -168,6 +176,9 @@ def _make_driver(config_path: Path) -> Callable[..., DriverResult]:
         ]
         if preprompt:
             cmd.extend(["--append-system-prompt-file", preprompt])
+        for ep in (extra_preprompts or []):
+            if ep.exists():
+                cmd.extend(["--append-system-prompt-file", str(ep)])
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -286,5 +297,40 @@ from tests.llm_local.prereq_checker import (  # noqa: E402,F401
     require_full_prereqs,
     cda_prereqs,
 )
-from tests.llm_local.connector_fixtures import connector_spec  # noqa: E402,F401
+from tests.llm_local.connector_fixtures import (  # noqa: E402,F401
+    connector_spec,
+    write_connector_preprompt,
+)
+
+
+@pytest.fixture
+def llm_driver_for_connector(connector_spec, llm_driver_for):
+    """
+    Returns a `run(task)` callable that drives Claude with BOTH:
+      1. The job-completion pre-prompt (wait for async jobs)
+      2. A connector context pre-prompt (field docs + resolved values from schema/.secrets.yaml)
+
+    Use this for prompts taken directly from .claude/test/testing/*.md so Claude
+    can handle "Link an AppData dSource using those defaults" without needing
+    fields pre-embedded in the prompt.
+
+        driver = llm_driver_for_connector
+        result = driver("Link an AppData dSource using those defaults with a test name")
+    """
+    import tempfile, os as _os
+
+    # Write connector pre-prompt to a temp file (session-scoped content)
+    preprompt_path = write_connector_preprompt(connector_spec)
+    mcp_config_path = _write_mcp_config("continuous_data_admin")
+
+    driver = _make_driver(mcp_config_path, extra_preprompts=[preprompt_path])
+
+    yield driver
+
+    # Cleanup temp files
+    for p in [preprompt_path, mcp_config_path]:
+        try:
+            p.unlink()
+        except OSError:
+            pass
 # llm_driver_for_session is defined above in this file and used by cda_prereq_state

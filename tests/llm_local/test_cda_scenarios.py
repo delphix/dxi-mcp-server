@@ -36,6 +36,18 @@ from tests.llm_local.prereq_checker import (
     require_prereq_level,
 )
 
+# Connector-specific mutation prompts from the .md file.
+# Claude reads the raw prompt, uses the connector pre-prompt (schema + resolved fields)
+# to figure out what action/fields to use, and discovers env/repo IDs from DCT.
+_CONNECTOR_MUTATIONS = [
+    s for s in S.load_scenarios("continuous_data_admin")
+    if s.tier == "mutation"
+    and any(w in s.prompt.lower() for w in [
+        "appdata", "oracle", "ase", "mssql", "link", "dsource", "provision",
+        "snapshot", "refresh", "vdb"
+    ])
+]
+
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven]
 
 _ALLOW_MUTATIONS = os.environ.get("SCENARIO_MUTATIONS") == "1"
@@ -65,6 +77,51 @@ def _scenarios_to_run():
 
 
 _CASES = _scenarios_to_run()
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    _CONNECTOR_MUTATIONS,
+    ids=[s.id for s in _CONNECTOR_MUTATIONS],
+)
+def test_cda_connector_mutation(cda_prereq_state, llm_driver_for_connector, scenario):
+    """
+    Connector mutation prompts from continuous_data_admin.md, driven by Claude.
+
+    Prompts are taken VERBATIM from the .md file (e.g. "Link an AppData dSource
+    using those defaults"). Claude uses the connector context pre-prompt (schema
+    field docs + resolved values from .secrets.yaml) to figure out what action and
+    fields to use, and discovers environment/repository IDs from DCT via tools.
+
+    Gated: SCENARIO_MUTATIONS=1 + LLM_ALLOW_MUTATION=1 + connector secrets set.
+    """
+    if not (os.environ.get("SCENARIO_MUTATIONS") == "1"
+            and os.environ.get("LLM_ALLOW_MUTATION") == "1"):
+        pytest.skip(
+            "Set SCENARIO_MUTATIONS=1 and LLM_ALLOW_MUTATION=1 to run connector mutations."
+        )
+
+    if scenario.id in _KNOWN_ISSUES:
+        pytest.xfail(_KNOWN_ISSUES[scenario.id])
+
+    needed_level = TOOL_PREREQ_LEVEL.get(scenario.tool)
+    if needed_level and not cda_prereq_state.is_met_up_to(needed_level):
+        missing = cda_prereq_state.first_missing()
+        pytest.skip(cda_prereq_state.skip_message(missing))
+
+    # Drive with the connector-aware driver (schema + credentials in pre-prompt)
+    result = llm_driver_for_connector(scenario.prompt, timeout=600)
+
+    if license_blocked(result):
+        pytest.skip(f"{scenario.id}: DCT license does not permit this operation")
+
+    used_cda = result.tools_used & _CDA_TOOLS
+    assert used_cda, (
+        f"{scenario.id} [{scenario.tier}] Claude used NO CDA tool. "
+        f"tools_used={sorted(result.tools_used)}\n"
+        f"  prompt: {scenario.prompt}\n"
+        f"  answer: {result.final_text[:200]}"
+    )
 
 
 @pytest.mark.parametrize("scenario", _CASES, ids=[s.id for s in _CASES])
