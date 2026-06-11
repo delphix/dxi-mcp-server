@@ -1,0 +1,98 @@
+# CI gate for DLPXECO-14016 (S2 Maturity HG1 — "coverage enforced in CI").
+#
+# Public-repo-safe by design:
+#   - Uses only GitHub-authored actions (checkout, setup-python), so the org's
+#     "allowed actions" policy needs no allowlisting.
+#   - Needs NO secrets: tests are unit-level (no live DCT, no DCT_API_KEY).
+#   - GitHub-hosted runners are free/unlimited for public repos.
+#
+# Jobs: lint (advisory for now), test (+ coverage floor), build.
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read          # least privilege; bump only if a step needs more
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint (ruff, advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: python -m pip install --upgrade pip ruff
+      # Advisory until the existing 138 findings are cleaned up: annotate the
+      # PR but do not fail the gate. Flip to a hard `ruff check .` in a later
+      # PR once the backlog is burned down.
+      - name: Ruff (non-blocking)
+        run: ruff check . --output-format=github --exit-zero
+
+  test:
+    name: test + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov pytest-asyncio
+      # Coverage floor starts at the measured baseline (~5%) and is ratcheted
+      # toward 80% over subsequent sprints (see DLPXECO-14016 + follow-ups).
+      # A PR that drops coverage below the floor fails this job.
+      - name: Pytest with coverage gate
+        run: |
+          pytest \
+            --cov=src/dct_mcp_server \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=4
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coverage.xml ]; then
+            line_rate=$(grep -m1 -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*')
+            pct=$(python -c "print(f'{float('${line_rate:-0}')*100:.2f}%')")
+            echo "Total line coverage: **$pct** (floor: 4%, target: 80%)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  build:
+    name: build (sdist + wheel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the package
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
