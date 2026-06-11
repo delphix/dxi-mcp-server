@@ -102,10 +102,13 @@ def _parse_stream_json(stdout: str) -> tuple[list[dict], list[ToolCall], str]:
 
 
 def _write_mcp_config(toolset: str) -> Path:
-    """Write a temp MCP config pointing dct-mcp-server at the REAL DCT for `toolset`.
+    """
+    Write a temp MCP config for `toolset` derived from `.mcp.json`.
 
-    Skips (via pytest.skip) if creds are absent. Caller owns the returned path and
-    must unlink it.
+    Reads the `delphix-dct` server definition from `.mcp.json` (the single
+    source of truth), overrides DCT_TOOLSET + injects runtime credentials from
+    the environment, and writes a per-session temp file for `claude -p
+    --mcp-config`. Skips if credentials are absent. Caller must unlink the path.
     """
     base_url = os.environ.get("DCT_BASE_URL")
     api_key = os.environ.get("DCT_API_KEY")
@@ -114,7 +117,17 @@ def _write_mcp_config(toolset: str) -> Path:
             "DCT_BASE_URL and DCT_API_KEY are required for Layer 5 — run via "
             "`dct-mcp-test --layer llm --base-url ... --api-key ...`"
         )
+
+    # Read server definition from .mcp.json
+    mcp_json_path = _REPO_ROOT / ".mcp.json"
+    base_config = json.loads(mcp_json_path.read_text())
+    server = base_config["mcpServers"][MCP_SERVER_NAME]
+
     server_env = {
+        k: os.path.expandvars(v) if isinstance(v, str) else v
+        for k, v in server.get("env", {}).items()
+    }
+    server_env.update({
         "DCT_API_KEY": api_key,
         "DCT_BASE_URL": base_url,
         "DCT_TOOLSET": toolset,
@@ -122,13 +135,15 @@ def _write_mcp_config(toolset: str) -> Path:
         "DCT_LOG_LEVEL": "ERROR",
         "DCT_TIMEOUT": "30",
         "DCT_MAX_RETRIES": "3",
-    }
-    # Propagate TMPDIR so the spawned server's tool generation ($TEMP/dct_mcp_tools)
-    # can be isolated per run — lets a second live run avoid racing the shared temp dir.
+    })
+    # Propagate TMPDIR for generation isolation (safe-run venv → $TEMP, not src/)
     if os.environ.get("TMPDIR"):
         server_env["TMPDIR"] = os.environ["TMPDIR"]
+
     config = {"mcpServers": {MCP_SERVER_NAME: {
-        "command": sys.executable, "args": ["-m", "dct_mcp_server.main"], "env": server_env,
+        "command": server["command"],
+        "args": server.get("args", []),
+        "env": server_env,
     }}}
     fd, path = tempfile.mkstemp(prefix=f"dct-mcp-{toolset}-", suffix=".json")
     with os.fdopen(fd, "w") as f:

@@ -23,8 +23,26 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install package + test extras
-        run: pip install -e ".[test]"
+      # Non-editable install — the startup OpenAPI generator writes to $TEMP
+      # (not src/) because site-packages is detected. This avoids the editable-
+      # install footgun where generation deletes *_tool.py from the source tree.
+      - name: Install package + test extras (non-editable)
+        run: pip install ".[test]"
+
+      # Download the OpenAPI spec from the configured DCT for the functional
+      # layer's in-process tool generation. Falls back to cache if unavailable.
+      # (The cache file is gitignored; no DCT creds means the offline path runs.)
+      - name: Pre-cache OpenAPI spec (optional, best-effort)
+        if: ${{ env.DCT_BASE_URL != '' && env.DCT_API_KEY != '' }}
+        env:
+          DCT_BASE_URL: ${{ secrets.DCT_BASE_URL }}
+          DCT_API_KEY:  ${{ secrets.DCT_API_KEY }}
+        run: |
+          python -c "
+          from tests.functional.conftest import _download_spec
+          spec = _download_spec()
+          print('spec downloaded:', spec is not None)
+          " || echo "spec download skipped (no creds or DCT unreachable)"
 
       # The CLI is installed by pip as a [project.scripts] entry point and
       # is the same command developers run locally.
