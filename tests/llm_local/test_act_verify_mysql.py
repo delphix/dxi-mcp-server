@@ -1,20 +1,21 @@
 """
-Layer 5 — MySQL dSource (AppData) act → verify scenarios, Claude-driven.
+Layer 5 — Connector act → verify scenarios: add environments + link dSource.
 
-Exercises the real MySQL/AppData write path on the disposable DCT:
-  1. Add the MySQL host as an environment (if not already present)
-  2. Link a MySQL dSource via AppData → wait for job → verify → cleanup
+Works for ANY connector type defined in tests/fixtures/connectors/schema.yaml.
+Credentials and topology come from tests/fixtures/connectors/.secrets.yaml (local)
+or DCT_CONNECTOR_<TYPE>_<FIELD> env vars (CI). Select the connector with:
 
-Topology:
-  MYSQL_SOURCE_HOST   — source MySQL host (e.g. r95-mys-s11.dlpxdc.co) — add as environment
-  MYSQL_TARGET_HOST   — target MySQL host (e.g. r95-mys-t11.dlpxdc.co) — add as environment + link here
-  MYSQL_ENV_USER      — OS user to add environments (e.g. mysql)
-  MYSQL_ENV_PASSWORD  — OS password for environment user (e.g. connect_123)
-  MYSQL_LINK_USER     — OS user for link/provision (e.g. delphix_os)
-  MYSQL_LINK_PASSWORD — password for link/provision (e.g. Delphix@123)
+    CONNECTOR_TYPE=mysql   (default)
+    CONNECTOR_TYPE=db2
+    CONNECTOR_TYPE=postgresql
+    ...
 
-GATED: skipped unless LLM_ALLOW_MUTATION=1 AND MYSQL_TARGET_HOST is set.
-Run via the safe-run venv against a DISPOSABLE DCT only.
+Flow:
+    test_ai_adds_both_environments          — adds source + target hosts as environments
+    test_ai_links_dsource_and_verifies      — links dSource on target, verifies, cleanup
+
+GATED: skipped unless LLM_ALLOW_MUTATION=1 AND connector secrets are present.
+Run only against a DISPOSABLE / CLONED DCT.
 """
 
 import os
@@ -22,115 +23,135 @@ import os
 import pytest
 
 from tests.llm_local.conftest import license_blocked
+from tests.llm_local.connector_fixtures import ConnectorSpec, schema_link_hints
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven]
 
 _MUTATION = os.environ.get("LLM_ALLOW_MUTATION") == "1"
-_SOURCE_HOST = os.environ.get("MYSQL_SOURCE_HOST", "")   # add as env (no link here)
-_TARGET_HOST = os.environ.get("MYSQL_TARGET_HOST", "")   # add as env + link from here
-_ENV_USER = os.environ.get("MYSQL_ENV_USER", "mysql")
-_ENV_PASS = os.environ.get("MYSQL_ENV_PASSWORD", "")
-_LINK_USER = os.environ.get("MYSQL_LINK_USER", "delphix_os")
-_LINK_PASS = os.environ.get("MYSQL_LINK_PASSWORD", "")
-
-_SKIP_REASON = (
-    "Set LLM_ALLOW_MUTATION=1 AND MYSQL_TARGET_HOST / MYSQL_ENV_PASSWORD / MYSQL_LINK_PASSWORD "
-    "to run the MySQL dSource scenarios."
-)
 
 
-@pytest.mark.skipif(
-    not (_MUTATION and (_SOURCE_HOST or _TARGET_HOST) and _ENV_PASS),
-    reason=_SKIP_REASON,
-)
-def test_ai_adds_both_mysql_environments(llm_driver_for):
+def _skip_reason(spec: ConnectorSpec) -> str | None:
+    """Returns a skip reason if the connector isn't runnable, else None."""
+    if not _MUTATION:
+        return "Set LLM_ALLOW_MUTATION=1 to run connector act→verify tests."
+    if not spec.target_host:
+        return (
+            f"No target_host for connector '{spec.connector_type}'. "
+            f"Set DCT_CONNECTOR_{spec.connector_type.upper()}_TARGET_HOST or "
+            f"add it to tests/fixtures/connectors/.secrets.yaml."
+        )
+    if not spec.env_password or not spec.link_password:
+        return (
+            f"Missing credentials for connector '{spec.connector_type}'. "
+            f"Set DCT_CONNECTOR_{spec.connector_type.upper()}_ENV_PASSWORD and "
+            f"LINK_PASSWORD, or add them to .secrets.yaml."
+        )
+    return None
+
+
+@pytest.mark.asyncio
+def test_ai_adds_both_environments(connector_spec: ConnectorSpec, llm_driver_for):
     """
-    Add BOTH MySQL hosts as Delphix environments (source + target).
-    Each: act → wait for job → independent verify hostname appears.
+    Add source + target hosts as Delphix environments.
+    Works for any connector type — topology comes from connector_spec.
     """
+    reason = _skip_reason(connector_spec)
+    if reason:
+        pytest.skip(reason)
+
     drive = llm_driver_for("continuous_data_admin")
-    hosts = [h for h in [_SOURCE_HOST, _TARGET_HOST] if h]
+    hosts = [h for h in [connector_spec.source_host, connector_spec.target_host] if h]
 
     for host in hosts:
         short = host.split(".")[0]
 
-        # --- ACT ---
         act = drive(
             f"Add the host '{host}' as a new Unix/Linux environment in Delphix. "
-            f"Use username='{_ENV_USER}' and password='{_ENV_PASS}' for the SSH credentials. "
-            f"Call the appropriate environment tool action with all required fields. "
-            f"Then use job_tool to poll until the job reaches a terminal state. "
+            f"Use SSH username='{connector_spec.env_user}' and "
+            f"password='{connector_spec.env_password}'. "
+            f"Call environment_source_tool with all required fields. "
+            f"Then poll job_tool until the job reaches COMPLETED or FAILED. "
             f"Confirm the final job status.",
             timeout=600,
         )
         if license_blocked(act):
             pytest.skip("DCT license does not permit environment operations")
-        assert "environment_source_tool" in act.tools_used or "environment_tool" in act.tools_used, (
-            f"Claude did not use an environment tool for {host}. "
-            f"Tools: {sorted(act.tools_used)}\n{act.final_text[:300]}"
+        assert (
+            "environment_source_tool" in act.tools_used
+            or "environment_tool" in act.tools_used
+        ), (
+            f"Claude did not use an environment tool for {host}.\n"
+            f"{act.final_text[:300]}"
         )
 
-        # --- INDEPENDENT VERIFY (short hostname NOT in prompt) ---
+        # Independent verify (short hostname NOT in prompt)
         verify = drive(
-            "List all environments registered in Delphix, showing each environment's hostname."
+            "List all environments registered in Delphix, showing hostname and status."
         )
         assert short in verify.final_text, (
-            f"Environment {host!r} (short: {short!r}) not found after adding.\n"
-            f"Claude's answer: {verify.final_text[:400]}"
+            f"Environment {host!r} not found after adding.\n"
+            f"{verify.final_text[:400]}"
         )
 
 
-@pytest.mark.skipif(
-    not (_MUTATION and _TARGET_HOST and _ENV_PASS and _LINK_PASS),
-    reason=_SKIP_REASON,
-)
-def test_ai_links_mysql_dsource_on_target_and_verifies(llm_driver_for):
+@pytest.mark.asyncio
+def test_ai_links_dsource_and_verifies(connector_spec: ConnectorSpec, llm_driver_for):
     """
-    Link a MySQL AppData dSource on the TARGET host (r95-mys-t11) →
-    wait for job → independent verify → cleanup.
+    Link a dSource on the target host using the connector-specific parameters
+    from the schema + secrets. Works for MySQL, DB2, PostgreSQL etc.
 
-    The SOURCE host (r95-mys-s11) is already registered as an environment but the
-    link operation runs against the TARGET host (r95-mys-t11).
+    act → wait for job → independent verify → cleanup
     """
+    reason = _skip_reason(connector_spec)
+    if reason:
+        pytest.skip(reason)
+
     drive = llm_driver_for("continuous_data_admin")
     run_tag = os.environ.get("E2E_RUN_TAG", "e2e-local")
-    dsource_name = f"{run_tag}-mysql-ds"
-    short_target = _TARGET_HOST.split(".")[0]
+    dsource_name = f"{run_tag}-{connector_spec.connector_type}-ds"
 
-    # --- ACT: LINK on target host ---
+    # Build prompt: explicit fields from secrets + schema hints for undetermined ones
+    link_detail = connector_spec.link_prompt_detail()
+    if not link_detail:
+        link_detail = schema_link_hints(connector_spec.connector_type)
+
     act = drive(
-        f"Link a new AppData dSource named '{dsource_name}' using the environment "
-        f"on host '{_TARGET_HOST}' (the target/staging host). "
-        f"Environment user: '{_LINK_USER}', password: '{_LINK_PASS}'. "
-        f"Use data_tool action=dsource_link_appdata. "
-        f"Search for the right environment and repository on '{_TARGET_HOST}' automatically. "
-        f"For required fields you cannot determine, use sensible defaults. "
-        f"Then use job_tool to poll until the link job reaches COMPLETED or FAILED. "
+        f"Link a new {connector_spec.display_name} dSource named '{dsource_name}' "
+        f"from the environment on host '{connector_spec.target_host}'. "
+        f"OS username: '{connector_spec.link_user}', password: '{connector_spec.link_password}'. "
+        f"Use data_tool action={connector_spec.dsource_link_action}. "
+        f"Search for the right environment and repository automatically. "
+        f"{link_detail}\n"
+        f"For any fields not listed above, use DCT get-defaults or sensible defaults. "
+        f"Then poll job_tool until the link job reaches COMPLETED or FAILED. "
         f"Confirm the final job status.",
         timeout=900,
     )
     if license_blocked(act):
-        pytest.skip("DCT license does not permit dSource link operations")
+        pytest.skip(
+            f"DCT license does not permit {connector_spec.dsource_link_action} operations"
+        )
     assert "data_tool" in act.tools_used, (
-        f"Claude did not use data_tool to link. Tools: {sorted(act.tools_used)}\n{act.final_text[:300]}"
+        f"Claude did not use data_tool. Tools: {sorted(act.tools_used)}\n"
+        f"{act.final_text[:300]}"
     )
-    assert "dsource_link_appdata" in act.actions_for("data_tool"), (
-        f"Claude did not call dsource_link_appdata; actions: {act.actions_for('data_tool')}"
-    )
-    assert "job_tool" in act.tools_used, (
-        f"Claude did not poll job_tool; may not have waited for link job.\n{act.final_text[:300]}"
+    assert connector_spec.dsource_link_action in act.actions_for("data_tool"), (
+        f"Claude did not call {connector_spec.dsource_link_action}; "
+        f"actions: {act.actions_for('data_tool')}"
     )
 
-    # --- INDEPENDENT VERIFY (dsource_name and target host NOT in verify prompt) ---
+    # Independent verify (dsource_name NOT in verify prompt)
     verify = drive(
-        "Search for all dSources and show each one's name, type, and current status."
+        "Search for all dSources and show each one's name, type, and status."
     )
     assert dsource_name in verify.final_text, (
-        f"dSource {dsource_name!r} not found after link.\nClaude's answer: {verify.final_text[:500]}"
+        f"dSource {dsource_name!r} not found after link.\n"
+        f"{verify.final_text[:400]}"
     )
 
-    # --- CLEANUP ---
+    # Cleanup
     drive(
-        f"Delete the dSource named '{dsource_name}'. Confirm the deletion and wait for completion.",
+        f"Delete the dSource named '{dsource_name}'. "
+        f"Confirm the deletion and wait for completion.",
         timeout=300,
     )
