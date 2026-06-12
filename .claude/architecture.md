@@ -17,7 +17,7 @@ A Model Context Protocol (MCP) server that exposes Delphix Data Control Tower (D
 main.py                              ← Entry point; FastMCP app, lifespan, startup/shutdown
     ├── toolsgenerator/driver.py     ← Generates tool modules from OpenAPI spec at startup
     ├── tools/__init__.py            ← Dynamic tool registration (priority: generated → pre-built)
-    │       ├── tools/core/meta_tools.py      ← 5 meta-tools for auto mode only
+    │       ├── tools/core/meta_tools.py      ← 8 meta-tools for auto mode only
     │       ├── tools/core/tool_factory.py    ← Runtime tool generation from OpenAPI spec
     │       └── tools/*_endpoints_tool.py     ← Pre-built grouped tools (fallback)
     ├── config/config.py             ← Env var loading and validation
@@ -42,7 +42,7 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
 - Available toolsets: `self_service` (default), `self_service_provision`, `continuous_data_admin`, `platform_admin`, `reporting_insights`
 
 ### Auto Mode (`DCT_TOOLSET=auto`)
-- Starts with 5 meta-tools only
+- Starts with 8 meta-tools only
 - AI dynamically enables toolsets at runtime via `enable_toolset()` — no restart needed
 - Uses `tools/list_changed` MCP notification to signal tool list updates to clients
 - Not all clients support hot-switching (VS Code Copilot requires chat restart)
@@ -91,6 +91,21 @@ At startup, `main()` calls `generate_tools_from_openapi()` before registering to
 4. Falls back to bundled `docs/api-external.yaml` on download failure
 
 Generated modules take priority over pre-built `*_endpoints_tool.py` files. Failure is non-fatal.
+
+Note: `docs/api-external.yaml` does not ship in the repo. The fallback path only succeeds if the file is present (the code checks `bundled_path.exists()` before loading). In practice the server falls back to pre-built `*_endpoints_tool.py` files when no live DCT connection is available.
+
+---
+
+## Docker Distribution
+
+A `Dockerfile` ships in the repo root for containerised deployment:
+
+- Multi-stage build: `python:3.11-slim` build stage installs deps into a venv; runtime stage copies only the venv
+- Runs as non-root `appuser` (uid 1000); `/app/logs` created and chowned in build
+- No `EXPOSE` — transport is stdio, not HTTP
+- Run with `-i` (not `-t`): `docker run -i --init --rm -e DCT_API_KEY=… -e DCT_BASE_URL=… dct-mcp-server`
+- MCP client config uses `"command": "docker"` with args `["run", "-i", "--init", "--rm", ...]`
+- See `README.md` → "Run with Docker" for full examples including PowerShell and MCP client JSON
 
 ---
 

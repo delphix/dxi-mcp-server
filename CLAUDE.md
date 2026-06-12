@@ -19,6 +19,16 @@ pip install git+https://github.com/delphix/dxi-mcp-server.git
 dct-mcp-server  # CLI entry point
 ```
 
+**Run with Docker:**
+```bash
+docker build -t dct-mcp-server .
+docker run -i --init --rm \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=<your-dct-url> \
+  dct-mcp-server
+```
+Use `-i` (not `-t`) — the server uses stdio MCP transport. See `README.md` for full Docker usage and MCP client configuration.
+
 **From a local clone (development):**
 ```bash
 export DCT_API_KEY=<your-api-key>
@@ -60,7 +70,7 @@ Instead of one MCP tool per API endpoint, related endpoints are grouped under a 
 
 ### Auto Mode
 
-When `DCT_TOOLSET=auto`, the server starts with only 6 meta-tools. The AI can dynamically enable/disable toolsets at runtime (using `tools/list_changed` MCP notifications) without restarting the server.
+When `DCT_TOOLSET=auto`, the server starts with only 8 meta-tools. The AI can dynamically enable/disable toolsets at runtime (using `tools/list_changed` MCP notifications) without restarting the server.
 
 Client compatibility for dynamic tool switching:
 - Claude Desktop, Cursor, Continue.dev — fully supported

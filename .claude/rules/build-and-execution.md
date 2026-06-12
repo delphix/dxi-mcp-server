@@ -22,6 +22,32 @@ pip install git+https://github.com/delphix/dxi-mcp-server.git
 dct-mcp-server
 ```
 
+**Run with Docker:**
+```bash
+docker build -t dct-mcp-server .
+docker run -i --init --rm \
+  -e DCT_API_KEY="your-api-key" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  dct-mcp-server
+```
+
+IMPORTANT: Always use `-i` (stdin), never `-t` (tty) — the server uses stdio MCP transport and `-t` corrupts the binary framing.
+
+MCP client config (Claude Desktop / Cursor):
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": ["run", "-i", "--init", "--rm",
+               "-e", "DCT_API_KEY=your-api-key",
+               "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+               "dct-mcp-server"]
+    }
+  }
+}
+```
+
 ## Development Connection
 
 When running from a local clone, the server prints the port it listens on (e.g. `http://127.0.0.1:6790`). Connect your MCP client using just the port — no env vars needed in the client:
