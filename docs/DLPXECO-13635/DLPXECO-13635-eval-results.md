@@ -221,3 +221,23 @@ PASS  At least one FR-* requirement present
 ---
 Result: 20 passed, 0 failed
 ```
+
+### Step: pr
+
+```
+Checking: DLPXECO-13635 (step: pr)
+---
+[pr]
+PASS  Not on protected branch (dlpx/pr/vinay.byrappa/dlpxeco-13635)
+PASS  Commit message has ticket prefix (HEAD or HEAD~1)
+PASS  "logs/" not in last commit
+PASS  "__pycache__/" not in last commit
+PASS  ".env" not in last commit
+SKIP  Test evidence embedded in PR (PR body could not be read — manual PR creation required)
+---
+Result: 5 passed, 0 failed
+
+Branch pushed: origin/dlpx/pr/vinay.byrappa/dlpxeco-13635
+PR creation: gh CLI not authenticated — manual PR creation required at:
+  https://github.com/delphix/dxi-mcp-server/pull/new/dlpx/pr/vinay.byrappa/dlpxeco-13635
+```
