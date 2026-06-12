@@ -49,8 +49,11 @@ start_mcp_server_*.sh
 start_mcp_server_*.bat
 
 # --- Documentation (not needed inside container)
-# NOTE: docs/api-external.yaml does not exist in this repo — the server
-#       fetches the OpenAPI spec from DCT at startup and falls back to
-#       pre-built tools if unavailable.
+# Exclude spec and workflow docs; keep README.md for hatchling build metadata.
+# docs/api-external.yaml is not present in this repo (server fetches spec from DCT
+# at startup). The negation below is kept so it takes effect automatically if the
+# bundled spec is added in future — Docker processes .dockerignore rules in order.
+docs/
+!docs/api-external.yaml
 *.md
 !README.md
