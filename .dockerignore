@@ -1,0 +1,56 @@
+# =============================================================
+# .dockerignore — DCT MCP Server
+# Keeps build context small (<5 MB) and secrets out of image
+# =============================================================
+
+# --- Version control ---
+.git
+.gitignore
+.gitattributes
+
+# --- Python caches (generated at runtime, not needed in image) ---
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+*.egg
+dist/
+build/
+.eggs/
+
+# --- Virtual environments (never copy into image) ---
+.venv
+venv
+.venv/
+venv/
+
+# --- Secrets and local config (NEVER bake into image layers) ---
+.env
+*.env
+.env.*
+mcp.json
+.claude/settings.local.json
+
+# --- Runtime logs (generated at runtime, mount with -v instead) ---
+logs/
+
+# --- Lock files (image uses requirements.txt for reproducibility) ---
+uv.lock
+
+# --- Development and CI infrastructure ---
+.claude/
+evals/
+tests/
+whitesource/
+
+# --- Startup scripts (not needed inside container) ---
+start_mcp_server_*.sh
+start_mcp_server_*.bat
+
+# --- Documentation (not needed inside container)
+# NOTE: docs/api-external.yaml is intentionally NOT excluded —
+#       it is the bundled OpenAPI spec fallback used by persona toolsets.
+# The Dockerfile copies it explicitly via: COPY docs/api-external.yaml docs/api-external.yaml
+*.md
+!README.md
