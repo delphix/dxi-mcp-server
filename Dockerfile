@@ -21,8 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the source tree and install the package
 COPY src/ src/
 COPY pyproject.toml .
-# Copy bundled OpenAPI spec (used as fallback for persona toolsets)
-COPY docs/api-external.yaml docs/api-external.yaml
+# NOTE: docs/api-external.yaml is NOT bundled in this repo.
+# The server fetches the OpenAPI spec from DCT at startup and falls back to
+# pre-built tools in tools/*_endpoints_tool.py if the download fails.
 
 RUN pip install .
 
@@ -43,10 +44,6 @@ RUN addgroup --gid 1000 appuser \
 
 # Copy the virtualenv from the build stage
 COPY --from=build /app/venv /app/venv
-
-# Copy the installed package (site-packages are inside the venv)
-# The bundled OpenAPI spec must be accessible at the path the package expects
-COPY --from=build /app/docs /app/docs
 
 # Create the log directory and set ownership
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
