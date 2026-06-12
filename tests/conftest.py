@@ -9,6 +9,13 @@ DCTAPIClient against respx-mocked HTTP.
 import os
 from unittest.mock import AsyncMock, MagicMock
 
+# Warm up pydantic's generic-model registry before any mcp.server.fastmcp import.
+# pytest-cov instruments target modules before the test file's own imports run,
+# which means meta_tools.py can trigger `from mcp.server.fastmcp import Context`
+# before pydantic.root_model is registered in sys.modules → KeyError.
+# Importing RootModel here (in conftest) ensures pydantic self-registers first.
+from pydantic import RootModel  # noqa: F401
+
 import pytest
 
 
