@@ -13,6 +13,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 - [Environment Variables](#environment-variables)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Advanced Installation](#advanced-installation)
+- [Run with Docker](#run-with-docker)
 - [Toolsets](#toolsets)
 - [Available Tools](#available-tools)
 - [Privacy & Telemetry](#privacy--telemetry)
@@ -425,6 +426,243 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
+
+## Run with Docker
+
+Run the DCT MCP Server as a Docker container — no Python, `uv`, or virtual environment required on the host machine.
+
+> **Note:** All `docker run` commands use `-i` (interactive stdin) and `--init` (proper signal handling). Do **not** add `-t` (allocate TTY) — it breaks the binary stdio MCP transport.
+>
+> For the full list of environment variables, see [Environment Variables](#environment-variables).
+
+### Prerequisites
+
+- **Docker Desktop** (macOS or Windows with WSL2 backend) or **Docker Engine** 20.10+ (Linux)
+- **Windows**: Docker Desktop with the WSL2 backend enabled (not the legacy Hyper-V backend)
+- No Python, `uv`, or `pip` required on the host
+
+### Build the Image
+
+From the root of a cloned repository:
+
+```bash
+docker build -t dct-mcp-server .
+```
+
+> **Note:** The first build downloads the `python:3.11-slim` base image and installs packages from PyPI. Subsequent builds use Docker's layer cache and are much faster. If you are on Apple Silicon, add `--platform linux/amd64` for cross-platform compatibility:
+> ```bash
+> docker build --platform linux/amd64 -t dct-mcp-server .
+> ```
+
+### Run the Server
+
+The server communicates over stdio. Always pass `-i` (keep stdin open) and `--init` (PID 1 signal reaping). **Never use `-t`.**
+
+**macOS / Linux (bash):**
+
+```bash
+docker run -i --init --rm \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -e DCT_TOOLSET="self_service" \
+  -e DCT_VERIFY_SSL="false" \
+  dct-mcp-server
+```
+
+**Windows (PowerShell):**
+
+```powershell
+docker run -i --init --rm `
+  -e DCT_API_KEY="$env:DCT_API_KEY" `
+  -e DCT_BASE_URL="$env:DCT_BASE_URL" `
+  -e DCT_TOOLSET="self_service" `
+  -e DCT_VERIFY_SSL="false" `
+  dct-mcp-server
+```
+
+**Windows (cmd.exe):**
+
+```cmd
+docker run -i --init --rm ^
+  -e DCT_API_KEY=%DCT_API_KEY% ^
+  -e DCT_BASE_URL=%DCT_BASE_URL% ^
+  -e DCT_TOOLSET=self_service ^
+  -e DCT_VERIFY_SSL=false ^
+  dct-mcp-server
+```
+
+> **Do not prefix `DCT_API_KEY` with `apk`** — the server adds this prefix automatically. Use the key value exactly as provided by DCT (e.g. `2.abc123...`).
+
+### MCP Client Configuration
+
+Use `docker run -i --init --rm` as the command in your MCP client's JSON config. The container handles all environment setup — no local Python install needed.
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--init", "--rm",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_VERIFY_SSL=false",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor IDE</strong></summary>
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "delphix-dct",
+      "command": "docker",
+      "args": [
+        "run", "-i", "--init", "--rm",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_VERIFY_SSL=false",
+        "dct-mcp-server"
+      ]
+    }
+  ]
+}
+```
+</details>
+
+<details>
+<summary><strong>VS Code Copilot</strong></summary>
+
+```json
+{
+  "servers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--init", "--rm",
+        "-e", "DCT_API_KEY=your-api-key-here",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "-e", "DCT_TOOLSET=self_service",
+        "-e", "DCT_VERIFY_SSL=false",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+> **VS Code Copilot note:** For best experience, use a fixed toolset (e.g. `self_service`) instead of `auto` mode — VS Code Copilot requires a chat restart after `enable_toolset`.
+</details>
+
+> **Tip:** Replace `your-api-key-here` and `https://your-dct-host.company.com` with your actual values. See [Environment Variables](#environment-variables) for the full list of supported variables.
+
+### Persist Logs (Optional)
+
+By default, logs are written to `/app/logs` inside the container and lost when the container exits. To persist them, bind-mount a host directory:
+
+**macOS / Linux:**
+```bash
+docker run -i --init --rm \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -v "$(pwd)/logs:/app/logs" \
+  dct-mcp-server
+```
+
+**Linux note:** If the mounted `logs/` directory is owned by root, the container's `appuser` (uid 1000) may not have write permission. Fix with:
+```bash
+mkdir -p logs && chmod 777 logs
+# or pass --user to match your host UID:
+docker run -i --init --rm \
+  --user "$(id -u):$(id -g)" \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -v "$(pwd)/logs:/app/logs" \
+  dct-mcp-server
+```
+
+### Using a Pre-Built Registry Image (Pending Provisioning)
+
+> **TODO: The official Delphix registry is not yet provisioned.** Build from source (see [Build the Image](#build-the-image) above) until this pull URL is available.
+
+Once the registry is provisioned, you will be able to pull the pre-built image:
+
+```bash
+# Pending — not yet available
+docker pull <registry-host>/delphix/dct-mcp-server:<tag>
+```
+
+After pulling, use the registry image in place of the locally built `dct-mcp-server` tag with no other changes:
+
+```bash
+# TODO: replace <registry-host> with the actual registry URL once provisioned
+docker run -i --init --rm \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  <registry-host>/delphix/dct-mcp-server:<tag>
+```
+
+### SSL and Proxy Notes
+
+**SSL verification:**
+```bash
+docker run -i --init --rm \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -e DCT_VERIFY_SSL="true" \
+  dct-mcp-server
+```
+
+> **Custom CA certificates:** The current codebase passes `verify_ssl` as a boolean to `httpx.AsyncClient` — a CA bundle path is **not** supported via environment variable. If your DCT instance uses a self-signed or corporate CA certificate, build a derived image that installs the certificate:
+> ```dockerfile
+> FROM dct-mcp-server
+> USER root
+> COPY my-ca.crt /usr/local/share/ca-certificates/my-ca.crt
+> RUN update-ca-certificates
+> USER appuser
+> ```
+
+**Corporate proxy:**
+```bash
+docker run -i --init --rm \
+  -e DCT_API_KEY="your-api-key-here" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  -e HTTPS_PROXY="http://proxy.company.com:8080" \
+  dct-mcp-server
+```
+
+`httpx` (the HTTP client used by the server) honours `HTTPS_PROXY` automatically when passed via `-e`.
+
+### Troubleshooting
+
+**Container exits immediately with no output:**
+- Ensure you included `-i` in your `docker run` command. Without `-i`, stdin is closed immediately and the MCP server exits. The MCP client must hold stdin open for the duration of the session.
+- **Never add `-t`** (allocate pseudo-TTY) to `docker run` for MCP clients. A pseudo-TTY injects CRLF line endings and TTY escape sequences into the binary stdio stream, corrupting the MCP JSON-RPC framing and causing the client to receive no valid responses.
+
+**`DCT_API_KEY` or `DCT_BASE_URL` not set:**
+- The server exits non-zero with a configuration error if either variable is missing. Pass them via `-e DCT_API_KEY=...` and `-e DCT_BASE_URL=...` on the `docker run` command line.
+- Do **not** rely on a `.env` file bind-mounted at `/app/.env` — the server does not use `python-dotenv` and will silently ignore it. Use Docker's own `--env-file /path/to/your.env` flag instead.
+
+**Running on Apple Silicon (linux/arm64 vs linux/amd64):**
+- Docker Desktop on Apple Silicon defaults to building `linux/arm64` images. If you need to deploy the image to an `amd64` host, build with `--platform linux/amd64`:
+  ```bash
+  docker build --platform linux/amd64 -t dct-mcp-server .
+  ```
+
+**`DCT_TOOLSET=dynamic` in an air-gapped network:**
+- Dynamic mode downloads the DCT OpenAPI spec at startup. If DCT is unreachable from inside the container, the server exits with `SPEC_LOAD_FAILED`. Use a persona toolset (e.g. `DCT_TOOLSET=self_service`) instead — persona toolsets use the bundled `docs/api-external.yaml` spec and work offline after the image is built.
 
 ## Toolsets
 
