@@ -491,7 +491,7 @@ docker run -i --init --rm ^
   dct-mcp-server
 ```
 
-> **Do not prefix `DCT_API_KEY` with `apk`** — the server adds this prefix automatically. Use the key value exactly as provided by DCT (e.g. `2.abc123...`).
+> **Do not prefix `DCT_API_KEY` with `apk`** — use the key exactly as provided by DCT (e.g. `2.abc123...`).
 
 ### MCP Client Configuration
 
