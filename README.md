@@ -662,7 +662,7 @@ docker run -i --init --rm \
   ```
 
 **`DCT_TOOLSET=dynamic` in an air-gapped network:**
-- Dynamic mode downloads the DCT OpenAPI spec at startup. If DCT is unreachable from inside the container, the server exits with `SPEC_LOAD_FAILED`. Use a persona toolset (e.g. `DCT_TOOLSET=self_service`) instead — persona toolsets use the bundled `docs/api-external.yaml` spec and work offline after the image is built.
+- Dynamic mode downloads the DCT OpenAPI spec at startup. If DCT is unreachable from inside the container, the server exits with `SPEC_LOAD_FAILED`. Use a persona toolset (e.g. `DCT_TOOLSET=self_service`) instead — persona toolsets load pre-built Python tool modules and do not require a live DCT connection to start.
 
 ## Toolsets
 
