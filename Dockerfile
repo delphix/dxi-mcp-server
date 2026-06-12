@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the source tree and install the package
 COPY src/ src/
 COPY pyproject.toml .
+COPY README.md .
 # NOTE: docs/api-external.yaml is NOT bundled in this repo.
 # The server fetches the OpenAPI spec from DCT at startup and falls back to
 # pre-built tools in tools/*_endpoints_tool.py if the download fails.
