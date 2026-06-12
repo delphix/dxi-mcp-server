@@ -197,10 +197,10 @@ async def async_main():
         logger.error(f"Configuration error: {str(e)}")
         print(f"Configuration Error: {str(e)}")
         print_config_help()
-        return
+        sys.exit(1)
     except Exception as e:
         logger.error(f"An unexpected server error occurred: {e}", exc_info=True)
-        return
+        sys.exit(1)
 
 
 def main():
