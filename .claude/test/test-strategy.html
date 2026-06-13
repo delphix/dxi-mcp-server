@@ -60,7 +60,7 @@
 <body>
 <header>
   <h1>DCT MCP Server — Test Strategy</h1>
-  <div class="sub">Branch: dlpx/pr/chaitali/test-suite-poc &nbsp;·&nbsp; 1,360 tests &nbsp;·&nbsp; Layers 1–5 built &nbsp;·&nbsp; 2026-06-11</div>
+  <div class="sub">Branch: dlpx/pr/chaitali/test-suite-poc &nbsp;·&nbsp; 1,678 tests (L1–L3) &nbsp;·&nbsp; Layers 1–5 built &nbsp;·&nbsp; 2026-06-13</div>
 </header>
 <nav>
   <button class="active" onclick="show('overview',this)">Overview</button>
@@ -76,6 +76,7 @@
   <button onclick="show('roadmap',this)">Roadmap</button>
   <button onclick="show('success',this)">Success Criteria</button>
   <button onclick="show('future',this)">Future Scope ↗</button>
+  <button onclick="show('coverage',this)">Coverage</button>
 </nav>
 <main>
 
@@ -83,10 +84,10 @@
 <section id="overview" class="active">
   <h2>Overview</h2>
   <div class="stat-grid">
-    <div class="stat"><div class="stat-value">1,360</div><div class="stat-label">Total tests</div></div>
-    <div class="stat"><div class="stat-value">1,116</div><div class="stat-label">CI offline gate</div></div>
-    <div class="stat"><div class="stat-value">~2.5m</div><div class="stat-label">CI runtime</div></div>
-    <div class="stat"><div class="stat-value">54%</div><div class="stat-label">Line coverage</div></div>
+    <div class="stat"><div class="stat-value">1,678</div><div class="stat-label">L1–L3 tests</div></div>
+    <div class="stat"><div class="stat-value">1,678</div><div class="stat-label">CI offline gate</div></div>
+    <div class="stat"><div class="stat-value">~7m</div><div class="stat-label">CI runtime</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--good)">97%</div><div class="stat-label">Line coverage (L1–L3)</div></div>
     <div class="stat"><div class="stat-value">62</div><div class="stat-label">Confirmation rules</div></div>
     <div class="stat"><div class="stat-value">904</div><div class="stat-label">Scenario prompts</div></div>
   </div>
@@ -117,9 +118,9 @@
   <table>
     <thead><tr><th>Layer</th><th>Tests</th><th>Runtime</th><th>Needs DCT?</th><th>Blocks merge?</th></tr></thead>
     <tbody>
-      <tr><td><span class="tag t-unit">1 Unit</span></td><td>156</td><td>~0.3s</td><td>No</td><td><span class="tag t-good">Yes</span></td></tr>
+      <tr><td><span class="tag t-unit">1 Unit</span></td><td>718</td><td>~1.7s</td><td>No</td><td><span class="tag t-good">Yes</span></td></tr>
       <tr><td><span class="tag t-int">2 Integration</span></td><td>29</td><td>~0.1s</td><td>No</td><td><span class="tag t-good">Yes</span></td></tr>
-      <tr><td><span class="tag t-func">3 Functional</span></td><td>931</td><td>~2.5 min</td><td>No (stub)</td><td><span class="tag t-good">Yes</span></td></tr>
+      <tr><td><span class="tag t-func">3 Functional</span></td><td>931</td><td>~7 min</td><td>No (stub)</td><td><span class="tag t-good">Yes</span></td></tr>
       <tr><td><span class="tag t-e2e">4 E2E</span></td><td>27</td><td>3–8 min</td><td><strong>Yes</strong></td><td><span class="tag t-warn">No (advisory)</span></td></tr>
       <tr><td><span class="tag t-llm">5 LLM</span></td><td>217</td><td>varies</td><td><strong>Yes + claude CLI</strong></td><td><span class="tag t-warn">No (advisory)</span></td></tr>
     </tbody>
@@ -571,6 +572,115 @@
     <h3>Other-persona mutation scenarios</h3>
     <p>Read-tier validated for all personas (S2–S4). Mutation-tier scenarios (CDA provisions, IAM changes, policy updates) depend on a working dSource/VDB. Unblocked once the MySQL plugin infra issue is resolved.</p>
   </div>
+</section>
+
+<!-- COVERAGE -->
+<section id="coverage">
+  <h2>Code Coverage — L1+L2+L3 Combined</h2>
+  <div class="card card-accent">
+    <p style="font-size:13px">Measured across <strong>tests/unit + tests/integration + tests/functional</strong> (no real DCT). Updated 2026-06-13.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-value" style="color:var(--good)">97%</div><div class="stat-label">L1+L2+L3 combined</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--good)">95%</div><div class="stat-label">Unit (L1) alone</div></div>
+    <div class="stat"><div class="stat-value">2588</div><div class="stat-label">Total statements</div></div>
+    <div class="stat"><div class="stat-value">66</div><div class="stat-label">Missed lines</div></div>
+    <div class="stat"><div class="stat-value">1678</div><div class="stat-label">Tests (L1–L3)</div></div>
+  </div>
+
+  <h3>Per-module breakdown</h3>
+  <table>
+    <thead><tr><th>Module</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><code>config/config.py</code></td><td>39</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>config/loader.py</code></td><td>192</td><td>13</td><td>93%</td><td><span class="tag t-warn">≈</span></td></tr>
+      <tr><td><code>core/decorators.py</code></td><td>44</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>core/exceptions.py</code></td><td>6</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>core/logging.py</code></td><td>69</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>core/session.py</code></td><td>121</td><td>3</td><td>98%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>dct_client/client.py</code></td><td>72</td><td>3</td><td>96%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>main.py</code></td><td>100</td><td>5</td><td>95%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>testing/cli.py</code></td><td>58</td><td>1</td><td>98%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/__init__.py</code></td><td>100</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/core/meta_tools.py</code></td><td>210</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/core/tool_factory.py</code></td><td>208</td><td>10</td><td>95%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/dataset_endpoints_tool.py</code></td><td>751</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/job_endpoints_tool.py</code></td><td>94</td><td>4</td><td>96%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>toolsgenerator/driver.py</code></td><td>506</td><td>25</td><td>95%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>__init__.py</code></td><td>7</td><td>2</td><td>71%</td><td><span class="tag t-warn">—</span></td></tr>
+      <tr style="font-weight:600"><td>TOTAL</td><td>2588</td><td>66</td><td style="color:var(--good)">97%</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h3>What the 66 missed lines are — and why they're not covered</h3>
+
+  <div class="card">
+    <h4>1. Unreachable in dev mode — site-packages branch (3 lines)</h4>
+    <p><code>driver.py:38</code>, <code>client.py:35-36</code></p>
+    <p>These lines execute only when the package is installed from a wheel/site-packages path, not from a local editable checkout. The branch is <code>if 'site-packages' in __file__</code> — always False in the dev tree. Covered by production installs; deliberately not mocked in tests to keep the guard honest.</p>
+  </div>
+
+  <div class="card">
+    <h4>2. Catastrophic server startup failures (5 lines)</h4>
+    <p><code>main.py:126, 162-164, 185</code></p>
+    <p>Line 126: configuration-validation warning path (only fires when <code>loader.validate_config()</code> returns warnings — a rare partial-misconfiguration that doesn't abort startup). Lines 162-164: outer <code>except Exception</code> in <code>async_main</code> (only fires if FastMCP itself throws during startup, not a tool execution). Line 185: <code>if __name__ == "__main__"</code> guard. Testing these requires either a real broken server or invasive patching of FastMCP internals — low value relative to the brittleness cost.</p>
+  </div>
+
+  <div class="card">
+    <h4>3. Session telemetry error-path (3 lines)</h4>
+    <p><code>core/session.py:78-80</code></p>
+    <p>The <code>except Exception</code> inside <code>start_session()</code> that re-raises after logging. Triggered only when the session log file itself cannot be created (disk full, permissions error). Tested in contract (session telemetry is opt-in, off by default); this branch requires filesystem fault injection.</p>
+  </div>
+
+  <div class="card">
+    <h4>4. All retry attempts exhausted (1 line)</h4>
+    <p><code>dct_client/client.py:143</code></p>
+    <p><code>raise DCTClientError("All retry attempts failed")</code> — only fires after <code>DCT_MAX_RETRIES</code> consecutive HTTP failures. The integration tests exercise single-failure and two-failure paths; the full-exhaustion path requires a brittle "fail N+1 times" mock setup. Covered implicitly by the retry logic tests; the raise itself is a one-liner with no branching logic.</p>
+  </div>
+
+  <div class="card">
+    <h4>5. Loader edge cases — malformed or missing config (13 lines)</h4>
+    <p><code>loader.py:70, 138-139, 157, 255-256, 551, 555-556, 574, 580-582</code></p>
+    <p>These are five distinct error paths: (a) line 70: <code>raise ValueError</code> for a malformed toolset header format never seen in the real files; (b) lines 138-139: bare tool name without description (always has description in practice); (c) line 157: <code>raise ValueError</code> for an invalid <code>METHOD|path|action</code> format; (d) lines 255-256: <code>manual_confirmation.txt</code> not found (file always present in the package); (e) lines 551, 555-556, 574, 580-582: the <code>validate_config()</code> diagnostic function's error-accumulation branches. These are config-validation paths that only fire when the package is partially corrupted or someone edits the config files incorrectly — not reachable in any valid deployment.</p>
+  </div>
+
+  <div class="card">
+    <h4>6. OpenAPI code-generator edge cases in driver.py (22 lines)</h4>
+    <p><code>driver.py:494, 514-515, 527, 751-753, 755-756, 764, 792, 819, 823-826, 840, 876, 878, 949, 952-953, 978-979, 1020</code></p>
+    <p>All inside <code>_generate_unified_tool</code> and <code>generate_tools_from_openapi</code>. Specific paths:</p>
+    <ul style="font-size:13px">
+      <li><strong>494</strong>: <code>API_FILE</code> set to temp dir (site-packages branch inside the function — same as #1)</li>
+      <li><strong>514-515</strong>: <code>OSError</code> when deleting a stale <code>*_tool.py</code> file (locked file edge case)</li>
+      <li><strong>527</strong>: <code>module_name = "misc_endpoints"</code> when an apis list is empty (never happens for well-formed toolsets)</li>
+      <li><strong>751-756</strong>: default-value update for a param already seen from another action — requires two actions to share a param but provide different defaults, a rare OpenAPI pattern</li>
+      <li><strong>764</strong>: <code>requestBody</code> itself is a <code>$ref</code> (DCT API always inlines request body schemas)</li>
+      <li><strong>792, 819, 823-826, 840, 876, 878, 949, 952-953, 978-979, 1020</strong>: enum-value formatting, description-truncation, and toolkit-schema docstring branches that require specific API spec shapes not present in the minimal inline spec used by tests. Covered during live tool generation from the real <code>api-external.yaml</code></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>7. get_main() lazy import (2 lines)</h4>
+    <p><code>__init__.py:15-17</code></p>
+    <p>The <code>get_main()</code> function is a lazy-import shim used by the CLI entry point (<code>pyproject.toml</code> console_scripts). It is exercised end-to-end by <code>dct-mcp-test --layer ci</code> but is intentionally not called in unit/integration tests since importing <code>main.py</code> triggers FastMCP startup side-effects.</p>
+  </div>
+
+  <div class="card">
+    <h4>8. tool_factory.py async generation path (10 lines)</h4>
+    <p><code>tools/core/tool_factory.py:207, 246-252, 262, 403, 454-455</code></p>
+    <p>Lines 246-252: the async <code>generate_and_register_tools</code> function that downloads the spec at runtime in auto mode — only exercised when <code>DCT_TOOLSET=auto</code> and a live DCT is reachable. Lines 207, 262, 403, 454-455: fallback paths in the spec-loading chain (spec file absent, YAML parse error). These are covered by Layer 4/5 tests against a real DCT.</p>
+  </div>
+
+  <h3>Policy: what we deliberately leave uncovered</h3>
+  <div class="card card-warn">
+    <ul style="font-size:13px">
+      <li><strong>Site-packages branch</strong> — the <code>if 'site-packages' in __file__</code> guard is intentionally not mocked in unit tests. Mocking <code>__file__</code> at module level would make the test fragile and the branch trivial. Covered by real installs.</li>
+      <li><strong>FastMCP internals</strong> — we don't inject failures into FastMCP startup. These failure modes belong to the framework, not this codebase.</li>
+      <li><strong>Filesystem fault injection</strong> — disk-full, permission-denied, and file-locked scenarios are excluded. They would require platform-specific OS mocking for one-liner error handlers.</li>
+      <li><strong>100% is not the goal</strong> — 97% with well-understood gaps is better than 100% achieved by mocking away the boundary you're supposed to be testing.</li>
+    </ul>
+  </div>
+
 </section>
 
 </main>

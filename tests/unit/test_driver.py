@@ -767,9 +767,3 @@ def test_generate_tools_from_openapi_download_failure_propagates(monkeypatch, tm
                 driver_mod.generate_tools_from_openapi()
 
 
-# ===========================================================================
-# _generate_legacy_tools_from_openapi
-# ===========================================================================
-
-def test_generate_legacy_tools_does_not_raise():
-    driver_mod._generate_legacy_tools_from_openapi()

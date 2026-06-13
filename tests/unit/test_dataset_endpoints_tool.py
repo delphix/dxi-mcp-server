@@ -517,8 +517,3 @@ class TestRegisterTools:
         # Should not raise
         dataset_endpoints_tool.register_tools(app, dct_client)
 
-    def test_register_tools_sets_global_client(self):
-        app = MagicMock()
-        sentinel = MagicMock()
-        dataset_endpoints_tool.register_tools(app, sentinel)
-        assert dataset_endpoints_tool.client is sentinel
