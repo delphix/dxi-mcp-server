@@ -29,8 +29,9 @@ anyio>=3.6.0
 # Additional utilities that might be needed
 typing-extensions>=4.0.0
 
-# Optional: Development dependencies (uncomment if needed)
-# pytest>=7.0.0
-# pytest-asyncio>=0.21.0
+# Development/test dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
 # black>=22.0.0
 # flake8>=5.0.0
