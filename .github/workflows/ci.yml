@@ -40,13 +40,16 @@ jobs:
         run: ruff check . --output-format=github --exit-zero
 
   test:
-    name: test + coverage
+    name: test + coverage (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
       - name: Install package and test deps
         run: |
           python -m pip install --upgrade pip
@@ -55,6 +58,7 @@ jobs:
       # Coverage floor starts at the measured baseline (~5%) and is ratcheted
       # toward 80% over subsequent sprints (see DLPXECO-14016 + follow-ups).
       # A PR that drops coverage below the floor fails this job.
+      # To raise the floor: update --cov-fail-under here AND in CONTRIBUTING.md.
       - name: Pytest with coverage gate
         run: |
           pytest \
@@ -79,7 +83,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-xml
+          name: coverage-xml-${{ matrix.python-version }}
           path: coverage.xml
           if-no-files-found: ignore
 
