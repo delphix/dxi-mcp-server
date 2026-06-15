@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   lint:
-    name: lint (ruff, advisory)
+    name: lint (ruff check + format, advisory)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,11 +33,18 @@ jobs:
           python-version: "3.11"
       - name: Install ruff
         run: python -m pip install --upgrade pip ruff
-      # Advisory until the existing 138 findings are cleaned up: annotate the
-      # PR but do not fail the gate. Flip to a hard `ruff check .` in a later
-      # PR once the backlog is burned down.
-      - name: Ruff (non-blocking)
+      # ruff replaces flake8 (lint) AND black (format) with one tool, run here
+      # and in .pre-commit-config.yaml so local and CI checks are identical.
+      # Both steps are advisory until the existing findings are cleaned up:
+      # they annotate the PR but never fail the gate. Flip to hard
+      # `ruff check .` / `ruff format --check .` in a later PR once the backlog
+      # is burned down. The same flip should update .pre-commit-config.yaml.
+      - name: Ruff lint (flake8-equivalent, non-blocking)
         run: ruff check . --output-format=github --exit-zero
+      - name: Ruff format check (black-equivalent, non-blocking)
+        run: |
+          ruff format --check . \
+            || echo "::warning::ruff format would reformat files — run 'ruff format .' locally before committing"
 
   test:
     name: test + coverage (Python ${{ matrix.python-version }})
