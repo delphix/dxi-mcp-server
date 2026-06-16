@@ -33,6 +33,24 @@ _DEFAULT_SECRETS = _FIXTURES_DIR / ".secrets.yaml"
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 @dataclass
+class EngineSpec:
+    """Fields needed to register a Delphix Engine with DCT."""
+
+    hostname: str
+    name: str
+    username: str
+    password: str
+    insecure_ssl: bool = True
+
+    def registration_prompt_detail(self) -> str:
+        return (
+            f"hostname='{self.hostname}', name='{self.name}', "
+            f"username='{self.username}', password='{self.password}', "
+            f"insecure_ssl={str(self.insecure_ssl).lower()}"
+        )
+
+
+@dataclass
 class ConnectorSpec:
     """All fields needed to drive the full dSource + VDB flow for one connector."""
 
@@ -46,6 +64,17 @@ class ConnectorSpec:
     link_password: str
     dsource_link_action: str
     provision_action: str
+    toolkit_path: str = "/tmp"
+    source_config_name: str = "mysql_test"
+    source_config_host: str = "target"   # "source" or "target"
+    data_dir: str = "/var/lib/mysql"
+    source_port: int = 3306
+    base_dir: str = "/usr"
+    vdb_name: str = "TEST1"
+    vdb_port: int = 2151
+    vdb_server_id: int = 151
+    vdb_mount_path: str = "/mnt/provision/2151"
+    vdb_basedir: str = "/usr"
     link_fields: dict = field(default_factory=dict)
     provision_fields: dict = field(default_factory=dict)
     connector_search_keyword: str = "plugin"
@@ -97,6 +126,40 @@ def _load_schema() -> dict:
     if not _SCHEMA_FILE.exists():
         return {}
     return yaml.safe_load(_SCHEMA_FILE.read_text()) or {}
+
+
+def load_engine_spec(secrets_file: Path | None = None) -> EngineSpec:
+    """
+    Load engine registration details from:
+    1. .secrets.yaml under the 'engine' key (local dev)
+    2. DCT_ENGINE_<FIELD> env vars (CI)
+    """
+    secrets: dict[str, Any] = {}
+
+    path = secrets_file or Path(os.environ.get("CONNECTOR_SECRETS", str(_DEFAULT_SECRETS)))
+    if path.exists():
+        data = yaml.safe_load(path.read_text()) or {}
+        secrets.update(data.get("engine", {}))
+
+    for key, val in os.environ.items():
+        if key.startswith("DCT_ENGINE_"):
+            field_name = key[len("DCT_ENGINE_"):].lower()
+            secrets[field_name] = val
+
+    hostname = secrets.get("hostname", "")
+    name = secrets.get("name", "")
+    username = secrets.get("username", "admin")
+    password = secrets.get("password", "")
+    insecure_ssl_raw = secrets.get("insecure_ssl", True)
+    insecure_ssl = insecure_ssl_raw if isinstance(insecure_ssl_raw, bool) else str(insecure_ssl_raw).lower() == "true"
+
+    return EngineSpec(
+        hostname=hostname,
+        name=name,
+        username=username,
+        password=password,
+        insecure_ssl=insecure_ssl,
+    )
 
 
 def _load_secrets(connector_type: str, secrets_file: Path | None = None) -> dict:
@@ -166,6 +229,35 @@ def load_connector_spec(
     link_user    = secrets.get("link_user", "delphix")
     link_password = secrets.get("link_password", "")
 
+    # Environment fields — toolkit_path with schema default fallback
+    env_field_defaults = {
+        f["name"]: f.get("default", f.get("example", ""))
+        for f in connector_schema.get("environment_fields", [])
+    }
+    toolkit_path = secrets.get("toolkit_path", env_field_defaults.get("toolkit_path", "/tmp"))
+
+    # Source config fields with schema default fallback
+    sc_field_defaults = {
+        f["name"]: f.get("default", f.get("example", ""))
+        for f in connector_schema.get("source_config_fields", [])
+    }
+    source_config_name = secrets.get("source_config_name", sc_field_defaults.get("name", "mysql_test"))
+    source_config_host = secrets.get("source_config_host", sc_field_defaults.get("source_config_host", "target"))
+    data_dir = secrets.get("data_dir", sc_field_defaults.get("data_dir", "/var/lib/mysql"))
+    source_port = int(secrets.get("port", sc_field_defaults.get("port", 3306)))
+    base_dir = secrets.get("base_dir", sc_field_defaults.get("base_dir", "/usr"))
+
+    # VDB provision fields with schema default fallback
+    prov_field_defaults = {
+        f["name"]: f.get("default", f.get("example", ""))
+        for f in connector_schema.get("provision_fields", [])
+    }
+    vdb_name = secrets.get("vdb_name", "TEST1")
+    vdb_port = int(secrets.get("vdb_port", prov_field_defaults.get("port", 2151)))
+    vdb_server_id = int(secrets.get("vdb_server_id", prov_field_defaults.get("serverId", 151)))
+    vdb_mount_path = secrets.get("vdb_mount_path", prov_field_defaults.get("mPath", "/mnt/provision/2151"))
+    vdb_basedir = secrets.get("vdb_basedir", prov_field_defaults.get("baseDir", "/usr"))
+
     # Build link_fields from schema required_link_fields + secrets + defaults
     link_fields: dict[str, Any] = {}
     for f in connector_schema.get("required_link_fields", []):
@@ -217,6 +309,17 @@ def load_connector_spec(
         env_password=env_password,
         link_user=link_user,
         link_password=link_password,
+        toolkit_path=toolkit_path,
+        source_config_name=source_config_name,
+        source_config_host=source_config_host,
+        data_dir=data_dir,
+        source_port=source_port,
+        base_dir=base_dir,
+        vdb_name=vdb_name,
+        vdb_port=vdb_port,
+        vdb_server_id=vdb_server_id,
+        vdb_mount_path=vdb_mount_path,
+        vdb_basedir=vdb_basedir,
         dsource_link_action=connector_schema["dsource_link_action"],
         provision_action=connector_schema.get("provision_action", "provision_by_snapshot"),
         link_fields=link_fields,
@@ -322,6 +425,14 @@ def write_connector_preprompt(spec: ConnectorSpec, output_path: Path | None = No
 
 
 # ── pytest fixture ─────────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="session")
+def engine_spec() -> EngineSpec:
+    """Session-scoped EngineSpec loaded from .secrets.yaml or DCT_ENGINE_* env vars."""
+    spec = load_engine_spec()
+    print(f"\nEngineSpec: name={spec.name!r} | hostname={spec.hostname} | insecure_ssl={spec.insecure_ssl}")
+    return spec
+
 
 @pytest.fixture(scope="session")
 def connector_spec() -> ConnectorSpec:

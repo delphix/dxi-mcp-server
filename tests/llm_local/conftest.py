@@ -299,6 +299,7 @@ from tests.llm_local.prereq_checker import (  # noqa: E402,F401
 )
 from tests.llm_local.connector_fixtures import (  # noqa: E402,F401
     connector_spec,
+    engine_spec,
     write_connector_preprompt,
 )
 

@@ -13,6 +13,27 @@
 #   2. Add the connector's secrets to .secrets.yaml (copy from .secrets.yaml.example).
 #   3. Set CONNECTOR_TYPE=<type> when running tests.
 
+# Engine registration fields (required before any connector workflow).
+# Secrets live in .secrets.yaml under the 'engine' key.
+# CI env vars: DCT_ENGINE_HOSTNAME, DCT_ENGINE_NAME, DCT_ENGINE_USERNAME,
+#              DCT_ENGINE_PASSWORD, DCT_ENGINE_INSECURE_SSL
+engine:
+  fields:
+    - name: hostname
+      description: "Delphix Engine IP or FQDN"
+      example: dlpx-engine.example.com
+    - name: name
+      description: "Display name for the engine in DCT"
+      example: My Engine
+    - name: username
+      description: "Virtualization domain admin username"
+      default: admin
+    - name: password
+      description: "Virtualization domain admin password"
+    - name: insecure_ssl
+      description: "Skip TLS cert validation (set true for lab/dev)"
+      default: true
+
 connectors:
 
   # ── MySQL via Delphix AppData/Plugin ──────────────────────────────────────
@@ -21,16 +42,37 @@ connectors:
     connector_search_keyword: plugin
     dsource_link_action: dsource_link_appdata
     provision_action: provision_by_snapshot
+    environment_fields:
+      - name: toolkit_path
+        description: "Path on the host where the Delphix toolkit will be installed"
+        default: /tmp
+    source_config_fields:
+      - name: name
+        description: "Source config name"
+        default: mysql_test
+      - name: source_config_host
+        description: "Which environment to create the source config on (source or target)"
+        default: target
+      - name: data_dir
+        description: "MySQL data directory path on the host"
+        default: /var/lib/mysql
+      - name: port
+        description: "MySQL port on the host"
+        default: 3306
+      - name: base_dir
+        description: "MySQL installation base directory on the host (where /bin/mysql lives)"
+        default: /usr
+    link_type: AppDataStaged               # Staging Push ingestion
     required_link_fields:
       - name: mountPath
-        description: "Unique NFS mount directory on the staging host"
-        default: /mnt/provision
+        description: "Unique NFS mount directory on the staging host (pattern: /mnt/link/<stagingPort>)"
+        default: /mnt/link/2150
       - name: stagingBasedir
         description: "MySQL installation base directory on staging host (where /bin/mysql lives)"
-        example: /usr
+        default: /usr
       - name: stagingPort
-        description: "Port for the staging MySQL instance — must differ from source"
-        example: 3308
+        description: "Port for the staging MySQL instance — must differ from source (3306)"
+        default: 2150
       - name: sourceip
         description: "Source MySQL hostname (auto-populated from source_host)"
         source: source_host
@@ -41,27 +83,30 @@ connectors:
         description: "DB password for the staging database"
         source: link_password
       - name: serverId
-        description: "MySQL server-id for staging (must be unique on the network)"
-        example: 200
+        description: "MySQL server-id for staging DB — must be unique on the network"
+        default: 150
+      - name: stagingInitPassword
+        description: "Host user password used while initializing the staging DB"
+        source: link_password
     provision_fields:
       - name: vdbUser
-        description: "MySQL user for the VDB instance"
+        description: "DB user for the VDB MySQL instance"
         source: link_user
       - name: vdbPass
-        description: "MySQL password for the VDB instance"
+        description: "DB password for the VDB MySQL instance"
         source: link_password
       - name: baseDir
-        description: "MySQL installation base directory on VDB host"
+        description: "MySQL installation base directory on VDB host (where /bin/mysql lives)"
         default: /usr
       - name: port
-        description: "Port for the VDB MySQL instance"
-        example: 3309
+        description: "Port for the VDB MySQL instance — must differ from source (3306) and staging (2150)"
+        default: 2151
       - name: serverId
-        description: "MySQL server-id for the VDB (must be unique)"
-        example: 300
+        description: "MySQL server-id for the VDB — must be unique on the network"
+        default: 151
       - name: mPath
-        description: "NFS mount path for the VDB"
-        default: /mnt/provision
+        description: "Unique NFS mount directory for the VDB (pattern: /mnt/provision/<port>)"
+        default: /mnt/provision/2151
 
   # ── IBM DB2 via AppData plugin ────────────────────────────────────────────
   db2:
