@@ -26,12 +26,31 @@ Workflow summary:
 
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
 
-from tests.llm_local.conftest import license_blocked
+from tests.llm_local.conftest import license_blocked, DriverResult
 from tests.llm_local.connector_fixtures import ConnectorSpec, EngineSpec
+
+
+def _l5(label: str, prompt: str, result: DriverResult) -> None:
+    """Print a structured L5_DETAIL line captured by pytest-json-report stdout."""
+    print(
+        "\nL5_DETAIL:"
+        + json.dumps({
+            "label": label,
+            "prompt": prompt[:600],
+            "tools_used": sorted(result.tools_used),
+            "tool_calls": [
+                {"tool": c.name, "action": c.input.get("action"), "input_keys": sorted(c.input.keys())}
+                for c in result.tool_calls
+            ],
+            "final_text": result.final_text[:500],
+            "returncode": result.returncode,
+        })
+    )
 
 pytestmark = [pytest.mark.real_dct, pytest.mark.llm_driven]
 
@@ -79,25 +98,25 @@ def test_ai_registers_engine(engine_spec: EngineSpec, llm_driver_for):
 
     drive = llm_driver_for("continuous_data_admin")
 
-    act = drive(
-        f"Register a Delphix Engine with DCT using management_tool action=register. "
+    act_prompt = (
+        f"Register a Delphix Engine with DCT using engine_tool action=register. "
         f"Use: name='{engine_spec.name}', hostname='{engine_spec.hostname}', "
         f"username='{engine_spec.username}', password='{engine_spec.password}', "
         f"insecure_ssl={str(engine_spec.insecure_ssl).lower()}. "
         f"If an engine with hostname '{engine_spec.hostname}' is already registered "
-        f"(search first), skip registration and report it as already present.",
-        timeout=120,
+        f"(search first), skip registration and report it as already present."
     )
+    act = drive(act_prompt, timeout=120)
     if license_blocked(act):
         pytest.skip("DCT license does not permit engine registration")
-    assert "management_tool" in act.tools_used, (
-        f"Claude did not use management_tool.\n{act.final_text[:400]}"
+    _l5("act:register_engine", act_prompt, act)
+    assert "engine_tool" in act.tools_used, (
+        f"Claude did not use engine_tool.\n{act.final_text[:400]}"
     )
 
-    # Independent verify — search without mentioning the hostname
-    verify = drive(
-        "List all registered engines showing their names and hostnames."
-    )
+    verify_prompt = "List all registered engines showing their names and hostnames."
+    verify = drive(verify_prompt)
+    _l5("verify:list_engines", verify_prompt, verify)
     assert engine_spec.hostname in verify.final_text, (
         f"Engine '{engine_spec.hostname}' not found after registration.\n"
         f"{verify.final_text[:400]}"
