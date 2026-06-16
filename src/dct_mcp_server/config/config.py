@@ -21,7 +21,9 @@ def get_dct_config() -> Dict[str, Any]:
         "timeout": int(os.getenv("DCT_TIMEOUT", "30")),
         "max_retries": int(os.getenv("DCT_MAX_RETRIES", "3")),
         "log_level": os.getenv("DCT_LOG_LEVEL", "INFO").upper(),
-        "is_local_telemetry_enabled": os.getenv("IS_LOCAL_TELEMETRY_ENABLED", "false").lower()
+        "is_local_telemetry_enabled": os.getenv(
+            "IS_LOCAL_TELEMETRY_ENABLED", "false"
+        ).lower()
         == "true",
         "toolset": os.getenv("DCT_TOOLSET", "dynamic").lower().strip(),
         # Dynamic mode (DCT_TOOLSET=dynamic) spec cache settings
@@ -66,30 +68,18 @@ def print_config_help():
     print(
         "  IS_LOCAL_TELEMETRY_ENABLED Enable local telemetry data collection (default: false)"
     )
-    print(
-        "  DCT_TOOLSET      Active toolset (default: dynamic). Options:"
-    )
+    print("  DCT_TOOLSET      Active toolset (default: dynamic). Options:")
     print(
         "                   - dynamic: 2-tool mode (discovery + execute) driven by live OpenAPI spec (default)"
     )
-    print(
-        "                   - auto: Dynamic discovery mode with meta-tools"
-    )
-    print(
-        "                   - self_service: Basic VDB operations for developers/QA"
-    )
+    print("                   - auto: Dynamic discovery mode with meta-tools")
+    print("                   - self_service: Basic VDB operations for developers/QA")
     print(
         "                   - self_service_provision: Extended self-service with provisioning"
     )
-    print(
-        "                   - continuous_data_admin: Full DBA/CD admin operations"
-    )
-    print(
-        "                   - platform_admin: System administration tools"
-    )
-    print(
-        "                   - reporting_insights: Read-only reporting and analytics"
-    )
+    print("                   - continuous_data_admin: Full DBA/CD admin operations")
+    print("                   - platform_admin: System administration tools")
+    print("                   - reporting_insights: Read-only reporting and analytics")
     print()
     print("Dynamic mode (DCT_TOOLSET=dynamic) optional variables:")
     print(

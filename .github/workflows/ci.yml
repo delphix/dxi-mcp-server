@@ -6,7 +6,7 @@
 #   - Needs NO secrets: tests are unit-level (no live DCT, no DCT_API_KEY).
 #   - GitHub-hosted runners are free/unlimited for public repos.
 #
-# Jobs: lint (advisory for now), test (+ coverage floor), build.
+# Jobs: lint (ruff check + format, blocking), test (+ coverage floor), build.
 name: ci
 
 on:
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   lint:
-    name: lint (ruff check + format, advisory)
+    name: lint (ruff check + format)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,19 +32,17 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ruff
-        run: python -m pip install --upgrade pip ruff
+        # Pinned to match .pre-commit-config.yaml so local and CI format/lint
+        # results are identical (avoids version-skew false failures).
+        run: python -m pip install --upgrade pip "ruff==0.15.17"
       # ruff replaces flake8 (lint) AND black (format) with one tool, run here
       # and in .pre-commit-config.yaml so local and CI checks are identical.
-      # Both steps are advisory until the existing findings are cleaned up:
-      # they annotate the PR but never fail the gate. Flip to hard
-      # `ruff check .` / `ruff format --check .` in a later PR once the backlog
-      # is burned down. The same flip should update .pre-commit-config.yaml.
-      - name: Ruff lint (flake8-equivalent, non-blocking)
-        run: ruff check . --output-format=github --exit-zero
-      - name: Ruff format check (black-equivalent, non-blocking)
-        run: |
-          ruff format --check . \
-            || echo "::warning::ruff format would reformat files — run 'ruff format .' locally before committing"
+      # Both steps are BLOCKING: a lint error or an unformatted file fails the
+      # gate. Rule config (per-file ignores, line length) lives in pyproject.toml.
+      - name: Ruff lint (flake8-equivalent)
+        run: ruff check . --output-format=github
+      - name: Ruff format check (black-equivalent)
+        run: ruff format --check .
 
   test:
     name: test + coverage (Python ${{ matrix.python-version }})

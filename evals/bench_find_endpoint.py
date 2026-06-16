@@ -67,7 +67,9 @@ def _load_cached_spec() -> dict:
     Start the server once with DCT_TOOLSET=dynamic to download and cache the
     DCT OpenAPI spec, then re-run this benchmark.
     """
-    spec_path = Path(tempfile.gettempdir()) / "dct_mcp_tools" / "api-external-dynamic.yaml"
+    spec_path = (
+        Path(tempfile.gettempdir()) / "dct_mcp_tools" / "api-external-dynamic.yaml"
+    )
     if not spec_path.exists():
         raise SystemExit(
             f"Spec not found at {spec_path}. Start the server once in dynamic mode "
@@ -157,11 +159,18 @@ def main() -> int:
 
     # ---- correctness ---------------------------------------------------- #
     rank_mismatch = sum(
-        _strip_rank(rank_old(spec, q)) != _strip_rank(rank_new(spec, q)) for q in QUERIES
+        _strip_rank(rank_old(spec, q)) != _strip_rank(rank_new(spec, q))
+        for q in QUERIES
     )
-    full_mismatch = sum(full_old(spec, q, toolsets) != full_new(spec, q) for q in QUERIES)
-    print(f"Correctness — ranking:   {len(QUERIES) - rank_mismatch}/{len(QUERIES)} identical")
-    print(f"Correctness — end-to-end: {len(QUERIES) - full_mismatch}/{len(QUERIES)} identical\n")
+    full_mismatch = sum(
+        full_old(spec, q, toolsets) != full_new(spec, q) for q in QUERIES
+    )
+    print(
+        f"Correctness — ranking:   {len(QUERIES) - rank_mismatch}/{len(QUERIES)} identical"
+    )
+    print(
+        f"Correctness — end-to-end: {len(QUERIES) - full_mismatch}/{len(QUERIES)} identical\n"
+    )
 
     calls = iters * len(QUERIES)
 
@@ -177,11 +186,17 @@ def main() -> int:
     f_old = _time(lambda q: full_old(spec, q, toolsets), iters)
     f_new = _time(lambda q: full_new(spec, q), iters)
 
-    print(f"Iterations: {iters}  |  Queries/iter: {len(QUERIES)}  |  Total calls: {calls}\n")
+    print(
+        f"Iterations: {iters}  |  Queries/iter: {len(QUERIES)}  |  Total calls: {calls}\n"
+    )
     print(f"{'Layer':<14}{'OLD ms/call':>14}{'NEW ms/call':>14}{'Speedup':>12}")
     print("-" * 54)
-    print(f"{'ranking':<14}{r_old / calls * 1000:>14.3f}{r_new / calls * 1000:>14.3f}{r_old / r_new:>11.1f}x")
-    print(f"{'end-to-end':<14}{f_old / calls * 1000:>14.3f}{f_new / calls * 1000:>14.3f}{f_old / f_new:>11.1f}x")
+    print(
+        f"{'ranking':<14}{r_old / calls * 1000:>14.3f}{r_new / calls * 1000:>14.3f}{r_old / r_new:>11.1f}x"
+    )
+    print(
+        f"{'end-to-end':<14}{f_old / calls * 1000:>14.3f}{f_new / calls * 1000:>14.3f}{f_old / f_new:>11.1f}x"
+    )
 
     return 1 if (rank_mismatch or full_mismatch) else 0
 

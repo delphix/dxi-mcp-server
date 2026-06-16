@@ -38,6 +38,7 @@ _MAX_PAGE_SIZE = 50
 # Public registration entry point
 # =========================================================================== #
 
+
 def register_dynamic_tools(app: FastMCP, dct_client: Any) -> None:
     """
     Register the `discovery` and `execute` tools on the FastMCP app.
@@ -66,6 +67,7 @@ def register_dynamic_tools(app: FastMCP, dct_client: Any) -> None:
 # =========================================================================== #
 # Tool factory functions (return decorated callables)
 # =========================================================================== #
+
 
 def _get_spec(app: FastMCP) -> dict[str, Any] | None:
     """Return the OpenAPI spec from the spec_cache module-level cache.
@@ -240,7 +242,9 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # Step 2 — Look up operation in spec
         # ---------------------------------------------------------------- #
         # Try to find by the resolved path first, then by the template path
-        path_item = _find_path_item(paths_map, resolved_path) or _find_path_item(paths_map, path)
+        path_item = _find_path_item(paths_map, resolved_path) or _find_path_item(
+            paths_map, path
+        )
         if path_item is None:
             # Also try without leading /dct/v3 prefix in case caller included it
             stripped = re.sub(r"^/dct/v3", "", resolved_path)
@@ -259,7 +263,8 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         operation = path_item.get(method_upper.lower())
         if operation is None:
             available_methods = [
-                m.upper() for m in path_item
+                m.upper()
+                for m in path_item
                 if m.lower() in {"get", "post", "put", "patch", "delete"}
             ]
             return {
@@ -275,8 +280,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # Step 3 — Validate required parameters
         # ---------------------------------------------------------------- #
         validation_error = _validate_required_params(
-            operation, path_params or {}, query_params or {}, body,
-            resolved_path=resolved_path, spec=spec,
+            operation,
+            path_params or {},
+            query_params or {},
+            body,
+            resolved_path=resolved_path,
+            spec=spec,
         )
         if validation_error:
             return validation_error
@@ -338,7 +347,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 "message": str(exc),
             }
         except Exception as exc:
-            logger.error("Unexpected error dispatching %s %s: %s", method_upper, resolved_path, exc)
+            logger.error(
+                "Unexpected error dispatching %s %s: %s",
+                method_upper,
+                resolved_path,
+                exc,
+            )
             return {
                 "status": "error",
                 "code": "DCT_API_ERROR",
@@ -352,6 +366,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
 # =========================================================================== #
 # Discovery action implementations
 # =========================================================================== #
+
 
 def _action_list_tags(paths_map: dict[str, Any]) -> dict[str, Any]:
     """Extract all unique tags from spec paths with operation counts."""
@@ -417,20 +432,20 @@ def _action_list_operations(
             # Confirmation flag
             conf = check_confirmation(m_upper, path)
 
-            operations.append({
-                "method": m_upper,
-                "path": path,
-                "operationId": op_id,
-                "summary": summary,
-                "tags": op_tags,
-                "requires_confirmation": conf["requires_confirmation"],
-            })
+            operations.append(
+                {
+                    "method": m_upper,
+                    "path": path,
+                    "operationId": op_id,
+                    "summary": summary,
+                    "tags": op_tags,
+                    "requires_confirmation": conf["requires_confirmation"],
+                }
+            )
 
     # Sort: GET before mutating, then alphabetically by path
     _METHOD_ORDER = {"GET": 0, "POST": 1, "PUT": 2, "PATCH": 3, "DELETE": 4}
-    operations.sort(
-        key=lambda o: (_METHOD_ORDER.get(o["method"], 9), o["path"])
-    )
+    operations.sort(key=lambda o: (_METHOD_ORDER.get(o["method"], 9), o["path"]))
 
     # Paginate
     total_count = len(operations)
@@ -474,7 +489,8 @@ def _action_get_operation_schema(
     op = path_item.get(operation_method.lower())
     if op is None:
         available = [
-            m.upper() for m in path_item
+            m.upper()
+            for m in path_item
             if m.lower() in {"get", "post", "put", "patch", "delete"}
         ]
         return {
@@ -506,7 +522,9 @@ def _action_get_operation_schema(
     request_body_fields: list[dict] = []
     request_body = op.get("requestBody", {}) or {}
     if request_body:
-        resolved_rb, truncated = _resolve_refs(request_body, spec, depth=0, visited=frozenset())
+        resolved_rb, truncated = _resolve_refs(
+            request_body, spec, depth=0, visited=frozenset()
+        )
         if truncated:
             schema_truncated = True
         request_body_fields = _flatten_request_body(resolved_rb)
@@ -514,7 +532,9 @@ def _action_get_operation_schema(
     # Resolve $ref in responses
     responses: dict = {}
     for status_code, resp_obj in (op.get("responses", {}) or {}).items():
-        resolved_resp, truncated = _resolve_refs(resp_obj, spec, depth=0, visited=frozenset())
+        resolved_resp, truncated = _resolve_refs(
+            resp_obj, spec, depth=0, visited=frozenset()
+        )
         if truncated:
             schema_truncated = True
         responses[str(status_code)] = resolved_resp
@@ -544,6 +564,7 @@ def _action_get_operation_schema(
 # Execute helper functions
 # =========================================================================== #
 
+
 def _substitute_path_params(
     path: str, path_params: dict[str, Any]
 ) -> tuple[str, list[str]]:
@@ -565,9 +586,7 @@ def _substitute_path_params(
     return resolved, missing
 
 
-def _find_path_item(
-    paths_map: dict[str, Any], path: str
-) -> dict[str, Any] | None:
+def _find_path_item(paths_map: dict[str, Any], path: str) -> dict[str, Any] | None:
     """
     Find the path item in the spec for the given resolved path.
 
@@ -701,6 +720,7 @@ def _extract_http_status(error_message: str) -> int | None:
 # $ref resolution helpers
 # =========================================================================== #
 
+
 def _resolve_refs(
     obj: Any,
     spec: dict[str, Any],
@@ -725,7 +745,11 @@ def _resolve_refs(
     if "$ref" in obj:
         ref = obj["$ref"]
         if ref in visited:
-            return {"$ref_truncated": True, "reason": "cycle_detected", "ref": ref}, True
+            return {
+                "$ref_truncated": True,
+                "reason": "cycle_detected",
+                "ref": ref,
+            }, True
         try:
             resolved_target = _lookup_ref(ref, spec)
             resolved, truncated = _resolve_refs(
@@ -750,7 +774,9 @@ def _resolve_refs(
         elif isinstance(v, list):
             resolved_list: list[Any] = []
             for item in v:
-                resolved_item, child_truncated = _resolve_refs(item, spec, depth + 1, visited)
+                resolved_item, child_truncated = _resolve_refs(
+                    item, spec, depth + 1, visited
+                )
                 if child_truncated:
                     truncated = True
                 resolved_list.append(resolved_item)
@@ -772,7 +798,9 @@ def _lookup_ref(ref: str, spec: dict[str, Any]) -> Any:
     return node
 
 
-def _flatten_request_body(resolved_request_body: dict[str, Any]) -> list[dict[str, Any]]:
+def _flatten_request_body(
+    resolved_request_body: dict[str, Any],
+) -> list[dict[str, Any]]:
     """
     Flatten a resolved requestBody into a list of field descriptors.
 
@@ -790,12 +818,14 @@ def _flatten_request_body(resolved_request_body: dict[str, Any]) -> list[dict[st
             for name, prop in properties.items():
                 if not isinstance(prop, dict):
                     continue
-                fields.append({
-                    "name": name,
-                    "required": name in required_fields,
-                    "type": prop.get("type", "object"),
-                    "description": prop.get("description", ""),
-                })
+                fields.append(
+                    {
+                        "name": name,
+                        "required": name in required_fields,
+                        "type": prop.get("type", "object"),
+                        "description": prop.get("description", ""),
+                    }
+                )
             break  # Only process first media type
     except Exception as exc:
         logger.debug("Could not flatten requestBody fields: %s", exc)

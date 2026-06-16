@@ -1,7 +1,5 @@
 """Unit tests for hook-key normalization in tool_factory (DLPXECO-13799)."""
 
-import pytest
-
 from dct_mcp_server.tools.core.tool_factory import (
     _VALID_HOOK_TYPES,
     _camel_to_snake,
@@ -34,7 +32,11 @@ def test_normalize_hooks_mixed_keys():
     }
     err = _normalize_hooks_in_body(body)
     assert err is None
-    assert set(body["hooks"].keys()) == {"configure_clone", "pre_refresh", "post_snapshot"}
+    assert set(body["hooks"].keys()) == {
+        "configure_clone",
+        "pre_refresh",
+        "post_snapshot",
+    }
     assert body["hooks"]["configure_clone"] == [{"name": "a"}]
     assert body["hooks"]["pre_refresh"] == [{"name": "b"}]
     assert body["hooks"]["post_snapshot"] == [{"name": "c"}]

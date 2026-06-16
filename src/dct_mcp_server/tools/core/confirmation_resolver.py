@@ -117,6 +117,7 @@ def check_confirmation(
 # Helpers
 # --------------------------------------------------------------------------- #
 
+
 def _reconstruct_level_string(level: str, threshold: int | None, raw: dict) -> str:
     """Re-build the raw level string (e.g. 'retention_check:7') from parsed pieces."""
     if threshold is not None:
@@ -128,7 +129,7 @@ def _reconstruct_level_string(level: str, threshold: int | None, raw: dict) -> s
 def _parse_threshold(level_str: str, prefix: str) -> int:
     """Extract the integer threshold from a conditional level string."""
     try:
-        return int(level_str[len(prefix):])
+        return int(level_str[len(prefix) :])
     except (ValueError, IndexError):
         logger.warning("Could not parse threshold from '%s'", level_str)
         return 0

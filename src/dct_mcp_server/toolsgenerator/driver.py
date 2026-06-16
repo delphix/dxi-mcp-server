@@ -17,23 +17,23 @@ Configuration Files Used:
 - config/toolsets/*.txt: Toolset definitions with METHOD|path|action format and # TOOL headers
 """
 
-
 import yaml
 import os
 import glob
 import re
 import requests
-import urllib3
 import logging
 import tempfile
 from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.config.loader import TOOLSETS_DIR
 
 # Get the absolute path of the project root
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+project_root = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..")
+)
 
 # For uvx/package installations, use the package directory structure
-if 'site-packages' in __file__:
+if "site-packages" in __file__:
     # Use temp directory for generated tools to avoid permission issues
     TOOLS_DIR = os.path.join(tempfile.gettempdir(), "dct_mcp_tools")
 else:
@@ -60,16 +60,16 @@ SKIPPED_ENTRIES: list[dict] = []
 TOOL_DOMAIN_HINTS = {
     "data_tool": (
         "IMPORTANT — Delphix domain terminology:\n"
-        "  • \"dSource\" is often used as a VERB meaning \"create/link a dSource\" "
+        '  • "dSource" is often used as a VERB meaning "create/link a dSource" '
         "(i.e. ingest a source database). When a user says "
-        "\"dSource database X\", they want to LINK a new dSource for database X, "
+        '"dSource database X", they want to LINK a new dSource for database X, '
         "NOT look up an existing dSource named X. Use the appropriate "
         "dsource_link_* action (dsource_link_oracle, dsource_link_mssql, "
         "dsource_link_ase, dsource_link_appdata) depending on the database type.\n"
-        "  • \"provision\" or \"spin up\" a VDB or \"create a golden image of a "
-        "VDB\" means creating a virtual database from a dSource or bookmark  —"
+        '  • "provision" or "spin up" a VDB or "create a golden image of a '
+        'VDB" means creating a virtual database from a dSource or bookmark  —'
         " use provision_by_timestamp, provision_by_snapshot, etc.\n"
-        "  • \"refresh\" a VDB means updating it with newer data from its parent — "
+        '  • "refresh" a VDB means updating it with newer data from its parent — '
         "use refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, etc."
     ),
 }
@@ -146,41 +146,43 @@ ACTION_DOMAIN_HINTS: dict[str, str] = {
 def load_api_endpoints_from_toolsets():
     """
     Load API endpoints from the SELECTED toolset file and group by TOOL NAME.
-    
+
     Only reads the toolset specified by DCT_TOOLSET config (default: self_service).
     Parses tool comments like "# TOOL 1: vdb_tool" to group APIs into unified tools.
     Each tool will support multiple actions (search, get, create, etc.).
     """
     global TOOLS_BY_NAME
     TOOLS_BY_NAME = {}
-    
+
     if not TOOLSETS_DIR.exists():
         logger.error(f"Toolsets directory not found: {TOOLSETS_DIR}")
         return
-    
+
     # Get the selected toolset from config
     dct_config = get_dct_config()
     selected_toolset = dct_config.get("toolset", "self_service")
-    
+
     # "auto" and "dynamic" modes do not use the persona-grouped generator output
     # (dynamic mode loads the spec directly); fall back to self_service for grouping.
     if selected_toolset in ("auto", "dynamic"):
         selected_toolset = "self_service"
-    
+
     toolset_file = TOOLSETS_DIR / f"{selected_toolset}.txt"
-    
+
     if not toolset_file.exists():
         logger.error(f"Toolset file not found: {toolset_file}")
         return
-    
+
     logger.info(f"Loading toolset: {selected_toolset} from {toolset_file}")
-    
+
     # Parse the selected toolset file
     _parse_toolset_file(toolset_file)
-    
+
     # Log summary
     total_apis = sum(len(apis) for apis in TOOLS_BY_NAME.values())
-    logger.info(f"Loaded {total_apis} APIs grouped into {len(TOOLS_BY_NAME)} unified tools")
+    logger.info(
+        f"Loaded {total_apis} APIs grouped into {len(TOOLS_BY_NAME)} unified tools"
+    )
     for tool_name, apis in TOOLS_BY_NAME.items():
         logger.info(f"  {tool_name}: {len(apis)} actions")
 
@@ -188,23 +190,23 @@ def load_api_endpoints_from_toolsets():
 def _parse_toolset_file(toolset_file):
     """
     Parse a single toolset file and populate TOOLS_BY_NAME.
-    
+
     Handles inheritance directives (@inherit:parent_toolset).
     """
     global TOOLS_BY_NAME
     current_tool = None
-    
-    with open(toolset_file, 'r') as f:
+
+    with open(toolset_file, "r") as f:
         for line in f:
             line = line.strip()
-            
+
             # Skip empty lines
             if not line:
                 continue
-            
+
             # Handle inheritance directive
-            if line.startswith('@inherit:'):
-                parent_name = line.split(':')[1].strip()
+            if line.startswith("@inherit:"):
+                parent_name = line.split(":")[1].strip()
                 parent_file = TOOLSETS_DIR / f"{parent_name}.txt"
                 if parent_file.exists():
                     logger.info(f"  Inheriting from: {parent_name}")
@@ -212,34 +214,36 @@ def _parse_toolset_file(toolset_file):
                 else:
                     logger.warning(f"Parent toolset not found: {parent_name}")
                 continue
-            
+
             # Check for tool header comments like "# TOOL 1: vdb_tool"
             # Must start with "# TOOL" followed by number and colon (not "# Inherited: TOOL")
-            tool_header_match = re.match(r'^#\s*TOOL\s+\d+\s*:\s*(\w+)', line, re.IGNORECASE)
+            tool_header_match = re.match(
+                r"^#\s*TOOL\s+\d+\s*:\s*(\w+)", line, re.IGNORECASE
+            )
             if tool_header_match:
                 # Extract tool name from regex group
                 current_tool = tool_header_match.group(1).strip()
                 if current_tool and current_tool not in TOOLS_BY_NAME:
                     TOOLS_BY_NAME[current_tool] = []
                 continue
-            
+
             # Skip other comments
-            if line.startswith('#'):
+            if line.startswith("#"):
                 continue
-            
+
             # Parse METHOD|path|action format
-            parts = line.split('|')
+            parts = line.split("|")
             if len(parts) >= 3 and current_tool:
                 http_method = parts[0].strip().upper()
                 api_path = parts[1].strip()
                 action_name = parts[2].strip()
-                
+
                 api_entry = {
                     "method": http_method,
                     "path": api_path,
-                    "action": action_name
+                    "action": action_name,
                 }
-                
+
                 # Avoid duplicates
                 if api_entry not in TOOLS_BY_NAME[current_tool]:
                     TOOLS_BY_NAME[current_tool].append(api_entry)
@@ -255,16 +259,16 @@ def download_open_api_yaml(api_url: str, save_path: str):
     """Downloads the OpenAPI YAML from the given URL."""
     try:
         logger.info(f"Downloading OpenAPI spec from {api_url}...")
-        
+
         # Get DCT configuration for proper authentication and SSL settings
         dct_config = get_dct_config()
         verify_ssl = dct_config.get("verify_ssl", False)
         api_key = dct_config.get("api_key")
-        
+
         # Prepare headers with authentication if API key is available
         headers = {
             "Accept": "application/x-yaml, text/yaml, application/json",
-            "User-Agent": "dct-mcp-server-toolgen/1.0"
+            "User-Agent": "dct-mcp-server-toolgen/1.0",
         }
         if api_key:
             headers["Authorization"] = f"apk {api_key}"
@@ -278,6 +282,7 @@ def download_open_api_yaml(api_url: str, save_path: str):
     except requests.exceptions.RequestException as e:
         logger.warning(f"Error downloading OpenAPI spec: {e}")
         raise
+
 
 translated_dict_for_types = {
     "integer": "int",
@@ -377,20 +382,35 @@ def build_params(**kwargs):
 
 """
 
+
 def create_register_tool_function(tool_name, apis):
     func_str = "\n"
     func_str += "def register_tools(app, dct_client):\n"
-    func_str += " "* INDENT_SIZE + "global client\n"
-    func_str += " "* INDENT_SIZE + "client = dct_client\n"
-    func_str += " "* INDENT_SIZE + f"logger.info(f'Registering tools for {tool_name}...')\n"
-    func_str += " "* INDENT_SIZE + "try:\n"
+    func_str += " " * INDENT_SIZE + "global client\n"
+    func_str += " " * INDENT_SIZE + "client = dct_client\n"
+    func_str += (
+        " " * INDENT_SIZE + f"logger.info(f'Registering tools for {tool_name}...')\n"
+    )
+    func_str += " " * INDENT_SIZE + "try:\n"
     for function in apis:
-        func_str += " "* INDENT_SIZE*2 + f"logger.info(f'  Registering tool function: {function}')\n"
-        func_str += " "* INDENT_SIZE*2 + f"app.add_tool({function}, name=\"{function}\")\n"
-    func_str += " "* INDENT_SIZE + "except Exception as e:\n"
-    func_str += " "* INDENT_SIZE*2 + f"logger.error(f'Error registering tools for {tool_name}: {{e}}')\n"
-    func_str += " "* INDENT_SIZE + f"logger.info(f'Tools registration finished for {tool_name}.')\n"
+        func_str += (
+            " " * INDENT_SIZE * 2
+            + f"logger.info(f'  Registering tool function: {function}')\n"
+        )
+        func_str += (
+            " " * INDENT_SIZE * 2 + f'app.add_tool({function}, name="{function}")\n'
+        )
+    func_str += " " * INDENT_SIZE + "except Exception as e:\n"
+    func_str += (
+        " " * INDENT_SIZE * 2
+        + f"logger.error(f'Error registering tools for {tool_name}: {{e}}')\n"
+    )
+    func_str += (
+        " " * INDENT_SIZE
+        + f"logger.info(f'Tools registration finished for {tool_name}.')\n"
+    )
     return func_str
+
 
 def read_open_api_yaml(api_file):
     yaml_body = ""
@@ -404,11 +424,11 @@ def resolve_ref(ref: str, root: dict):
     Resolve a JSON pointer $ref like '#/components/schemas/DSource'
     inside a loaded OpenAPI YAML dict.
     """
-    if not ref.startswith('#/'):
+    if not ref.startswith("#/"):
         raise ValueError(f"Unsupported ref format: {ref}")
 
     # Remove starting '#/' and split by "/"
-    path = ref.lstrip('#/').split('/')
+    path = ref.lstrip("#/").split("/")
 
     node = root
     for part in path:
@@ -438,7 +458,6 @@ def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
 
         for sub_schema in schema["allOf"]:
             is_ref = "$ref" in sub_schema
-            ref_name = sub_schema.get("$ref", "").split("/")[-1] if is_ref else ""
 
             # Resolve $ref in sub-schema
             if is_ref:
@@ -446,7 +465,9 @@ def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
 
             # Recursively handle nested allOf
             if "allOf" in sub_schema:
-                nested_props, nested_required, nested_key = resolve_schema_properties(sub_schema, api_spec)
+                nested_props, nested_required, nested_key = resolve_schema_properties(
+                    sub_schema, api_spec
+                )
                 combined_properties.update(nested_props)
                 combined_required.extend(nested_required)
                 # Don't propagate key_properties from base schemas
@@ -473,7 +494,7 @@ def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
 def generate_tools_from_openapi():
     """
     Generates UNIFIED tool files from OpenAPI spec based on TOOLS_BY_NAME.
-    
+
     Each tool supports multiple actions through an 'action' parameter.
     Example: vdb_tool(action="search", ...) or vdb_tool(action="start", vdb_id="...")
     """
@@ -483,19 +504,21 @@ def generate_tools_from_openapi():
     dct_config = get_dct_config()
     base_url = dct_config.get("base_url")
     if not base_url:
-        logger.error("DCT_BASE_URL not configured. Cannot download OpenAPI specification.")
+        logger.error(
+            "DCT_BASE_URL not configured. Cannot download OpenAPI specification."
+        )
         raise ValueError("DCT_BASE_URL is required for tool generation")
-    
+
     # Construct the OpenAPI spec URL
     client_address = f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
     logger.info(f"OpenAPI spec URL: {client_address}")
-    
+
     # Use temp directory for package installations, project directory for local development
-    if 'site-packages' in __file__:
+    if "site-packages" in __file__:
         API_FILE = os.path.join(tempfile.gettempdir(), "api.yaml")
     else:
         API_FILE = os.path.join(project_root, "src", "api.yaml")
-    
+
     download_open_api_yaml(client_address, API_FILE)
 
     api_spec = read_open_api_yaml(API_FILE)
@@ -503,7 +526,7 @@ def generate_tools_from_openapi():
 
     # Reset per-run skip tracker so the summary only reflects this generation.
     SKIPPED_ENTRIES.clear()
-    
+
     os.makedirs(TOOLS_DIR, exist_ok=True)
 
     # Clean up existing generated tool files before creating new ones
@@ -514,7 +537,7 @@ def generate_tools_from_openapi():
             logger.info(f"Deleted existing tool file: {tool_file}")
         except OSError as e:
             logger.warning(f"Could not delete {tool_file}: {e}")
-    
+
     logger.info(f"Cleaned up {len(existing_tools)} existing tool files")
 
     # Group tools by module for file organization
@@ -526,7 +549,7 @@ def generate_tools_from_openapi():
             module_name = _get_module_for_path(first_path)
         else:
             module_name = "misc_endpoints"
-        
+
         if module_name not in module_tools:
             module_tools[module_name] = {}
         module_tools[module_name][tool_name] = apis
@@ -534,7 +557,7 @@ def generate_tools_from_openapi():
     # Generate one file per module containing unified tools
     for module_name, tools in module_tools.items():
         TOOL_FILE = os.path.join(TOOLS_DIR, f"{module_name}_tool.py")
-        
+
         tool_file_content = prefix
 
         function_lists = []
@@ -554,7 +577,7 @@ def generate_tools_from_openapi():
 
         with open(TOOL_FILE, "w") as f:
             f.write(tool_file_content)
-        
+
         logger.info(f"Generated {TOOL_FILE} with {len(function_lists)} unified tools")
 
     # Delete the api.yaml file after generating all tools
@@ -590,38 +613,30 @@ def _get_module_for_path(api_path: str) -> str:
         "/sources": "dataset_endpoints",
         "/data-connections": "dataset_endpoints",
         "/timeflows": "dataset_endpoints",
-        
         # Job endpoints
         "/jobs": "job_endpoints",
-        
         # Environment endpoints
         "/environments": "environment_endpoints",
         "/toolkits": "environment_endpoints",
-        
         # Engine endpoints
         "/management/engines": "engine_endpoints",
         "/engines": "engine_endpoints",
-        
         # Compliance endpoints
         "/masking": "compliance_endpoints",
         "/connectors": "compliance_endpoints",
         "/executions": "compliance_endpoints",
         "/algorithms": "compliance_endpoints",
-        
         # Reports endpoints
         "/reporting": "reports_endpoints",
         "/reports": "reports_endpoints",
-        
         # IAM endpoints (accounts, roles, access-groups)
         "/management/accounts": "iam_endpoints",
         "/roles": "iam_endpoints",
         "/access-groups": "iam_endpoints",
         "/management/tags": "iam_endpoints",
-        
         # Policy endpoints (replication, virtualization policies)
         "/replication-profiles": "policy_endpoints",
         "/virtualization-policies": "policy_endpoints",
-        
         # Admin/Platform endpoints (AI, telemetry, SMTP, LDAP, SAML, proxy, license, properties)
         "/ai": "admin_endpoints",
         "/management/properties": "admin_endpoints",
@@ -631,12 +646,11 @@ def _get_module_for_path(api_path: str) -> str:
         "/management/saml-config": "admin_endpoints",
         "/management/proxy-configuration": "admin_endpoints",
         "/management/license": "admin_endpoints",
-        
         # Template endpoints
         "/database-templates": "template_endpoints",
         "/hook-templates": "template_endpoints",
     }
-    
+
     # Check from most specific to least specific (longer paths first)
     for prefix in sorted(path_to_module.keys(), key=len, reverse=True):
         if api_path.startswith(prefix):
@@ -644,31 +658,30 @@ def _get_module_for_path(api_path: str) -> str:
     return "misc_endpoints"
 
 
-
 def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     """
     Generate a unified tool function that supports multiple actions.
-    
+
     Args:
         tool_name: Name of the tool (e.g., "vdb_tool")
         apis: List of API entries [{"method": "POST", "path": "/vdbs/search", "action": "search"}, ...]
         api_spec: Parsed OpenAPI specification
-    
+
     Returns:
         Generated Python code for the unified tool function
     """
     # Collect all parameters across all actions
     all_params = {}  # {param_name: {"type": str, "required_for": [actions], "description": str, "param_type": str}}
     action_details = {}  # {action_name: {"method": str, "path": str, "path_params": [], "has_filter": bool, "body_params": []}}
-    
+
     # Extract resource type from tool name for descriptions
     resource_type = tool_name.replace("_tool", "").replace("_", " ").upper()
-    
+
     for api_entry in apis:
         action = api_entry["action"]
         method = api_entry["method"]
         path = api_entry["path"]
-        
+
         path_item = api_spec.get("paths", {}).get(path, {})
         operation = path_item.get(method.lower())
 
@@ -676,8 +689,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             # Distinguish "path not in spec" from "wrong method on a valid path"
             # so the startup summary can point to the likely typo directly.
             available_methods = sorted(
-                m.upper() for m in path_item.keys()
-                if m.lower() in {"get", "post", "put", "patch", "delete", "head", "options"}
+                m.upper()
+                for m in path_item.keys()
+                if m.lower()
+                in {"get", "post", "put", "patch", "delete", "head", "options"}
             )
             if available_methods:
                 hint = (
@@ -688,30 +703,34 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             else:
                 hint = "path not found in OpenAPI spec — likely stale or misspelled."
             logger.warning(f"Skipping {tool_name}.{action}: {method} {path} — {hint}")
-            SKIPPED_ENTRIES.append({
-                "tool": tool_name,
-                "action": action,
-                "method": method,
-                "path": path,
-                "hint": hint,
-            })
+            SKIPPED_ENTRIES.append(
+                {
+                    "tool": tool_name,
+                    "action": action,
+                    "method": method,
+                    "path": path,
+                    "hint": hint,
+                }
+            )
             continue
-        
+
         # Extract path parameters
-        path_params = re.findall(r'\{(\w+)\}', path)
-        path_params_snake = [(p, re.sub(r'(?<!^)(?=[A-Z])', '_', p).lower()) for p in path_params]
-        
-        has_filter = operation.get('x-filterable', False)
-        
+        path_params = re.findall(r"\{(\w+)\}", path)
+        path_params_snake = [
+            (p, re.sub(r"(?<!^)(?=[A-Z])", "_", p).lower()) for p in path_params
+        ]
+
+        has_filter = operation.get("x-filterable", False)
+
         action_details[action] = {
             "method": method,
             "path": path,
             "path_params": path_params_snake,
             "has_filter": has_filter,
             "summary": operation.get("summary", ""),
-            "operation_id": operation.get("operationId", action)
+            "operation_id": operation.get("operationId", action),
         }
-        
+
         # Add path parameters
         for orig_name, snake_name in path_params_snake:
             param_key = snake_name
@@ -719,59 +738,83 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 # Find description from parameters
                 desc = f"The unique identifier for the {orig_name.replace('Id', '')}."
                 for param in operation.get("parameters", []):
-                    param_def = resolve_ref(param["$ref"], api_spec) if "$ref" in param else param
+                    param_def = (
+                        resolve_ref(param["$ref"], api_spec)
+                        if "$ref" in param
+                        else param
+                    )
                     if param_def.get("name") == orig_name:
                         desc = param_def.get("description", desc)
                         break
-                all_params[param_key] = {"type": "str", "required_for": [], "description": desc, "param_type": "path"}
+                all_params[param_key] = {
+                    "type": "str",
+                    "required_for": [],
+                    "description": desc,
+                    "param_type": "path",
+                }
             all_params[param_key]["required_for"].append(action)
-        
+
         # Add query parameters
         for param in operation.get("parameters", []):
-            param_def = resolve_ref(param["$ref"], api_spec) if "$ref" in param else param
+            param_def = (
+                resolve_ref(param["$ref"], api_spec) if "$ref" in param else param
+            )
             if param_def.get("in") == "path":
                 continue
 
             name = param_def.get("name", "unknown")
             try:
-                param_type = translated_dict_for_types.get(param_def['schema']['type'], "str")
+                param_type = translated_dict_for_types.get(
+                    param_def["schema"]["type"], "str"
+                )
                 desc = param_def.get("description", "Query parameter")
 
                 # Include enum values in description if they exist
-                enum_values = param_def.get('schema', {}).get('enum')
+                enum_values = param_def.get("schema", {}).get("enum")
                 if enum_values:
                     desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
 
                 # Capture default value from the spec if present
-                default_value = param_def.get('schema', {}).get('default')
+                default_value = param_def.get("schema", {}).get("default")
                 if default_value is not None:
                     desc = f"{desc} (Default: {default_value})"
 
                 if name not in all_params:
-                    all_params[name] = {"type": param_type, "required_for": [], "description": desc, "param_type": "query", "default": default_value}
-                elif default_value is not None and all_params[name].get("default") is None:
+                    all_params[name] = {
+                        "type": param_type,
+                        "required_for": [],
+                        "description": desc,
+                        "param_type": "query",
+                        "default": default_value,
+                    }
+                elif (
+                    default_value is not None
+                    and all_params[name].get("default") is None
+                ):
                     all_params[name]["default"] = default_value
                     all_params[name]["description"] = desc
                 all_params[name]["required_for"].append(action)
             except KeyError:
                 continue
-        
+
         # Add request body parameters for POST/PUT/PATCH
         body_params_for_action = []  # Initialize for all methods
         request_body = operation.get("requestBody", {})
-        
+
         # Resolve $ref in requestBody if present
         if "$ref" in request_body:
             request_body = resolve_ref(request_body["$ref"], api_spec)
-        
+
         if request_body and method.upper() in ["POST", "PUT", "PATCH"]:
             content = request_body.get("content", {})
             json_content = content.get("application/json", {})
             schema = json_content.get("schema", {})
-            
+
             # Use helper to resolve schema properties (handles $ref and allOf)
-            properties, required_props, key_props = resolve_schema_properties(schema, api_spec)
-            
+            properties, required_props, key_props = resolve_schema_properties(
+                schema, api_spec
+            )
+
             for prop_name, prop_def in properties.items():
                 # Handle nested $ref in property definition
                 if "$ref" in prop_def:
@@ -788,13 +831,15 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     desc = prop_def.get("description", "Request body parameter")
 
                     # Include enum values in description if they exist
-                    enum_values = prop_def.get('enum')
+                    enum_values = prop_def.get("enum")
                     if enum_values:
                         desc = f"{desc} Valid values: {', '.join(str(v) for v in enum_values)}."
 
                     # Add JSON hint for object/array params
                     if is_json_param:
-                        json_kind = "JSON object" if prop_type == "object" else "JSON array"
+                        json_kind = (
+                            "JSON object" if prop_type == "object" else "JSON array"
+                        )
                         desc = f"{desc} (Pass as {json_kind})"
 
                     # Read x-dct-toolkit-subcommand to tag database-type-specific params
@@ -807,12 +852,16 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                             "appdata": "AppData only",
                             "postgres": "Postgres only",
                         }
-                        label = subcommand_labels.get(toolkit_subcommand, f"{toolkit_subcommand} only")
+                        label = subcommand_labels.get(
+                            toolkit_subcommand, f"{toolkit_subcommand} only"
+                        )
                         desc = f"[{label}] {desc}"
 
                     # Convert camelCase to snake_case for consistency
-                    snake_name = re.sub(r'(?<!^)(?=[A-Z])', '_', prop_name).lower()
-                    body_params_for_action.append((prop_name, snake_name, is_json_param))
+                    snake_name = re.sub(r"(?<!^)(?=[A-Z])", "_", prop_name).lower()
+                    body_params_for_action.append(
+                        (prop_name, snake_name, is_json_param)
+                    )
 
                     # Capture default value from the spec if present
                     default_value = prop_def.get("default")
@@ -820,8 +869,20 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                         desc = f"{desc} (Default: {default_value})"
 
                     if snake_name not in all_params:
-                        all_params[snake_name] = {"type": python_type, "required_for": [], "key_for": [], "description": desc, "param_type": "body", "is_json": is_json_param, "default": default_value, "toolkit_subcommand": toolkit_subcommand}
-                    elif default_value is not None and all_params[snake_name].get("default") is None:
+                        all_params[snake_name] = {
+                            "type": python_type,
+                            "required_for": [],
+                            "key_for": [],
+                            "description": desc,
+                            "param_type": "body",
+                            "is_json": is_json_param,
+                            "default": default_value,
+                            "toolkit_subcommand": toolkit_subcommand,
+                        }
+                    elif (
+                        default_value is not None
+                        and all_params[snake_name].get("default") is None
+                    ):
                         # Update default if this action provides one and we didn't have one yet
                         all_params[snake_name]["default"] = default_value
                         all_params[snake_name]["description"] = desc
@@ -831,10 +892,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                         # Key parameter: action-specific but not in the required list.
                         # Surface these so the LLM knows they are the primary inputs.
                         all_params[snake_name].setdefault("key_for", []).append(action)
-        
+
         # Store body params for this action
         action_details[action]["body_params"] = body_params_for_action
-        
+
         # Add filter_expression for search actions
         if has_filter:
             if "filter_expression" not in all_params:
@@ -842,18 +903,17 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                     "type": "str",
                     "required_for": [],
                     "description": "Filter expression to narrow results (e.g., \"name CONTAINS 'prod'\")",
-                    "param_type": "body"
+                    "param_type": "body",
                 }
-    
+
     # Skip generating tool if no valid actions were found
     if not action_details:
         logger.warning(f"Skipping tool '{tool_name}' - no valid API operations found")
         return ""
-    
+
     # Build function signature
     actions_list = list(action_details.keys())
-    actions_literal = "|".join([f"'{a}'" for a in actions_list])
-    
+
     func_code = f"@log_tool_execution\nasync def {tool_name}(\n"
     func_code += f"    action: str,  # One of: {', '.join(actions_list)}\n"
 
@@ -879,20 +939,24 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                 default_repr = repr(default_value)
             else:
                 default_repr = repr(default_value)
-            func_code += f"    {param_name}: Optional[{param_info['type']}] = {default_repr},\n"
+            func_code += (
+                f"    {param_name}: Optional[{param_info['type']}] = {default_repr},\n"
+            )
         else:
             func_code += f"    {param_name}: Optional[{param_info['type']}] = None,\n"
 
     # Add confirmed parameter for destructive operation confirmation
-    func_code += f"    confirmed: Optional[bool] = None,\n"
+    func_code += "    confirmed: Optional[bool] = None,\n"
 
     func_code += ") -> Dict[str, Any]:\n"
-    
+
     # Build comprehensive docstring with detailed action documentation
     docstring_lines = []
     docstring_lines.append(f"Unified tool for {resource_type} operations.")
     docstring_lines.append("")
-    docstring_lines.append(f"This tool supports {len(actions_list)} actions: {', '.join(actions_list)}")
+    docstring_lines.append(
+        f"This tool supports {len(actions_list)} actions: {', '.join(actions_list)}"
+    )
     docstring_lines.append("")
 
     # Inject domain terminology hints for tools that need them
@@ -906,7 +970,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     docstring_lines.append("=" * 70)
     docstring_lines.append("ACTION REFERENCE")
     docstring_lines.append("=" * 70)
-    
+
     for action_name, details in action_details.items():
         docstring_lines.append("")
         docstring_lines.append(f"ACTION: {action_name}")
@@ -914,22 +978,29 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         docstring_lines.append(f"Summary: {details['summary']}")
         docstring_lines.append(f"Method: {details['method']}")
         docstring_lines.append(f"Endpoint: {details['path']}")
-        
+
         # Required parameters for this action
-        required_params = [p for p, info in all_params.items() if action_name in info["required_for"]]
+        required_params = [
+            p for p, info in all_params.items() if action_name in info["required_for"]
+        ]
         if required_params:
             docstring_lines.append(f"Required Parameters: {', '.join(required_params)}")
 
         # Key parameters: action-specific but not strictly required (e.g. provide at least one of these)
-        key_params = [p for p, info in all_params.items()
-                      if action_name in info.get("key_for", []) and p not in required_params]
+        key_params = [
+            p
+            for p, info in all_params.items()
+            if action_name in info.get("key_for", []) and p not in required_params
+        ]
         if key_params:
-            docstring_lines.append(f"Key Parameters (provide as applicable): {', '.join(key_params)}")
-        
+            docstring_lines.append(
+                f"Key Parameters (provide as applicable): {', '.join(key_params)}"
+            )
+
         # Get full operation details from api_spec for filterable fields
         path_item = api_spec.get("paths", {}).get(details["path"], {})
         operation = path_item.get(details["method"].lower(), {})
-        
+
         # Document filterable fields for search actions
         if details["has_filter"]:
             docstring_lines.append("")
@@ -937,38 +1008,60 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             try:
                 responses = operation.get("responses", {})
                 for status_code, resp_details in responses.items():
-                    if 'content' in resp_details and 'application/json' in resp_details['content']:
-                        schema = resp_details['content']['application/json'].get('schema', {})
-                        if 'properties' in schema and 'items' in schema['properties']:
-                            items_schema = schema['properties']['items']
-                            if 'items' in items_schema and '$ref' in items_schema['items']:
-                                response_schema = resolve_ref(items_schema['items']['$ref'], api_spec)
+                    if (
+                        "content" in resp_details
+                        and "application/json" in resp_details["content"]
+                    ):
+                        schema = resp_details["content"]["application/json"].get(
+                            "schema", {}
+                        )
+                        if "properties" in schema and "items" in schema["properties"]:
+                            items_schema = schema["properties"]["items"]
+                            if (
+                                "items" in items_schema
+                                and "$ref" in items_schema["items"]
+                            ):
+                                response_schema = resolve_ref(
+                                    items_schema["items"]["$ref"], api_spec
+                                )
                                 props = response_schema.get("properties", {})
                                 for prop_name, prop_def in props.items():
                                     prop_desc = prop_def.get("description", "")
                                     if len(prop_desc) > 60:
                                         prop_desc = prop_desc[:57] + "..."
-                                    docstring_lines.append(f"    - {prop_name}: {prop_desc}")
+                                    docstring_lines.append(
+                                        f"    - {prop_name}: {prop_desc}"
+                                    )
                                 break
             except Exception:
-                docstring_lines.append("    (See API documentation for filterable fields)")
-            
+                docstring_lines.append(
+                    "    (See API documentation for filterable fields)"
+                )
+
             docstring_lines.append("")
             docstring_lines.append("Filter Syntax:")
-            docstring_lines.append("    Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN")
+            docstring_lines.append(
+                "    Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN"
+            )
             docstring_lines.append("    Combine: AND, OR")
-            docstring_lines.append("    Example: \"name CONTAINS 'prod' AND status EQ 'RUNNING'\"")
-        
+            docstring_lines.append(
+                "    Example: \"name CONTAINS 'prod' AND status EQ 'RUNNING'\""
+            )
+
         # Example for this action (include both required and key params)
         docstring_lines.append("")
         docstring_lines.append("Example:")
         example_params = [f"action='{action_name}'"]
         for param, info in all_params.items():
-            if action_name in info["required_for"] or action_name in info.get("key_for", []):
+            if action_name in info["required_for"] or action_name in info.get(
+                "key_for", []
+            ):
                 if param.endswith("_id"):
-                    example_params.append(f"{param}='example-{param.replace('_id', '')}-123'")
+                    example_params.append(
+                        f"{param}='example-{param.replace('_id', '')}-123'"
+                    )
                 elif param == "filter_expression":
-                    example_params.append(f"filter_expression=\"name CONTAINS 'test'\"")
+                    example_params.append("filter_expression=\"name CONTAINS 'test'\"")
                 else:
                     example_params.append(f"{param}=...")
         docstring_lines.append(f"    >>> {tool_name}({', '.join(example_params)})")
@@ -998,7 +1091,9 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
     docstring_lines.append("=" * 70)
     docstring_lines.append("")
     docstring_lines.append("Args:")
-    docstring_lines.append(f"    action (str): The operation to perform. One of: {', '.join(actions_list)}")
+    docstring_lines.append(
+        f"    action (str): The operation to perform. One of: {', '.join(actions_list)}"
+    )
 
     # Separate params into general vs database-type-specific groups
     general_params = {}
@@ -1016,7 +1111,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             req_note = f"Required for: {', '.join(required_actions)}"
         else:
             req_note = "Optional for all actions"
-        desc = param_info['description']
+        desc = param_info["description"]
         if len(desc) > 80:
             desc = desc[:77] + "..."
         return [
@@ -1039,29 +1134,37 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         "postgres": "Postgres-specific parameters",
     }
     for subcommand, params in sorted(typed_params.items()):
-        group_label = subcommand_group_labels.get(subcommand, f"{subcommand}-specific parameters")
+        group_label = subcommand_group_labels.get(
+            subcommand, f"{subcommand}-specific parameters"
+        )
         docstring_lines.append("")
-        docstring_lines.append(f"  -- {group_label} (SKIP if not provisioning {subcommand}) --")
+        docstring_lines.append(
+            f"  -- {group_label} (SKIP if not provisioning {subcommand}) --"
+        )
         for param_name, param_info in params.items():
             docstring_lines.extend(_format_param_line(param_name, param_info))
-    
+
     docstring_lines.append("")
     docstring_lines.append("Returns:")
-    docstring_lines.append("    Dict[str, Any]: The API response containing operation results")
+    docstring_lines.append(
+        "    Dict[str, Any]: The API response containing operation results"
+    )
     docstring_lines.append("")
     docstring_lines.append("Raises:")
-    docstring_lines.append("    Returns error dict if required parameters are missing for the action")
-    
+    docstring_lines.append(
+        "    Returns error dict if required parameters are missing for the action"
+    )
+
     docstring = '    """\n'
     for line in docstring_lines:
         docstring += f"    {line}\n"
     docstring += '    """\n'
-    
+
     func_code += docstring
-    
+
     # Build function body with action routing
     func_code += "    # Route to appropriate API based on action\n"
-    
+
     first = True
     for action_name, details in action_details.items():
         if first:
@@ -1069,32 +1172,37 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             first = False
         else:
             func_code += f"    elif action == '{action_name}':\n"
-        
+
         # Build endpoint with path parameters
         path = details["path"]
         path_params = details["path_params"]
-        
+
         if path_params:
             # Check required parameters
             for orig, snake in path_params:
                 func_code += f"        if {snake} is None:\n"
                 func_code += f"            return {{'error': 'Missing required parameter: {snake} for action {action_name}'}}\n"
-            
+
             endpoint_expr = f"f'{path}'"
             for orig, snake in path_params:
-                endpoint_expr = endpoint_expr.replace("{" + orig + "}", "{" + snake + "}")
+                endpoint_expr = endpoint_expr.replace(
+                    "{" + orig + "}", "{" + snake + "}"
+                )
             func_code += f"        endpoint = {endpoint_expr}\n"
             endpoint_var = "endpoint"
         else:
             endpoint_var = f"'{path}'"
-        
+
         # Build params dict
         func_code += "        params = build_params("
         # Add query params that are relevant to this action
-        query_params = [p for p, info in all_params.items()
-                       if action_name in info["required_for"]
-                       and not p.endswith("_id")
-                       and p != "filter_expression"]
+        query_params = [
+            p
+            for p, info in all_params.items()
+            if action_name in info["required_for"]
+            and not p.endswith("_id")
+            and p != "filter_expression"
+        ]
         if query_params:
             func_code += ", ".join([f"{p}={p}" for p in query_params])
         func_code += ")\n"
@@ -1102,10 +1210,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         # Build request body BEFORE confirmation check so the review payload
         # can surface the exact values that will be sent to DCT.
         method = details["method"]
-        func_code += f"        _ctx = {{k: v for k, v in locals().items() if v is not None and not k.startswith('_')}}\n"
+        func_code += "        _ctx = {k: v for k, v in locals().items() if v is not None and not k.startswith('_')}\n"
         func_code += f"        conf = check_confirmation('{method}', {endpoint_var}, action, '{tool_name}', confirmed or False, context=_ctx)\n"
-        func_code += f"        if conf:\n"
-        func_code += f"            return conf\n"
+        func_code += "        if conf:\n"
+        func_code += "            return conf\n"
 
         # Handle request body
         body_var = None
@@ -1115,10 +1223,9 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         elif method in ["POST", "PUT", "PATCH"]:
             body_params = details.get("body_params", [])
             if body_params:
-                body_items = ", ".join([
-                    f"'{orig}': {snake}"
-                    for orig, snake, is_json in body_params
-                ])
+                body_items = ", ".join(
+                    [f"'{orig}': {snake}" for orig, snake, is_json in body_params]
+                )
                 body_param_names = {snake for _, snake, _ in body_params}
                 if "environment_user_id" in body_param_names:
                     func_code += "        if not environment_user_id:\n"
@@ -1133,12 +1240,12 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             func_code += f"        return await make_api_request('{method}', {endpoint_var}, params=params, json_body=body if body else None)\n"
         else:
             func_code += f"        return await make_api_request('{method}', {endpoint_var}, params=params)\n"
-    
+
     # Add else clause for unknown action
     func_code += "    else:\n"
     func_code += f"        return {{'error': f'Unknown action: {{action}}. Valid actions: {', '.join(actions_list)}'}}\n"
     func_code += "\n"
-    
+
     return func_code
 
 

@@ -100,7 +100,9 @@ def setup_signal_handlers():
     """Set up signal handlers for graceful shutdown."""
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(handle_shutdown(s)))
+        loop.add_signal_handler(
+            sig, lambda s=sig: asyncio.create_task(handle_shutdown(s))
+        )
 
 
 async def _load_dynamic_spec(app: FastMCP) -> None:
@@ -115,6 +117,7 @@ async def _load_dynamic_spec(app: FastMCP) -> None:
     """
     try:
         from .tools.core.spec_cache import load_and_cache_spec
+
         logger.info("Dynamic mode: loading OpenAPI spec…")
         spec = await asyncio.to_thread(load_and_cache_spec)
         path_count = len(spec.get("paths", {}))
@@ -125,7 +128,9 @@ async def _load_dynamic_spec(app: FastMCP) -> None:
     except MCPError:
         raise
     except Exception as exc:
-        logger.error("Dynamic mode: unexpected error loading spec: %s", exc, exc_info=True)
+        logger.error(
+            "Dynamic mode: unexpected error loading spec: %s", exc, exc_info=True
+        )
         raise MCPError(f"SPEC_LOAD_FAILED: {exc}") from exc
 
 
@@ -144,16 +149,20 @@ async def async_main():
             toolset = get_configured_toolset()
             available = get_available_toolsets()
             if is_auto_mode():
-                logger.info(f"Toolset mode: AUTO (meta-tools only)")
+                logger.info("Toolset mode: AUTO (meta-tools only)")
                 logger.info(f"Available toolsets for discovery: {available}")
             elif is_dynamic_mode():
-                logger.info("Toolset mode: DYNAMIC (discovery + execute — 2-tool architecture)")
+                logger.info(
+                    "Toolset mode: DYNAMIC (discovery + execute — 2-tool architecture)"
+                )
             else:
                 logger.info(f"Toolset mode: FIXED ({toolset})")
                 # Validate configuration files
                 validation_errors = validate_all_configs()
                 if validation_errors:
-                    logger.warning(f"Configuration validation warnings: {validation_errors}")
+                    logger.warning(
+                        f"Configuration validation warnings: {validation_errors}"
+                    )
         except Exception as e:
             logger.warning(f"Could not determine toolset configuration: {e}")
 

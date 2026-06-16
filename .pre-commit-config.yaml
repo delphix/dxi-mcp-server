@@ -7,9 +7,8 @@
 # Install once:   pip install pre-commit && pre-commit install
 # Run manually:   pre-commit run --all-files
 #
-# Note: the existing codebase predates these checks, so the first local run will
-# report/auto-fix a large number of findings. CI keeps them advisory for now
-# (see ci.yml); this config lets you fix incrementally before pushing.
+# These checks are BLOCKING in CI (ci.yml), so run them before pushing.
+# Rule config (per-file ignores, line length) lives in pyproject.toml [tool.ruff].
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.17

@@ -1,11 +1,11 @@
 """
 Session logging configuration for DCT MCP server telemetry
 """
+
 import json
 import logging
 import os
 import platform
-import sys
 import threading
 import uuid
 import getpass
@@ -161,9 +161,7 @@ class SessionManager:
         # This assumes this file is at src/dct_mcp_server/core/session.py
         # and the root is 3 levels up.
         return Path(
-            os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", "..")
-            )
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         )
 
 
@@ -219,9 +217,7 @@ def get_session_logger(
     return _session_manager.get_session_logger(session_id)
 
 
-def log_tool_call(
-    tool_data: Dict[str, Any], session_id: Optional[str] = None
-) -> None:
+def log_tool_call(tool_data: Dict[str, Any], session_id: Optional[str] = None) -> None:
     """Log tool call data to session log"""
     _session_manager.log_tool_call(tool_data, session_id)
 

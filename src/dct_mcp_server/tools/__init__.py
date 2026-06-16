@@ -43,9 +43,13 @@ def register_meta_tools_only(app, dct_client=None):
         initialize_tool_inventory(app, dct_client)
         logger.info("Tool inventory initialized for runtime toolset switching")
     else:
-        logger.warning("DCT client not provided - runtime toolset switching will be limited")
+        logger.warning(
+            "DCT client not provided - runtime toolset switching will be limited"
+        )
 
-    logger.info("Auto mode: 6 meta-tools registered. Use list_available_toolsets to discover toolsets.")
+    logger.info(
+        "Auto mode: 6 meta-tools registered. Use list_available_toolsets to discover toolsets."
+    )
 
 
 def register_all_tools(app, dct_client):
@@ -59,13 +63,13 @@ def register_all_tools(app, dct_client):
     Priority for tool loading in fixed mode:
     1. Generated tools from temp directory (fresh from DCT API)
     2. Fallback to pre-built tools from package directory
-    
+
     Any module that defines a function:
         register_tools(app, dct_client)
     will be automatically imported and executed.
     """
     logger.info("Starting dynamic tool registration...")
-    
+
     # Check toolset configuration
     try:
         toolset = get_configured_toolset()
@@ -74,10 +78,12 @@ def register_all_tools(app, dct_client):
         logger.error(f"Invalid toolset configuration: {e}")
         logger.info("Falling back to 'auto' mode")
         toolset = "auto"
-    
+
     # In auto mode, register only meta-tools
     if toolset == "auto":
-        logger.info("Running in AUTO mode - registering meta-tools with runtime switching support")
+        logger.info(
+            "Running in AUTO mode - registering meta-tools with runtime switching support"
+        )
         register_meta_tools_only(app, dct_client)
         return
 
@@ -86,6 +92,7 @@ def register_all_tools(app, dct_client):
         logger.info("Running in DYNAMIC mode - registering discovery + execute tools")
         try:
             from .core.dynamic import register_dynamic_tools
+
             register_dynamic_tools(app, dct_client)
         except Exception as exc:
             logger.error("Failed to register dynamic tools: %s", exc, exc_info=True)
@@ -94,7 +101,7 @@ def register_all_tools(app, dct_client):
 
     # Fixed toolset mode - register only the tools for this toolset
     logger.info(f"Running in FIXED mode with toolset: {toolset}")
-    
+
     # Log toolset info
     try:
         metadata = load_toolset_metadata(toolset)
@@ -116,29 +123,33 @@ def register_all_tools(app, dct_client):
         package_search_paths = list(__path__)
         temp_tools_dir = None
         registered_modules = set()  # Track what we've successfully registered
-        
+
         # For package installations, check temp directory first for generated tools
-        if 'site-packages' in __file__:
+        if "site-packages" in __file__:
             temp_tools_dir = os.path.join(tempfile.gettempdir(), "dct_mcp_tools")
-            
+
         # PRIORITY 1: Try generated tools from temp directory first
         if temp_tools_dir and os.path.exists(temp_tools_dir):
             logger.debug(f"Attempting to load generated tools from: {temp_tools_dir}")
             # Add temp directory to sys.path for imports
             if temp_tools_dir not in sys.path:
                 sys.path.insert(0, temp_tools_dir)
-                
-            for module_finder, module_name, ispkg in pkgutil.iter_modules([temp_tools_dir]):
+
+            for module_finder, module_name, ispkg in pkgutil.iter_modules(
+                [temp_tools_dir]
+            ):
                 if ispkg:
                     continue
-                
+
                 # Skip meta_tools as they're for auto mode only
                 if module_name == "meta_tools":
                     continue
-                
+
                 # Filter: Only load modules required by this toolset
                 if required_modules is not None and module_name not in required_modules:
-                    logger.debug(f"Skipping '{module_name}' - not required for toolset '{toolset}'")
+                    logger.debug(
+                        f"Skipping '{module_name}' - not required for toolset '{toolset}'"
+                    )
                     continue
 
                 try:
@@ -147,35 +158,51 @@ def register_all_tools(app, dct_client):
                     register_func = getattr(module, "register_tools", None)
 
                     if callable(register_func):
-                        logger.debug(f"Successfully loading generated tools from '{module_name}'...")
+                        logger.debug(
+                            f"Successfully loading generated tools from '{module_name}'..."
+                        )
                         register_func(app, dct_client)
-                        registered_modules.add(module_name)  # Mark as successfully registered
+                        registered_modules.add(
+                            module_name
+                        )  # Mark as successfully registered
                     else:
-                        logger.debug(f"Generated module '{module_name}' has no 'register_tools' function.")
-                        
+                        logger.debug(
+                            f"Generated module '{module_name}' has no 'register_tools' function."
+                        )
+
                 except Exception as e:
-                    logger.debug(f"Failed to load generated tools from '{module_name}': {e}")
+                    logger.debug(
+                        f"Failed to load generated tools from '{module_name}': {e}"
+                    )
                     # Continue to fallback for this module
 
         # PRIORITY 2: Fallback to pre-built tools from package directory
-        logger.debug(f"Loading pre-built tools from package directory: {package_search_paths}")
+        logger.debug(
+            f"Loading pre-built tools from package directory: {package_search_paths}"
+        )
         for search_path in package_search_paths:
-            for module_finder, module_name, ispkg in pkgutil.iter_modules([search_path]):
+            for module_finder, module_name, ispkg in pkgutil.iter_modules(
+                [search_path]
+            ):
                 if ispkg:
                     continue
-                
+
                 # Skip meta_tools in fixed toolset mode
                 if module_name == "meta_tools":
                     continue
-                
+
                 # Filter: Only load modules required by this toolset
                 if required_modules is not None and module_name not in required_modules:
-                    logger.debug(f"Skipping '{module_name}' - not required for toolset '{toolset}'")
+                    logger.debug(
+                        f"Skipping '{module_name}' - not required for toolset '{toolset}'"
+                    )
                     continue
-                    
+
                 # Skip if we already successfully registered this module from temp directory
                 if module_name in registered_modules:
-                    logger.debug(f"Skipping pre-built '{module_name}' - already loaded from generated tools")
+                    logger.debug(
+                        f"Skipping pre-built '{module_name}' - already loaded from generated tools"
+                    )
                     continue
 
                 try:
@@ -189,13 +216,19 @@ def register_all_tools(app, dct_client):
                         register_func(app, dct_client)
                         registered_modules.add(module_name)
                     else:
-                        logger.debug(f"Pre-built module '{module_name}' has no 'register_tools' function.")
-                        
-                except Exception as e:
-                    logger.exception(f"Failed to load pre-built tools from '{module_name}': {e}")
+                        logger.debug(
+                            f"Pre-built module '{module_name}' has no 'register_tools' function."
+                        )
 
-        logger.info(f"Tool registration completed for toolset '{toolset}'. Registered {len(registered_modules)} tool modules.")
-                    
+                except Exception as e:
+                    logger.exception(
+                        f"Failed to load pre-built tools from '{module_name}': {e}"
+                    )
+
+        logger.info(
+            f"Tool registration completed for toolset '{toolset}'. Registered {len(registered_modules)} tool modules."
+        )
+
     except NameError:
         logger.error(
             f"Package {__name__} has no __path__; "

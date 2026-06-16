@@ -47,7 +47,6 @@ from dct_mcp_server.tools.core.endpoint_discovery import (  # noqa: E402
     _tokenize,
     get_discovery_index,
     rank_candidates,
-    score_candidate,
 )
 
 # Representative intents spanning multiple domains (read, mutate, destructive).
@@ -109,7 +108,9 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=10)
     args = ap.parse_args()
 
-    spec_path = Path(tempfile.gettempdir()) / "dct_mcp_tools" / "api-external-dynamic.yaml"
+    spec_path = (
+        Path(tempfile.gettempdir()) / "dct_mcp_tools" / "api-external-dynamic.yaml"
+    )
     if not spec_path.exists():
         raise SystemExit(
             f"Spec not found at {spec_path}. Start the server once in dynamic mode "
@@ -120,8 +121,10 @@ def main() -> int:
     index = get_discovery_index(spec)
     corpus, hot = index["corpus"], index["hot_keywords"]
     inv = _build_inverted_index(corpus)
-    print(f"Spec: {len(spec.get('paths', {}))} paths  |  {len(corpus)} operations  |  "
-          f"{len(inv)} index tokens")
+    print(
+        f"Spec: {len(spec.get('paths', {}))} paths  |  {len(corpus)} operations  |  "
+        f"{len(inv)} index tokens"
+    )
     print(f"min_score={args.min_score}  limit={args.limit}  queries={len(QUERIES)}\n")
 
     # ---- behavioural delta --------------------------------------------- #
@@ -143,17 +146,22 @@ def main() -> int:
         else:
             # Endpoints present in FULL top-N but missing from PREFILTER top-N.
             pre_set = set(pre_keys)
-            lost = [(c["method"], c["path"], c["score"]) for c in full
-                    if (c["method"], c["path"]) not in pre_set]
+            lost = [
+                (c["method"], c["path"], c["score"])
+                for c in full
+                if (c["method"], c["path"]) not in pre_set
+            ]
             dropped_rows += len(lost)
             diffs.append((q, lost))
 
     print("=== Behavioural delta (FULL vs PREFILTER) ===")
     print(f"Queries with identical top-{args.limit}: {identical}/{len(QUERIES)}")
     print(f"Total result rows dropped by prefilter:  {dropped_rows}")
-    print(f"Avg candidates scored / query: FULL={total_scored_full // len(QUERIES)}  "
-          f"PREFILTER={total_scored_pre // len(QUERIES)}  "
-          f"(SequenceMatcher calls reduced ~{total_scored_full / max(total_scored_pre, 1):.0f}x)\n")
+    print(
+        f"Avg candidates scored / query: FULL={total_scored_full // len(QUERIES)}  "
+        f"PREFILTER={total_scored_pre // len(QUERIES)}  "
+        f"(SequenceMatcher calls reduced ~{total_scored_full / max(total_scored_pre, 1):.0f}x)\n"
+    )
 
     if diffs:
         print("Queries whose results would change:")

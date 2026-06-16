@@ -63,10 +63,17 @@ def _none() -> Dict[str, Any]:
 
 
 def _confirm(level: str, message: str) -> Dict[str, Any]:
-    return {"level": level, "message": message, "conditional": False, "threshold_days": None}
+    return {
+        "level": level,
+        "message": message,
+        "conditional": False,
+        "threshold_days": None,
+    }
 
 
-def _lookup_operation(spec: Dict[str, Any], method: str, path: str) -> Optional[Dict[str, Any]]:
+def _lookup_operation(
+    spec: Dict[str, Any], method: str, path: str
+) -> Optional[Dict[str, Any]]:
     """Return the OpenAPI operation object for (method, path), or None."""
     if not spec:
         return None
@@ -114,6 +121,7 @@ def get_confirmation_for_operation_dynamic(
     if spec is None:
         # Lazy import avoids a circular import with tool_factory.
         from .tool_factory import get_cached_spec
+
         spec = get_cached_spec()
 
     operation = _lookup_operation(spec, method_u, path) or {}

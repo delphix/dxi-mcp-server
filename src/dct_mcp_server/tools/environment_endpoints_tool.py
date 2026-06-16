@@ -1,7 +1,6 @@
-from mcp.server.fastmcp import FastMCP
-from typing import Dict,Any,Optional
+from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
-from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
+from dct_mcp_server.config import get_confirmation_for_operation
 import asyncio
 import logging
 import threading
@@ -29,7 +28,16 @@ logger = logging.getLogger(__name__)
 #       }
 # =============================================================================
 
-def check_confirmation(method: str, api_path: str, action: str, tool_name: str, confirmed: bool = False, request_params: Optional[Dict[str, Any]] = None, request_body: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+
+def check_confirmation(
+    method: str,
+    api_path: str,
+    action: str,
+    tool_name: str,
+    confirmed: bool = False,
+    request_params: Optional[Dict[str, Any]] = None,
+    request_body: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
     if confirmation["level"] != "none" and not confirmed:
@@ -41,7 +49,11 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
             review.update(request_params)
         if request_body:
             review.update(request_body)
-        is_review_critical = action.startswith("provision_") or action.startswith("dsource_link_") or action == "dsource_create_snapshot"
+        is_review_critical = (
+            action.startswith("provision_")
+            or action.startswith("dsource_link_")
+            or action == "dsource_create_snapshot"
+        )
         instructions = (
             "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
             "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
@@ -56,7 +68,9 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get("message", "Please confirm this operation."),
+            "confirmation_message": confirmation.get(
+                "message", "Please confirm this operation."
+            ),
             "action": action,
             "tool": tool_name,
             "api_path": api_path,
@@ -66,8 +80,10 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
         }
     return None
 
+
 def async_to_sync(async_func):
     """Utility decorator to convert async functions to sync with proper event loop handling."""
+
     @wraps(async_func)
     def wrapper(*args, **kwargs):
         try:
@@ -76,12 +92,14 @@ def async_to_sync(async_func):
                 # Create a task and run it synchronously
                 result = None
                 exception = None
+
                 def run_in_thread():
                     nonlocal result, exception
                     try:
                         result = asyncio.run(async_func(*args, **kwargs))
                     except Exception as e:
                         exception = e
+
                 thread = threading.Thread(target=run_in_thread)
                 thread.start()
                 thread.join()
@@ -92,18 +110,28 @@ def async_to_sync(async_func):
                 return loop.run_until_complete(async_func(*args, **kwargs))
         except RuntimeError:
             return asyncio.run(async_func(*args, **kwargs))
+
     return wrapper
 
-def make_api_request(method: str, endpoint: str, params: dict = None, json_body: dict = None):
+
+def make_api_request(
+    method: str, endpoint: str, params: dict = None, json_body: dict = None
+):
     """Utility function to make API requests with consistent parameter handling."""
+
     @async_to_sync
     async def _make_request():
-        return await client.make_request(method, endpoint, params=params or {}, json=json_body)
+        return await client.make_request(
+            method, endpoint, params=params or {}, json=json_body
+        )
+
     return _make_request()
+
 
 def build_params(**kwargs):
     """Build parameters dictionary excluding None and empty string values."""
-    return {k: v for k, v in kwargs.items() if v is not None and v != ''}
+    return {k: v for k, v in kwargs.items() if v is not None and v != ""}
+
 
 @log_tool_execution
 def environment_source_tool(
@@ -223,13 +251,13 @@ def environment_source_tool(
 ) -> Dict[str, Any]:
     """
     Unified tool for ENVIRONMENT SOURCE operations.
-    
+
     This tool supports 41 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
-    
+
     ======================================================================
     ACTION REFERENCE
     ======================================================================
-    
+
     ACTION: search_environments
     ----------------------------------------
     Summary: Search for environments.
@@ -237,7 +265,7 @@ def environment_source_tool(
     Endpoint: /environments/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
-    
+
     Filterable Fields:
         - id: The Environment object entity ID.
         - name: The name of this environment.
@@ -268,25 +296,25 @@ def environment_source_tool(
         - ase_db_user_name: The username of the SAP ASE database user.
         - ase_enable_tls: True if SAP ASE environment configured with TLS/SSL to di...
         - ase_skip_server_certificate_validation: If True, ASE database connection will skip the server cer...
-    
+
     Filter Syntax:
         Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
         Combine: AND, OR
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
-    
+
     Example:
         >>> environment_source_tool(action='search_environments', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
-    
+
     ACTION: get_environment
     ----------------------------------------
     Summary: Returns an environment by ID.
     Method: GET
     Endpoint: /environments/{environmentId}
     Required Parameters: environment_id
-    
+
     Example:
         >>> environment_source_tool(action='get_environment', environment_id='example-environment-123')
-    
+
     ACTION: create_environment
     ----------------------------------------
     Summary: Create an environment.
@@ -294,10 +322,10 @@ def environment_source_tool(
     Endpoint: /environments
     Required Parameters: engine_id, os_name, hostname
     Key Parameters (provide as applicable): name, is_cluster, cluster_home, staging_environment, connector_port, connector_authentication_key, is_target, ssh_port, toolkit_path, username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, use_custom_key_pair, custom_private_key, custom_public_key, nfs_addresses, ase_db_vault_username, ase_db_username, ase_db_password, ase_enable_tls, ase_skip_server_certificate_validation, ase_db_vault, ase_db_hashicorp_vault_engine, ase_db_hashicorp_vault_secret_path, ase_db_hashicorp_vault_username_key, ase_db_hashicorp_vault_secret_key, ase_db_cyberark_vault_query_string, ase_db_use_kerberos_authentication, ase_db_azure_vault_name, ase_db_azure_vault_username_key, ase_db_azure_vault_secret_key, java_home, dsp_keystore_path, dsp_keystore_password, dsp_keystore_alias, dsp_truststore_path, dsp_truststore_password, description, tags, make_current_account_owner
-    
+
     Example:
         >>> environment_source_tool(action='create_environment', name=..., engine_id='example-engine-123', os_name=..., is_cluster=..., cluster_home=..., hostname=..., staging_environment=..., connector_port=..., connector_authentication_key=..., is_target=..., ssh_port=..., toolkit_path=..., username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=..., nfs_addresses=..., ase_db_vault_username=..., ase_db_username=..., ase_db_password=..., ase_enable_tls=..., ase_skip_server_certificate_validation=..., ase_db_vault=..., ase_db_hashicorp_vault_engine=..., ase_db_hashicorp_vault_secret_path=..., ase_db_hashicorp_vault_username_key=..., ase_db_hashicorp_vault_secret_key=..., ase_db_cyberark_vault_query_string=..., ase_db_use_kerberos_authentication=..., ase_db_azure_vault_name=..., ase_db_azure_vault_username_key=..., ase_db_azure_vault_secret_key=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., description=..., tags=..., make_current_account_owner=...)
-    
+
     ACTION: add_environment_users
     ----------------------------------------
     Summary: Create environment user.
@@ -305,20 +333,20 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/users
     Required Parameters: environment_id
     Key Parameters (provide as applicable): username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, use_custom_key_pair, custom_private_key, custom_public_key
-    
+
     Example:
         >>> environment_source_tool(action='add_environment_users', environment_id='example-environment-123', username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=...)
-    
+
     ACTION: set_environment_primary_user
     ----------------------------------------
     Summary: Set primary environment user.
     Method: POST
     Endpoint: /environments/{environmentId}/users/{userRef}/primary
     Required Parameters: environment_id, user_ref
-    
+
     Example:
         >>> environment_source_tool(action='set_environment_primary_user', environment_id='example-environment-123', user_ref=...)
-    
+
     ACTION: update_environment_users
     ----------------------------------------
     Summary: Update environment user.
@@ -326,20 +354,20 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/users/{userRef}
     Required Parameters: environment_id, user_ref
     Key Parameters (provide as applicable): username, password, vault, vault_username, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, cyberark_vault_query_string, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, use_kerberos_authentication, use_engine_public_key, use_custom_key_pair, custom_private_key, custom_public_key
-    
+
     Example:
         >>> environment_source_tool(action='update_environment_users', environment_id='example-environment-123', username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=..., user_ref=...)
-    
+
     ACTION: delete_environment_users
     ----------------------------------------
     Summary: Delete environment user.
     Method: DELETE
     Endpoint: /environments/{environmentId}/users/{userRef}
     Required Parameters: environment_id, user_ref
-    
+
     Example:
         >>> environment_source_tool(action='delete_environment_users', environment_id='example-environment-123', user_ref=...)
-    
+
     ACTION: update_environment
     ----------------------------------------
     Summary: Update an environment by ID.
@@ -347,50 +375,50 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}
     Required Parameters: environment_id
     Key Parameters (provide as applicable): name, cluster_home, staging_environment, ase_db_vault_username, ase_db_username, ase_db_password, ase_enable_tls, ase_skip_server_certificate_validation, ase_db_vault, ase_db_hashicorp_vault_engine, ase_db_hashicorp_vault_secret_path, ase_db_hashicorp_vault_username_key, ase_db_hashicorp_vault_secret_key, ase_db_cyberark_vault_query_string, ase_db_use_kerberos_authentication, ase_db_azure_vault_name, ase_db_azure_vault_username_key, ase_db_azure_vault_secret_key, description, cluster_address, cluster_user, scan, remote_listener, encryption_enabled
-    
+
     Example:
         >>> environment_source_tool(action='update_environment', environment_id='example-environment-123', name=..., cluster_home=..., staging_environment=..., ase_db_vault_username=..., ase_db_username=..., ase_db_password=..., ase_enable_tls=..., ase_skip_server_certificate_validation=..., ase_db_vault=..., ase_db_hashicorp_vault_engine=..., ase_db_hashicorp_vault_secret_path=..., ase_db_hashicorp_vault_username_key=..., ase_db_hashicorp_vault_secret_key=..., ase_db_cyberark_vault_query_string=..., ase_db_use_kerberos_authentication=..., ase_db_azure_vault_name=..., ase_db_azure_vault_username_key=..., ase_db_azure_vault_secret_key=..., description=..., cluster_address=..., cluster_user=..., scan=..., remote_listener=..., encryption_enabled=...)
-    
+
     ACTION: delete_environment
     ----------------------------------------
     Summary: Delete an environment by ID.
     Method: DELETE
     Endpoint: /environments/{environmentId}
     Required Parameters: environment_id
-    
+
     Example:
         >>> environment_source_tool(action='delete_environment', environment_id='example-environment-123')
-    
+
     ACTION: enable_environment
     ----------------------------------------
     Summary: Enable a disabled environment.
     Method: POST
     Endpoint: /environments/{environmentId}/enable
     Required Parameters: environment_id
-    
+
     Example:
         >>> environment_source_tool(action='enable_environment', environment_id='example-environment-123')
-    
+
     ACTION: disable_environment
     ----------------------------------------
     Summary: Disable environment.
     Method: POST
     Endpoint: /environments/{environmentId}/disable
     Required Parameters: environment_id
-    
+
     Example:
         >>> environment_source_tool(action='disable_environment', environment_id='example-environment-123')
-    
+
     ACTION: refresh_environment
     ----------------------------------------
     Summary: Refresh environment.
     Method: POST
     Endpoint: /environments/{environmentId}/refresh
     Required Parameters: environment_id
-    
+
     Example:
         >>> environment_source_tool(action='refresh_environment', environment_id='example-environment-123')
-    
+
     ACTION: list_environment_hosts
     ----------------------------------------
     Summary: Create a new Host.
@@ -398,10 +426,10 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/hosts
     Required Parameters: environment_id
     Key Parameters (provide as applicable): name, hostname, ssh_port, toolkit_path, nfs_addresses, java_home, dsp_keystore_path, dsp_keystore_password, dsp_keystore_alias, dsp_truststore_path, dsp_truststore_password, privilege_elevation_profile_reference, oracle_jdbc_keystore_password, oracle_tde_keystores_root_path, ssh_verification_strategy, oracle_cluster_node_virtual_ips
-    
+
     Example:
         >>> environment_source_tool(action='list_environment_hosts', environment_id='example-environment-123', name=..., hostname=..., ssh_port=..., toolkit_path=..., nfs_addresses=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., privilege_elevation_profile_reference=..., oracle_jdbc_keystore_password=..., oracle_tde_keystores_root_path=..., ssh_verification_strategy=..., oracle_cluster_node_virtual_ips=...)
-    
+
     ACTION: update_environment_host
     ----------------------------------------
     Summary: Update a Host.
@@ -409,20 +437,20 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/hosts/{hostId}
     Required Parameters: environment_id, host_id
     Key Parameters (provide as applicable): hostname, connector_port, connector_authentication_key, ssh_port, toolkit_path, nfs_addresses, java_home, dsp_keystore_path, dsp_keystore_password, dsp_keystore_alias, dsp_truststore_path, dsp_truststore_password, oracle_jdbc_keystore_password, oracle_tde_keystores_root_path, ssh_verification_strategy, oracle_cluster_node_virtual_ips, oracle_cluster_node_name, oracle_cluster_node_enabled, oracle_tde_okv_home_path, oracle_tde_external_key_manager_credential
-    
+
     Example:
         >>> environment_source_tool(action='update_environment_host', environment_id='example-environment-123', hostname=..., connector_port=..., connector_authentication_key=..., ssh_port=..., toolkit_path=..., nfs_addresses=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., oracle_jdbc_keystore_password=..., oracle_tde_keystores_root_path=..., ssh_verification_strategy=..., oracle_cluster_node_virtual_ips=..., host_id='example-host-123', oracle_cluster_node_name=..., oracle_cluster_node_enabled=..., oracle_tde_okv_home_path=..., oracle_tde_external_key_manager_credential=...)
-    
+
     ACTION: delete_environment_host
     ----------------------------------------
     Summary: Delete a Host.
     Method: DELETE
     Endpoint: /environments/{environmentId}/hosts/{hostId}
     Required Parameters: environment_id, host_id
-    
+
     Example:
         >>> environment_source_tool(action='delete_environment_host', environment_id='example-environment-123', host_id='example-host-123')
-    
+
     ACTION: list_environment_listeners
     ----------------------------------------
     Summary: Create Oracle listener.
@@ -430,30 +458,30 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/listeners
     Required Parameters: environment_id, type
     Key Parameters (provide as applicable): name, host_id, protocol_addresses
-    
+
     Example:
         >>> environment_source_tool(action='list_environment_listeners', environment_id='example-environment-123', name=..., host_id='example-host-123', type=..., protocol_addresses=...)
-    
+
     ACTION: get_environment_tags
     ----------------------------------------
     Summary: Get tags for an Environment.
     Method: GET
     Endpoint: /environments/{environmentId}/tags
     Required Parameters: environment_id
-    
+
     Example:
         >>> environment_source_tool(action='get_environment_tags', environment_id='example-environment-123')
-    
+
     ACTION: add_environment_tags
     ----------------------------------------
     Summary: Create tags for an Environment.
     Method: POST
     Endpoint: /environments/{environmentId}/tags
     Required Parameters: environment_id, tags
-    
+
     Example:
         >>> environment_source_tool(action='add_environment_tags', environment_id='example-environment-123', tags=...)
-    
+
     ACTION: delete_environment_tags
     ----------------------------------------
     Summary: Delete tags for an Environment.
@@ -461,40 +489,40 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/tags/delete
     Required Parameters: environment_id
     Key Parameters (provide as applicable): tags, key, value
-    
+
     Example:
         >>> environment_source_tool(action='delete_environment_tags', environment_id='example-environment-123', tags=..., key=..., value=...)
-    
+
     ACTION: get_environment_compatible_repositories_by_snapshot
     ----------------------------------------
     Summary: Get compatible repositories corresponding to the snapshot.
     Method: POST
     Endpoint: /environments/compatible_repositories_by_snapshot
     Key Parameters (provide as applicable): environment_id, engine_id, source_data_id, snapshot_id
-    
+
     Example:
         >>> environment_source_tool(action='get_environment_compatible_repositories_by_snapshot', environment_id='example-environment-123', engine_id='example-engine-123', source_data_id='example-source_data-123', snapshot_id='example-snapshot-123')
-    
+
     ACTION: get_environment_compatible_repositories_by_timestamp
     ----------------------------------------
     Summary: Get compatible repositories corresponding to the timestamp.
     Method: POST
     Endpoint: /environments/compatible_repositories_by_timestamp
     Key Parameters (provide as applicable): environment_id, engine_id, source_data_id, timestamp, timeflow_id
-    
+
     Example:
         >>> environment_source_tool(action='get_environment_compatible_repositories_by_timestamp', environment_id='example-environment-123', engine_id='example-engine-123', source_data_id='example-source_data-123', timestamp=..., timeflow_id='example-timeflow-123')
-    
+
     ACTION: get_environment_compatible_repositories_by_location
     ----------------------------------------
     Summary: Get compatible repositories corresponding to the location.
     Method: POST
     Endpoint: /environments/compatible_repositories_by_location
     Key Parameters (provide as applicable): environment_id, engine_id, source_data_id, timeflow_id, location
-    
+
     Example:
         >>> environment_source_tool(action='get_environment_compatible_repositories_by_location', environment_id='example-environment-123', engine_id='example-engine-123', source_data_id='example-source_data-123', timeflow_id='example-timeflow-123', location=...)
-    
+
     ACTION: update_environment_repository
     ----------------------------------------
     Summary: Update a Repository.
@@ -502,20 +530,20 @@ def environment_source_tool(
     Endpoint: /environments/{environmentId}/repository/{repositoryId}
     Required Parameters: environment_id, repository_id
     Key Parameters (provide as applicable): allow_provisioning, is_staging, version, oracle_base, bits, port, instance_owner, installation_path, dump_history_file, database_username, database_password, service_principal_name, isql_path
-    
+
     Example:
         >>> environment_source_tool(action='update_environment_repository', environment_id='example-environment-123', repository_id='example-repository-123', allow_provisioning=..., is_staging=..., version=..., oracle_base=..., bits=..., port=..., instance_owner=..., installation_path=..., dump_history_file=..., database_username=..., database_password=..., service_principal_name=..., isql_path=...)
-    
+
     ACTION: delete_environment_repository
     ----------------------------------------
     Summary: Delete a repository.
     Method: DELETE
     Endpoint: /environments/{environmentId}/repository/{repositoryId}
     Required Parameters: environment_id, repository_id
-    
+
     Example:
         >>> environment_source_tool(action='delete_environment_repository', environment_id='example-environment-123', repository_id='example-repository-123')
-    
+
     ACTION: search_sources
     ----------------------------------------
     Summary: Search for Sources.
@@ -523,7 +551,7 @@ def environment_source_tool(
     Endpoint: /sources/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
-    
+
     Filterable Fields:
         - id: The Source object entity ID.
         - database_type: The type of this source database.
@@ -541,18 +569,18 @@ def environment_source_tool(
         - jdbc_connection_string: The JDBC connection URL for this source database.
         - plugin_version: The version of the plugin associated with this source dat...
         - toolkit_id: The ID of the toolkit associated with this source databas...
-        - is_dsource: 
+        - is_dsource:
         - repository: The repository id for this source
         - recovery_model: Recovery model of the source database (MSSql Only).
         - mssql_source_type: The type of this mssql source database (MSSql Only).
         - appdata_source_type: The type of this appdata source database (Appdata Only).
         - is_pdb: If this source is of PDB type (Oracle Only).
         - mount_base: The base mount point for the NFS or iSCSI LUN mounts.
-        - tags: 
+        - tags:
         - instance_name: The instance name of this single instance database source.
         - instance_number: The instance number of this single instance database source.
-        - instances: 
-        - oracle_services: 
+        - instances:
+        - oracle_services:
         - user: The username of the database user.
         - environment_user_ref: The environment user reference.
         - non_sys_user: The username of a database user that does not have admini...
@@ -562,85 +590,85 @@ def environment_source_tool(
         - data_connection_id: The ID of the associated DataConnection.
         - database_name: The name of this source database.
         - database_unique_name: The unique name of the database.
-    
+
     Filter Syntax:
         Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
         Combine: AND, OR
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
-    
+
     Example:
         >>> environment_source_tool(action='search_sources', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
-    
+
     ACTION: list_sources
     ----------------------------------------
     Summary: List all sources.
     Method: GET
     Endpoint: /sources
     Required Parameters: limit, cursor, sort
-    
+
     Example:
         >>> environment_source_tool(action='list_sources', limit=..., cursor=..., sort=...)
-    
+
     ACTION: get_source
     ----------------------------------------
     Summary: Get a source by ID.
     Method: GET
     Endpoint: /sources/{sourceId}
     Required Parameters: source_id
-    
+
     Example:
         >>> environment_source_tool(action='get_source', source_id='example-source-123')
-    
+
     ACTION: delete_source
     ----------------------------------------
     Summary: Delete a source by ID.
     Method: DELETE
     Endpoint: /sources/{sourceId}
     Required Parameters: source_id
-    
+
     Example:
         >>> environment_source_tool(action='delete_source', source_id='example-source-123')
-    
+
     ACTION: verify_source_jdbc_connection
     ----------------------------------------
     Summary: Verify JDBC connection string for a source.
     Method: POST
     Endpoint: /sources/{sourceId}/jdbc-check
     Required Parameters: database_username, database_password, source_id, jdbc_connection_string
-    
+
     Example:
         >>> environment_source_tool(action='verify_source_jdbc_connection', database_username=..., database_password=..., source_id='example-source-123', jdbc_connection_string=...)
-    
+
     ACTION: get_source_compatible_repositories
     ----------------------------------------
     Summary: Returns a list of repositories that match the specified source.
     Method: GET
     Endpoint: /sources/{sourceId}/staging_compatible_repositories
     Required Parameters: source_id
-    
+
     Example:
         >>> environment_source_tool(action='get_source_compatible_repositories', source_id='example-source-123')
-    
+
     ACTION: get_source_tags
     ----------------------------------------
     Summary: Get tags for a Source.
     Method: GET
     Endpoint: /sources/{sourceId}/tags
     Required Parameters: source_id
-    
+
     Example:
         >>> environment_source_tool(action='get_source_tags', source_id='example-source-123')
-    
+
     ACTION: add_source_tags
     ----------------------------------------
     Summary: Create tags for a Source.
     Method: POST
     Endpoint: /sources/{sourceId}/tags
     Required Parameters: tags, source_id
-    
+
     Example:
         >>> environment_source_tool(action='add_source_tags', tags=..., source_id='example-source-123')
-    
+
     ACTION: delete_source_tags
     ----------------------------------------
     Summary: Delete tags for a Source.
@@ -648,10 +676,10 @@ def environment_source_tool(
     Endpoint: /sources/{sourceId}/tags/delete
     Required Parameters: source_id
     Key Parameters (provide as applicable): tags, key, value
-    
+
     Example:
         >>> environment_source_tool(action='delete_source_tags', tags=..., key=..., value=..., source_id='example-source-123')
-    
+
     ACTION: create_oracle_source
     ----------------------------------------
     Summary: Create an Oracle Source.
@@ -659,10 +687,10 @@ def environment_source_tool(
     Endpoint: /sources/oracle
     Required Parameters: repository_id, oracle_config_type
     Key Parameters (provide as applicable): environment_id, engine_id, database_name, instances, unique_name, instance_name, oracle_services
-    
+
     Example:
         >>> environment_source_tool(action='create_oracle_source', environment_id='example-environment-123', engine_id='example-engine-123', repository_id='example-repository-123', oracle_config_type=..., database_name=..., instances=..., unique_name=..., instance_name=..., oracle_services=...)
-    
+
     ACTION: update_oracle_source
     ----------------------------------------
     Summary: Update an Oracle source by ID.
@@ -670,10 +698,10 @@ def environment_source_tool(
     Endpoint: /sources/oracle/{sourceId}
     Required Parameters: source_id
     Key Parameters (provide as applicable): password, oracle_services, user, linking_enabled
-    
+
     Example:
         >>> environment_source_tool(action='update_oracle_source', password=..., source_id='example-source-123', oracle_services=..., user=..., linking_enabled=...)
-    
+
     ACTION: create_postgres_source
     ----------------------------------------
     Summary: Create a PostgreSQL source.
@@ -681,10 +709,10 @@ def environment_source_tool(
     Endpoint: /sources/postgres
     Required Parameters: name
     Key Parameters (provide as applicable): environment_id, engine_id, repository_id
-    
+
     Example:
         >>> environment_source_tool(action='create_postgres_source', environment_id='example-environment-123', name=..., engine_id='example-engine-123', repository_id='example-repository-123')
-    
+
     ACTION: update_postgres_source
     ----------------------------------------
     Summary: Update a PostgreSQL source by ID.
@@ -692,10 +720,10 @@ def environment_source_tool(
     Endpoint: /sources/postgres/{sourceId}
     Required Parameters: source_id
     Key Parameters (provide as applicable): name
-    
+
     Example:
         >>> environment_source_tool(action='update_postgres_source', name=..., source_id='example-source-123')
-    
+
     ACTION: create_ase_source
     ----------------------------------------
     Summary: Create an ASE source.
@@ -703,10 +731,10 @@ def environment_source_tool(
     Endpoint: /sources/ase
     Required Parameters: repository_id, database_name
     Key Parameters (provide as applicable): environment_id, engine_id, linking_enabled, environment_user
-    
+
     Example:
         >>> environment_source_tool(action='create_ase_source', environment_id='example-environment-123', engine_id='example-engine-123', repository_id='example-repository-123', database_name=..., linking_enabled=..., environment_user=...)
-    
+
     ACTION: update_ase_source
     ----------------------------------------
     Summary: Update an ASE source by ID.
@@ -714,10 +742,10 @@ def environment_source_tool(
     Endpoint: /sources/ase/{sourceId}
     Required Parameters: source_id
     Key Parameters (provide as applicable): environment_id, repository_id, database_username, database_password, database_name, linking_enabled, environment_user
-    
+
     Example:
         >>> environment_source_tool(action='update_ase_source', environment_id='example-environment-123', repository_id='example-repository-123', database_username=..., database_password=..., source_id='example-source-123', database_name=..., linking_enabled=..., environment_user=...)
-    
+
     ACTION: create_appdata_source
     ----------------------------------------
     Summary: Create an AppData source.
@@ -725,10 +753,10 @@ def environment_source_tool(
     Endpoint: /sources/appdata
     Required Parameters: name, type, repository_id
     Key Parameters (provide as applicable): environment_id, engine_id, linking_enabled, environment_user, parameters, path
-    
+
     Example:
         >>> environment_source_tool(action='create_appdata_source', environment_id='example-environment-123', name=..., engine_id='example-engine-123', type=..., repository_id='example-repository-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
-    
+
     ACTION: update_appdata_source
     ----------------------------------------
     Summary: Update a AppData source by ID.
@@ -736,17 +764,17 @@ def environment_source_tool(
     Endpoint: /sources/appdata/{sourceId}
     Required Parameters: source_id
     Key Parameters (provide as applicable): environment_id, name, repository_id, linking_enabled, environment_user, parameters, path
-    
+
     Example:
         >>> environment_source_tool(action='update_appdata_source', environment_id='example-environment-123', name=..., repository_id='example-repository-123', source_id='example-source-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
-    
+
     ======================================================================
     PARAMETERS
     ======================================================================
-    
+
     Args:
         action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
-    
+
       -- General parameters (all database types) --
         allow_provisioning (bool): Flag indicating whether the repository should be used for provisioning.
             [Optional for all actions]
@@ -970,392 +998,1193 @@ def environment_source_tool(
             [Optional for all actions]
         version (str): Version of the repository.
             [Optional for all actions]
-    
+
     Returns:
         Dict[str, Any]: The API response containing operation results
-    
+
     Raises:
         Returns error dict if required parameters are missing for the action
     """
     # Route to appropriate API based on action
-    if action == 'search_environments':
+    if action == "search_environments":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {'filter_expression': filter_expression} if filter_expression else {}
-        conf = check_confirmation('POST', '/environments/search', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        conf = check_confirmation(
+            "POST",
+            "/environments/search",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/environments/search', params=params, json_body=body)
-    elif action == 'get_environment':
+        return make_api_request(
+            "POST", "/environments/search", params=params, json_body=body
+        )
+    elif action == "get_environment":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action get_environment'}
-        endpoint = f'/environments/{environment_id}'
+            return {
+                "error": "Missing required parameter: environment_id for action get_environment"
+            }
+        endpoint = f"/environments/{environment_id}"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'create_environment':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "create_environment":
         params = build_params(os_name=os_name, hostname=hostname)
-        body = {k: v for k, v in {'name': name, 'engine_id': engine_id, 'os_name': os_name, 'is_cluster': is_cluster, 'cluster_home': cluster_home, 'hostname': hostname, 'staging_environment': staging_environment, 'connector_port': connector_port, 'connector_authentication_key': connector_authentication_key, 'is_target': is_target, 'ssh_port': ssh_port, 'toolkit_path': toolkit_path, 'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'use_custom_key_pair': use_custom_key_pair, 'custom_private_key': custom_private_key, 'custom_public_key': custom_public_key, 'nfs_addresses': nfs_addresses, 'ase_db_vault_username': ase_db_vault_username, 'ase_db_username': ase_db_username, 'ase_db_password': ase_db_password, 'ase_enable_tls': ase_enable_tls, 'ase_skip_server_certificate_validation': ase_skip_server_certificate_validation, 'ase_db_vault': ase_db_vault, 'ase_db_hashicorp_vault_engine': ase_db_hashicorp_vault_engine, 'ase_db_hashicorp_vault_secret_path': ase_db_hashicorp_vault_secret_path, 'ase_db_hashicorp_vault_username_key': ase_db_hashicorp_vault_username_key, 'ase_db_hashicorp_vault_secret_key': ase_db_hashicorp_vault_secret_key, 'ase_db_cyberark_vault_query_string': ase_db_cyberark_vault_query_string, 'ase_db_use_kerberos_authentication': ase_db_use_kerberos_authentication, 'ase_db_azure_vault_name': ase_db_azure_vault_name, 'ase_db_azure_vault_username_key': ase_db_azure_vault_username_key, 'ase_db_azure_vault_secret_key': ase_db_azure_vault_secret_key, 'java_home': java_home, 'dsp_keystore_path': dsp_keystore_path, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_truststore_path': dsp_truststore_path, 'dsp_truststore_password': dsp_truststore_password, 'description': description, 'tags': tags, 'make_current_account_owner': make_current_account_owner}.items() if v is not None}
-        conf = check_confirmation('POST', '/environments', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "name": name,
+                "engine_id": engine_id,
+                "os_name": os_name,
+                "is_cluster": is_cluster,
+                "cluster_home": cluster_home,
+                "hostname": hostname,
+                "staging_environment": staging_environment,
+                "connector_port": connector_port,
+                "connector_authentication_key": connector_authentication_key,
+                "is_target": is_target,
+                "ssh_port": ssh_port,
+                "toolkit_path": toolkit_path,
+                "username": username,
+                "password": password,
+                "vault": vault,
+                "vault_username": vault_username,
+                "hashicorp_vault_engine": hashicorp_vault_engine,
+                "hashicorp_vault_secret_path": hashicorp_vault_secret_path,
+                "hashicorp_vault_username_key": hashicorp_vault_username_key,
+                "hashicorp_vault_secret_key": hashicorp_vault_secret_key,
+                "cyberark_vault_query_string": cyberark_vault_query_string,
+                "azure_vault_name": azure_vault_name,
+                "azure_vault_username_key": azure_vault_username_key,
+                "azure_vault_secret_key": azure_vault_secret_key,
+                "use_kerberos_authentication": use_kerberos_authentication,
+                "use_engine_public_key": use_engine_public_key,
+                "use_custom_key_pair": use_custom_key_pair,
+                "custom_private_key": custom_private_key,
+                "custom_public_key": custom_public_key,
+                "nfs_addresses": nfs_addresses,
+                "ase_db_vault_username": ase_db_vault_username,
+                "ase_db_username": ase_db_username,
+                "ase_db_password": ase_db_password,
+                "ase_enable_tls": ase_enable_tls,
+                "ase_skip_server_certificate_validation": ase_skip_server_certificate_validation,
+                "ase_db_vault": ase_db_vault,
+                "ase_db_hashicorp_vault_engine": ase_db_hashicorp_vault_engine,
+                "ase_db_hashicorp_vault_secret_path": ase_db_hashicorp_vault_secret_path,
+                "ase_db_hashicorp_vault_username_key": ase_db_hashicorp_vault_username_key,
+                "ase_db_hashicorp_vault_secret_key": ase_db_hashicorp_vault_secret_key,
+                "ase_db_cyberark_vault_query_string": ase_db_cyberark_vault_query_string,
+                "ase_db_use_kerberos_authentication": ase_db_use_kerberos_authentication,
+                "ase_db_azure_vault_name": ase_db_azure_vault_name,
+                "ase_db_azure_vault_username_key": ase_db_azure_vault_username_key,
+                "ase_db_azure_vault_secret_key": ase_db_azure_vault_secret_key,
+                "java_home": java_home,
+                "dsp_keystore_path": dsp_keystore_path,
+                "dsp_keystore_password": dsp_keystore_password,
+                "dsp_keystore_alias": dsp_keystore_alias,
+                "dsp_truststore_path": dsp_truststore_path,
+                "dsp_truststore_password": dsp_truststore_password,
+                "description": description,
+                "tags": tags,
+                "make_current_account_owner": make_current_account_owner,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/environments', params=params, json_body=body if body else None)
-    elif action == 'add_environment_users':
+        return make_api_request(
+            "POST", "/environments", params=params, json_body=body if body else None
+        )
+    elif action == "add_environment_users":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action add_environment_users'}
-        endpoint = f'/environments/{environment_id}/users'
+            return {
+                "error": "Missing required parameter: environment_id for action add_environment_users"
+            }
+        endpoint = f"/environments/{environment_id}/users"
         params = build_params()
-        body = {k: v for k, v in {'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'use_custom_key_pair': use_custom_key_pair, 'custom_private_key': custom_private_key, 'custom_public_key': custom_public_key}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "username": username,
+                "password": password,
+                "vault": vault,
+                "vault_username": vault_username,
+                "hashicorp_vault_engine": hashicorp_vault_engine,
+                "hashicorp_vault_secret_path": hashicorp_vault_secret_path,
+                "hashicorp_vault_username_key": hashicorp_vault_username_key,
+                "hashicorp_vault_secret_key": hashicorp_vault_secret_key,
+                "cyberark_vault_query_string": cyberark_vault_query_string,
+                "azure_vault_name": azure_vault_name,
+                "azure_vault_username_key": azure_vault_username_key,
+                "azure_vault_secret_key": azure_vault_secret_key,
+                "use_kerberos_authentication": use_kerberos_authentication,
+                "use_engine_public_key": use_engine_public_key,
+                "use_custom_key_pair": use_custom_key_pair,
+                "custom_private_key": custom_private_key,
+                "custom_public_key": custom_public_key,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'set_environment_primary_user':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "set_environment_primary_user":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action set_environment_primary_user'}
+            return {
+                "error": "Missing required parameter: environment_id for action set_environment_primary_user"
+            }
         if user_ref is None:
-            return {'error': 'Missing required parameter: user_ref for action set_environment_primary_user'}
-        endpoint = f'/environments/{environment_id}/users/{user_ref}/primary'
+            return {
+                "error": "Missing required parameter: user_ref for action set_environment_primary_user"
+            }
+        endpoint = f"/environments/{environment_id}/users/{user_ref}/primary"
         params = build_params(user_ref=user_ref)
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params)
-    elif action == 'update_environment_users':
+        return make_api_request("POST", endpoint, params=params)
+    elif action == "update_environment_users":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action update_environment_users'}
+            return {
+                "error": "Missing required parameter: environment_id for action update_environment_users"
+            }
         if user_ref is None:
-            return {'error': 'Missing required parameter: user_ref for action update_environment_users'}
-        endpoint = f'/environments/{environment_id}/users/{user_ref}'
+            return {
+                "error": "Missing required parameter: user_ref for action update_environment_users"
+            }
+        endpoint = f"/environments/{environment_id}/users/{user_ref}"
         params = build_params(user_ref=user_ref)
-        body = {k: v for k, v in {'username': username, 'password': password, 'vault': vault, 'vault_username': vault_username, 'hashicorp_vault_engine': hashicorp_vault_engine, 'hashicorp_vault_secret_path': hashicorp_vault_secret_path, 'hashicorp_vault_username_key': hashicorp_vault_username_key, 'hashicorp_vault_secret_key': hashicorp_vault_secret_key, 'cyberark_vault_query_string': cyberark_vault_query_string, 'azure_vault_name': azure_vault_name, 'azure_vault_username_key': azure_vault_username_key, 'azure_vault_secret_key': azure_vault_secret_key, 'use_kerberos_authentication': use_kerberos_authentication, 'use_engine_public_key': use_engine_public_key, 'use_custom_key_pair': use_custom_key_pair, 'custom_private_key': custom_private_key, 'custom_public_key': custom_public_key}.items() if v is not None}
-        conf = check_confirmation('PUT', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "username": username,
+                "password": password,
+                "vault": vault,
+                "vault_username": vault_username,
+                "hashicorp_vault_engine": hashicorp_vault_engine,
+                "hashicorp_vault_secret_path": hashicorp_vault_secret_path,
+                "hashicorp_vault_username_key": hashicorp_vault_username_key,
+                "hashicorp_vault_secret_key": hashicorp_vault_secret_key,
+                "cyberark_vault_query_string": cyberark_vault_query_string,
+                "azure_vault_name": azure_vault_name,
+                "azure_vault_username_key": azure_vault_username_key,
+                "azure_vault_secret_key": azure_vault_secret_key,
+                "use_kerberos_authentication": use_kerberos_authentication,
+                "use_engine_public_key": use_engine_public_key,
+                "use_custom_key_pair": use_custom_key_pair,
+                "custom_private_key": custom_private_key,
+                "custom_public_key": custom_public_key,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PUT",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PUT', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_environment_users':
+        return make_api_request(
+            "PUT", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_environment_users":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action delete_environment_users'}
+            return {
+                "error": "Missing required parameter: environment_id for action delete_environment_users"
+            }
         if user_ref is None:
-            return {'error': 'Missing required parameter: user_ref for action delete_environment_users'}
-        endpoint = f'/environments/{environment_id}/users/{user_ref}'
+            return {
+                "error": "Missing required parameter: user_ref for action delete_environment_users"
+            }
+        endpoint = f"/environments/{environment_id}/users/{user_ref}"
         params = build_params(user_ref=user_ref)
-        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "DELETE",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
-    elif action == 'update_environment':
+        return make_api_request("DELETE", endpoint, params=params)
+    elif action == "update_environment":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action update_environment'}
-        endpoint = f'/environments/{environment_id}'
+            return {
+                "error": "Missing required parameter: environment_id for action update_environment"
+            }
+        endpoint = f"/environments/{environment_id}"
         params = build_params()
-        body = {k: v for k, v in {'name': name, 'staging_environment': staging_environment, 'cluster_address': cluster_address, 'cluster_home': cluster_home, 'cluster_user': cluster_user, 'scan': scan, 'remote_listener': remote_listener, 'ase_db_username': ase_db_username, 'ase_db_password': ase_db_password, 'ase_enable_tls': ase_enable_tls, 'ase_skip_server_certificate_validation': ase_skip_server_certificate_validation, 'ase_db_vault': ase_db_vault, 'ase_db_vault_username': ase_db_vault_username, 'ase_db_hashicorp_vault_engine': ase_db_hashicorp_vault_engine, 'ase_db_hashicorp_vault_secret_path': ase_db_hashicorp_vault_secret_path, 'ase_db_hashicorp_vault_username_key': ase_db_hashicorp_vault_username_key, 'ase_db_hashicorp_vault_secret_key': ase_db_hashicorp_vault_secret_key, 'ase_db_cyberark_vault_query_string': ase_db_cyberark_vault_query_string, 'ase_db_azure_vault_name': ase_db_azure_vault_name, 'ase_db_azure_vault_username_key': ase_db_azure_vault_username_key, 'ase_db_azure_vault_secret_key': ase_db_azure_vault_secret_key, 'ase_db_use_kerberos_authentication': ase_db_use_kerberos_authentication, 'encryption_enabled': encryption_enabled, 'description': description}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "name": name,
+                "staging_environment": staging_environment,
+                "cluster_address": cluster_address,
+                "cluster_home": cluster_home,
+                "cluster_user": cluster_user,
+                "scan": scan,
+                "remote_listener": remote_listener,
+                "ase_db_username": ase_db_username,
+                "ase_db_password": ase_db_password,
+                "ase_enable_tls": ase_enable_tls,
+                "ase_skip_server_certificate_validation": ase_skip_server_certificate_validation,
+                "ase_db_vault": ase_db_vault,
+                "ase_db_vault_username": ase_db_vault_username,
+                "ase_db_hashicorp_vault_engine": ase_db_hashicorp_vault_engine,
+                "ase_db_hashicorp_vault_secret_path": ase_db_hashicorp_vault_secret_path,
+                "ase_db_hashicorp_vault_username_key": ase_db_hashicorp_vault_username_key,
+                "ase_db_hashicorp_vault_secret_key": ase_db_hashicorp_vault_secret_key,
+                "ase_db_cyberark_vault_query_string": ase_db_cyberark_vault_query_string,
+                "ase_db_azure_vault_name": ase_db_azure_vault_name,
+                "ase_db_azure_vault_username_key": ase_db_azure_vault_username_key,
+                "ase_db_azure_vault_secret_key": ase_db_azure_vault_secret_key,
+                "ase_db_use_kerberos_authentication": ase_db_use_kerberos_authentication,
+                "encryption_enabled": encryption_enabled,
+                "description": description,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_environment':
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_environment":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action delete_environment'}
-        endpoint = f'/environments/{environment_id}'
+            return {
+                "error": "Missing required parameter: environment_id for action delete_environment"
+            }
+        endpoint = f"/environments/{environment_id}"
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "DELETE",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
-    elif action == 'enable_environment':
+        return make_api_request("DELETE", endpoint, params=params)
+    elif action == "enable_environment":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action enable_environment'}
-        endpoint = f'/environments/{environment_id}/enable'
+            return {
+                "error": "Missing required parameter: environment_id for action enable_environment"
+            }
+        endpoint = f"/environments/{environment_id}/enable"
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params)
-    elif action == 'disable_environment':
+        return make_api_request("POST", endpoint, params=params)
+    elif action == "disable_environment":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action disable_environment'}
-        endpoint = f'/environments/{environment_id}/disable'
+            return {
+                "error": "Missing required parameter: environment_id for action disable_environment"
+            }
+        endpoint = f"/environments/{environment_id}/disable"
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params)
-    elif action == 'refresh_environment':
+        return make_api_request("POST", endpoint, params=params)
+    elif action == "refresh_environment":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action refresh_environment'}
-        endpoint = f'/environments/{environment_id}/refresh'
+            return {
+                "error": "Missing required parameter: environment_id for action refresh_environment"
+            }
+        endpoint = f"/environments/{environment_id}/refresh"
         params = build_params()
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params)
-    elif action == 'list_environment_hosts':
+        return make_api_request("POST", endpoint, params=params)
+    elif action == "list_environment_hosts":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action list_environment_hosts'}
-        endpoint = f'/environments/{environment_id}/hosts'
+            return {
+                "error": "Missing required parameter: environment_id for action list_environment_hosts"
+            }
+        endpoint = f"/environments/{environment_id}/hosts"
         params = build_params()
-        body = {k: v for k, v in {'name': name, 'hostname': hostname, 'nfs_addresses': nfs_addresses, 'ssh_port': ssh_port, 'privilege_elevation_profile_reference': privilege_elevation_profile_reference, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_path': dsp_keystore_path, 'dsp_truststore_password': dsp_truststore_password, 'dsp_truststore_path': dsp_truststore_path, 'java_home': java_home, 'toolkit_path': toolkit_path, 'oracle_jdbc_keystore_password': oracle_jdbc_keystore_password, 'oracle_tde_keystores_root_path': oracle_tde_keystores_root_path, 'ssh_verification_strategy': ssh_verification_strategy, 'oracle_cluster_node_virtual_ips': oracle_cluster_node_virtual_ips}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "name": name,
+                "hostname": hostname,
+                "nfs_addresses": nfs_addresses,
+                "ssh_port": ssh_port,
+                "privilege_elevation_profile_reference": privilege_elevation_profile_reference,
+                "dsp_keystore_alias": dsp_keystore_alias,
+                "dsp_keystore_password": dsp_keystore_password,
+                "dsp_keystore_path": dsp_keystore_path,
+                "dsp_truststore_password": dsp_truststore_password,
+                "dsp_truststore_path": dsp_truststore_path,
+                "java_home": java_home,
+                "toolkit_path": toolkit_path,
+                "oracle_jdbc_keystore_password": oracle_jdbc_keystore_password,
+                "oracle_tde_keystores_root_path": oracle_tde_keystores_root_path,
+                "ssh_verification_strategy": ssh_verification_strategy,
+                "oracle_cluster_node_virtual_ips": oracle_cluster_node_virtual_ips,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'update_environment_host':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "update_environment_host":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action update_environment_host'}
+            return {
+                "error": "Missing required parameter: environment_id for action update_environment_host"
+            }
         if host_id is None:
-            return {'error': 'Missing required parameter: host_id for action update_environment_host'}
-        endpoint = f'/environments/{environment_id}/hosts/{host_id}'
+            return {
+                "error": "Missing required parameter: host_id for action update_environment_host"
+            }
+        endpoint = f"/environments/{environment_id}/hosts/{host_id}"
         params = build_params()
-        body = {k: v for k, v in {'hostname': hostname, 'oracle_cluster_node_name': oracle_cluster_node_name, 'oracle_cluster_node_enabled': oracle_cluster_node_enabled, 'oracle_cluster_node_virtual_ips': oracle_cluster_node_virtual_ips, 'nfs_addresses': nfs_addresses, 'ssh_port': ssh_port, 'toolkit_path': toolkit_path, 'java_home': java_home, 'dsp_keystore_path': dsp_keystore_path, 'dsp_keystore_password': dsp_keystore_password, 'dsp_keystore_alias': dsp_keystore_alias, 'dsp_truststore_path': dsp_truststore_path, 'dsp_truststore_password': dsp_truststore_password, 'connector_port': connector_port, 'oracle_jdbc_keystore_password': oracle_jdbc_keystore_password, 'oracle_tde_keystores_root_path': oracle_tde_keystores_root_path, 'ssh_verification_strategy': ssh_verification_strategy, 'connector_authentication_key': connector_authentication_key, 'oracle_tde_okv_home_path': oracle_tde_okv_home_path, 'oracle_tde_external_key_manager_credential': oracle_tde_external_key_manager_credential}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "hostname": hostname,
+                "oracle_cluster_node_name": oracle_cluster_node_name,
+                "oracle_cluster_node_enabled": oracle_cluster_node_enabled,
+                "oracle_cluster_node_virtual_ips": oracle_cluster_node_virtual_ips,
+                "nfs_addresses": nfs_addresses,
+                "ssh_port": ssh_port,
+                "toolkit_path": toolkit_path,
+                "java_home": java_home,
+                "dsp_keystore_path": dsp_keystore_path,
+                "dsp_keystore_password": dsp_keystore_password,
+                "dsp_keystore_alias": dsp_keystore_alias,
+                "dsp_truststore_path": dsp_truststore_path,
+                "dsp_truststore_password": dsp_truststore_password,
+                "connector_port": connector_port,
+                "oracle_jdbc_keystore_password": oracle_jdbc_keystore_password,
+                "oracle_tde_keystores_root_path": oracle_tde_keystores_root_path,
+                "ssh_verification_strategy": ssh_verification_strategy,
+                "connector_authentication_key": connector_authentication_key,
+                "oracle_tde_okv_home_path": oracle_tde_okv_home_path,
+                "oracle_tde_external_key_manager_credential": oracle_tde_external_key_manager_credential,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_environment_host':
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_environment_host":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action delete_environment_host'}
+            return {
+                "error": "Missing required parameter: environment_id for action delete_environment_host"
+            }
         if host_id is None:
-            return {'error': 'Missing required parameter: host_id for action delete_environment_host'}
-        endpoint = f'/environments/{environment_id}/hosts/{host_id}'
+            return {
+                "error": "Missing required parameter: host_id for action delete_environment_host"
+            }
+        endpoint = f"/environments/{environment_id}/hosts/{host_id}"
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "DELETE",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
-    elif action == 'list_environment_listeners':
+        return make_api_request("DELETE", endpoint, params=params)
+    elif action == "list_environment_listeners":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action list_environment_listeners'}
-        endpoint = f'/environments/{environment_id}/listeners'
+            return {
+                "error": "Missing required parameter: environment_id for action list_environment_listeners"
+            }
+        endpoint = f"/environments/{environment_id}/listeners"
         params = build_params(type=type)
-        body = {k: v for k, v in {'type': type, 'name': name, 'protocol_addresses': protocol_addresses, 'host_id': host_id}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "type": type,
+                "name": name,
+                "protocol_addresses": protocol_addresses,
+                "host_id": host_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'get_environment_tags':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "get_environment_tags":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action get_environment_tags'}
-        endpoint = f'/environments/{environment_id}/tags'
+            return {
+                "error": "Missing required parameter: environment_id for action get_environment_tags"
+            }
+        endpoint = f"/environments/{environment_id}/tags"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'add_environment_tags':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "add_environment_tags":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action add_environment_tags'}
-        endpoint = f'/environments/{environment_id}/tags'
+            return {
+                "error": "Missing required parameter: environment_id for action add_environment_tags"
+            }
+        endpoint = f"/environments/{environment_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_environment_tags':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_environment_tags":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action delete_environment_tags'}
-        endpoint = f'/environments/{environment_id}/tags/delete'
+            return {
+                "error": "Missing required parameter: environment_id for action delete_environment_tags"
+            }
+        endpoint = f"/environments/{environment_id}/tags/delete"
         params = build_params()
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'get_environment_compatible_repositories_by_snapshot':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "get_environment_compatible_repositories_by_snapshot":
         params = build_params()
-        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'snapshot_id': snapshot_id, 'environment_id': environment_id}.items() if v is not None}
-        conf = check_confirmation('POST', '/environments/compatible_repositories_by_snapshot', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "source_data_id": source_data_id,
+                "engine_id": engine_id,
+                "snapshot_id": snapshot_id,
+                "environment_id": environment_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments/compatible_repositories_by_snapshot",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/environments/compatible_repositories_by_snapshot', params=params, json_body=body if body else None)
-    elif action == 'get_environment_compatible_repositories_by_timestamp':
+        return make_api_request(
+            "POST",
+            "/environments/compatible_repositories_by_snapshot",
+            params=params,
+            json_body=body if body else None,
+        )
+    elif action == "get_environment_compatible_repositories_by_timestamp":
         params = build_params()
-        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'timestamp': timestamp, 'timeflow_id': timeflow_id, 'environment_id': environment_id}.items() if v is not None}
-        conf = check_confirmation('POST', '/environments/compatible_repositories_by_timestamp', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "source_data_id": source_data_id,
+                "engine_id": engine_id,
+                "timestamp": timestamp,
+                "timeflow_id": timeflow_id,
+                "environment_id": environment_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments/compatible_repositories_by_timestamp",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/environments/compatible_repositories_by_timestamp', params=params, json_body=body if body else None)
-    elif action == 'get_environment_compatible_repositories_by_location':
+        return make_api_request(
+            "POST",
+            "/environments/compatible_repositories_by_timestamp",
+            params=params,
+            json_body=body if body else None,
+        )
+    elif action == "get_environment_compatible_repositories_by_location":
         params = build_params()
-        body = {k: v for k, v in {'source_data_id': source_data_id, 'engine_id': engine_id, 'location': location, 'timeflow_id': timeflow_id, 'environment_id': environment_id}.items() if v is not None}
-        conf = check_confirmation('POST', '/environments/compatible_repositories_by_location', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "source_data_id": source_data_id,
+                "engine_id": engine_id,
+                "location": location,
+                "timeflow_id": timeflow_id,
+                "environment_id": environment_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments/compatible_repositories_by_location",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/environments/compatible_repositories_by_location', params=params, json_body=body if body else None)
-    elif action == 'update_environment_repository':
+        return make_api_request(
+            "POST",
+            "/environments/compatible_repositories_by_location",
+            params=params,
+            json_body=body if body else None,
+        )
+    elif action == "update_environment_repository":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action update_environment_repository'}
+            return {
+                "error": "Missing required parameter: environment_id for action update_environment_repository"
+            }
         if repository_id is None:
-            return {'error': 'Missing required parameter: repository_id for action update_environment_repository'}
-        endpoint = f'/environments/{environment_id}/repository/{repository_id}'
+            return {
+                "error": "Missing required parameter: repository_id for action update_environment_repository"
+            }
+        endpoint = f"/environments/{environment_id}/repository/{repository_id}"
         params = build_params()
-        body = {k: v for k, v in {'allow_provisioning': allow_provisioning, 'is_staging': is_staging, 'version': version, 'oracle_base': oracle_base, 'bits': bits, 'port': port, 'instance_owner': instance_owner, 'installation_path': installation_path, 'dump_history_file': dump_history_file, 'database_username': database_username, 'database_password': database_password, 'service_principal_name': service_principal_name, 'isql_path': isql_path}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "allow_provisioning": allow_provisioning,
+                "is_staging": is_staging,
+                "version": version,
+                "oracle_base": oracle_base,
+                "bits": bits,
+                "port": port,
+                "instance_owner": instance_owner,
+                "installation_path": installation_path,
+                "dump_history_file": dump_history_file,
+                "database_username": database_username,
+                "database_password": database_password,
+                "service_principal_name": service_principal_name,
+                "isql_path": isql_path,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_environment_repository':
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_environment_repository":
         if environment_id is None:
-            return {'error': 'Missing required parameter: environment_id for action delete_environment_repository'}
+            return {
+                "error": "Missing required parameter: environment_id for action delete_environment_repository"
+            }
         if repository_id is None:
-            return {'error': 'Missing required parameter: repository_id for action delete_environment_repository'}
-        endpoint = f'/environments/{environment_id}/repository/{repository_id}'
+            return {
+                "error": "Missing required parameter: repository_id for action delete_environment_repository"
+            }
+        endpoint = f"/environments/{environment_id}/repository/{repository_id}"
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "DELETE",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
-    elif action == 'search_sources':
+        return make_api_request("DELETE", endpoint, params=params)
+    elif action == "search_sources":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {'filter_expression': filter_expression} if filter_expression else {}
-        conf = check_confirmation('POST', '/sources/search', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        conf = check_confirmation(
+            "POST",
+            "/sources/search",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/sources/search', params=params, json_body=body)
-    elif action == 'list_sources':
+        return make_api_request(
+            "POST", "/sources/search", params=params, json_body=body
+        )
+    elif action == "list_sources":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        conf = check_confirmation('GET', '/sources', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            "/sources",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', '/sources', params=params)
-    elif action == 'get_source':
+        return make_api_request("GET", "/sources", params=params)
+    elif action == "get_source":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action get_source'}
-        endpoint = f'/sources/{source_id}'
+            return {
+                "error": "Missing required parameter: source_id for action get_source"
+            }
+        endpoint = f"/sources/{source_id}"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'delete_source':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "delete_source":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action delete_source'}
-        endpoint = f'/sources/{source_id}'
+            return {
+                "error": "Missing required parameter: source_id for action delete_source"
+            }
+        endpoint = f"/sources/{source_id}"
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "DELETE",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
-    elif action == 'verify_source_jdbc_connection':
+        return make_api_request("DELETE", endpoint, params=params)
+    elif action == "verify_source_jdbc_connection":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action verify_source_jdbc_connection'}
-        endpoint = f'/sources/{source_id}/jdbc-check'
-        params = build_params(database_username=database_username, database_password=database_password, jdbc_connection_string=jdbc_connection_string)
-        body = {k: v for k, v in {'database_username': database_username, 'database_password': database_password, 'jdbc_connection_string': jdbc_connection_string}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+            return {
+                "error": "Missing required parameter: source_id for action verify_source_jdbc_connection"
+            }
+        endpoint = f"/sources/{source_id}/jdbc-check"
+        params = build_params(
+            database_username=database_username,
+            database_password=database_password,
+            jdbc_connection_string=jdbc_connection_string,
+        )
+        body = {
+            k: v
+            for k, v in {
+                "database_username": database_username,
+                "database_password": database_password,
+                "jdbc_connection_string": jdbc_connection_string,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'get_source_compatible_repositories':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "get_source_compatible_repositories":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action get_source_compatible_repositories'}
-        endpoint = f'/sources/{source_id}/staging_compatible_repositories'
+            return {
+                "error": "Missing required parameter: source_id for action get_source_compatible_repositories"
+            }
+        endpoint = f"/sources/{source_id}/staging_compatible_repositories"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'get_source_tags':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "get_source_tags":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action get_source_tags'}
-        endpoint = f'/sources/{source_id}/tags'
+            return {
+                "error": "Missing required parameter: source_id for action get_source_tags"
+            }
+        endpoint = f"/sources/{source_id}/tags"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'add_source_tags':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "add_source_tags":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action add_source_tags'}
-        endpoint = f'/sources/{source_id}/tags'
+            return {
+                "error": "Missing required parameter: source_id for action add_source_tags"
+            }
+        endpoint = f"/sources/{source_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_source_tags':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_source_tags":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action delete_source_tags'}
-        endpoint = f'/sources/{source_id}/tags/delete'
+            return {
+                "error": "Missing required parameter: source_id for action delete_source_tags"
+            }
+        endpoint = f"/sources/{source_id}/tags/delete"
         params = build_params()
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'create_oracle_source':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "create_oracle_source":
         params = build_params(oracle_config_type=oracle_config_type)
-        body = {k: v for k, v in {'oracle_config_type': oracle_config_type, 'engine_id': engine_id, 'environment_id': environment_id, 'database_name': database_name, 'repository_id': repository_id, 'instances': instances, 'unique_name': unique_name, 'instance_name': instance_name, 'oracle_services': oracle_services}.items() if v is not None}
-        conf = check_confirmation('POST', '/sources/oracle', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "oracle_config_type": oracle_config_type,
+                "engine_id": engine_id,
+                "environment_id": environment_id,
+                "database_name": database_name,
+                "repository_id": repository_id,
+                "instances": instances,
+                "unique_name": unique_name,
+                "instance_name": instance_name,
+                "oracle_services": oracle_services,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/oracle",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/sources/oracle', params=params, json_body=body if body else None)
-    elif action == 'update_oracle_source':
+        return make_api_request(
+            "POST", "/sources/oracle", params=params, json_body=body if body else None
+        )
+    elif action == "update_oracle_source":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action update_oracle_source'}
-        endpoint = f'/sources/oracle/{source_id}'
+            return {
+                "error": "Missing required parameter: source_id for action update_oracle_source"
+            }
+        endpoint = f"/sources/oracle/{source_id}"
         params = build_params()
-        body = {k: v for k, v in {'oracle_services': oracle_services, 'user': user, 'password': password, 'linking_enabled': linking_enabled}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "oracle_services": oracle_services,
+                "user": user,
+                "password": password,
+                "linking_enabled": linking_enabled,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
-    elif action == 'create_postgres_source':
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "create_postgres_source":
         params = build_params(name=name)
-        body = {k: v for k, v in {'name': name, 'repository_id': repository_id, 'engine_id': engine_id, 'environment_id': environment_id}.items() if v is not None}
-        conf = check_confirmation('POST', '/sources/postgres', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "name": name,
+                "repository_id": repository_id,
+                "engine_id": engine_id,
+                "environment_id": environment_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/postgres",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/sources/postgres', params=params, json_body=body if body else None)
-    elif action == 'update_postgres_source':
+        return make_api_request(
+            "POST", "/sources/postgres", params=params, json_body=body if body else None
+        )
+    elif action == "update_postgres_source":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action update_postgres_source'}
-        endpoint = f'/sources/postgres/{source_id}'
+            return {
+                "error": "Missing required parameter: source_id for action update_postgres_source"
+            }
+        endpoint = f"/sources/postgres/{source_id}"
         params = build_params()
-        body = {k: v for k, v in {'name': name}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
-    elif action == 'create_ase_source':
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "create_ase_source":
         params = build_params(database_name=database_name)
-        body = {k: v for k, v in {'database_name': database_name, 'repository_id': repository_id, 'linking_enabled': linking_enabled, 'environment_id': environment_id, 'environment_user': environment_user, 'engine_id': engine_id}.items() if v is not None}
-        conf = check_confirmation('POST', '/sources/ase', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "database_name": database_name,
+                "repository_id": repository_id,
+                "linking_enabled": linking_enabled,
+                "environment_id": environment_id,
+                "environment_user": environment_user,
+                "engine_id": engine_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/ase",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/sources/ase', params=params, json_body=body if body else None)
-    elif action == 'update_ase_source':
+        return make_api_request(
+            "POST", "/sources/ase", params=params, json_body=body if body else None
+        )
+    elif action == "update_ase_source":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action update_ase_source'}
-        endpoint = f'/sources/ase/{source_id}'
+            return {
+                "error": "Missing required parameter: source_id for action update_ase_source"
+            }
+        endpoint = f"/sources/ase/{source_id}"
         params = build_params()
-        body = {k: v for k, v in {'database_name': database_name, 'repository_id': repository_id, 'linking_enabled': linking_enabled, 'environment_id': environment_id, 'environment_user': environment_user, 'database_username': database_username, 'database_password': database_password}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "database_name": database_name,
+                "repository_id": repository_id,
+                "linking_enabled": linking_enabled,
+                "environment_id": environment_id,
+                "environment_user": environment_user,
+                "database_username": database_username,
+                "database_password": database_password,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
-    elif action == 'create_appdata_source':
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "create_appdata_source":
         params = build_params(name=name, type=type)
-        body = {k: v for k, v in {'type': type, 'name': name, 'repository_id': repository_id, 'linking_enabled': linking_enabled, 'environment_user': environment_user, 'parameters': parameters, 'path': path, 'environment_id': environment_id, 'engine_id': engine_id}.items() if v is not None}
-        conf = check_confirmation('POST', '/sources/appdata', action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "type": type,
+                "name": name,
+                "repository_id": repository_id,
+                "linking_enabled": linking_enabled,
+                "environment_user": environment_user,
+                "parameters": parameters,
+                "path": path,
+                "environment_id": environment_id,
+                "engine_id": engine_id,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/appdata",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/sources/appdata', params=params, json_body=body if body else None)
-    elif action == 'update_appdata_source':
+        return make_api_request(
+            "POST", "/sources/appdata", params=params, json_body=body if body else None
+        )
+    elif action == "update_appdata_source":
         if source_id is None:
-            return {'error': 'Missing required parameter: source_id for action update_appdata_source'}
-        endpoint = f'/sources/appdata/{source_id}'
+            return {
+                "error": "Missing required parameter: source_id for action update_appdata_source"
+            }
+        endpoint = f"/sources/appdata/{source_id}"
         params = build_params()
-        body = {k: v for k, v in {'name': name, 'repository_id': repository_id, 'environment_id': environment_id, 'linking_enabled': linking_enabled, 'environment_user': environment_user, 'parameters': parameters, 'path': path}.items() if v is not None}
-        conf = check_confirmation('PATCH', endpoint, action, 'environment_source_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {
+                "name": name,
+                "repository_id": repository_id,
+                "environment_id": environment_id,
+                "linking_enabled": linking_enabled,
+                "environment_user": environment_user,
+                "parameters": parameters,
+                "path": path,
+            }.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('PATCH', endpoint, params=params, json_body=body if body else None)
+        return make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source'}
+        return {
+            "error": f"Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source"
+        }
+
 
 @log_tool_execution
 def toolkit_tool(
@@ -1372,13 +2201,13 @@ def toolkit_tool(
 ) -> Dict[str, Any]:
     """
     Unified tool for TOOLKIT operations.
-    
+
     This tool supports 7 actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags
-    
+
     ======================================================================
     ACTION REFERENCE
     ======================================================================
-    
+
     ACTION: search
     ----------------------------------------
     Summary: Search for toolkits.
@@ -1386,7 +2215,7 @@ def toolkit_tool(
     Endpoint: /toolkits/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
-    
+
     Filterable Fields:
         - id: Id of the toolkit.
         - type: Specifies whether this object is toolkit or plugin
@@ -1399,81 +2228,81 @@ def toolkit_tool(
         - upgrade_definition: Definition of how to upgrade sources of this type.
         - snapshot_parameters_definition: The schema that defines the structure of the fields in Ap...
         - build_api: The Delphix API version that the toolkit was built against.
-        - display_name: 
-        - pretty_name: 
-        - version: 
-        - namespace: 
-        - identifier: 
-        - root_squash_enabled: 
-        - default_locale: 
-        - status: 
-        - language: 
-        - extended_start_stop_hooks: 
-        - entry_point: 
-        - lua_name: 
-        - minimum_lua_version: 
-        - host_types: 
-        - snapshot_schema: 
-        - resources: 
+        - display_name:
+        - pretty_name:
+        - version:
+        - namespace:
+        - identifier:
+        - root_squash_enabled:
+        - default_locale:
+        - status:
+        - language:
+        - extended_start_stop_hooks:
+        - entry_point:
+        - lua_name:
+        - minimum_lua_version:
+        - host_types:
+        - snapshot_schema:
+        - resources:
         - tags: Tags associated to this toolkit.
-    
+
     Filter Syntax:
         Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
         Combine: AND, OR
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
-    
+
     Example:
         >>> toolkit_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
-    
+
     ACTION: get
     ----------------------------------------
     Summary: Get Toolkit by ID.
     Method: GET
     Endpoint: /toolkits/{toolkitId}
     Required Parameters: toolkit_id
-    
+
     Example:
         >>> toolkit_tool(action='get', toolkit_id='example-toolkit-123')
-    
+
     ACTION: upload_toolkit
     ----------------------------------------
     Summary: Upload toolkit to engines.
     Method: POST
     Endpoint: /toolkits/upload
-    
+
     Example:
         >>> toolkit_tool(action='upload_toolkit')
-    
+
     ACTION: delete_toolkit
     ----------------------------------------
     Summary: Delete a Toolkit by ID.
     Method: DELETE
     Endpoint: /toolkits/{toolkitId}
     Required Parameters: toolkit_id
-    
+
     Example:
         >>> toolkit_tool(action='delete_toolkit', toolkit_id='example-toolkit-123')
-    
+
     ACTION: get_tags
     ----------------------------------------
     Summary: Get tags for a Toolkit.
     Method: GET
     Endpoint: /toolkits/{toolkitId}/tags
     Required Parameters: toolkit_id
-    
+
     Example:
         >>> toolkit_tool(action='get_tags', toolkit_id='example-toolkit-123')
-    
+
     ACTION: add_tags
     ----------------------------------------
     Summary: Create tags for a toolkit.
     Method: POST
     Endpoint: /toolkits/{toolkitId}/tags
     Required Parameters: toolkit_id, tags
-    
+
     Example:
         >>> toolkit_tool(action='add_tags', toolkit_id='example-toolkit-123', tags=...)
-    
+
     ACTION: delete_tags
     ----------------------------------------
     Summary: Delete tags for a Toolkit.
@@ -1481,17 +2310,17 @@ def toolkit_tool(
     Endpoint: /toolkits/{toolkitId}/tags/delete
     Required Parameters: toolkit_id
     Key Parameters (provide as applicable): tags, key, value
-    
+
     Example:
         >>> toolkit_tool(action='delete_tags', toolkit_id='example-toolkit-123', tags=..., key=..., value=...)
-    
+
     ======================================================================
     PARAMETERS
     ======================================================================
-    
+
     Args:
         action (str): The operation to perform. One of: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags
-    
+
       -- General parameters (all database types) --
         cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
             [Required for: search]
@@ -1509,87 +2338,163 @@ def toolkit_tool(
             [Required for: get, delete_toolkit, get_tags, add_tags, delete_tags]
         value (str): Value of the tag
             [Optional for all actions]
-    
+
     Returns:
         Dict[str, Any]: The API response containing operation results
-    
+
     Raises:
         Returns error dict if required parameters are missing for the action
     """
     # Route to appropriate API based on action
-    if action == 'search':
+    if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {'filter_expression': filter_expression} if filter_expression else {}
-        conf = check_confirmation('POST', '/toolkits/search', action, 'toolkit_tool', confirmed or False, request_params=params, request_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        conf = check_confirmation(
+            "POST",
+            "/toolkits/search",
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/toolkits/search', params=params, json_body=body)
-    elif action == 'get':
+        return make_api_request(
+            "POST", "/toolkits/search", params=params, json_body=body
+        )
+    elif action == "get":
         if toolkit_id is None:
-            return {'error': 'Missing required parameter: toolkit_id for action get'}
-        endpoint = f'/toolkits/{toolkit_id}'
+            return {"error": "Missing required parameter: toolkit_id for action get"}
+        endpoint = f"/toolkits/{toolkit_id}"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'toolkit_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'upload_toolkit':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "upload_toolkit":
         params = build_params()
-        conf = check_confirmation('POST', '/toolkits/upload', action, 'toolkit_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "POST",
+            "/toolkits/upload",
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('POST', '/toolkits/upload', params=params)
-    elif action == 'delete_toolkit':
+        return make_api_request("POST", "/toolkits/upload", params=params)
+    elif action == "delete_toolkit":
         if toolkit_id is None:
-            return {'error': 'Missing required parameter: toolkit_id for action delete_toolkit'}
-        endpoint = f'/toolkits/{toolkit_id}'
+            return {
+                "error": "Missing required parameter: toolkit_id for action delete_toolkit"
+            }
+        endpoint = f"/toolkits/{toolkit_id}"
         params = build_params()
-        conf = check_confirmation('DELETE', endpoint, action, 'toolkit_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "DELETE",
+            endpoint,
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('DELETE', endpoint, params=params)
-    elif action == 'get_tags':
+        return make_api_request("DELETE", endpoint, params=params)
+    elif action == "get_tags":
         if toolkit_id is None:
-            return {'error': 'Missing required parameter: toolkit_id for action get_tags'}
-        endpoint = f'/toolkits/{toolkit_id}/tags'
+            return {
+                "error": "Missing required parameter: toolkit_id for action get_tags"
+            }
+        endpoint = f"/toolkits/{toolkit_id}/tags"
         params = build_params()
-        conf = check_confirmation('GET', endpoint, action, 'toolkit_tool', confirmed or False, request_params=params, request_body=None)
+        conf = check_confirmation(
+            "GET",
+            endpoint,
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=None,
+        )
         if conf:
             return conf
-        return make_api_request('GET', endpoint, params=params)
-    elif action == 'add_tags':
+        return make_api_request("GET", endpoint, params=params)
+    elif action == "add_tags":
         if toolkit_id is None:
-            return {'error': 'Missing required parameter: toolkit_id for action add_tags'}
-        endpoint = f'/toolkits/{toolkit_id}/tags'
+            return {
+                "error": "Missing required parameter: toolkit_id for action add_tags"
+            }
+        endpoint = f"/toolkits/{toolkit_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'toolkit_tool', confirmed or False, request_params=params, request_body=body)
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
-    elif action == 'delete_tags':
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_tags":
         if toolkit_id is None:
-            return {'error': 'Missing required parameter: toolkit_id for action delete_tags'}
-        endpoint = f'/toolkits/{toolkit_id}/tags/delete'
+            return {
+                "error": "Missing required parameter: toolkit_id for action delete_tags"
+            }
+        endpoint = f"/toolkits/{toolkit_id}/tags/delete"
         params = build_params()
-        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
-        conf = check_confirmation('POST', endpoint, action, 'toolkit_tool', confirmed or False, request_params=params, request_body=body)
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "toolkit_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
         if conf:
             return conf
-        return make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+        return make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags'}
+        return {
+            "error": f"Unknown action: {action}. Valid actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags"
+        }
 
 
 def register_tools(app, dct_client):
     global client
     client = dct_client
-    logger.info(f'Registering tools for environment_endpoints...')
+    logger.info("Registering tools for environment_endpoints...")
     try:
-        logger.info(f'  Registering tool function: environment_source_tool')
+        logger.info("  Registering tool function: environment_source_tool")
         app.add_tool(environment_source_tool, name="environment_source_tool")
-        logger.info(f'  Registering tool function: toolkit_tool')
+        logger.info("  Registering tool function: toolkit_tool")
         app.add_tool(toolkit_tool, name="toolkit_tool")
     except Exception as e:
-        logger.error(f'Error registering tools for environment_endpoints: {e}')
-    logger.info(f'Tools registration finished for environment_endpoints.')
+        logger.error(f"Error registering tools for environment_endpoints: {e}")
+    logger.info("Tools registration finished for environment_endpoints.")
