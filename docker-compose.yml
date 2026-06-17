@@ -1,0 +1,18 @@
+# docker-compose.yml
+# Run: docker compose up
+# Requires a .env file in this directory with DCT_API_KEY and DCT_BASE_URL.
+# The MCP server uses stdio transport: stdin_open keeps stdin attached.
+# Logs are persisted to ./logs/ on the host via the volume mount.
+services:
+  dct-mcp-server:
+    image: dct-mcp-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    stdin_open: true   # required for MCP stdio transport (-i equivalent)
+    tty: false         # do NOT allocate a TTY; stdio framing requires raw bytes
+    env_file:
+      - .env           # must contain DCT_API_KEY and DCT_BASE_URL
+    volumes:
+      - ./logs:/app/logs  # persist logs to host
+    restart: "no"
