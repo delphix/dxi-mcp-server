@@ -41,3 +41,9 @@ target-version = "py311"
 # __init__.py modules are re-export hubs: the "unused" imports are intentional
 # public API surface, not dead code.
 "__init__.py" = ["F401"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+]
