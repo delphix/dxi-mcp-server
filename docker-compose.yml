@@ -5,7 +5,7 @@
 # Logs are persisted to ./logs/ on the host via the volume mount.
 services:
   dct-mcp-server:
-    image: dct-mcp-server:local
+    image: dct-mcp-server:latest
     build:
       context: .
       dockerfile: Dockerfile

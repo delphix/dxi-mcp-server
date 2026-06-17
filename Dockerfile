@@ -3,7 +3,7 @@ FROM python:3.11-slim-bookworm
 
 # Create a non-root user and group (UID/GID 1000)
 RUN groupadd --gid 1000 mcpuser \
-    && useradd --uid 1000 --gid 1000 --no-create-home --shell /bin/sh mcpuser
+    && useradd --uid 1000 --gid 1000 --no-create-home --shell /bin/false mcpuser
 
 WORKDIR /app
 
