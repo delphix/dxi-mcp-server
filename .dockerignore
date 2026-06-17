@@ -1,0 +1,50 @@
+# Secrets — never bake these into the image
+.env
+*.env
+.env.*
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python build artefacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Development tooling
+.claude/
+.pre-commit-config.yaml
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+uv.lock
+
+# Test directories
+tests/
+
+# Documentation and project metadata
+docs/
+*.md
+!README.md
+
+# Logs (should never be copied into image)
+logs/
+
+# IDE / OS artefacts
+.DS_Store
+.idea/
+.vscode/
+*.swp
