@@ -304,6 +304,236 @@ See below for the full JSON configuration examples for each client.
 > **Note**: VS Code, Eclipse, and IntelliJ all use the same configuration format (servers object).
 </details>
 
+## Running with Docker
+
+Docker lets you run the MCP server without installing Python 3.11+ or `uv` locally. The container runs as a non-root user (`mcpuser`, UID 1000) and writes logs to `/app/logs` inside the container.
+
+> **Important:** The MCP server uses **stdio transport**. Always pass `-i` (or `--interactive`) to `docker run` to keep stdin attached. Without `-i` the server exits immediately.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) 20.10 or later
+- A valid DCT API key (`DCT_API_KEY`) and DCT instance URL (`DCT_BASE_URL`)
+
+### Build the Image
+
+```bash
+docker build -t dct-mcp-server .
+```
+
+> **Multi-arch builds (optional):** To build for both `linux/amd64` and `linux/arm64` (requires Docker Buildx with a multi-arch builder configured):
+> ```bash
+> docker buildx build --platform linux/amd64,linux/arm64 -t dct-mcp-server .
+> ```
+
+### Run with `docker run`
+
+**Linux / macOS:**
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  -e DCT_VERIFY_SSL=false \
+  dct-mcp-server
+```
+
+**Windows (Command Prompt):**
+```cmd
+docker run --rm -i ^
+  -e DCT_API_KEY=<your-api-key> ^
+  -e DCT_BASE_URL=https://your-dct-host.company.com ^
+  -e DCT_VERIFY_SSL=false ^
+  dct-mcp-server
+```
+
+**Windows (PowerShell):**
+```powershell
+docker run --rm -i `
+  -e DCT_API_KEY=<your-api-key> `
+  -e DCT_BASE_URL=https://your-dct-host.company.com `
+  -e DCT_VERIFY_SSL=false `
+  dct-mcp-server
+```
+
+### Persist Logs to the Host
+
+Mount a local directory to `/app/logs` to keep logs after the container exits:
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  -v ./logs:/app/logs \
+  dct-mcp-server
+```
+
+Logs are written to `logs/dct_mcp_server.log` on the host. If `IS_LOCAL_TELEMETRY_ENABLED=true` is set, session telemetry also appears under `logs/sessions/`.
+
+### Run with `docker compose`
+
+Create a `.env` file with your credentials:
+
+```bash
+# .env
+DCT_API_KEY=<your-api-key>
+DCT_BASE_URL=https://your-dct-host.company.com
+DCT_VERIFY_SSL=false
+DCT_TOOLSET=self_service
+```
+
+Then start the container:
+
+```bash
+docker compose up
+```
+
+Logs are persisted to `./logs/` on the host automatically.
+
+### SSL / Private CA Certificates
+
+If your DCT instance uses a private certificate authority, mount the CA bundle and set `SSL_CERT_FILE`:
+
+```bash
+docker run --rm -i \
+  -e DCT_API_KEY=<your-api-key> \
+  -e DCT_BASE_URL=https://your-dct-host.company.com \
+  -e DCT_VERIFY_SSL=true \
+  -e SSL_CERT_FILE=/certs/ca-bundle.crt \
+  -v /path/to/your/ca-bundle.crt:/certs/ca-bundle.crt:ro \
+  dct-mcp-server
+```
+
+### MCP Client Configuration (Docker)
+
+Configure your MCP client to launch the server via Docker. Expand the section for your client:
+
+<details>
+<summary>Claude Desktop</summary>
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+**Linux / macOS:**
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=<your-api-key>",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+**Windows:**
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=<your-api-key>",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Cursor / Windsurf</summary>
+
+Edit your Cursor settings (`~/.cursor/mcp.json`) or Windsurf settings (`~/.codeium/windsurf/mcp_config.json`):
+
+**Linux / macOS:**
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=<your-api-key>",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+**Windows:**
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=<your-api-key>",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>VS Code / Eclipse / IntelliJ (Continue.dev)</summary>
+
+Edit your Continue configuration (`~/.continue/config.json` or workspace `.continue/config.json`):
+
+**Linux / macOS:**
+```json
+{
+  "mcpServers": [
+    {
+      "name": "delphix-dct",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=<your-api-key>",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  ]
+}
+```
+
+**Windows:**
+```json
+{
+  "mcpServers": [
+    {
+      "name": "delphix-dct",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "DCT_API_KEY=<your-api-key>",
+        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
+        "dct-mcp-server"
+      ]
+    }
+  ]
+}
+```
+
+</details>
+
+> **Tip:** Pass `DCT_TOOLSET=self_service` (or another toolset) via `-e DCT_TOOLSET=self_service` to control which tools are exposed.
+
 ## Advanced Installation
 
 For running as a standalone command-line tool or contributing to development.
@@ -427,122 +657,6 @@ To connect your client, you only need to specify this port number. You do not ne
 ```
 
 > **Note**: You can configure other MCP clients similarly by providing the port number. This method is ideal for development, as it allows you to restart the server without reconfiguring or restarting your client application. For troubleshooting, all log files can be found in the `logs` directory created in the project root.
-
-## Running with Docker
-
-Docker lets you run the MCP server without installing Python 3.11+ or `uv` locally. The container runs as a non-root user (`mcpuser`, UID 1000) and writes logs to `/app/logs` inside the container.
-
-> **Important:** The MCP server uses **stdio transport**. Always pass `-i` (or `--interactive`) to `docker run` to keep stdin attached. Without `-i` the server exits immediately.
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) 20.10 or later
-- A valid DCT API key (`DCT_API_KEY`) and DCT instance URL (`DCT_BASE_URL`)
-
-### Build the Image
-
-```bash
-docker build -t dct-mcp-server .
-```
-
-### Run with `docker run`
-
-**Linux / macOS:**
-```bash
-docker run --rm -i \
-  -e DCT_API_KEY=<your-api-key> \
-  -e DCT_BASE_URL=https://your-dct-host.company.com \
-  -e DCT_VERIFY_SSL=false \
-  dct-mcp-server
-```
-
-**Windows (Command Prompt):**
-```cmd
-docker run --rm -i ^
-  -e DCT_API_KEY=<your-api-key> ^
-  -e DCT_BASE_URL=https://your-dct-host.company.com ^
-  -e DCT_VERIFY_SSL=false ^
-  dct-mcp-server
-```
-
-**Windows (PowerShell):**
-```powershell
-docker run --rm -i `
-  -e DCT_API_KEY=<your-api-key> `
-  -e DCT_BASE_URL=https://your-dct-host.company.com `
-  -e DCT_VERIFY_SSL=false `
-  dct-mcp-server
-```
-
-### Persist Logs to the Host
-
-Mount a local directory to `/app/logs` to keep logs after the container exits:
-
-```bash
-docker run --rm -i \
-  -e DCT_API_KEY=<your-api-key> \
-  -e DCT_BASE_URL=https://your-dct-host.company.com \
-  -v ./logs:/app/logs \
-  dct-mcp-server
-```
-
-Logs are written to `logs/dct_mcp_server.log` on the host. If `IS_LOCAL_TELEMETRY_ENABLED=true` is set, session telemetry also appears under `logs/sessions/`.
-
-### Run with `docker compose`
-
-Create a `.env` file with your credentials:
-
-```bash
-# .env
-DCT_API_KEY=<your-api-key>
-DCT_BASE_URL=https://your-dct-host.company.com
-DCT_VERIFY_SSL=false
-DCT_TOOLSET=self_service
-```
-
-Then start the container:
-
-```bash
-docker compose up
-```
-
-Logs are persisted to `./logs/` on the host automatically.
-
-### SSL / Private CA Certificates
-
-If your DCT instance uses a private certificate authority, mount the CA bundle and set `SSL_CERT_FILE`:
-
-```bash
-docker run --rm -i \
-  -e DCT_API_KEY=<your-api-key> \
-  -e DCT_BASE_URL=https://your-dct-host.company.com \
-  -e DCT_VERIFY_SSL=true \
-  -e SSL_CERT_FILE=/certs/ca-bundle.crt \
-  -v /path/to/your/ca-bundle.crt:/certs/ca-bundle.crt:ro \
-  dct-mcp-server
-```
-
-### MCP Client Configuration (Docker)
-
-Configure your MCP client to launch the server via Docker:
-
-```json
-{
-  "mcpServers": {
-    "delphix-dct": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "DCT_API_KEY=<your-api-key>",
-        "-e", "DCT_BASE_URL=https://your-dct-host.company.com",
-        "dct-mcp-server"
-      ]
-    }
-  }
-}
-```
-
-> **Tip:** Pass `DCT_TOOLSET=self_service` (or another toolset) via `-e DCT_TOOLSET=self_service` to control which tools are exposed.
 
 ## Toolsets
 

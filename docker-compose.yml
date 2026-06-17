@@ -5,14 +5,14 @@
 # Logs are persisted to ./logs/ on the host via the volume mount.
 services:
   dct-mcp-server:
-    image: dct-mcp-server:latest
+    image: dct-mcp-server:local
     build:
       context: .
       dockerfile: Dockerfile
     stdin_open: true   # required for MCP stdio transport (-i equivalent)
     tty: false         # do NOT allocate a TTY; stdio framing requires raw bytes
     env_file:
-      - .env           # must contain DCT_API_KEY and DCT_BASE_URL
+      - .env           # create this file from the env-var list in README.md
     volumes:
       - ./logs:/app/logs  # persist logs to host
     restart: "no"

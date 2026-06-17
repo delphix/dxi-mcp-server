@@ -7,6 +7,7 @@
 .git
 .gitignore
 .gitattributes
+.github
 
 # Python build artefacts
 __pycache__/
@@ -31,6 +32,9 @@ env/
 .mypy_cache/
 .pytest_cache/
 uv.lock
+evals/
+*.sh
+*.bat
 
 # Test directories
 tests/
@@ -48,3 +52,5 @@ logs/
 .idea/
 .vscode/
 *.swp
+whitesource/
+mcp.json
