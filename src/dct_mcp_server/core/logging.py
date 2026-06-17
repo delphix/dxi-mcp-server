@@ -79,11 +79,11 @@ class GlobalLogger:
             log_file_path = Path(log_file)
             logs_dir = log_file_path.parent
 
-        # Create logs directory
-        logs_dir.mkdir(exist_ok=True)
-
-        # Add rotating file handler for global logs
+        # Create logs directory and add rotating file handler.
+        # When running from a read-only location (e.g. restricted container mount),
+        # degrade gracefully: emit a warning and skip the file handler.
         try:
+            logs_dir.mkdir(exist_ok=True)
             global_handler = TimedRotatingFileHandler(
                 log_file_path,
                 when=LoggingConfig.WHEN,
@@ -92,6 +92,11 @@ class GlobalLogger:
                 encoding=LoggingConfig.ENCODING,
             )
             self._add_handler(root_logger, global_handler, global_formatter)
+        except PermissionError as e:
+            print(
+                f"Warning: Cannot create log directory {logs_dir}: {e}",
+                file=sys.stderr,
+            )
         except Exception as e:
             print(
                 f"Warning: Failed to create global log file {log_file_path}: {e}",
@@ -131,11 +136,36 @@ class GlobalLogger:
 
     @staticmethod
     def _get_project_root() -> Path:
-        """Get project root directory."""
+        """Get project root directory.
+
+        Returns Path.cwd() when running from an installed package (site-packages),
+        so log files are written relative to the working directory rather than
+        into the Python library tree. Falls back to cwd when the candidate path
+        is not writable (secondary guard).
+
+        In development (cloned repo or editable install) returns the repo root,
+        which is four directory levels above this file:
+        src/dct_mcp_server/core/logging.py → parents[3] = repo root.
+        """
         if getattr(sys, "frozen", False):
             return Path(os.path.dirname(sys.executable))
-        # Assuming this file is at src/dct_mcp_server/core/logging.py
-        return Path(__file__).resolve().parents[3]
+
+        resolved_file = Path(__file__).resolve()
+
+        # Primary guard: installed package path always contains "site-packages"
+        if "site-packages" in str(resolved_file):
+            return Path.cwd()
+
+        # Dev clone / editable install: file lives inside the source tree
+        candidate = resolved_file.parents[3]
+
+        # Secondary guard: if the candidate is unwritable (e.g. a path that
+        # coincidentally contains "site-packages" in an ancestor dir name but
+        # was caught above, or a read-only mount), fall back to cwd.
+        if not os.access(str(candidate), os.W_OK):
+            return Path.cwd()
+
+        return candidate
 
 
 # Global instance
