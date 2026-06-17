@@ -72,8 +72,10 @@ SCENARIOS: list[dict[str, Any]] = [
         "type": "discovery",
         "action": "get_operation_schema",
         "params": {"path": "/vdbs/{vdbId}/delete", "operation_method": "POST"},
-        "expect": lambda r: r.get("requires_confirmation") is True
-                           and r.get("confirmation_level") == "manual",
+        "expect": lambda r: (
+            r.get("requires_confirmation") is True
+            and r.get("confirmation_level") == "manual"
+        ),
     },
     {
         "id": "S04",
@@ -82,8 +84,7 @@ SCENARIOS: list[dict[str, Any]] = [
         "type": "discovery",
         "action": "get_operation_schema",
         "params": {"path": "/vdbs/search", "operation_method": "POST"},
-        "expect": lambda r: r.get("requires_confirmation") is False
-                           and "path" in r,
+        "expect": lambda r: r.get("requires_confirmation") is False and "path" in r,
     },
     {
         "id": "S05",
@@ -149,8 +150,9 @@ SCENARIOS: list[dict[str, Any]] = [
             "path": "/nonexistent/endpoint/xyz",
             "operation_method": "GET",
         },
-        "expect": lambda r: r.get("code") == "OPERATION_NOT_FOUND"
-                           or r.get("status") == "error",
+        "expect": lambda r: (
+            r.get("code") == "OPERATION_NOT_FOUND" or r.get("status") == "error"
+        ),
     },
 ]
 
@@ -158,6 +160,7 @@ SCENARIOS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 # Harness runner
 # ---------------------------------------------------------------------------
+
 
 class ScenarioResult:
     def __init__(
@@ -180,7 +183,11 @@ class ScenarioResult:
 def _load_spec() -> dict[str, Any] | None:
     """Load spec via the dynamic-mode spec cache (downloads from DCT if needed)."""
     try:
-        from dct_mcp_server.tools.core.spec_cache import get_cached_spec, load_and_cache_spec
+        from dct_mcp_server.tools.core.spec_cache import (
+            get_cached_spec,
+            load_and_cache_spec,
+        )
+
         spec = get_cached_spec()
         if spec:
             return spec
@@ -192,8 +199,10 @@ def _load_spec() -> dict[str, Any] | None:
 
 class MockApp:
     """Minimal mock app that provides app.state.openapi_spec."""
+
     class _State:
         openapi_spec: dict | None = None
+
     state = _State()
 
 
@@ -251,7 +260,7 @@ def _run_execute_dry_scenario(
     expect_no_confirmation = scenario.get("expect_no_confirmation", False)
 
     # Substitute path params
-    import re
+
     resolved_path = path
     for k, v in path_params.items():
         resolved_path = resolved_path.replace(f"{{{k}}}", str(v))
@@ -296,7 +305,7 @@ def _run_execute_dry_scenario(
 
 def run_all_scenarios(dry_run: bool = True) -> list[ScenarioResult]:
     """Run all 10 scenarios and return results."""
-    print(f"\nLoading OpenAPI spec…")
+    print("\nLoading OpenAPI spec…")
     spec = _load_spec()
     if spec is None:
         print("  ERROR: Could not load OpenAPI spec. Aborting.")
@@ -336,6 +345,7 @@ def run_all_scenarios(dry_run: bool = True) -> list[ScenarioResult]:
 # Report generation
 # ---------------------------------------------------------------------------
 
+
 def _compute_recommendation(success_rate: float) -> str:
     if success_rate >= 0.80:
         return "ADOPT"
@@ -354,36 +364,38 @@ def _write_eval_results(results: list[ScenarioResult], output_path: Path) -> Non
     recommendation = _compute_recommendation(success_rate)
 
     lines: list[str] = []
-    lines.append(f"# DLPXECO-13984 LLM Evaluation Results")
-    lines.append(f"")
-    lines.append(f"**Run date**: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
-    lines.append(f"**Harness**: evals/llm_eval_harness.py")
-    lines.append(f"**Mode**: dry-run (discovery + confirmation resolver)")
-    lines.append(f"")
-    lines.append(f"## Summary")
-    lines.append(f"")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|--------|-------|")
+    lines.append("# DLPXECO-13984 LLM Evaluation Results")
+    lines.append("")
+    lines.append(
+        f"**Run date**: {datetime.datetime.now(datetime.timezone.utc).isoformat()}"
+    )
+    lines.append("**Harness**: evals/llm_eval_harness.py")
+    lines.append("**Mode**: dry-run (discovery + confirmation resolver)")
+    lines.append("")
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
     lines.append(f"| Total scenarios | {total_count} |")
     lines.append(f"| Passed | {success_count} |")
     lines.append(f"| Failed | {total_count - success_count} |")
     lines.append(f"| Success rate | {success_rate:.0%} |")
     lines.append(f"| Recommendation | **{recommendation}** |")
-    lines.append(f"")
-    lines.append(f"## Per-Scenario Results")
-    lines.append(f"")
-    lines.append(f"| ID | Scenario | Status | Notes |")
-    lines.append(f"|----|----------|--------|-------|")
+    lines.append("")
+    lines.append("## Per-Scenario Results")
+    lines.append("")
+    lines.append("| ID | Scenario | Status | Notes |")
+    lines.append("|----|----------|--------|-------|")
     for r in results:
         status_str = "PASS" if r.status == "success" else "FAIL"
         notes = (r.failure_reason or "").replace("|", " ").replace("\n", " ")[:80]
         lines.append(f"| {r.scenario_id} | {r.name} | {status_str} | {notes} |")
 
-    lines.append(f"")
-    lines.append(f"### Step: implement")
-    lines.append(f"")
-    lines.append(f"Eval harness run completed.")
-    lines.append(f"")
+    lines.append("")
+    lines.append("### Step: implement")
+    lines.append("")
+    lines.append("Eval harness run completed.")
+    lines.append("")
 
     output_path.write_text("\n".join(lines) + "\n")
     print(f"\nEval results written to: {output_path}")
@@ -398,7 +410,8 @@ def _write_decision_gate(results: list[ScenarioResult], output_path: Path) -> No
     success_rate = success_count / total_count if total_count else 0.0
     recommendation = _compute_recommendation(success_rate)
 
-    content = textwrap.dedent(f"""
+    content = (
+        textwrap.dedent(f"""
     # DLPXECO-13984 Phase 1 Decision Gate
 
     **Date**: {datetime.datetime.now(datetime.timezone.utc).date().isoformat()}
@@ -432,13 +445,20 @@ def _write_decision_gate(results: list[ScenarioResult], output_path: Path) -> No
 
     **{recommendation}**
 
-    {"The discovery and execute tools pass all dry-run schema validation scenarios. The confirmation resolver correctly identifies destructive operations. Proceed to Phase 2 pending live DCT integration testing." if recommendation == "ADOPT" else "Success rate below the 80% adopt threshold. Review failure scenarios and address before committing to full migration."}
+    {
+            "The discovery and execute tools pass all dry-run schema validation scenarios. The confirmation resolver correctly identifies destructive operations. Proceed to Phase 2 pending live DCT integration testing."
+            if recommendation == "ADOPT"
+            else "Success rate below the 80% adopt threshold. Review failure scenarios and address before committing to full migration."
+        }
 
     ---
 
     ## Migration Plan (if ADOPT)
 
-    {"N/A — Investigate/Revert path" if recommendation != "ADOPT" else textwrap.dedent("""
+    {
+            "N/A — Investigate/Revert path"
+            if recommendation != "ADOPT"
+            else textwrap.dedent('''
     **Timeline**: Persona-based toolsets (`self_service`, `continuous_data_admin`, etc.) remain
     fully supported until Phase 2 (PPM-1129) is complete and validated.
 
@@ -448,7 +468,8 @@ def _write_decision_gate(results: list[ScenarioResult], output_path: Path) -> No
     4. Backward-compatibility window: persona toolsets remain available for 6 months after sunset
        announcement
     5. Removal: persona toolsets removed in a major version bump
-    """).strip()}
+    ''').strip()
+        }
 
     ---
 
@@ -480,7 +501,9 @@ def _write_decision_gate(results: list[ScenarioResult], output_path: Path) -> No
     - Eval results: `docs/DLPXECO-13984/DLPXECO-13984-eval-results.md`
     - Design: `docs/DLPXECO-13984/DLPXECO-13984-design.md`
     - Functional spec: `docs/DLPXECO-13984/DLPXECO-13984-functional.md`
-    """).strip() + "\n"
+    """).strip()
+        + "\n"
+    )
 
     output_path.write_text(content)
     print(f"Decision gate report written to: {output_path}")
@@ -489,6 +512,7 @@ def _write_decision_gate(results: list[ScenarioResult], output_path: Path) -> No
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -565,10 +589,12 @@ def main() -> int:
 
     success_count = sum(1 for r in results if r.status == "success")
     total = len(results)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {success_count}/{total} passed")
-    print(f"Recommendation: {_compute_recommendation(success_count / total if total else 0)}")
-    print(f"{'='*60}")
+    print(
+        f"Recommendation: {_compute_recommendation(success_count / total if total else 0)}"
+    )
+    print(f"{'=' * 60}")
 
     return 0 if success_count == total else 1
 

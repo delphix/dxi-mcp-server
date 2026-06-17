@@ -16,6 +16,7 @@ def log_tool_execution(func):
     Supports both sync and async tool functions.
     """
     if inspect.iscoroutinefunction(func):
+
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             logger = get_logger(func.__module__)
@@ -37,6 +38,7 @@ def log_tool_execution(func):
                 tool_data["error"] = str(e)
                 log_tool_call(tool_data)
                 raise
+
         return wrapper
 
     @functools.wraps(func)

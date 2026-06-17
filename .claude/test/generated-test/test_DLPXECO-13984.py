@@ -14,11 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import tempfile
-import types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, mock_open
+from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
 
 import pytest
@@ -89,6 +86,7 @@ MINIMAL_SPEC: dict[str, Any] = {
 # S1-S6 — spec_cache.py tests
 # ===========================================================================
 
+
 class TestSpecCacheDownloadSuccess:
     """S1 — Spec download succeeds on first startup."""
 
@@ -114,8 +112,16 @@ class TestSpecCacheDownloadSuccess:
             "spec_cache_path": str(cache_file),
         }
 
-        with patch("dct_mcp_server.tools.core.spec_cache.get_dct_config", return_value=mock_config), \
-             patch("dct_mcp_server.tools.core.spec_cache.requests.get", return_value=mock_response):
+        with (
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.get_dct_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.requests.get",
+                return_value=mock_response,
+            ),
+        ):
             result = spec_cache.load_and_cache_spec()
 
         assert result is not None
@@ -143,6 +149,7 @@ class TestSpecCacheFreshCacheReused:
 
         # Write a fresh spec to cache with a current timestamp
         from datetime import datetime, timezone
+
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(yaml.dump(MINIMAL_SPEC))
         meta = {
@@ -161,8 +168,13 @@ class TestSpecCacheFreshCacheReused:
             "spec_cache_path": str(cache_file),
         }
 
-        with patch("dct_mcp_server.tools.core.spec_cache.get_dct_config", return_value=mock_config), \
-             patch("dct_mcp_server.tools.core.spec_cache.requests.get") as mock_get:
+        with (
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.get_dct_config",
+                return_value=mock_config,
+            ),
+            patch("dct_mcp_server.tools.core.spec_cache.requests.get") as mock_get,
+        ):
             result = spec_cache.load_and_cache_spec()
             mock_get.assert_not_called()
 
@@ -189,8 +201,16 @@ class TestSpecCacheFailsOnNetworkError:
             "spec_cache_path": str(tmp_path / "api-external-dynamic.yaml"),
         }
 
-        with patch("dct_mcp_server.tools.core.spec_cache.get_dct_config", return_value=mock_config), \
-             patch("dct_mcp_server.tools.core.spec_cache.requests.get", side_effect=ConnectionError("timeout")):
+        with (
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.get_dct_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.requests.get",
+                side_effect=ConnectionError("timeout"),
+            ),
+        ):
             with pytest.raises(MCPError, match="SPEC_LOAD_FAILED"):
                 spec_cache.load_and_cache_spec()
 
@@ -220,8 +240,16 @@ class TestSpecCacheFailsOnInvalidYAML:
             "spec_cache_path": str(tmp_path / "api-external-dynamic.yaml"),
         }
 
-        with patch("dct_mcp_server.tools.core.spec_cache.get_dct_config", return_value=mock_config), \
-             patch("dct_mcp_server.tools.core.spec_cache.requests.get", return_value=mock_response):
+        with (
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.get_dct_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.requests.get",
+                return_value=mock_response,
+            ),
+        ):
             with pytest.raises(MCPError, match="SPEC_LOAD_FAILED"):
                 spec_cache.load_and_cache_spec()
 
@@ -246,8 +274,16 @@ class TestSpecCacheSpecLoadFailed:
             "spec_cache_path": str(tmp_path / "api-external-dynamic.yaml"),
         }
 
-        with patch("dct_mcp_server.tools.core.spec_cache.get_dct_config", return_value=mock_config), \
-             patch("dct_mcp_server.tools.core.spec_cache.requests.get", side_effect=ConnectionError("unreachable")):
+        with (
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.get_dct_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.requests.get",
+                side_effect=ConnectionError("unreachable"),
+            ),
+        ):
             with pytest.raises(MCPError, match="SPEC_LOAD_FAILED"):
                 spec_cache.load_and_cache_spec()
 
@@ -266,6 +302,7 @@ class TestSpecCacheCorruptedCacheRedownload:
 
         # Write corrupted cache AND a fresh meta (so cache age check passes)
         from datetime import datetime, timezone
+
         cache_file.write_text("<<< corrupted yaml")
         meta = {
             "downloaded_at": datetime.now(timezone.utc).isoformat(),
@@ -287,8 +324,16 @@ class TestSpecCacheCorruptedCacheRedownload:
             "spec_cache_path": str(cache_file),
         }
 
-        with patch("dct_mcp_server.tools.core.spec_cache.get_dct_config", return_value=mock_config), \
-             patch("dct_mcp_server.tools.core.spec_cache.requests.get", return_value=mock_response):
+        with (
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.get_dct_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "dct_mcp_server.tools.core.spec_cache.requests.get",
+                return_value=mock_response,
+            ),
+        ):
             result = spec_cache.load_and_cache_spec()
 
         # Should have succeeded via re-download
@@ -301,10 +346,12 @@ class TestSpecCacheCorruptedCacheRedownload:
 # S7-S13 — discovery tool tests (FR-002)
 # ===========================================================================
 
+
 def _make_discovery_fn(spec: dict[str, Any]):
     """Create a discovery function backed by the given spec (via spec_cache)."""
     from dct_mcp_server.tools.core.dynamic import _make_discovery_fn as _make
     from dct_mcp_server.tools.core import spec_cache
+
     spec_cache._cached_spec = spec
     mock_app = MagicMock()
     return _make(mock_app)
@@ -445,9 +492,7 @@ class TestDiscoveryCircularRef:
                 "schemas": {
                     "Node": {
                         "type": "object",
-                        "properties": {
-                            "child": {"$ref": "#/components/schemas/Node"}
-                        },
+                        "properties": {"child": {"$ref": "#/components/schemas/Node"}},
                     }
                 }
             },
@@ -486,14 +531,18 @@ class TestDiscoveryCircularRef:
         )
 
         # Should complete without recursion error; schema_truncated may be set
-        assert "status" not in result or result.get("status") != "error" or \
-               result.get("code") != "INFINITE_RECURSION"
+        assert (
+            "status" not in result
+            or result.get("status") != "error"
+            or result.get("code") != "INFINITE_RECURSION"
+        )
         # The response should not cause a RecursionError (test would blow up above)
 
 
 # ===========================================================================
 # S14-S23 — execute tool tests (FR-003)
 # ===========================================================================
+
 
 def _make_execute_fn(spec: dict[str, Any], dct_client=None):
     """Create an execute function with the given spec (via spec_cache) and dct_client.
@@ -503,6 +552,7 @@ def _make_execute_fn(spec: dict[str, Any], dct_client=None):
     """
     from dct_mcp_server.tools.core.dynamic import _make_execute_fn as _make
     from dct_mcp_server.tools.core import spec_cache
+
     spec_cache._cached_spec = spec
     mock_app = MagicMock()
     if dct_client is None:
@@ -634,7 +684,11 @@ class TestExecuteMissingRequiredField:
         fn = _make_execute_fn(spec_with_required, mock_client)
 
         with patch("dct_mcp_server.tools.core.dynamic.check_confirmation") as mock_cc:
-            mock_cc.return_value = {"requires_confirmation": False, "confirmation_level": None, "message_template": None}
+            mock_cc.return_value = {
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            }
             result = fn(
                 path="/vdbs/provision",
                 method="POST",
@@ -701,11 +755,17 @@ class TestExecuteGetSuccess:
     def test_s21_get_returns_read_type(self):
         """S21: GET /vdbs/vdb-123 → status=success, operation_type=read."""
         mock_client = MagicMock()
-        mock_client.make_request = AsyncMock(return_value={"id": "vdb-123", "status": "running"})
+        mock_client.make_request = AsyncMock(
+            return_value={"id": "vdb-123", "status": "running"}
+        )
         fn = _make_execute_fn(MINIMAL_SPEC, mock_client)
 
         with patch("dct_mcp_server.tools.core.dynamic.check_confirmation") as mock_cc:
-            mock_cc.return_value = {"requires_confirmation": False, "confirmation_level": None, "message_template": None}
+            mock_cc.return_value = {
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            }
             result = fn(
                 path="/vdbs/{vdbId}",
                 method="GET",
@@ -724,11 +784,17 @@ class TestExecuteDCTAPIError:
         from dct_mcp_server.core.exceptions import DCTClientError
 
         mock_client = MagicMock()
-        mock_client.make_request = AsyncMock(side_effect=DCTClientError("HTTP 404: Not Found"))
+        mock_client.make_request = AsyncMock(
+            side_effect=DCTClientError("HTTP 404: Not Found")
+        )
         fn = _make_execute_fn(MINIMAL_SPEC, mock_client)
 
         with patch("dct_mcp_server.tools.core.dynamic.check_confirmation") as mock_cc:
-            mock_cc.return_value = {"requires_confirmation": False, "confirmation_level": None, "message_template": None}
+            mock_cc.return_value = {
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            }
             result = fn(
                 path="/vdbs/search",
                 method="POST",
@@ -753,7 +819,11 @@ class TestExecuteNonJSONResponse:
         fn = _make_execute_fn(MINIMAL_SPEC, mock_client)
 
         with patch("dct_mcp_server.tools.core.dynamic.check_confirmation") as mock_cc:
-            mock_cc.return_value = {"requires_confirmation": False, "confirmation_level": None, "message_template": None}
+            mock_cc.return_value = {
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            }
             result = fn(
                 path="/vdbs/search",
                 method="POST",
@@ -761,12 +831,15 @@ class TestExecuteNonJSONResponse:
 
         assert result["status"] == "error"
         assert result["code"] == "DCT_API_ERROR"
-        assert "Non-JSON" in result.get("message", "") or "DCT" in result.get("message", "")
+        assert "Non-JSON" in result.get("message", "") or "DCT" in result.get(
+            "message", ""
+        )
 
 
 # ===========================================================================
 # S24-S28 — confirmation_resolver.py tests (FR-004)
 # ===========================================================================
+
 
 class TestConfirmationResolver:
     """S24-S28 — check_confirmation() tests."""
@@ -775,7 +848,9 @@ class TestConfirmationResolver:
         """S24: POST /vdbs/vdb-123/delete → requires_confirmation=True, level=manual."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "manual",
                 "message": "Delete VDB permanently?",
@@ -791,7 +866,9 @@ class TestConfirmationResolver:
         """S25: GET /vdbs/search → requires_confirmation=False."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "none",
                 "message": None,
@@ -807,7 +884,9 @@ class TestConfirmationResolver:
         """S26: retention_check:7 triggers when retention_days=3."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "retention_check",
                 "message": "Retention is too low",
@@ -815,7 +894,9 @@ class TestConfirmationResolver:
                 "threshold_days": 7,
             }
             # retention_days=3 < threshold 7 → should trigger
-            result = check_confirmation("DELETE", "/snapshots/snap-1", context={"retention_days": 3})
+            result = check_confirmation(
+                "DELETE", "/snapshots/snap-1", context={"retention_days": 3}
+            )
 
         assert result["requires_confirmation"] is True
 
@@ -823,14 +904,18 @@ class TestConfirmationResolver:
         """S26: retention_check:7 does NOT trigger when retention_days=30."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "retention_check",
                 "message": "Retention is too low",
                 "conditional": True,
                 "threshold_days": 7,
             }
-            result = check_confirmation("DELETE", "/snapshots/snap-1", context={"retention_days": 30})
+            result = check_confirmation(
+                "DELETE", "/snapshots/snap-1", context={"retention_days": 30}
+            )
 
         assert result["requires_confirmation"] is False
 
@@ -838,14 +923,20 @@ class TestConfirmationResolver:
         """S27: policy_impact_check:N triggers when affected_object_count > N."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "policy_impact_check",
                 "message": "Policy impacts many objects",
                 "conditional": True,
                 "threshold_days": 10,  # N=10
             }
-            result = check_confirmation("POST", "/policies/policy-1/apply", context={"affected_object_count": 15})
+            result = check_confirmation(
+                "POST",
+                "/policies/policy-1/apply",
+                context={"affected_object_count": 15},
+            )
 
         assert result["requires_confirmation"] is True
 
@@ -853,14 +944,18 @@ class TestConfirmationResolver:
         """S27: policy_impact_check:N does NOT trigger when affected_object_count <= N."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "policy_impact_check",
                 "message": "Policy impacts many objects",
                 "conditional": True,
                 "threshold_days": 10,
             }
-            result = check_confirmation("POST", "/policies/policy-1/apply", context={"affected_object_count": 5})
+            result = check_confirmation(
+                "POST", "/policies/policy-1/apply", context={"affected_object_count": 5}
+            )
 
         assert result["requires_confirmation"] is False
 
@@ -868,7 +963,9 @@ class TestConfirmationResolver:
         """S28: unknown path with no matching rule → requires_confirmation=False without error."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
 
-        with patch("dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation") as mock_gc:
+        with patch(
+            "dct_mcp_server.tools.core.confirmation_resolver.get_confirmation_for_operation"
+        ) as mock_gc:
             mock_gc.return_value = {
                 "level": "none",
                 "message": None,
@@ -886,23 +983,33 @@ class TestConfirmationResolver:
 # S32 — Decision-gate report existence check
 # ===========================================================================
 
+
 class TestDecisionGateReportExists:
     """S32 — Decision-gate report file exists."""
 
     def test_s32_decision_gate_doc_exists(self):
         """S32: DLPXECO-13984-decision-gate.md exists and is non-empty."""
-        gate_path = Path(__file__).parent.parent.parent.parent / "docs" / "DLPXECO-13984" / "DLPXECO-13984-decision-gate.md"
+        gate_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "docs"
+            / "DLPXECO-13984"
+            / "DLPXECO-13984-decision-gate.md"
+        )
         assert gate_path.exists(), f"Decision-gate report not found at {gate_path}"
         content = gate_path.read_text()
         assert len(content.strip()) > 0, "Decision-gate report is empty"
         # Check required sections
         assert "Executive Summary" in content or "Summary" in content
-        assert any(word in content for word in ("Recommendation", "ADOPT", "INVESTIGATE", "REVERT"))
+        assert any(
+            word in content
+            for word in ("Recommendation", "ADOPT", "INVESTIGATE", "REVERT")
+        )
 
 
 # ===========================================================================
 # S33 — Backward compatibility: existing test suite still passes
 # ===========================================================================
+
 
 class TestBackwardCompatibility:
     """S33 — Existing persona-based toolsets must not be broken."""
@@ -913,29 +1020,37 @@ class TestBackwardCompatibility:
             _normalize_hooks_in_body,
             _VALID_HOOK_TYPES,
         )
+
         assert callable(_normalize_hooks_in_body)
         assert len(_VALID_HOOK_TYPES) > 0
 
     def test_s33_dynamic_module_importable(self):
         """S33: dynamic.py importable; register_dynamic_tools is callable."""
         from dct_mcp_server.tools.core.dynamic import register_dynamic_tools
+
         assert callable(register_dynamic_tools)
 
     def test_s33_spec_cache_module_importable(self):
         """S33: spec_cache.py importable; load_and_cache_spec, get_cached_spec callable."""
-        from dct_mcp_server.tools.core.spec_cache import load_and_cache_spec, get_cached_spec
+        from dct_mcp_server.tools.core.spec_cache import (
+            load_and_cache_spec,
+            get_cached_spec,
+        )
+
         assert callable(load_and_cache_spec)
         assert callable(get_cached_spec)
 
     def test_s33_confirmation_resolver_importable(self):
         """S33: confirmation_resolver.py importable; check_confirmation callable."""
         from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
+
         assert callable(check_confirmation)
 
 
 # ===========================================================================
 # S34 — Telemetry decoration check
 # ===========================================================================
+
 
 class TestTelemetryDecoration:
     """S34 — discovery and execute must be decorated with @log_tool_execution."""

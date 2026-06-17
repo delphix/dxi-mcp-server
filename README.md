@@ -1,6 +1,7 @@
 ![Support](https://img.shields.io/badge/Support-Community-yellow.svg)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
+[![Coverage](https://img.shields.io/badge/coverage-5%25-yellow.svg)](https://github.com/delphix/dxi-mcp-server/actions/workflows/ci.yml)
 
 # Delphix DCT MCP Server
 

@@ -50,6 +50,7 @@ _CACHE_META_FILENAME = ".cache-meta.json"
 # Public API
 # --------------------------------------------------------------------------- #
 
+
 def load_and_cache_spec() -> dict[str, Any]:
     """
     Download, validate, and cache the DCT OpenAPI spec.
@@ -84,7 +85,9 @@ def load_and_cache_spec() -> dict[str, Any]:
     if _should_use_cache(cache_path, max_age_hours):
         spec = _load_from_disk(cache_path)
         if spec is not None:
-            logger.info("Using cached OpenAPI spec from %s (within max age)", cache_path)
+            logger.info(
+                "Using cached OpenAPI spec from %s (within max age)", cache_path
+            )
             _cached_spec = spec
             return _cached_spec
 
@@ -123,6 +126,7 @@ def clear_spec_cache() -> None:
 # --------------------------------------------------------------------------- #
 # Private helpers
 # --------------------------------------------------------------------------- #
+
 
 def _should_use_cache(cache_path: Path, max_age_hours: int) -> bool:
     """Return True if the cache file exists and is younger than max_age_hours."""
@@ -181,7 +185,9 @@ def _load_from_disk(cache_path: Path) -> dict | None:
             spec = yaml.safe_load(f)
         if _validate_spec(spec):
             return spec
-        logger.warning("Cached spec at %s failed validation — will re-download", cache_path)
+        logger.warning(
+            "Cached spec at %s failed validation — will re-download", cache_path
+        )
         return None
     except Exception as exc:
         logger.warning("Could not load cached spec from %s: %s", cache_path, exc)
@@ -231,9 +237,7 @@ def _download_spec(
                     spec_url,
                 )
                 return None
-            logger.info(
-                "OpenAPI spec downloaded: %d paths", len(spec.get("paths", {}))
-            )
+            logger.info("OpenAPI spec downloaded: %d paths", len(spec.get("paths", {})))
             return spec
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else "?"

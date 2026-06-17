@@ -99,8 +99,12 @@ class GlobalLogger:
             )
 
         # Add console handler for global logs
-        console_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        self._add_handler(root_logger, logging.StreamHandler(sys.stderr), console_formatter)
+        console_formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s"
+        )
+        self._add_handler(
+            root_logger, logging.StreamHandler(sys.stderr), console_formatter
+        )
 
     def _suppress_noisy_loggers(self) -> None:
         """Suppress commonly noisy third-party loggers."""
@@ -108,7 +112,10 @@ class GlobalLogger:
             logging.getLogger(logger_name).setLevel(logging.WARNING)
 
     def _add_handler(
-        self, logger: logging.Logger, handler: logging.Handler, formatter: logging.Formatter
+        self,
+        logger: logging.Logger,
+        handler: logging.Handler,
+        formatter: logging.Formatter,
     ) -> None:
         """Helper function to configure and add a handler to the logger."""
         handler.setFormatter(formatter)
