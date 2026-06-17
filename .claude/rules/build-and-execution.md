@@ -22,6 +22,18 @@ pip install git+https://github.com/delphix/dxi-mcp-server.git
 dct-mcp-server
 ```
 
+**Via Docker (no Python install needed):**
+```bash
+docker build -t dct-mcp-server .
+docker run --rm -i \
+  -e DCT_API_KEY="your-api-key" \
+  -e DCT_BASE_URL="https://your-dct-host.company.com" \
+  dct-mcp-server
+```
+The container runs as non-root `mcpuser` (UID 1000). Pass `-v ./logs:/app/logs` to persist logs. See `README.md` `## Running with Docker` for full options including `docker compose up`, SSL/CA certs, and per-client MCP config.
+
+Note: when running inside Docker, `_get_project_root()` returns `Path.cwd()` (`/app`) via the site-packages guard — log files are written to `/app/logs/` inside the container.
+
 ## Development Connection
 
 When running from a local clone, the server prints the port it listens on (e.g. `http://127.0.0.1:6790`). Connect your MCP client using just the port — no env vars needed in the client:

@@ -17,7 +17,7 @@ A Model Context Protocol (MCP) server that exposes Delphix Data Control Tower (D
 main.py                              ← Entry point; FastMCP app, lifespan, startup/shutdown
     ├── toolsgenerator/driver.py     ← Generates tool modules from OpenAPI spec at startup
     ├── tools/__init__.py            ← Dynamic tool registration (priority: generated → pre-built)
-    │       ├── tools/core/meta_tools.py      ← 5 meta-tools for auto mode only
+    │       ├── tools/core/meta_tools.py      ← 8 meta-tools for auto mode only
     │       ├── tools/core/tool_factory.py    ← Runtime tool generation from OpenAPI spec
     │       └── tools/*_endpoints_tool.py     ← Pre-built grouped tools (fallback)
     ├── config/config.py             ← Env var loading and validation
@@ -42,7 +42,7 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
 - Available toolsets: `self_service` (default), `self_service_provision`, `continuous_data_admin`, `platform_admin`, `reporting_insights`
 
 ### Auto Mode (`DCT_TOOLSET=auto`)
-- Starts with 5 meta-tools only
+- Starts with 8 meta-tools only
 - AI dynamically enables toolsets at runtime via `enable_toolset()` — no restart needed
 - Uses `tools/list_changed` MCP notification to signal tool list updates to clients
 - Not all clients support hot-switching (VS Code Copilot requires chat restart)
