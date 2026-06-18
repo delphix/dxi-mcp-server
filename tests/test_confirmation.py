@@ -19,11 +19,9 @@ All functions in this module were AI-generated.  Each test carries an
 
 import textwrap
 
-import pytest
 
 from dct_mcp_server.config import loader
 from dct_mcp_server.config.loader import (
-    MAPPINGS_DIR,
     _path_matches,
     clear_cache,
     get_confirmation_for_operation,

@@ -18,7 +18,6 @@ import pytest
 
 from dct_mcp_server.config import loader
 from dct_mcp_server.config.loader import (
-    TOOLSETS_DIR,
     clear_cache,
     get_confirmation_for_operation,
     load_toolset_apis,
@@ -224,7 +223,9 @@ def test_requires_confirmation_false_for_read():
 def test_validate_toolset_config_returns_empty_for_valid():
     # AI-generated — the self_service toolset is valid; no errors expected
     errors = validate_toolset_config("self_service")
-    assert errors == [], f"Expected no validation errors for self_service, got: {errors}"
+    assert errors == [], (
+        f"Expected no validation errors for self_service, got: {errors}"
+    )
 
 
 def test_validate_toolset_config_returns_error_for_empty_toolset(tmp_path, monkeypatch):
@@ -234,4 +235,6 @@ def test_validate_toolset_config_returns_error_for_empty_toolset(tmp_path, monke
     monkeypatch.setattr(loader, "TOOLSETS_DIR", tmp_path)
     clear_cache()
     errors = validate_toolset_config("empty_toolset")
-    assert len(errors) > 0, "Expected at least one validation error for a toolset with no APIs"
+    assert len(errors) > 0, (
+        "Expected at least one validation error for a toolset with no APIs"
+    )

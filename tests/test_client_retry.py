@@ -13,7 +13,6 @@ All functions in this module were AI-generated.  Each test carries an
 ``# AI-generated`` comment on the first line of its body.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -23,7 +22,12 @@ from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.dct_client.client import DCTAPIClient
 
 
-def _make_response(status_code: int, json_body=None, text_body: str = "", content_type: str = "application/json"):
+def _make_response(
+    status_code: int,
+    json_body=None,
+    text_body: str = "",
+    content_type: str = "application/json",
+):
     """Build a minimal mock httpx.Response for use in request mocks."""
     response = MagicMock(spec=httpx.Response)
     response.status_code = status_code
