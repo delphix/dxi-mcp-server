@@ -17,7 +17,9 @@ dct-mcp-server = "dct_mcp_server.main:main"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [build-system]
@@ -30,6 +32,15 @@ packages = ["src/dct_mcp_server"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "--tb=short"
+
+[tool.coverage.run]
+source = ["src/dct_mcp_server"]
+omit = [
+    "*/toolsgenerator/*",
+    "*/tools/core/tool_factory.py",
+]
 
 [tool.ruff]
 # Pinned to ruff 0.15.x in ci.yml and .pre-commit-config.yaml so format/lint
