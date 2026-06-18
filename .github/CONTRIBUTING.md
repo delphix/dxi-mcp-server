@@ -24,3 +24,33 @@ When you submit a pull request, our team follows this internal process:
 4.  **PR Closure**: After a successful merge, we will close your original pull request.
 
 We appreciate your contribution and patience during this process!
+
+## Acceptance Criteria Format
+
+All non-trivial stories and tasks (story points ≥ 2) must include at least one acceptance criterion written as a testable Given/When/Then assertion. Acceptance criteria belong both in the Jira ticket description and in the `## Acceptance Criteria (test assertions)` section of the GitHub PR template.
+
+**Format**:
+
+```
+Given [precondition or system state],
+When [action or event],
+Then [observable expected outcome].
+```
+
+**Project-specific example** (checkbox format — use this style in your PRs):
+
+- [ ] AC-1: Given `DCT_TOOLSET=auto` and no toolset is currently enabled, when `enable_toolset("self_service")` is called, then the MCP client's tool list includes `vdb_tool` within one round-trip notification and `list_available_toolsets` still returns the full toolset catalogue.
+
+Use concrete, observable outcomes — "the response body contains `status=enabled`" is testable; "it works correctly" is not. Reference real domain concepts (`DCT_TOOLSET`, `vdb_tool`, `confirmation_required`, toolset names) rather than generic placeholders.
+
+## AI Pre-Review Expectation
+
+Before requesting human review on any PR, contributors are expected to run the AI pre-review step using the `dataconnectors-and-integrations` review skill:
+
+```
+/review
+```
+
+Paste the `/review` output directly into the PR description (or attach it as a PR comment) so that human reviewers can see which findings were already surfaced and addressed. This is not a gate — it is a quality aid. If the `/review` output is empty or not applicable (e.g., the change is documentation-only), note that in the PR Checklist item.
+
+The review skill is available via the `dataconnectors-and-integrations` Claude Code plugin. See the plugin documentation for setup if you have not yet installed it.
