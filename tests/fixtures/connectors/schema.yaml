@@ -42,6 +42,22 @@ connectors:
     connector_search_keyword: plugin
     dsource_link_action: dsource_link_appdata
     provision_action: provision_by_snapshot
+
+    # ── Runtime config-generation rules (no hardcoded values) ────────────────
+    # MySQLConfigAllocator in connector_fixtures.py reads these to generate
+    # unique serverId / port / mountPath / name combinations on the fly.
+    # Nothing here is a credential or environment-specific value.
+    config_generation:
+      server_id_range: [200, 800]        # inclusive; must be unique across all objects
+      dsource_server_id_step: 100        # 201, 301, 401 … (start=201)
+      vdb_server_id_offset: 50           # VDB serverId = dSource serverId + 50  (251, 351…)
+      port_prefix: 2000                  # port = prefix + serverId  (201→2201, 251→2251)
+      dsource_mount_template: "/mnt/link/staging{port}"
+      vdb_mount_template: "/mnt/link/vdb{port}"
+      dsource_name_template: "mysql_test{suffix}"   # suffix="" for first, "1","2"… after
+      vdb_name_templates:
+        - "TEST{n}"                      # TEST1, TEST2, TEST3 …
+        - "{rand6}"                      # 6-char alphanum fallback when n>999
     environment_fields:
       - name: toolkit_path
         description: "Path on the host where the Delphix toolkit will be installed"

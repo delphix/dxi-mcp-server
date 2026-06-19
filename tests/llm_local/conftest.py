@@ -163,10 +163,14 @@ def _make_driver(
     """
     exe = _require_claude_cli()
     preprompt = str(_PREPROMPT) if _PREPROMPT.exists() else None
+    # Default to haiku — Sonnet 4.6 intermittently returns HTTP 500 for DCT ops.
+    # Override with LLM_MODEL env var (e.g. LLM_MODEL=claude-sonnet-4-6).
+    model = os.environ.get("LLM_MODEL", "claude-haiku-4-5-20251001")
 
     def run(task: str, *, timeout: int = 180) -> DriverResult:
         cmd = [
             exe, "-p", task,
+            "--model", model,
             "--mcp-config", str(config_path),
             "--strict-mcp-config",
             "--allowedTools", f"{TOOL_PREFIX}*",

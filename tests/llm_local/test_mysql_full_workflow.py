@@ -226,7 +226,10 @@ def test_ai_links_mysql_dsource(connector_spec: ConnectorSpec, llm_driver_for):
     link_detail = connector_spec.link_prompt_detail()
 
     act = drive(
-        f"Link a new {connector_spec.display_name} dSource named '{dsource_name}' "
+        f"BEFORE linking: call data_tool(action='search_dsources') to check if a dSource "
+        f"named '{dsource_name}' already exists. "
+        f"If it exists, delete it (with confirmed=True) and poll job_tool until COMPLETED. "
+        f"Then link a fresh {connector_spec.display_name} dSource named '{dsource_name}' "
         f"using source config '{connector_spec.source_config_name}' on environment "
         f"'{connector_spec.target_host}'. "
         f"Use data_tool action={connector_spec.dsource_link_action} with "
@@ -278,7 +281,10 @@ def test_ai_provisions_mysql_vdb(connector_spec: ConnectorSpec, llm_driver_for):
     provision_detail = connector_spec.provision_prompt_detail()
 
     act = drive(
-        f"Provision a {connector_spec.display_name} VDB named '{vdb_name}' "
+        f"BEFORE provisioning: call data_tool(action='search_vdbs') to check if a VDB "
+        f"named '{vdb_name}' already exists. "
+        f"If it exists, delete it (with confirmed=True) and poll job_tool until COMPLETED. "
+        f"Then provision a fresh {connector_spec.display_name} VDB named '{vdb_name}' "
         f"from the latest snapshot of dSource '{dsource_name}' "
         f"onto environment '{connector_spec.target_host}'. "
         f"Use data_tool action={connector_spec.provision_action}. "

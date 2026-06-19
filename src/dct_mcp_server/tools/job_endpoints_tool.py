@@ -89,18 +89,21 @@ def build_params(**kwargs):
 
 @log_tool_execution
 async def job_tool(
-    action: str,  # One of: search, get, abandon, get_tags
+    action: str,  # One of: search, get, abandon, get_result, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     filter_expression: Optional[str] = None,
     job_id: Optional[str] = None,
+    key: Optional[str] = None,
     limit: Optional[int] = 100,
     sort: Optional[str] = '-start_time',
+    tags: Optional[list] = None,
+    value: Optional[str] = None,
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Unified tool for JOB operations.
     
-    This tool supports 4 actions: search, get, abandon, get_tags
+    This tool supports 7 actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags
     
     ======================================================================
     ACTION REFERENCE
@@ -169,6 +172,16 @@ async def job_tool(
     Example:
         >>> job_tool(action='abandon', job_id='example-job-123')
     
+    ACTION: get_result
+    ----------------------------------------
+    Summary: Get job result.
+    Method: GET
+    Endpoint: /jobs/{jobId}/result
+    Required Parameters: job_id
+    
+    Example:
+        >>> job_tool(action='get_result', job_id='example-job-123')
+    
     ACTION: get_tags
     ----------------------------------------
     Summary: Get tags for a Job.
@@ -179,12 +192,33 @@ async def job_tool(
     Example:
         >>> job_tool(action='get_tags', job_id='example-job-123')
     
+    ACTION: add_tags
+    ----------------------------------------
+    Summary: Create tags for a Job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/tags
+    Required Parameters: job_id, tags
+    
+    Example:
+        >>> job_tool(action='add_tags', job_id='example-job-123', tags=...)
+    
+    ACTION: delete_tags
+    ----------------------------------------
+    Summary: Delete tags for a Job.
+    Method: POST
+    Endpoint: /jobs/{jobId}/tags/delete
+    Required Parameters: job_id
+    Key Parameters (provide as applicable): tags, key, value
+    
+    Example:
+        >>> job_tool(action='delete_tags', job_id='example-job-123', tags=..., key=..., value=...)
+    
     ======================================================================
     PARAMETERS
     ======================================================================
     
     Args:
-        action (str): The operation to perform. One of: search, get, abandon, get_tags
+        action (str): The operation to perform. One of: search, get, abandon, get_result, get_tags, add_tags, delete_tags
     
       -- General parameters (all database types) --
         cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
@@ -192,11 +226,17 @@ async def job_tool(
         filter_expression (str): Request body parameter
             [Optional for all actions]
         job_id (str): The unique identifier for the job.
-            [Required for: get, abandon, get_tags]
+            [Required for: get, abandon, get_result, get_tags, add_tags, delete_tags]
+        key (str): Key of the tag
+            [Optional for all actions]
         limit (int): Maximum number of objects to return per query. The value must be between 1 an...
             [Required for: search]
         sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
             [Required for: search]
+        tags (list): Array of tags with key value pairs (Pass as JSON array)
+            [Required for: add_tags]
+        value (str): Value of the tag
+            [Optional for all actions]
     
     Returns:
         Dict[str, Any]: The API response containing operation results
@@ -233,6 +273,16 @@ async def job_tool(
         if conf:
             return conf
         return await make_api_request('POST', endpoint, params=params)
+    elif action == 'get_result':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action get_result'}
+        endpoint = f'/jobs/{job_id}/result'
+        params = build_params()
+        _ctx = {k: v for k, v in locals().items() if v is not None and not k.startswith('_')}
+        conf = check_confirmation('GET', endpoint, action, 'job_tool', confirmed or False, context=_ctx)
+        if conf:
+            return conf
+        return await make_api_request('GET', endpoint, params=params)
     elif action == 'get_tags':
         if job_id is None:
             return {'error': 'Missing required parameter: job_id for action get_tags'}
@@ -243,8 +293,30 @@ async def job_tool(
         if conf:
             return conf
         return await make_api_request('GET', endpoint, params=params)
+    elif action == 'add_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action add_tags'}
+        endpoint = f'/jobs/{job_id}/tags'
+        params = build_params(tags=tags)
+        _ctx = {k: v for k, v in locals().items() if v is not None and not k.startswith('_')}
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, context=_ctx)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'tags': tags}.items() if v is not None}
+        return await make_api_request('POST', endpoint, params=params, json_body=body if body else None)
+    elif action == 'delete_tags':
+        if job_id is None:
+            return {'error': 'Missing required parameter: job_id for action delete_tags'}
+        endpoint = f'/jobs/{job_id}/tags/delete'
+        params = build_params()
+        _ctx = {k: v for k, v in locals().items() if v is not None and not k.startswith('_')}
+        conf = check_confirmation('POST', endpoint, action, 'job_tool', confirmed or False, context=_ctx)
+        if conf:
+            return conf
+        body = {k: v for k, v in {'key': key, 'value': value, 'tags': tags}.items() if v is not None}
+        return await make_api_request('POST', endpoint, params=params, json_body=body if body else None)
     else:
-        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_tags'}
+        return {'error': f'Unknown action: {action}. Valid actions: search, get, abandon, get_result, get_tags, add_tags, delete_tags'}
 
 
 def register_tools(app, dct_client):

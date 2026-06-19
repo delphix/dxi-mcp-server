@@ -55,7 +55,7 @@ def _environments() -> list:
     return mcp_search("environment_source_tool", "search_environments")
 
 def _dsources() -> list:
-    return mcp_search("dsource_tool", "search")
+    return mcp_search("data_tool", "search_dsources")
 
 def _vdbs() -> list:
     return mcp_search("data_tool", "search_vdbs")
@@ -170,9 +170,11 @@ def test_setup_03_hosts(connector_spec: ConnectorSpec, llm_driver_for):
         short = host.split(".")[0]
         act = drive(
             f"Add the host '{host}' as a new Unix/Linux environment in Delphix. "
-            f"Use SSH username='{connector_spec.env_user}' and "
-            f"password='{connector_spec.env_password}'. "
-            f"Call environment_source_tool or the appropriate tool with all required fields. "
+            f"Use SSH username='{connector_spec.env_user}', "
+            f"password='{connector_spec.env_password}', "
+            f"toolkit_path='{connector_spec.toolkit_path}'. "
+            f"Find the engine_id from the registered engine first. "
+            f"Call environment_source_tool with action=create_unix_host_environment passing ALL required fields. "
             f"Then use job_tool to poll until the job reaches COMPLETED or FAILED. "
             f"Confirm the final job status.",
             timeout=600,
@@ -248,8 +250,8 @@ def test_setup_05_dsource(connector_spec: ConnectorSpec, llm_driver_for):
     act = drive(
         f"Link a new {connector_spec.display_name} dSource named '{dsource_name}' "
         f"from the environment on host '{connector_spec.target_host}'. "
-        f"Use OS username='{connector_spec.link_os_user}', "
-        f"password='{connector_spec.link_os_password}'. "
+        f"Use OS username='{connector_spec.link_user}', "
+        f"password='{connector_spec.link_password}'. "
         f"Use data_tool action={connector_spec.dsource_link_action}. "
         f"Search for the right environment and repository automatically. "
         f"{link_detail}\n"
@@ -306,7 +308,7 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
 
     def _ds_detail() -> dict:
         """Get dSource detail via MCP."""
-        items = mcp_search("dsource_tool", "search")
+        items = mcp_search("data_tool", "search_dsources")
         for d in items:
             if d.get("id") == ds_id or d.get("name") == ds_name:
                 return d
@@ -314,7 +316,7 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
 
     def _ds_snapshots() -> list:
         """List snapshots for this dSource via MCP."""
-        return mcp_search("snapshot_tool", "search")  # filter by dsource below if needed
+        return mcp_search("snapshot_bookmark_tool", "search_dsource_snapshots")
 
     # Check status via MCP
     detail = _ds_detail()
@@ -359,6 +361,8 @@ def test_setup_05b_enable_dsource(connector_spec: ConnectorSpec, llm_driver_for)
         f"Take a new snapshot of the dSource named '{ds_name}' using "
         f"data_tool action=dsource_create_snapshot. "
         f"Find its dsourceId first with a search, then call dsource_create_snapshot with that id. "
+        f"IMPORTANT: Pass appdata_parameters={{\"resync\": true}} in the snapshot call — "
+        f"this is required for AppData/MySQL dSources on the initial sync. "
         f"Then use job_tool to poll until the snapshot job reaches COMPLETED or FAILED. "
         f"Report the final job status.",
         timeout=600,

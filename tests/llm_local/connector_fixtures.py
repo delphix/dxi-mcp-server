@@ -18,6 +18,8 @@ Usage:
 from __future__ import annotations
 
 import os
+import random
+import string
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -120,12 +122,111 @@ class ConnectorSpec:
         return "\n".join(lines)
 
 
-# ── Loaders ───────────────────────────────────────────────────────────────────
+# ── Runtime config allocator ─────────────────────────────────────────────────
 
-def _load_schema() -> dict:
+class MySQLConfigAllocator:
+    """
+    Generates unique (serverId, port, mountPath, name) tuples for MySQL
+    dSources and VDBs on the fly.  Rules come from schema.yaml
+    connectors.mysql.config_generation — nothing is hardcoded here.
+
+    Usage (session-scoped fixture recommended):
+        alloc = MySQLConfigAllocator()
+        ds = alloc.next_dsource()   # {"name": "mysql_test", "serverId": 201, ...}
+        vdb = alloc.next_vdb()      # {"name": "TEST1", "serverId": 251, ...}
+    """
+
+    def __init__(self, connector_type: str = "mysql") -> None:
+        schema = _load_schema_raw()
+        rules: dict = (
+            schema.get("connectors", {})
+                  .get(connector_type, {})
+                  .get("config_generation", {})
+        )
+        self._sid_range: tuple[int, int] = tuple(rules.get("server_id_range", [200, 800]))
+        self._ds_step: int   = rules.get("dsource_server_id_step", 100)
+        self._vdb_offset: int = rules.get("vdb_server_id_offset", 50)
+        self._port_prefix: int = rules.get("port_prefix", 2000)
+        self._ds_mount: str  = rules.get("dsource_mount_template", "/mnt/link/staging{port}")
+        self._vdb_mount: str = rules.get("vdb_mount_template", "/mnt/link/vdb{port}")
+        self._ds_name: str   = rules.get("dsource_name_template", "mysql_test{suffix}")
+        self._vdb_templates: list[str] = rules.get(
+            "vdb_name_templates", ["TEST{n}", "{rand6}"]
+        )
+
+        self._used_sids: set[int] = set()
+        self._ds_count: int = 0
+        self._vdb_count: int = 0
+
+    # ── internal helpers ──────────────────────────────────────────────────────
+
+    def _next_ds_sid(self) -> int:
+        start = self._sid_range[0] + 1          # e.g. 201
+        sid = start + self._ds_count * self._ds_step
+        while sid in self._used_sids or sid > self._sid_range[1]:
+            sid += self._ds_step
+        if sid > self._sid_range[1]:
+            raise RuntimeError("MySQLConfigAllocator: serverId range exhausted for dSources")
+        self._used_sids.add(sid)
+        return sid
+
+    def _next_vdb_sid(self, ds_sid: int) -> int:
+        sid = ds_sid + self._vdb_offset
+        while sid in self._used_sids or sid > self._sid_range[1]:
+            sid += 1
+        if sid > self._sid_range[1]:
+            raise RuntimeError("MySQLConfigAllocator: serverId range exhausted for VDBs")
+        self._used_sids.add(sid)
+        return sid
+
+    @staticmethod
+    def _rand6() -> str:
+        chars = string.ascii_letters + string.digits
+        return "".join(random.choices(chars, k=6))
+
+    def _vdb_name(self, n: int) -> str:
+        tpl = self._vdb_templates[0] if n <= 999 else self._vdb_templates[-1]
+        return tpl.format(n=n, rand6=self._rand6())
+
+    # ── public API ────────────────────────────────────────────────────────────
+
+    def next_dsource(self, name: str | None = None) -> dict[str, Any]:
+        """Return a fresh dSource config dict derived from schema rules."""
+        self._ds_count += 1
+        sid = self._next_ds_sid()
+        port = self._port_prefix + sid
+        suffix = "" if self._ds_count == 1 else str(self._ds_count - 1)
+        return {
+            "name":        name or self._ds_name.format(suffix=suffix),
+            "serverId":    sid,
+            "stagingPort": port,
+            "mountPath":   self._ds_mount.format(port=port),
+        }
+
+    def next_vdb(self, ds_config: dict | None = None, name: str | None = None) -> dict[str, Any]:
+        """Return a fresh VDB config dict.  Pass ds_config to keep serverId close."""
+        self._vdb_count += 1
+        ds_sid = ds_config["serverId"] if ds_config else (self._sid_range[0] + 1)
+        sid = self._next_vdb_sid(ds_sid)
+        port = self._port_prefix + sid
+        return {
+            "name":     name or self._vdb_name(self._vdb_count),
+            "serverId": sid,
+            "vdbPort":  port,
+            "mountPath": self._vdb_mount.format(port=port),
+        }
+
+
+def _load_schema_raw() -> dict:
     if not _SCHEMA_FILE.exists():
         return {}
     return yaml.safe_load(_SCHEMA_FILE.read_text()) or {}
+
+
+# ── Loaders ───────────────────────────────────────────────────────────────────
+
+def _load_schema() -> dict:
+    return _load_schema_raw()
 
 
 def load_engine_spec(secrets_file: Path | None = None) -> EngineSpec:

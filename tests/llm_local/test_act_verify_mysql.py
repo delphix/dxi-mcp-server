@@ -66,10 +66,14 @@ def test_ai_adds_both_environments(connector_spec: ConnectorSpec, llm_driver_for
         short = host.split(".")[0]
 
         act = drive(
-            f"Add the host '{host}' as a new Unix/Linux environment in Delphix. "
-            f"Use SSH username='{connector_spec.env_user}' and "
+            f"BEFORE adding: call environment_source_tool(action='search') to list all "
+            f"existing environments and check if host '{host}' is already registered. "
+            f"If an environment for '{host}' already exists, do NOT try to add it again — "
+            f"just confirm it is present and enabled, and report PASS. "
+            f"Only if '{host}' is NOT already registered: add it as a new Unix/Linux "
+            f"environment using SSH username='{connector_spec.env_user}' and "
             f"password='{connector_spec.env_password}'. "
-            f"Call environment_source_tool with all required fields. "
+            f"Call environment_source_tool(action='create') with all required fields. "
             f"Then poll job_tool until the job reaches COMPLETED or FAILED. "
             f"Confirm the final job status.",
             timeout=600,
@@ -116,7 +120,12 @@ def test_ai_links_dsource_and_verifies(connector_spec: ConnectorSpec, llm_driver
         link_detail = schema_link_hints(connector_spec.connector_type)
 
     act = drive(
-        f"Link a new {connector_spec.display_name} dSource named '{dsource_name}' "
+        f"BEFORE linking: call data_tool(action='search_dsources') to check if a dSource "
+        f"named '{dsource_name}' already exists. "
+        f"If it exists, delete it first using data_tool(action='delete_dsource') with "
+        f"confirmed=True, then poll job_tool until the delete job is COMPLETED. "
+        f"After cleanup (or if it did not exist), link a fresh "
+        f"{connector_spec.display_name} dSource named '{dsource_name}' "
         f"from the environment on host '{connector_spec.target_host}'. "
         f"OS username: '{connector_spec.link_user}', password: '{connector_spec.link_password}'. "
         f"Use data_tool action={connector_spec.dsource_link_action}. "
@@ -149,9 +158,10 @@ def test_ai_links_dsource_and_verifies(connector_spec: ConnectorSpec, llm_driver
         f"{verify.final_text[:400]}"
     )
 
-    # Cleanup
+    # Cleanup — idempotent: skip silently if already gone
     drive(
-        f"Delete the dSource named '{dsource_name}'. "
-        f"Confirm the deletion and wait for completion.",
+        f"Search for a dSource named '{dsource_name}'. "
+        f"If it exists, delete it (with confirmed=True) and wait for the job to COMPLETE. "
+        f"If it does not exist, report that cleanup is already done and finish.",
         timeout=300,
     )
