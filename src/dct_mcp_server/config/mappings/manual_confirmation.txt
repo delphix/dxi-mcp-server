@@ -10,6 +10,11 @@
 # - policy_impact_check:N: Conditional - triggers if policy affects resources
 
 # ============================================
+# RULE 0: Engine Registration (STANDARD)
+# ============================================
+POST|/management/engines|standard|Register new Delphix engine '{hostname}'? This will add a new engine to the system. Confirm?
+
+# ============================================
 # RULE 1: All Delete Operations (MANUAL)
 # ============================================
 POST|/vdbs/{vdbId}/delete|manual|Are you sure you want to permanently delete VDB '{name}'? This action cannot be undone.
