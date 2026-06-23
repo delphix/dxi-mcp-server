@@ -43,6 +43,16 @@ Then [observable expected outcome].
 
 Use concrete, observable outcomes — "the response body contains `status=enabled`" is testable; "it works correctly" is not. Reference real domain concepts (`DCT_TOOLSET`, `vdb_tool`, `confirmation_required`, toolset names) rather than generic placeholders.
 
+## Specification Docs for Larger Tickets
+
+For substantial tickets (story points ≥ 5), the preferred path is to generate the full specification set — vision, functional (with numbered `FR-*` requirements), design, and test plan — using the `dataconnectors-and-integrations` `feature-implement` skill rather than hand-writing the spec:
+
+```
+/feature-implement <TICKET-ID>
+```
+
+This produces `docs/<TICKET-ID>/<TICKET-ID>-functional.md` (plus vision, design, and test-plan docs) in which the `FR-*` requirements and Given/When/Then acceptance criteria become the contract the implementation is built and verified against. Smaller tickets still need acceptance criteria in the format above, but do not require the full spec-doc set.
+
 ## AI Pre-Review Expectation
 
 Before requesting human review on any PR, contributors are expected to run the AI pre-review step using the `dataconnectors-and-integrations` review skill:
