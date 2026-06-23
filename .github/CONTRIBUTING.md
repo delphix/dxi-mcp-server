@@ -27,7 +27,7 @@ We appreciate your contribution and patience during this process!
 
 ## Acceptance Criteria Format
 
-All non-trivial stories and tasks (story points ≥ 2) must include at least one acceptance criterion written as a testable Given/When/Then assertion. Acceptance criteria belong both in the Jira ticket description and in the `## Acceptance Criteria (test assertions)` section of the GitHub PR template.
+All non-trivial stories and tasks (story points ≥ 3) must include at least one acceptance criterion written as a testable Given/When/Then assertion — this matches the Jira automation rule that blocks such tickets from leaving "To Do" without an acceptance-criteria section. Acceptance criteria belong both in the Jira ticket description and in the `## Acceptance Criteria (test assertions)` section of the GitHub PR template.
 
 **Format**:
 
