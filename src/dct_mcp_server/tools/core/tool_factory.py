@@ -25,6 +25,7 @@ from dct_mcp_server.config import (
 )
 from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.core.decorators import log_tool_execution
+from dct_mcp_server.tools.core.spec_model import OpenAPISpec
 from .dynamic_confirmation import resolve_confirmation
 
 logger = logging.getLogger(__name__)
@@ -196,15 +197,12 @@ def clear_spec_cache():
 
 
 def _resolve_ref(ref: str, spec: Dict[str, Any]) -> Dict[str, Any]:
-    """Resolve a JSON $ref pointer in the OpenAPI spec."""
-    if not ref.startswith("#/"):
-        raise ValueError(f"Unsupported ref format: {ref}")
+    """Resolve a JSON $ref pointer in the OpenAPI spec.
 
-    path = ref.lstrip("#/").split("/")
-    node = spec
-    for part in path:
-        node = node[part]
-    return node
+    Thin wrapper over the shared OpenAPISpec model (tools/core/spec_model.py),
+    the single source of truth for $ref resolution.
+    """
+    return OpenAPISpec(spec).resolve_pointer(ref)
 
 
 def _get_python_type(schema_type: str) -> str:
