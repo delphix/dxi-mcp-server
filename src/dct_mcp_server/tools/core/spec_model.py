@@ -52,6 +52,7 @@ DEFAULT_MAX_REF_DEPTH = 10
 # Spec root
 # =========================================================================== #
 
+
 class OpenAPISpec:
     """Wrapper around a parsed OpenAPI spec dict.
 
@@ -155,7 +156,11 @@ class OpenAPISpec:
         if "$ref" in obj:
             ref = obj["$ref"]
             if ref in visited:
-                return {"$ref_truncated": True, "reason": "cycle_detected", "ref": ref}, True
+                return {
+                    "$ref_truncated": True,
+                    "reason": "cycle_detected",
+                    "ref": ref,
+                }, True
             try:
                 target = self.resolve_pointer(ref)
             except (KeyError, TypeError, ValueError) as exc:
@@ -269,6 +274,7 @@ class OpenAPISpec:
 # Operation
 # =========================================================================== #
 
+
 class Operation:
     """A single API operation — one (path, HTTP method) pair."""
 
@@ -328,6 +334,7 @@ class Operation:
 # Parameter
 # =========================================================================== #
 
+
 class Parameter:
     """A path/query/header parameter on an operation."""
 
@@ -362,6 +369,7 @@ class Parameter:
 # =========================================================================== #
 # RequestBody
 # =========================================================================== #
+
 
 class RequestBody:
     """An operation's ``requestBody``.
@@ -428,18 +436,21 @@ class RequestBody:
         for name, prop in obj.properties.items():
             if not isinstance(prop, dict):
                 continue
-            out.append({
-                "name": name,
-                "required": name in required,
-                "type": prop.get("type", "object"),
-                "description": prop.get("description", "") or "",
-            })
+            out.append(
+                {
+                    "name": name,
+                    "required": name in required,
+                    "type": prop.get("type", "object"),
+                    "description": prop.get("description", "") or "",
+                }
+            )
         return out
 
 
 # =========================================================================== #
 # Response
 # =========================================================================== #
+
 
 class Response:
     """A single response entry keyed by status code."""
@@ -472,6 +483,7 @@ class Response:
 # =========================================================================== #
 # SchemaObject (domain objects: dSource, VDB, request/response bodies, …)
 # =========================================================================== #
+
 
 class SchemaObject:
     """A ``components/schemas`` entry or any inline schema.
@@ -527,7 +539,11 @@ class SchemaObject:
             self._resolved = (properties, required, key_properties)
         else:
             props = schema.get("properties", {}) or {}
-            self._resolved = (props, schema.get("required", []) or [], set(props.keys()))
+            self._resolved = (
+                props,
+                schema.get("required", []) or [],
+                set(props.keys()),
+            )
 
         return self._resolved
 
@@ -548,6 +564,7 @@ class SchemaObject:
 # --------------------------------------------------------------------------- #
 # Curated domain objects
 # --------------------------------------------------------------------------- #
+
 
 class DSource(SchemaObject):
     """The DCT ``DSource`` domain object (a linked/ingested source dataset)."""

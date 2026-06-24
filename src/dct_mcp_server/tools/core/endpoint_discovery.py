@@ -62,7 +62,6 @@ def build_corpus_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
         }
         for op in model.operations()
     ]
-    return out
 
 
 def _candidate_tokens(candidate: dict[str, Any]) -> frozenset[str]:

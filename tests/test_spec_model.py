@@ -30,14 +30,21 @@ def spec_dict() -> dict:
                     "summary": "Get a VDB",
                     "tags": ["VDBs"],
                     "parameters": [
-                        {"name": "vdbId", "in": "path", "required": True,
-                         "schema": {"type": "string"}},
+                        {
+                            "name": "vdbId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        },
                     ],
                     "responses": {
                         "200": {
                             "description": "ok",
-                            "content": {"application/json": {
-                                "schema": {"$ref": "#/components/schemas/VDB"}}},
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/VDB"}
+                                }
+                            },
                         }
                     },
                 },
@@ -49,8 +56,11 @@ def spec_dict() -> dict:
                     "tags": ["dSources"],
                     "requestBody": {
                         "required": True,
-                        "content": {"application/json": {
-                            "schema": {"$ref": "#/components/schemas/LinkParams"}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/LinkParams"}
+                            }
+                        },
                     },
                     "responses": {"200": {"description": "ok"}},
                 },
@@ -60,7 +70,10 @@ def spec_dict() -> dict:
             "schemas": {
                 "VDB": {
                     "type": "object",
-                    "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
+                    "properties": {
+                        "id": {"type": "string"},
+                        "name": {"type": "string"},
+                    },
                 },
                 "DSource": {
                     "type": "object",
@@ -71,9 +84,12 @@ def spec_dict() -> dict:
                 "Base": {
                     "type": "object",
                     "properties": {
-                        "a": {"type": "string"}, "b": {"type": "string"},
-                        "c": {"type": "string"}, "d": {"type": "string"},
-                        "e": {"type": "string"}, "f": {"type": "string"},
+                        "a": {"type": "string"},
+                        "b": {"type": "string"},
+                        "c": {"type": "string"},
+                        "d": {"type": "string"},
+                        "e": {"type": "string"},
+                        "f": {"type": "string"},
                     },
                     "required": ["a"],
                 },
@@ -81,10 +97,16 @@ def spec_dict() -> dict:
                     "required": ["source_id"],
                     "allOf": [
                         {"$ref": "#/components/schemas/Base"},
-                        {"type": "object",
-                         "properties": {"source_id": {"type": "string",
-                                                      "description": "the source"}},
-                         "required": ["source_id"]},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "source_id": {
+                                    "type": "string",
+                                    "description": "the source",
+                                }
+                            },
+                            "required": ["source_id"],
+                        },
                     ],
                 },
                 # Self-referential schema to exercise cycle detection.
@@ -100,6 +122,7 @@ def spec_dict() -> dict:
 # --------------------------------------------------------------------------- #
 # OpenAPISpec
 # --------------------------------------------------------------------------- #
+
 
 def test_wrap_memoizes_by_identity(spec_dict):
     a = OpenAPISpec.wrap(spec_dict)
@@ -146,6 +169,7 @@ def test_resolve_refs_missing_ref_returns_error_marker(spec_dict):
 # Operations & path matching
 # --------------------------------------------------------------------------- #
 
+
 def test_operations_iterates_all(spec_dict):
     spec = OpenAPISpec(spec_dict)
     ops = {(o.method, o.path) for o in spec.operations()}
@@ -181,6 +205,7 @@ def test_operation_at(spec_dict):
 # RequestBody
 # --------------------------------------------------------------------------- #
 
+
 def test_request_body_fields_merge_allof(spec_dict):
     spec = OpenAPISpec(spec_dict)
     op = spec.operation_at("/dsources/link", "post")
@@ -206,6 +231,7 @@ def test_request_body_required_field_names_top_level_only(spec_dict):
 # --------------------------------------------------------------------------- #
 # SchemaObject & curated domain objects
 # --------------------------------------------------------------------------- #
+
 
 def test_schema_object_allof_key_properties(spec_dict):
     spec = OpenAPISpec(spec_dict)
