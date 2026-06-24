@@ -80,6 +80,7 @@ class ConnectorSpec:
     link_fields: dict = field(default_factory=dict)
     provision_fields: dict = field(default_factory=dict)
     connector_search_keyword: str = "plugin"
+    toolkit_file: str = ""   # path/filename of the connector toolkit to upload (setup step)
 
     @property
     def source_short(self) -> str:
@@ -426,7 +427,234 @@ def load_connector_spec(
         link_fields=link_fields,
         provision_fields=provision_fields,
         connector_search_keyword=connector_schema.get("connector_search_keyword", ctype),
+        toolkit_file=secrets.get("toolkit_file", connector_schema.get("toolkit_file", "")),
     )
+
+
+# ── Workflow matrix + requirements (newcomer-facing) ──────────────────────────
+
+# Inputs every connector workflow run needs, regardless of connector type.
+# (field name in secrets, human description). The connector-specific link/
+# provision FIELDS come from the schema; these are the topology + credentials.
+_REQUIRED_CONNECTOR_INPUTS: list[tuple[str, str]] = [
+    ("source_host",   "Source DB hostname/FQDN"),
+    ("target_host",   "Target/staging DB hostname/FQDN"),
+    ("env_user",      "OS user for environment registration"),
+    ("env_password",  "OS password for environment registration"),
+    ("link_user",     "DB/OS user used to link the dSource"),
+    ("link_password", "Password for link_user"),
+]
+
+
+# CSV columns for a per-connector workflow file (authoring surface — edit in a
+# spreadsheet). Maps 1:1 to the workflow dict the test runner consumes.
+_WORKFLOW_CSV_COLUMNS = [
+    "section", "id", "kind", "description", "prompt",
+    "expect_tool", "expect_action",
+    "verify_prompt", "verify_contains", "verify_absent", "timeout",
+]
+
+
+def _workflows_yaml_path(ctype: str) -> Path:
+    """Per-connector workflow YAML path (e.g. mysql-workflows.yaml)."""
+    override = os.environ.get("CONNECTOR_WORKFLOW_YAML")
+    if override:
+        return Path(override)
+    return _FIXTURES_DIR / f"{ctype}-workflows.yaml"
+
+
+def _workflows_csv_path(ctype: str) -> Path:
+    """Per-connector workflow CSV path (e.g. mysql-workflows.csv)."""
+    override = os.environ.get("CONNECTOR_WORKFLOW_CSV")
+    if override:
+        return Path(override)
+    return _FIXTURES_DIR / f"{ctype}-workflows.csv"
+
+
+def _load_workflows_yaml(path: Path) -> list[dict]:
+    """
+    Read a per-connector workflow YAML organized by category into the flat
+    list-of-dicts the runner consumes. Structure:
+
+        categories:
+          - name: Engine
+            scenarios:
+              - id: ...
+                kind: ...
+                prompt: ...
+                expect_tool: ...
+                expect_action: ...
+                ...
+
+    The category `name` becomes each scenario's `section`. Scenario order within
+    and across categories is preserved (the runner executes top-to-bottom).
+    """
+    data = yaml.safe_load(path.read_text()) or {}
+    rows: list[dict] = []
+    for cat in data.get("categories", []) or []:
+        section = (cat.get("name") or "").strip()
+        for sc in cat.get("scenarios", []) or []:
+            if not (sc.get("id") or "").strip():
+                continue
+            row = {k: v for k, v in sc.items() if v not in (None, "")}
+            row["section"] = section
+            rows.append(row)
+    return rows
+
+
+def _load_workflows_csv(path: Path) -> list[dict]:
+    """
+    Read a per-connector workflow CSV (DLPXECO-13687 catalog layout) into the
+    list-of-dicts shape the test runner consumes.
+
+    Layout handled:
+      - free-form title / description rows at the top (skipped)
+      - SECTION BANNER rows: only the first cell filled (e.g. "Engine Workflow")
+        → becomes the `section` for the rows that follow
+      - per-section HEADER row: first cell == "ID", defines the columns
+        (ID, Testcase, Description, Prompt, Status, kind, expect_tool,
+         expect_action, verify_prompt, verify_contains, verify_absent, timeout)
+      - DATA rows: mapped via that header. Testcase→id, Description→description,
+        Prompt→prompt; ID and Status columns are ignored (Status is the result).
+
+    Blank cells are dropped; `timeout`→int. Section banners drop the trailing
+    " Workflow"/"Workflows" for a tidy tag (e.g. "Engine Workflow" → "Engine").
+    """
+    import csv
+
+    # CSV header column → workflow dict key.
+    COLMAP = {
+        "testcase": "id", "description": "description", "prompt": "prompt",
+        "kind": "kind", "expect_tool": "expect_tool", "expect_action": "expect_action",
+        "verify_prompt": "verify_prompt", "verify_contains": "verify_contains",
+        "verify_absent": "verify_absent", "timeout": "timeout",
+    }
+
+    def _tidy_section(banner: str) -> str:
+        s = banner.strip()
+        for suffix in (" Workflows", " Workflow"):
+            if s.endswith(suffix):
+                return s[: -len(suffix)]
+        return s
+
+    rows: list[dict] = []
+    section = ""
+    header: list[str] | None = None
+
+    with path.open(newline="") as fh:
+        for cells in csv.reader(fh):
+            stripped = [c.strip() for c in cells]
+            nonempty = [c for c in stripped if c]
+            if not nonempty:
+                continue
+
+            first = stripped[0] if stripped else ""
+
+            # Header row for a section's table.
+            if first.lower() == "id" and any(c.lower() == "testcase" for c in stripped):
+                header = [c.lower() for c in stripped]
+                continue
+
+            # Section banner: only the first cell is filled.
+            if len(nonempty) == 1 and first.lower() != "id":
+                # Could be a banner OR the free-form title/description line. Treat
+                # any single-cell row that isn't under-data as a section banner;
+                # title/description appear before the first header so are harmless.
+                section = _tidy_section(first)
+                header = None
+                continue
+
+            # Data row — needs an active header.
+            if header is None:
+                continue
+            rec = dict(zip(header, stripped))
+            wid = (rec.get("testcase") or "").strip()
+            if not wid:
+                continue
+            row: dict[str, Any] = {"section": section}
+            for col, key in COLMAP.items():
+                val = (rec.get(col) or "").strip()
+                if not val:
+                    continue
+                if key == "timeout":
+                    try:
+                        row[key] = int(val)
+                    except ValueError:
+                        pass
+                else:
+                    row[key] = val
+            rows.append(row)
+    return rows
+
+
+def load_workflows(connector_type: str | None = None) -> list[dict]:
+    """
+    Return the ordered workflow matrix for a connector.
+
+    Source priority:
+      1. <connector>-workflows.yaml  (or $CONNECTOR_WORKFLOW_YAML) — the
+         category-organized authoring surface (preferred).
+      2. <connector>-workflows.csv   (or $CONNECTOR_WORKFLOW_CSV)  — spreadsheet form.
+      3. schema.yaml `connectors.<type>.workflows`                — fallback.
+
+    Empty list if none defines any. No secrets involved.
+    """
+    ctype = (connector_type or os.environ.get("CONNECTOR_TYPE", "mysql")).lower()
+
+    yaml_path = _workflows_yaml_path(ctype)
+    if yaml_path.exists():
+        rows = _load_workflows_yaml(yaml_path)
+        if rows:
+            return rows
+
+    csv_path = _workflows_csv_path(ctype)
+    if csv_path.exists():
+        rows = _load_workflows_csv(csv_path)
+        if rows:
+            return rows
+
+    schema = _load_schema()
+    cs = schema.get("connectors", {}).get(ctype, {}) or {}
+    return cs.get("workflows", []) or []
+
+
+def connector_requirements(connector_type: str | None = None) -> dict | None:
+    """
+    Describe what a newcomer must supply to run this connector's workflow tests,
+    and whether each input is currently resolvable (from .secrets.yaml or
+    DCT_CONNECTOR_<TYPE>_* env vars). Returns None for an unknown connector.
+
+    Used by `dct-mcp-test --connector <t> --show-requirements` and the preflight.
+    """
+    ctype = (connector_type or os.environ.get("CONNECTOR_TYPE", "mysql")).lower()
+    schema = _load_schema()
+    cs = schema.get("connectors", {}).get(ctype)
+    if cs is None:
+        return None
+
+    secrets = _load_secrets(ctype)
+    inputs = []
+    for name, desc in _REQUIRED_CONNECTOR_INPUTS:
+        val = secrets.get(name) or secrets.get(name.lower())
+        inputs.append({"field": name, "description": desc, "provided": bool(val)})
+
+    # Engine creds are shared (registered once); report presence too.
+    engine = load_engine_spec()
+    engine_ok = bool(engine.hostname and engine.password)
+
+    secrets_path = Path(os.environ.get("CONNECTOR_SECRETS", str(_DEFAULT_SECRETS)))
+    return {
+        "connector": ctype,
+        "display_name": cs.get("display_name", ctype),
+        "inputs": inputs,
+        "missing": [r["field"] for r in inputs if not r["provided"]],
+        "engine_ok": engine_ok,
+        "workflows": [w.get("id") for w in load_workflows(ctype)],
+        "secrets_file": str(secrets_path),
+        "secrets_file_exists": secrets_path.exists(),
+        "env_prefix": f"DCT_CONNECTOR_{ctype.upper()}_",
+        "supported_connectors": list(schema.get("connectors", {}).keys()),
+    }
 
 
 def schema_link_hints(connector_type: str) -> str:

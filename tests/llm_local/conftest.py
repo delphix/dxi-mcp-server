@@ -163,9 +163,11 @@ def _make_driver(
     """
     exe = _require_claude_cli()
     preprompt = str(_PREPROMPT) if _PREPROMPT.exists() else None
-    # Default to haiku — Sonnet 4.6 intermittently returns HTTP 500 for DCT ops.
-    # Override with LLM_MODEL env var (e.g. LLM_MODEL=claude-sonnet-4-6).
-    model = os.environ.get("LLM_MODEL", "claude-haiku-4-5-20251001")
+    # Default to Sonnet 4.6 — the most capable reliably-available model for driving
+    # the DCT tools (better at multi-step confirmation/job-poll flows than haiku).
+    # Override with LLM_MODEL (e.g. claude-opus-4-8 for hardest cases, or
+    # claude-haiku-4-5-20251001 only as a last-resort fallback).
+    model = os.environ.get("LLM_MODEL", "claude-sonnet-4-6")
 
     def run(task: str, *, timeout: int = 180) -> DriverResult:
         cmd = [
@@ -174,6 +176,11 @@ def _make_driver(
             "--mcp-config", str(config_path),
             "--strict-mcp-config",
             "--allowedTools", f"{TOOL_PREFIX}*",
+            # Block the shell/file fallback path: if the MCP server is briefly
+            # slow to connect, Claude must WAIT for and use the DCT MCP tools
+            # rather than dropping to Bash (which silently breaks act→verify and
+            # produces false failures). Forces MCP-only for honest signal.
+            "--disallowedTools", "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,Task,NotebookEdit",
             "--permission-mode", "bypassPermissions",
             "--output-format", "stream-json",
             "--verbose",
@@ -237,12 +244,15 @@ LICENSE_MARKER = "License does not permit"
 
 def license_blocked(result: DriverResult) -> bool:
     """
-    True if the run hit a DCT license restriction (a tool returned
-    "License does not permit operations on <X>"). Scenario tests should skip
-    (resource not licensed on this DCT), not fail.
+    True if the run was ultimately blocked by a DCT license restriction.
+
+    We judge the FINAL outcome (the model's closing summary), NOT the full raw
+    transcript. A multi-attempt run can surface "License does not permit" in a
+    transient tool response and then succeed on a later attempt — scanning the
+    raw transcript would falsely skip a step that actually completed. The final
+    text reflects the real end state, so check that.
     """
-    blob = (result.raw or "") + " " + (result.final_text or "")
-    return LICENSE_MARKER in blob
+    return LICENSE_MARKER in (result.final_text or "")
 
 
 @pytest.fixture(scope="session")

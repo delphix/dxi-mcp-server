@@ -1,0 +1,590 @@
+# ════════════════════════════════════════════════════════════════════════════
+# MySQL — Validation of virtualization workflows using DCT MCP Server
+# (mirrors DLPXECO-13687)
+#
+# Edit scenario by scenario. This file is the authoring surface — the test
+# framework reads it directly (no conversion). Scenarios run TOP-TO-BOTTOM and
+# chain (a VDB needs its dSource, which needs its source config, etc.).
+#
+# Each scenario:
+#   id            test name (unique)
+#   kind          how it is judged:
+#                   readonly       — list/show; PASS if the right tool+action is called
+#                   setup          — ensure a prerequisite exists (idempotent); PASS if
+#                                    present afterwards (created now OR already there)
+#                   mutation       — change state; PASS if right tool+action AND verified
+#                   expected_error — op SHOULD be rejected; PASS = error relayed cleanly
+#                   na             — not applicable to MySQL; recorded as N/A
+#                   destructive    — harms shared infra; SKIPPED unless CONNECTOR_DESTRUCTIVE=1
+#   description   human label (shown in the report)
+#   prompt        plain-English task handed to the LLM
+#   expect_tool   the MCP tool the LLM must call (e.g. data_tool)
+#   expect_action the action on that tool (e.g. provision_by_snapshot)
+#   verify_prompt independent read used to confirm completion (mutation/setup)
+#   verify_contains / verify_absent  what that read must / must not show
+#   timeout       seconds for the act step
+#
+# {placeholders} are filled at runtime from .secrets.yaml + schema:
+#   {engine_hostname} {engine_username} {engine_password} {engine_name}
+#   {display_name} {toolkit_file} {target_host} {source_host}
+#   {env_user} {env_password} {link_user} {link_password}
+#   {source_config_name} {dsource_name} {vdb_name}
+# ════════════════════════════════════════════════════════════════════════════
+
+categories:
+
+  # ── 1. Engine workflows ─────────────────────────────────────────────────────
+  - name: Engine
+    scenarios:
+      - id: test_list_engines
+        kind: readonly
+        description: List all registered engines
+        prompt: List all registered Delphix engines with their name and status.
+        expect_tool: engine_tool
+        expect_action: search
+        timeout: 180
+
+      - id: test_register_engine
+        kind: setup
+        description: Register (ensure) the engine
+        prompt: >
+          Ensure a Delphix engine with hostname '{engine_hostname}' is registered.
+          First list engines; if it already exists, confirm it and stop. Otherwise
+          register it with username '{engine_username}', password '{engine_password}',
+          name '{engine_name}', insecure SSL, confirmed=true.
+        expect_tool: engine_tool
+        expect_action: register
+        verify_prompt: List all registered engines and their hostnames.
+        verify_contains: "{engine_hostname}"
+        timeout: 400
+
+  # ── 2. Environment workflows ────────────────────────────────────────────────
+  - name: Environment
+    scenarios:
+      - id: test_list_environment
+        kind: readonly
+        description: List environments
+        prompt: List all environments and show hostname and status.
+        expect_tool: environment_source_tool
+        expect_action: search_environments
+        timeout: 180
+
+      - id: test_create_environment
+        kind: mutation
+        description: Create environment if absent; if present, remove dependents then recreate
+        prompt: >
+          Ensure a freshly-created environment for host '{target_host}' exists.
+          First call environment_source_tool search_environments to check if it is
+          already registered.
+          • If it is NOT present: add host '{target_host}' as a Unix environment
+            with SSH user '{env_user}' password '{env_password}' and
+            toolkit_path='/tmp' (environment_source_tool create_environment,
+            confirmed=true), wait for repository discovery, and stop.
+          • If it IS present: remove all dependent entities first, then recreate it,
+            polling each job to COMPLETED:
+            1) delete every VDB on it (data_tool delete_vdb, confirmed=true, and
+               attempt_cleanup=true if a normal delete is blocked);
+            2) delete every dSource on it (data_tool delete_dsource, confirmed=true);
+            3) delete every source config on it (environment_source_tool delete_source, confirmed=true);
+            4) delete the environment itself (environment_source_tool delete_environment, confirmed=true);
+            5) add host '{target_host}' back as a Unix environment with SSH user
+               '{env_user}' password '{env_password}' and toolkit_path='/tmp'
+               (environment_source_tool create_environment, confirmed=true) and wait
+               for repository discovery.
+          Use toolkit_path '/tmp' (NOT the default home dir) so the toolkit lands in
+          a correctly-permissioned directory — otherwise snapshots fail with toolkit
+          directory permission faults.
+          Either way this MUST end with a create_environment call and the
+          environment present.
+        expect_tool: environment_source_tool
+        expect_action: create_environment
+        verify_prompt: List all environments and show their hostnames and status.
+        verify_contains: "{target_host}"
+        timeout: 1800
+
+      - id: test_disable_environment
+        kind: mutation
+        description: Disable environment
+        prompt: Disable the environment for host '{target_host}' (confirmed=true).
+        expect_tool: environment_source_tool
+        expect_action: disable_environment
+        verify_prompt: List environments and show host '{target_host}' status.
+        verify_contains: "{target_host}"
+        timeout: 400
+
+      - id: test_enable_environment
+        kind: mutation
+        description: Enable environment (restores it after the disable above)
+        prompt: Enable the environment for host '{target_host}' (confirmed=true).
+        expect_tool: environment_source_tool
+        expect_action: enable_environment
+        verify_prompt: List environments and show host '{target_host}' status.
+        verify_contains: "{target_host}"
+        timeout: 300
+
+      - id: test_refresh_environment
+        kind: mutation
+        description: Refresh environment
+        prompt: Refresh the environment for host '{target_host}' (confirmed=true).
+        expect_tool: environment_source_tool
+        expect_action: refresh_environment
+        verify_prompt: List environments and show host '{target_host}' status.
+        verify_contains: "{target_host}"
+        timeout: 600
+
+      - id: test_update_environment
+        kind: mutation
+        description: Update environment (toolkit path)
+        prompt: Change the toolkit directory of the environment on host '{target_host}' to '/var/tmp' (confirmed=true).
+        expect_tool: environment_source_tool
+        expect_action: update_environment|update_environment_host
+        timeout: 300
+
+      - id: test_list_users_environment
+        kind: readonly
+        description: List environment users
+        prompt: Show the users configured on the environment for host '{target_host}'.
+        expect_tool: environment_source_tool
+        expect_action: get_environment|search_environments
+        timeout: 180
+
+      - id: test_add_users_environment
+        kind: mutation
+        description: Add an environment user
+        prompt: >
+          Add OS user '{link_user}' (password '{link_password}') to the environment
+          on host '{target_host}' (confirmed=true). If already present, confirm it.
+        expect_tool: environment_source_tool
+        expect_action: add_environment_users
+        verify_prompt: Show the users on the environment for host '{target_host}'.
+        verify_contains: "{link_user}"
+        timeout: 300
+
+      # Source-config CRUD on a separate config named 'mysql_dsource' so deleting
+      # it never touches the config used for the real dSource link.
+      - id: test_add_source_config
+        kind: mutation
+        description: Add a source config (STAGED)
+        prompt: >
+          Create a source config on the MySQL installation on environment
+          '{target_host}'. This is for a MySQL dSource. You may inspect the
+          sourceConfigDefinition for the MySQL toolkit before creating it. Name it
+          mysql_dsource, with data directory '/var/lib/mysql', port 3306, base
+          directory '/usr', and source config name mysql_dsource. Use type='STAGED'
+          and confirmed=true.
+        expect_tool: environment_source_tool
+        expect_action: create_appdata_source
+        verify_prompt: Use environment_source_tool search_sources to list all source CONFIGS (NOT dSources) and show their names.
+        verify_contains: mysql_dsource
+        timeout: 400
+
+      - id: test_update_source_config
+        kind: mutation
+        description: Update source config
+        prompt: Update the source config named 'mysql_dsource' — change its source_config name to 'mysql_dsource1' (confirmed=true).
+        expect_tool: environment_source_tool
+        expect_action: update_appdata_source
+        verify_prompt: Use environment_source_tool search_sources to list all source CONFIGS and show their names.
+        verify_contains: mysql_dsource1
+        timeout: 400
+
+      - id: test_delete_source_config
+        kind: mutation
+        description: Delete source config
+        prompt: >
+          Delete the source config named 'mysql_dsource1' (environment_source_tool
+          delete_source, confirmed=true). Poll job_tool until the delete job reaches
+          COMPLETED before reporting.
+        expect_tool: environment_source_tool
+        expect_action: delete_source
+        verify_prompt: Use environment_source_tool search_sources to list all source CONFIGS and show their names.
+        verify_absent: mysql_dsource1
+        timeout: 400
+
+  # ── 3. Connector workflows (Toolkit) ────────────────────────────────────────
+  - name: Connector
+    scenarios:
+      - id: test_toolkit_list
+        kind: readonly
+        description: List all toolkits/connectors
+        prompt: Show me all installed toolkits/connectors.
+        expect_tool: toolkit_tool
+        expect_action: search
+        timeout: 180
+
+      - id: test_toolkit_upload
+        kind: setup
+        description: Ensure the connector toolkit is installed (upload if missing)
+        prompt: >
+          Ensure the {display_name} connector/toolkit is installed. First list
+          toolkits; if a matching plugin is already installed, confirm it and stop.
+          Otherwise upload the toolkit from file '{toolkit_file}' (confirmed=true).
+        expect_tool: toolkit_tool
+        expect_action: upload_toolkit
+        verify_prompt: List all installed toolkits and their names.
+        timeout: 400
+
+      - id: test_toolkit_delete
+        kind: expected_error
+        description: Delete the in-use connector (should be rejected for dependencies)
+        prompt: Delete the {display_name} toolkit/connector (confirmed=true).
+        expect_tool: toolkit_tool
+        expect_action: delete_toolkit
+        timeout: 200
+
+  # ── 4. dSource workflows ────────────────────────────────────────────────────
+  # The dSource links from the source config created by test_add_source_config
+  # ('mysql_dsource'); no separate "create link source config" step is needed.
+  - name: dSource
+    scenarios:
+      - id: test_list_dSource
+        kind: readonly
+        description: List all dSources
+        prompt: Show me all dSources with their name and status.
+        expect_tool: data_tool
+        expect_action: search_dsources
+        timeout: 180
+
+      - id: test_link_dSource
+        kind: setup
+        description: Link a MySQL Staging Push dSource (AppData)
+        prompt: >
+          Link a {display_name} Staging Push dSource on the environment '{target_host}',
+          using env user '{env_user}', ingestion type 'Staging Push', and name it
+          '{dsource_name}'. Since it is an AppData dSource, inspect the
+          linkedSourceDefinition of the MySQL toolkit and fill the required params:
+          Staging DB Server ID, Staging DB Port, Staging Initialization Password,
+          MySQL Base Directory, Mount Location on Staging Host, Source DB UserName,
+          and Source Connection Password. Use Staging DB Server ID = {ds_server_id},
+          Staging DB Port = {ds_staging_port}, and Mount Location = {ds_mount_path}
+          (i.e. /mnt/link/<stagingPort>). Passwords come from the secrets (use
+          '{link_password}'). Also set sync parameter resync = true.
+
+          First call data_tool search_dsources; if a dSource named '{dsource_name}'
+          already exists, confirm it and stop. Otherwise link it with data_tool
+          dsource_link_appdata passing EXACTLY: name='{dsource_name}',
+          source_id=<the staged MySQL source config named 'mysql_dsource' on the
+          target environment, created by the add-source-config step>,
+          link_type='AppDataStaged', group_id=<first dataset group>,
+          staging_environment=<the '{target_host}' environment id>,
+          environment_user=<the HOST_USER ref for '{env_user}' on that environment>,
+          staging_mount_base='', link_now=true, confirmed=true,
+          parameters={{'dSourceType':'Staging Push','serverId':{ds_server_id},
+          'stagingPort':{ds_staging_port},'mountPath':'{ds_mount_path}',
+          'stagingBasedir':'/usr','sourceUser':'{link_user}',
+          'sourcePass':'{link_password}','stagingPass':'{link_password}'}},
+          and sync_parameters={{'resync':true}}. IMPORTANT: leave staging_mount_base
+          EMPTY ('') — the mount path is provided ONLY by parameters.mountPath; the
+          mysql-plugin toolkit rejects the link if both are set. Poll job_tool until
+          COMPLETED.
+        expect_tool: data_tool
+        expect_action: dsource_link_appdata
+        verify_prompt: Search for all dSources and show each one's name and status.
+        verify_contains: "{dsource_name}"
+        timeout: 1200
+
+      - id: test_list_snapshots
+        kind: readonly
+        description: List snapshots of a dSource
+        prompt: Show all snapshots of the dSource named '{dsource_name}'.
+        expect_tool: data_tool
+        expect_action: list_dsource_snapshots
+        timeout: 300
+
+      # Snapshot ops run while the dSource is ENABLED (right after link), BEFORE
+      # the disable/enable lifecycle tests — you cannot snapshot a disabled dSource.
+      - id: test_sync_dSource
+        kind: mutation
+        description: Take a snapshot of the dSource
+        prompt: Take a new snapshot of the dSource named '{dsource_name}' (confirmed=true). Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: dsource_create_snapshot
+        verify_prompt: List the snapshots of dSource '{dsource_name}' and how many exist.
+        verify_contains: "{dsource_name}"
+        timeout: 600
+
+      - id: test_sync_dSource_with_params
+        kind: mutation
+        description: Snapshot the dSource with resync=true
+        prompt: Take a snapshot of the dSource named '{dsource_name}' with sync parameter resync=true (confirmed=true). Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: dsource_create_snapshot
+        verify_prompt: List the snapshots of dSource '{dsource_name}'.
+        verify_contains: "{dsource_name}"
+        timeout: 600
+
+      # Staging Push dSources do not support disable/enable — the engine returns
+      # HTTP 500 (matches DLPXECO-13687 DB2 behaviour). Classified expected_error:
+      # PASS = the MCP attempted the op and relayed the error. CRITICAL: the prompt
+      # forbids attempt_cleanup/delete so a failed disable never destroys the dSource.
+      - id: test_disable_dSource
+        kind: mutation
+        description: Disable the dSource
+        prompt: >
+          Disable the dSource named '{dsource_name}' using data_tool disable_dsource
+          with attempt_cleanup=false and confirmed=true. IMPORTANT: you MUST pass
+          attempt_cleanup=false — the default (true) makes the engine run a pre-disable
+          database cleanup that fails with HTTP 500 on staged MySQL dSources. Poll
+          job_tool until the DSOURCE_DISABLE job reaches COMPLETED. THEN confirm the
+          state actually settled: re-read the dSource with get_dsource until its
+          'enabled' field is false — the field lags a few seconds behind job
+          completion, so re-read every few seconds for up to 60s until it flips to
+          false. Do NOT delete the dSource.
+        expect_tool: data_tool
+        expect_action: disable_dsource
+        verify_prompt: Get the dSource '{dsource_name}' and show its name and its 'enabled' field value.
+        verify_expect: the dSource '{dsource_name}' is DISABLED (its 'enabled' field is false)
+        timeout: 600
+
+      - id: test_enable_dSource
+        kind: mutation
+        description: Enable the dSource (restores it after the disable above)
+        prompt: >
+          Enable the dSource named '{dsource_name}' using data_tool enable_dsource
+          with attempt_start=false and confirmed=true. IMPORTANT: you MUST pass
+          attempt_start=false — the default (true) makes the engine attempt a
+          post-enable source startup that fails with HTTP 500 on staged MySQL
+          dSources. Poll job_tool until the DSOURCE_ENABLE job reaches COMPLETED. THEN
+          confirm the state actually settled: re-read the dSource with get_dsource
+          until its 'enabled' field is true — the field lags a few seconds behind job
+          completion, so re-read every few seconds for up to 60s until it flips to
+          true. Do NOT delete the dSource.
+        expect_tool: data_tool
+        expect_action: enable_dsource
+        verify_prompt: Get the dSource '{dsource_name}' and show its name and its 'enabled' field value.
+        verify_expect: the dSource '{dsource_name}' is ENABLED (its 'enabled' field is true)
+        timeout: 600
+
+  # ── 5. VDB workflows ────────────────────────────────────────────────────────
+  - name: VDB
+    scenarios:
+      - id: test_list_vdbs
+        kind: readonly
+        description: List all VDBs
+        prompt: Show me all VDBs with their name and status.
+        expect_tool: data_tool
+        expect_action: search_vdbs
+        timeout: 180
+
+      - id: test_provision_vdb
+        kind: setup
+        description: Provision a VDB from the latest snapshot
+        prompt: >
+          Ensure a {display_name} VDB named '{vdb_name}' exists. First call data_tool
+          search_vdbs; if it exists, confirm and stop. Otherwise provision with
+          data_tool provision_by_snapshot passing EXACTLY: name='{vdb_name}',
+          source_data_id=<the '{dsource_name}' dSource id>, target_group_id=<first
+          dataset group>, environment_id=<the '{target_host}' environment id>,
+          environment_user_id=<the HOST_USER ref for '{env_user}'>, link_now=true,
+          confirmed=true, parameters={{'vdbUser':'{link_user}','vdbPass':'{link_password}',
+          'baseDir':'/usr','port':{vdb_port},'serverId':{vdb_server_id},
+          'mPath':'{vdb_mount_path}'}}. Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: provision_by_snapshot
+        verify_prompt: Search for all VDBs and show each one's name and status.
+        verify_contains: "{vdb_name}"
+        timeout: 1200
+
+      - id: test_refresh_vdb
+        kind: mutation
+        description: Refresh VDB to the latest snapshot
+        prompt: Refresh the VDB named '{vdb_name}' with the latest snapshot of dSource '{dsource_name}' (confirmed=true). Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: refresh_vdb_by_snapshot
+        verify_prompt: Search for all VDBs and show '{vdb_name}' status.
+        verify_contains: "{vdb_name}"
+        timeout: 900
+
+      - id: test_rollback_vdb
+        kind: mutation
+        description: Rewind/rollback VDB to its earliest snapshot
+        prompt: Rewind the VDB named '{vdb_name}' to its earliest snapshot (confirmed=true). Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: rollback_vdb_by_snapshot
+        verify_prompt: Search for all VDBs and show '{vdb_name}' status.
+        verify_contains: "{vdb_name}"
+        timeout: 900
+
+      - id: test_disable_vdb
+        kind: mutation
+        description: Disable the VDB
+        prompt: >
+          Disable the VDB named '{vdb_name}' using data_tool disable_vdb with
+          attempt_cleanup=false and confirmed=true. IMPORTANT: you MUST pass
+          attempt_cleanup=false — the default (true) makes the engine run a
+          pre-disable cleanup that can fail with HTTP 500 on staged MySQL VDBs. Poll
+          job_tool until the VDB_DISABLE job reaches COMPLETED, then re-read the VDB
+          with get_vdb until its 'enabled' field is false (the field lags a few
+          seconds — re-read for up to 60s). Do NOT delete the VDB.
+        expect_tool: data_tool
+        expect_action: disable_vdb
+        verify_prompt: Get the VDB '{vdb_name}' and show its name and its 'enabled' field value.
+        verify_expect: the VDB '{vdb_name}' is DISABLED (its 'enabled' field is false)
+        timeout: 600
+
+      - id: test_enable_vdb
+        kind: mutation
+        description: Enable the VDB (restores it after the disable above)
+        prompt: >
+          Enable the VDB named '{vdb_name}' using data_tool enable_vdb with
+          attempt_start=false and confirmed=true. IMPORTANT: you MUST pass
+          attempt_start=false — the default (true) makes the engine attempt a
+          post-enable startup that can fail with HTTP 500 on staged MySQL VDBs. Poll
+          job_tool until the VDB_ENABLE job reaches COMPLETED, then re-read the VDB
+          with get_vdb until its 'enabled' field is true (re-read for up to 60s). Do
+          NOT delete the VDB.
+        expect_tool: data_tool
+        expect_action: enable_vdb
+        verify_prompt: Get the VDB '{vdb_name}' and show its name and its 'enabled' field value.
+        verify_expect: the VDB '{vdb_name}' is ENABLED (its 'enabled' field is true)
+        timeout: 600
+
+      - id: test_stop_vdb
+        kind: mutation
+        description: Stop the VDB
+        prompt: >
+          Stop the VDB named '{vdb_name}' using data_tool stop_vdb (confirmed=true).
+          Poll job_tool until the VDB_STOP / SOURCE_STOP job reaches COMPLETED, then
+          re-read the VDB with get_vdb until its runtime status is no longer RUNNING
+          (re-read for up to 60s). Do NOT delete the VDB.
+        expect_tool: data_tool
+        expect_action: stop_vdb
+        verify_prompt: Get the VDB '{vdb_name}' and show its name and its runtime status.
+        verify_expect: the VDB '{vdb_name}' is STOPPED / its status is not RUNNING
+        timeout: 600
+
+      - id: test_start_vdb
+        kind: mutation
+        description: Start the VDB (restores it after the stop above)
+        prompt: >
+          Start the VDB named '{vdb_name}' using data_tool start_vdb (confirmed=true).
+          Poll job_tool until the VDB_START / SOURCE_START job reaches COMPLETED, then
+          re-read the VDB with get_vdb until its runtime status is RUNNING (re-read for
+          up to 60s). Do NOT delete the VDB.
+        expect_tool: data_tool
+        expect_action: start_vdb
+        verify_prompt: Get the VDB '{vdb_name}' and show its name and its runtime status.
+        verify_expect: the VDB '{vdb_name}' status is RUNNING
+        timeout: 600
+
+      - id: test_snapsync_vdb
+        kind: mutation
+        description: Take a snapshot of the VDB
+        prompt: Take a new snapshot of the VDB named '{vdb_name}' (confirmed=true). Poll job_tool until the VDB_SNAPSHOT job reaches COMPLETED.
+        expect_tool: data_tool
+        expect_action: snapshot_vdb
+        verify_prompt: List the snapshots of the VDB '{vdb_name}' and report how many snapshots it has.
+        verify_expect: the VDB '{vdb_name}' has at least one snapshot
+        timeout: 600
+
+      - id: test_undo_refresh_vdb
+        kind: mutation
+        description: Undo the last refresh/rewind
+        prompt: Perform an undo-refresh on the VDB named '{vdb_name}' (confirmed=true). Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: undo_vdb_refresh
+        verify_prompt: Search for all VDBs and show '{vdb_name}' status.
+        verify_contains: "{vdb_name}"
+        timeout: 700
+
+      - id: test_v2p
+        kind: na
+        description: Virtual-to-physical export (not supported by this plugin)
+        prompt: Export the latest snapshot of VDB '{vdb_name}' to /mnt/local as a physical dataset (confirmed=true).
+        expect_tool: data_tool
+        expect_action: export_vdb_by_snapshot
+        timeout: 400
+
+      - id: test_delete_vdb
+        kind: mutation
+        description: Delete the VDB
+        prompt: >
+          Delete the VDB named '{vdb_name}' using data_tool delete_vdb with force=true
+          and confirmed=true. IMPORTANT: you MUST pass force=true — without it the
+          delete returns HTTP 422 'Input is not readable'. Poll job_tool until the
+          VDB_DELETE job reaches COMPLETED.
+        expect_tool: data_tool
+        expect_action: delete_vdb
+        verify_prompt: Search for all VDBs and list their names.
+        verify_absent: "{vdb_name}"
+        timeout: 600
+
+      # dSource teardown — runs after the VDB is deleted (dependency order).
+      - id: test_delete_dSource
+        kind: mutation
+        description: Delete the dSource (after the VDB is removed)
+        prompt: Delete the dSource named '{dsource_name}' (confirmed=true). Poll job_tool until COMPLETED.
+        expect_tool: data_tool
+        expect_action: delete_dsource
+        verify_prompt: Search for all dSources and list their names.
+        verify_absent: "{dsource_name}"
+        timeout: 600
+
+  # ── 6. System Jobs, Faults, Events ──────────────────────────────────────────
+  - name: System
+    scenarios:
+      - id: test_list_faults
+        kind: readonly
+        description: List virtualization faults
+        prompt: List any virtualization faults.
+        expect_tool: reporting_tool
+        expect_action: get_virtualization_faults_history
+        timeout: 200
+
+      - id: test_list_alerts
+        kind: readonly
+        description: List outstanding alerts
+        prompt: List any outstanding virtualization alerts.
+        expect_tool: reporting_tool
+        expect_action: get_virtualization_alerts_history|search_virtualization_alerts_history
+        timeout: 200
+
+      - id: test_list_jobs
+        kind: readonly
+        description: List jobs (e.g. failed recently)
+        prompt: List all jobs that failed recently.
+        expect_tool: job_tool
+        expect_action: search
+        timeout: 200
+
+      - id: test_list_job_by_id
+        kind: readonly
+        description: Get detail of a specific job
+        prompt: Show the details of the most recent job including its status and steps.
+        expect_tool: job_tool
+        expect_action: search
+        timeout: 200
+
+  # ── Environment teardown ─────────────────────────────────────────────────────
+  # Dedicated delete-environment test. Runs near the end, after the VDB and
+  # dSource have been deleted, so the environment can be removed cleanly. Removes
+  # any remaining dependents first, then deletes the environment.
+  - name: Environment
+    scenarios:
+      - id: test_delete_environment
+        kind: mutation
+        description: Delete the environment (teardown)
+        prompt: >
+          Delete the environment for host '{target_host}'. First remove any
+          remaining dependent entities on it (VDBs, dSources, source configs) using
+          confirmed=true, then delete the environment itself
+          (environment_source_tool delete_environment, confirmed=true). Poll
+          job_tool until the delete job reaches COMPLETED.
+        expect_tool: environment_source_tool
+        expect_action: delete_environment
+        verify_prompt: List all environments and show their hostnames.
+        verify_absent: "{target_host}"
+        timeout: 800
+
+  # ── Engine teardown (opt-in: CONNECTOR_DESTRUCTIVE=1) ────────────────────────
+  - name: Engine
+    scenarios:
+      - id: test_deregister_engine
+        kind: destructive
+        description: Deregister the test engine (shared-infra; opt-in)
+        prompt: Remove/deregister the engine named '{engine_name}' (confirmed=true).
+        expect_tool: engine_tool
+        expect_action: unregister
+        verify_prompt: List all registered engines and their names.
+        verify_absent: "{engine_name}"
+        timeout: 300
