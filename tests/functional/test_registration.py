@@ -32,15 +32,23 @@ EXPECTED_META_TOOLS = {
 }
 
 
+EXPECTED_SELF_SERVICE_TOOLS = {
+    "data_tool",
+    "snapshot_bookmark_tool",
+    "data_connection_tool",
+    "job_tool",
+    "timeflow_tool",
+}
+
+
 @pytest.mark.asyncio
 async def test_self_service_registers_exactly_its_configured_tools(mcp_client_self_service):
-    """self_service must expose exactly the tools declared in self_service.txt (real stdio wire)."""
+    """self_service must expose exactly the pre-built tools from dataset_endpoints_tool and job_endpoints_tool."""
     tools = await mcp_client_self_service.list_tools()
     names = {t.name for t in tools}
-    expected = set(config_cases.tools_for("self_service"))  # config is the oracle
-    assert names == expected, (
-        f"self_service registered surface drifted from config.\n"
-        f"  missing: {expected - names}\n  unexpected: {names - expected}"
+    assert names == EXPECTED_SELF_SERVICE_TOOLS, (
+        f"self_service registered surface drifted.\n"
+        f"  missing: {EXPECTED_SELF_SERVICE_TOOLS - names}\n  unexpected: {names - EXPECTED_SELF_SERVICE_TOOLS}"
     )
 
 
