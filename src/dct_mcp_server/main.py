@@ -6,8 +6,7 @@ This server provides tools for interacting with the Delphix DCT API.
 Each DCT API category has its own dedicated tool for better organization.
 
 Toolset Configuration:
-- DCT_TOOLSET=self_service (default): Basic VDB operations
-- DCT_TOOLSET=auto: Meta-tools for toolset discovery
+- DCT_TOOLSET=dynamic (default): 2-tool discovery + execute mode
 - DCT_TOOLSET=<name>: Fixed toolset mode with specific tools
 """
 
@@ -21,9 +20,7 @@ from dct_mcp_server.config import (
     get_dct_config,
     print_config_help,
     get_configured_toolset,
-    is_auto_mode,
     is_dynamic_mode,
-    get_available_toolsets,
     validate_all_configs,
 )
 from dct_mcp_server.core import end_session, start_session
@@ -147,11 +144,7 @@ async def async_main():
         toolset = "dynamic"
         try:
             toolset = get_configured_toolset()
-            available = get_available_toolsets()
-            if is_auto_mode():
-                logger.info("Toolset mode: AUTO (meta-tools only)")
-                logger.info(f"Available toolsets for discovery: {available}")
-            elif is_dynamic_mode():
+            if is_dynamic_mode():
                 logger.info(
                     "Toolset mode: DYNAMIC (discovery + execute — 2-tool architecture)"
                 )

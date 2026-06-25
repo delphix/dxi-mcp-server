@@ -25,7 +25,7 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 ## Features
 
 - **Persona-Based Toolsets**: Choose from 5 pre-configured toolsets tailored for different roles (Self-Service, Self-Service Provisioning, Continuous Data Admin, Platform Admin, Reporting & Insights).
-- **Auto Mode**: Dynamic toolset discovery with runtime switching - no server restart required.
+- **Dynamic Mode**: Default 2-tool mode (`discovery` + `execute`) that exposes the full DCT API driven by the live OpenAPI spec.
 - **Grouped Tools**: Each tool handles multiple related actions via an `action` parameter, reducing tool count while maintaining full functionality.
 - **Confirmation System**: Built-in confirmation checks for destructive operations to prevent accidental data loss.
 - **Comprehensive DCT integration**: Access datasets, environments, engines, compliance, jobs, and reporting through specialized tools.
@@ -85,7 +85,6 @@ All configuration methods use these environment variables:
 - `DCT_TOOLSET` - Toolset to load (see [Toolsets](#toolsets) section below)
   - `dynamic` (default) - 2-tool mode (`discovery` + `execute`) driven by the live DCT OpenAPI spec
   - `self_service` - Basic VDB operations (7 tools)
-  - `auto` - Dynamic discovery with 5 meta-tools for runtime switching
   - `self_service_provision` - Self-service + provisioning (14 tools)
   - `continuous_data_admin` - Full DBA operations (22 tools)
   - `platform_admin` - System administration (13 tools)
@@ -140,7 +139,7 @@ See below for the full JSON configuration examples for each client.
 }
 ```
 
-> **Tip**: The default `"DCT_TOOLSET": "dynamic"` exposes the full DCT API through two tools (`discovery` + `execute`). Use `"self_service"` for a curated set of basic VDB operations, `"auto"` for runtime toolset discovery, or `"continuous_data_admin"` for full DBA operations.
+> **Tip**: The default `"DCT_TOOLSET": "dynamic"` exposes the full DCT API through two tools (`discovery` + `execute`). Use `"self_service"` for a curated set of basic VDB operations, or `"continuous_data_admin"` for full DBA operations.
 
 **Option 2: Using Python directly**
 ```json
@@ -244,7 +243,7 @@ See below for the full JSON configuration examples for each client.
 <details>
 <summary><strong>VS Code, Eclipse, & IntelliJ IDEA</strong></summary>
 
-> **VS Code Copilot Note**: For best experience, use a fixed toolset instead of `auto` mode, as VS Code Copilot doesn't refresh tools mid-session.
+> **VS Code Copilot Note**: The default `dynamic` mode (or any fixed toolset) works well in VS Code Copilot.
 
 **Option 1: Using uvx (Recommended)**
 ```json
@@ -437,35 +436,10 @@ The server organizes tools into **persona-based toolsets** designed for specific
 |---------|-------|--------------|-------------|
 | `dynamic` | 2 tools | All users | Full DCT API via `discovery` + `execute`, driven by the live OpenAPI spec (default) |
 | `self_service` | 7 tools | Developers, QA | Basic VDB operations: search, refresh, rollback, start/stop, timeflows |
-| `auto` | 5 meta-tools | All users | Dynamic discovery mode - start minimal, enable toolsets at runtime |
 | `self_service_provision` | 14 tools | Dev leads | Self-service + VDB provisioning, toolkits, templates, policies |
 | `continuous_data_admin` | 22 tools | DBAs | Full data management: VDBs, dSources, snapshots, policies, staging, toolkits, vaults, diagnostics |
 | `platform_admin` | 13 tools | Admins | System administration: engines, environments, IAM, toolkits, vaults, diagnostics, reporting |
 | `reporting_insights` | 13 tools | Managers | Read-only reporting and analytics |
-
-### Auto Mode
-
-When `DCT_TOOLSET=auto`, the server starts with **5 meta-tools** for dynamic toolset discovery:
-
-| Meta-Tool | Description |
-|-----------|-------------|
-| `list_available_toolsets` | List all toolsets with descriptions and tool counts |
-| `get_toolset_tools` | Get detailed list of tools and actions in a toolset |
-| `enable_toolset` | Enable a toolset at runtime (no restart required) |
-| `disable_toolset` | Return to meta-tools only mode |
-| `check_operation_confirmation` | Check if an operation requires confirmation |
-
-**Example workflow:**
-```
-User: "What toolsets are available?"
-AI: [calls list_available_toolsets] → Shows 5 toolsets
-
-User: "I need to work with VDBs"
-AI: [calls enable_toolset("self_service")] → 6 tools now available
-
-User: "Show me all VDBs"
-AI: [calls vdb_tool(action="search_vdbs")] → Returns VDB list
-```
 
 ### Fixed Toolset Mode
 
@@ -479,20 +453,7 @@ For environments where you always need the same toolset, set it directly:
 }
 ```
 
-This pre-registers all tools at startup (no runtime switching).
-
-### Agent Compatibility for Auto Mode
-
-Not all MCP clients support dynamic tool registration mid-session:
-
-| Agent | Dynamic Tools | Notes |
-|-------|---------------|-------| 
-| Claude Desktop | ✅ Yes | Fully supports `tools/list_changed` notifications |
-| Cursor | ✅ Yes | Refreshes tool list dynamically |
-| Continue.dev | ✅ Yes | Supports runtime tool changes |
-| VS Code Copilot | ⚠️ Limited | Requires chat restart after `enable_toolset` |
-
-**Recommendation**: For VS Code Copilot, use a fixed toolset (`DCT_TOOLSET=self_service`) for the best experience.
+This pre-registers all tools at startup.
 
 ### Grouped Tools
 
@@ -1346,7 +1307,7 @@ dxi-mcp-server/
         │   └── client.py       # DCT API HTTP client
         ├── tools/
         │   ├── core/           # Tool generation framework
-        │   │   ├── meta_tools.py   # Auto mode meta-tools
+        │   │   ├── meta_tools.py   # Retained spec helpers (find_endpoint, get_spec_chunk)
         │   │   └── tool_factory.py # Dynamic tool generator
         │   ├── dataset_endpoints_tool.py   # VDBs, VDB groups, dSources, snapshots, bookmarks
         │   ├── engine_endpoints_tool.py    # Engine management

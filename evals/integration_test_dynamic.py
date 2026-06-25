@@ -214,31 +214,6 @@ async def main() -> int:
     finally:
         await client.close()
 
-    # --- S9: no auto-mode regression (in-process registration check) ------
-    os.environ["DCT_TOOLSET"] = "auto"
-    import importlib
-    import dct_mcp_server.config.loader as loader
-
-    importlib.reload(loader)
-    from dct_mcp_server.tools import register_all_tools
-
-    auto_app = FastMCP(name="auto-check")
-
-    class _C:  # dummy client; auto registration does not call the network
-        pass
-
-    register_all_tools(auto_app, _C())
-    auto_tools = sorted(t.name for t in await auto_app.list_tools())
-    leaked = {"discovery", "execute"} & set(auto_tools)
-    _rec(
-        "S9",
-        "additivity",
-        "auto mode unchanged; dynamic tools do not leak",
-        "PASS" if (auto_tools and not leaked) else "FAIL",
-        f"auto tools={len(auto_tools)} ; leaked={sorted(leaked)}",
-    )
-    os.environ["DCT_TOOLSET"] = "dynamic"
-
     _write_evidence(base, spec_paths=len(spec.get("paths", {})))
     failed = [r for r in _results if r["status"] == "FAIL"]
     print(

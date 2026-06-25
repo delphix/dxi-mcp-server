@@ -24,9 +24,6 @@ CONFIG_DIR = Path(__file__).parent
 TOOLSETS_DIR = CONFIG_DIR / "toolsets"
 MAPPINGS_DIR = CONFIG_DIR / "mappings"
 
-# Meta-tools that are always available in auto mode
-META_TOOLS = ["list_available_toolsets", "get_toolset_tools", "execute_action"]
-
 
 # ============================================================================
 # TOOLSET LOADING FUNCTIONS
@@ -388,27 +385,16 @@ def get_configured_toolset() -> str:
     """
     toolset = os.environ.get("DCT_TOOLSET", "dynamic").lower().strip()
 
-    if toolset in ("auto", "dynamic"):
+    if toolset == "dynamic":
         return toolset
 
     available = get_available_toolsets()
     if toolset not in available:
         raise ValueError(
-            f"Invalid toolset: {toolset}. "
-            f"Valid values: auto, dynamic, {', '.join(available)}"
+            f"Invalid toolset: {toolset}. Valid values: dynamic, {', '.join(available)}"
         )
 
     return toolset
-
-
-def is_auto_mode() -> bool:
-    """
-    Check if server is running in auto (dynamic discovery) mode.
-
-    Returns:
-        True if DCT_TOOLSET=auto
-    """
-    return get_configured_toolset() == "auto"
 
 
 def is_dynamic_mode() -> bool:
