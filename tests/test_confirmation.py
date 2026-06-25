@@ -196,11 +196,16 @@ def test_first_matching_rule_wins(tmp_path, monkeypatch):
 
 
 def test_missing_confirmation_file_returns_empty(tmp_path, monkeypatch):
-    # AI-generated  (EC-8: manual_confirmation.txt does not exist → no confirmation for any path)
+    # AI-generated  (EC-8: manual_confirmation.txt absent → no rules; non-destructive
+    # ops need no confirmation, but the destructive-delete safety net still applies)
     monkeypatch.setattr(loader, "MAPPINGS_DIR", tmp_path)
     clear_cache()
     # File is absent — load_manual_confirmation_rules should return empty tuple
     rules = load_manual_confirmation_rules()
     assert rules == ()
-    # requires_confirmation should return False for all paths
-    assert requires_confirmation("POST", "/vdbs/vdb-1/delete") is False
+    # Non-destructive operations require no confirmation when there are no rules.
+    assert requires_confirmation("GET", "/vdbs/vdb-1") is False
+    assert requires_confirmation("PATCH", "/vdbs/vdb-1") is False
+    # Destructive deletes are still gated by the safety net, even with no rules file.
+    assert requires_confirmation("POST", "/vdbs/vdb-1/delete") is True
+    assert requires_confirmation("DELETE", "/synthetic/applications/app-1") is True
