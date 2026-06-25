@@ -13,8 +13,8 @@ Define which DCT API endpoints belong to each persona toolset.
 **Format:**
 ```
 # Toolset Name - N Tools
-# Description: <shown in auto-mode discovery>
-# Target users: <shown in auto-mode discovery>
+# Description: <human-readable toolset description>
+# Target users: <intended persona>
 
 # TOOL N: tool_name - Tool Description
 METHOD|/endpoint/path/{pathParam}|action_name

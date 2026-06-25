@@ -9,12 +9,10 @@ from .loader import (
     requires_confirmation,
     get_available_toolsets,
     get_configured_toolset,
-    is_auto_mode,
     is_dynamic_mode,
     get_tools_for_toolset,
     get_modules_for_toolset,
     clear_cache,
     validate_toolset_config,
     validate_all_configs,
-    META_TOOLS,
 )

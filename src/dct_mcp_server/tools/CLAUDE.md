@@ -44,5 +44,5 @@ When adding a new tool, register it in `config/loader.py:get_modules_for_toolset
 
 ### `core/` Subdirectory
 
-- `meta_tools.py` — 6 meta-tools for `auto` mode only (`list_available_toolsets`, `get_toolset_tools`, `enable_toolset`, `disable_toolset`, `check_operation_confirmation`, `execute_action`). Do not register these in fixed-toolset mode.
+- `meta_tools.py` — Retained spec-reading helpers (`find_endpoint`, `get_spec_chunk`); formerly the auto-mode meta-tools. Auto mode was removed (DLPXECO-14257); these are kept as standalone utilities and are not registered as MCP tools.
 - `tool_factory.py` — Generates tool functions at runtime from the OpenAPI spec. Downloads spec from `{DCT_BASE_URL}/dct/static/api-external.yaml`; falls back to `docs/api-external.yaml`. Generated tools are cached in `$TEMP/dct_mcp_tools/` and take priority over pre-built modules.

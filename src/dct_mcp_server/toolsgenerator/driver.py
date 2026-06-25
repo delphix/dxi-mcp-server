@@ -163,9 +163,9 @@ def load_api_endpoints_from_toolsets():
     dct_config = get_dct_config()
     selected_toolset = dct_config.get("toolset", "self_service")
 
-    # "auto" and "dynamic" modes do not use the persona-grouped generator output
-    # (dynamic mode loads the spec directly); fall back to self_service for grouping.
-    if selected_toolset in ("auto", "dynamic"):
+    # "dynamic" mode does not use the persona-grouped generator output
+    # (it loads the spec directly); fall back to self_service for grouping.
+    if selected_toolset == "dynamic":
         selected_toolset = "self_service"
 
     toolset_file = TOOLSETS_DIR / f"{selected_toolset}.txt"

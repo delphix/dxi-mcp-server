@@ -24,9 +24,6 @@ CONFIG_DIR = Path(__file__).parent
 TOOLSETS_DIR = CONFIG_DIR / "toolsets"
 MAPPINGS_DIR = CONFIG_DIR / "mappings"
 
-# Meta-tools that are always available in auto mode
-META_TOOLS = ["list_available_toolsets", "get_toolset_tools", "execute_action"]
-
 
 # ============================================================================
 # TOOLSET LOADING FUNCTIONS
@@ -305,6 +302,22 @@ def _path_matches(path: str, pattern: str) -> bool:
     return bool(re.match(regex_pattern, path))
 
 
+def _is_destructive_delete(method: str, path: str) -> bool:
+    """Return True for destructive delete operations.
+
+    Covers any HTTP DELETE, plus the DCT convention of POST to a ``.../delete``
+    action path (e.g. ``/vdbs/{vdbId}/delete``). Used as a safety net so a delete
+    never executes without confirmation just because it lacks an explicit rule in
+    manual_confirmation.txt.
+    """
+    m = (method or "").upper()
+    if m == "DELETE":
+        return True
+    if m == "POST" and path.rstrip("/").endswith("/delete"):
+        return True
+    return False
+
+
 def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
     """
     Get confirmation requirements for an API operation.
@@ -334,6 +347,20 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
                 "conditional": conditional,
                 "threshold_days": int(level.split(":")[1]) if conditional else None,
             }
+
+    # Safety net: a destructive delete must never run unconfirmed just because
+    # it has no explicit rule above. Explicit rules (matched in the loop) still
+    # take precedence and may set a different level or a tailored message.
+    if _is_destructive_delete(method, path):
+        return {
+            "level": "manual",
+            "message": (
+                f"This is a destructive delete operation ({method} {path}). "
+                "Please confirm before proceeding — this action cannot be undone."
+            ),
+            "conditional": False,
+            "threshold_days": None,
+        }
 
     # No matching rule - no confirmation needed
     return {
@@ -388,27 +415,16 @@ def get_configured_toolset() -> str:
     """
     toolset = os.environ.get("DCT_TOOLSET", "dynamic").lower().strip()
 
-    if toolset in ("auto", "dynamic"):
+    if toolset == "dynamic":
         return toolset
 
     available = get_available_toolsets()
     if toolset not in available:
         raise ValueError(
-            f"Invalid toolset: {toolset}. "
-            f"Valid values: auto, dynamic, {', '.join(available)}"
+            f"Invalid toolset: {toolset}. Valid values: dynamic, {', '.join(available)}"
         )
 
     return toolset
-
-
-def is_auto_mode() -> bool:
-    """
-    Check if server is running in auto (dynamic discovery) mode.
-
-    Returns:
-        True if DCT_TOOLSET=auto
-    """
-    return get_configured_toolset() == "auto"
 
 
 def is_dynamic_mode() -> bool:
