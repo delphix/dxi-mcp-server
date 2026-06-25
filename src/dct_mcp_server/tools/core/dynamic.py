@@ -23,6 +23,10 @@ from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
 from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
+from dct_mcp_server.tools.core.confirmation_token import (
+    make_confirmation_token,
+    verify_confirmation_token,
+)
 from dct_mcp_server.tools.core.spec_cache import get_cached_spec
 from dct_mcp_server.tools.core.spec_model import OpenAPISpec, RequestBody
 
@@ -190,6 +194,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         query_params: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
         confirmed: bool = False,
+        confirmation_token: str | None = None,
     ) -> dict[str, Any]:
         """
         Validate, confirm, and dispatch a DCT API call.
@@ -198,7 +203,10 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
           1. Substitutes {paramName} placeholders in path using path_params
           2. Looks up the operation in the cached spec (OPERATION_NOT_FOUND if absent)
           3. Validates required parameters against the spec (VALIDATION_ERROR if missing)
-          4. Checks confirmation gates for destructive operations (confirmation_required if confirmed=False)
+          4. Checks confirmation gates for destructive operations. A destructive
+             op returns confirmation_required (with a confirmation_token) until the
+             caller re-calls with that exact token — a bare confirmed=true cannot
+             bypass it.
           5. Dispatches the call via DCTAPIClient
 
         Args:
@@ -208,7 +216,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             path_params:  Key-value map for {paramName} substitution in path
             query_params: Key-value map for query string parameters
             body:         JSON request body
-            confirmed:    Set to True to proceed through a pending confirmation gate
+            confirmed:    Deprecated/ignored for destructive operations — a bare
+                          confirmed=true no longer bypasses the gate. Use
+                          confirmation_token instead.
+            confirmation_token: Echo the token returned in a prior
+                          confirmation_required response to proceed with a
+                          destructive operation (only after explicit user approval).
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
@@ -300,16 +313,30 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # ---------------------------------------------------------------- #
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
             conf = check_confirmation(method_upper, resolved_path)
-            if conf["requires_confirmation"] and not confirmed:
+            # A bare confirmed=true does NOT bypass the gate: the caller must echo
+            # the server-issued confirmation_token from the prior
+            # confirmation_required response, proving it saw the STOP instructions.
+            if conf["requires_confirmation"] and not verify_confirmation_token(
+                confirmation_token, method_upper, resolved_path
+            ):
                 return {
                     "status": "confirmation_required",
                     "confirmation_level": conf["confirmation_level"],
                     "message": (
                         conf["message_template"]
-                        or f"This operation ({method_upper} {resolved_path}) requires confirmation. "
-                        "Re-call with confirmed=True to proceed."
+                        or f"This operation ({method_upper} {resolved_path}) requires confirmation."
+                    ),
+                    "confirmation_token": make_confirmation_token(
+                        method_upper, resolved_path
                     ),
                     "operation": {"path": resolved_path, "method": method_upper},
+                    "instructions": (
+                        "STOP. Display the message to the user and obtain their EXPLICIT "
+                        "approval before proceeding — do NOT approve on their behalf. Once "
+                        "the user approves, re-call execute with the IDENTICAL arguments "
+                        "plus confirmation_token set to the value above. A bare "
+                        "confirmed=true is ignored; the token is required."
+                    ),
                 }
 
         # ---------------------------------------------------------------- #
