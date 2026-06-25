@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 from dct_mcp_server.core.logging import get_logger
+from dct_mcp_server.tools.core.spec_model import OpenAPISpec
 
 logger = get_logger(__name__)
 
@@ -33,47 +34,34 @@ def extract_hot_keywords_from_spec(spec: dict[str, Any]) -> frozenset[str]:
     Returns tokens that appear in at least 3 operations (genuinely domain-relevant).
     """
     freq: dict[str, int] = {}
-    paths = spec.get("paths", {}) or {}
-    for _path, item in paths.items():
-        if not isinstance(item, dict):
-            continue
-        for method, op in item.items():
-            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
-                continue
-            if not isinstance(op, dict):
-                continue
-            for tag in op.get("tags", []):
-                for t in _TOKEN_RE.findall(tag.lower()):
-                    freq[t] = freq.get(t, 0) + 3
-            op_id = op.get("operationId", "") or ""
-            for t in re.findall(r"[a-z]+|[A-Z][a-z]*", op_id):
-                freq[t.lower()] = freq.get(t.lower(), 0) + 1
+    model = OpenAPISpec.wrap(spec)
+    if model is None:
+        return frozenset()
+    for op in model.operations():
+        for tag in op.tags:
+            for t in _TOKEN_RE.findall(tag.lower()):
+                freq[t] = freq.get(t, 0) + 3
+        for t in re.findall(r"[a-z]+|[A-Z][a-z]*", op.operation_id):
+            freq[t.lower()] = freq.get(t.lower(), 0) + 1
     return frozenset(k for k, v in freq.items() if v >= 3 and len(k) > 2)
 
 
 def build_corpus_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Flatten spec.paths into a list of candidate dicts."""
-    out: list[dict[str, Any]] = []
-    paths = spec.get("paths", {}) or {}
-    for path, item in paths.items():
-        if not isinstance(item, dict):
-            continue
-        for method, op in item.items():
-            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
-                continue
-            if not isinstance(op, dict):
-                continue
-            out.append(
-                {
-                    "method": method.upper(),
-                    "path": path,
-                    "operation_id": op.get("operationId", "") or "",
-                    "summary": op.get("summary", "") or "",
-                    "description": op.get("description", "") or "",
-                    "tags": op.get("tags", []) or [],
-                }
-            )
-    return out
+    """Flatten the spec's operations into a list of candidate dicts."""
+    model = OpenAPISpec.wrap(spec)
+    if model is None:
+        return []
+    return [
+        {
+            "method": op.method,
+            "path": op.path,
+            "operation_id": op.operation_id,
+            "summary": op.summary,
+            "description": op.description,
+            "tags": op.tags,
+        }
+        for op in model.operations()
+    ]
 
 
 def _candidate_tokens(candidate: dict[str, Any]) -> frozenset[str]:

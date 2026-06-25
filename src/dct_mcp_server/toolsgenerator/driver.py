@@ -26,6 +26,7 @@ import logging
 import tempfile
 from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.config.loader import TOOLSETS_DIR
+from dct_mcp_server.tools.core.spec_model import OpenAPISpec, SchemaObject
 
 # Get the absolute path of the project root
 project_root = os.path.abspath(
@@ -423,17 +424,11 @@ def resolve_ref(ref: str, root: dict):
     """
     Resolve a JSON pointer $ref like '#/components/schemas/DSource'
     inside a loaded OpenAPI YAML dict.
+
+    Thin wrapper over the shared OpenAPISpec model (tools/core/spec_model.py),
+    which is the single source of truth for $ref resolution.
     """
-    if not ref.startswith("#/"):
-        raise ValueError(f"Unsupported ref format: {ref}")
-
-    # Remove starting '#/' and split by "/"
-    path = ref.lstrip("#/").split("/")
-
-    node = root
-    for part in path:
-        node = node[part]
-    return node
+    return OpenAPISpec(root).resolve_pointer(ref)
 
 
 def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
@@ -445,50 +440,12 @@ def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
                key_properties contains property names from action-specific
                sub-schemas (inline objects and small $ref'd schemas), as
                opposed to large inherited base schemas.
+
+    Delegates to the shared SchemaObject (tools/core/spec_model.py); the allOf /
+    key-property logic lives there now so every consumer agrees.
     """
-    # Resolve top-level $ref if present
-    if "$ref" in schema:
-        schema = resolve_ref(schema["$ref"], api_spec)
-
-    # Handle allOf composition
-    if "allOf" in schema:
-        combined_properties = {}
-        combined_required = []
-        key_properties = set()
-
-        for sub_schema in schema["allOf"]:
-            is_ref = "$ref" in sub_schema
-
-            # Resolve $ref in sub-schema
-            if is_ref:
-                sub_schema = resolve_ref(sub_schema["$ref"], api_spec)
-
-            # Recursively handle nested allOf
-            if "allOf" in sub_schema:
-                nested_props, nested_required, nested_key = resolve_schema_properties(
-                    sub_schema, api_spec
-                )
-                combined_properties.update(nested_props)
-                combined_required.extend(nested_required)
-                # Don't propagate key_properties from base schemas
-            else:
-                props = sub_schema.get("properties", {})
-                combined_properties.update(props)
-                combined_required.extend(sub_schema.get("required", []))
-
-                # Determine if this sub-schema is action-specific or a large base.
-                # Inline objects (not $ref) and small $ref'd schemas (<=5 props)
-                # are considered action-specific — their properties are "key".
-                # Large $ref'd schemas (e.g. BaseProvisionVDBParameters with 60+
-                # props via nested allOf) are inherited base schemas.
-                if not is_ref or len(props) <= 5:
-                    key_properties.update(props.keys())
-
-        return combined_properties, combined_required, key_properties
-
-    # Direct properties (no allOf) — all are key
-    props = schema.get("properties", {})
-    return props, schema.get("required", []), set(props.keys())
+    obj = SchemaObject(OpenAPISpec(api_spec), schema)
+    return obj.properties, obj.required, obj.key_properties
 
 
 def generate_tools_from_openapi():
