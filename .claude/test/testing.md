@@ -20,13 +20,13 @@ Two complementary tracks, both driven by Claude:
 | New pre-built tool module | `register_tools()` runs at startup; tool is exposed via the MCP server |
 | `TOOL_TO_MODULE` mapping change | Correct module loads for the affected toolset |
 | Dynamic tool generation change | Generated module in `$TEMP/dct_mcp_tools/` takes priority over pre-built |
-| Auto mode change | `enable_toolset` / `disable_toolset` works; subsequent tool listing reflects the change |
+| `dynamic` mode change | `discovery` + `execute` are the only tools exposed; `execute` invokes the resolved endpoint correctly |
 
 ## DCT Toolset Coverage
 
 When changing toolset configs or tool implementations, exercise at minimum:
 - The specific toolset(s) the change affects
-- `auto` mode if the change touches dynamic enable/disable behaviour
+- `dynamic` mode if the change touches `discovery` / `execute` behaviour
 
 ## Track 1 — Scenario Execution
 
@@ -90,7 +90,6 @@ Full prompt lists for each toolset are in `.claude/test/testing/`:
 
 | File | Toolset | Prompts |
 |------|---------|---------|
-| [testing/auto.md](testing/auto.md) | `auto` | 57 |
 | [testing/self_service.md](testing/self_service.md) | `self_service` | 70 |
 | [testing/self_service_provision.md](testing/self_service_provision.md) | `self_service_provision` | 70 inherited + 69 new |
 | [testing/continuous_data_admin.md](testing/continuous_data_admin.md) | `continuous_data_admin` | 431 |
