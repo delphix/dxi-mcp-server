@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # For destructive operations (DELETE, POST .../delete), generated tools should:
 # 1. Call requires_confirmation(method, path) to check if confirmation needed
 # 2. If True, include confirmation_message in the response
-# 3. LLM should use check_operation_confirmation meta-tool before executing
+# 3. Re-call the action with confirmed=True to execute after confirmation
 #
 # Example usage in generated tool:
 #   confirmation = get_confirmation_for_operation("DELETE", "/vdbs/{id}")

@@ -23,8 +23,8 @@ The Delphix DCT MCP Server provides a robust Model Context Protocol (MCP) interf
 
 ## Features
 
-- **Persona-Based Toolsets**: Choose from 5 pre-configured toolsets tailored for different roles (Self-Service, Self-Service Provisioning, Continuous Data Admin, Platform Admin, Reporting & Insights).
 - **Dynamic Mode**: Default 2-tool mode (`discovery` + `execute`) that exposes the full DCT API driven by the live OpenAPI spec.
+- **Persona-Based Toolsets**: Choose from 5 pre-configured toolsets tailored for different roles (Self-Service, Self-Service Provisioning, Continuous Data Admin, Platform Admin, Reporting & Insights).
 - **Grouped Tools**: Each tool handles multiple related actions via an `action` parameter, reducing tool count while maintaining full functionality.
 - **Confirmation System**: Built-in confirmation checks for destructive operations to prevent accidental data loss.
 - **Comprehensive DCT integration**: Access datasets, environments, engines, compliance, jobs, and reporting through specialized tools.

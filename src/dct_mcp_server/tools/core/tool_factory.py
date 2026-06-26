@@ -6,7 +6,7 @@ Creates GROUPED tools where each logical tool has an 'action' parameter.
 
 Architecture:
 1. Fetch & cache OpenAPI spec once at startup
-2. When enable_toolset() is called, generate grouped tool functions dynamically
+2. Generate grouped tool functions dynamically from the configured toolset
 3. Each tool (e.g., vdb_tool) supports multiple actions (search, get, provision, etc.)
 4. Register generated functions with FastMCP via app.add_tool()
 """

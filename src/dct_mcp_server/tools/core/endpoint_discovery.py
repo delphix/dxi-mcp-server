@@ -1,4 +1,8 @@
-"""Fuzzy endpoint discovery helpers for auto-mode find_endpoint meta-tool."""
+"""Fuzzy endpoint discovery helpers backing the retained ``find_endpoint`` utility.
+
+Originally written for the auto-mode ``find_endpoint`` meta-tool; auto mode was
+removed in DLPXECO-14257 and these helpers are kept as standalone utilities.
+"""
 
 from __future__ import annotations
 import re
