@@ -1,9 +1,16 @@
 """
-Shared pytest fixtures for the DCT MCP Server test suite.
+Shared pytest fixtures for the dct-mcp-server test suite.
 
-PoC scope: provides a mock DCTAPIClient suitable for Layer 1 unit tests, and
-sets minimal env vars so Layer 2 integration tests can instantiate a real
-DCTAPIClient against respx-mocked HTTP.
+Three fixtures are registered here as autouse:
+
+1. ``pytest_configure``: loads DCT credentials from .claude/settings.local.json
+   so L4/L5 tests find real credentials when pytest is run directly.
+
+2. ``_set_test_env`` (function scope): sets test env vars via monkeypatch; skips
+   for @pytest.mark.real_dct tests so real credentials flow through unchanged.
+
+3. ``reset_cache`` (function scope): calls ``clear_cache()`` before every test.
+   ``config/loader.py`` uses ``@lru_cache``; without this, state bleeds between tests.
 """
 
 import json
@@ -11,14 +18,11 @@ import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-# Warm up pydantic's generic-model registry before any mcp.server.fastmcp import.
-# pytest-cov instruments target modules before the test file's own imports run,
-# which means meta_tools.py can trigger `from mcp.server.fastmcp import Context`
-# before pydantic.root_model is registered in sys.modules → KeyError.
-# Importing RootModel here (in conftest) ensures pydantic self-registers first.
-from pydantic import RootModel  # noqa: F401
+from pydantic import RootModel  # noqa: F401  — ensures pydantic registers before mcp imports
 
 import pytest
+
+from dct_mcp_server.config.loader import clear_cache
 
 
 def pytest_configure(config):
@@ -44,13 +48,7 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def _set_test_env(monkeypatch, request):
-    """
-    Ensure DCT_API_KEY and DCT_BASE_URL are set for any test that instantiates
-    DCTAPIClient. Tests can override via their own monkeypatch.setenv calls.
-
-    Skipped for tests marked @pytest.mark.real_dct so the real DCT credentials
-    passed via env / CLI flow through to the e2e fixtures unchanged.
-    """
+    """Set env vars for unit/integration/functional tests; skip for real_dct tests."""
     if request.node.get_closest_marker("real_dct"):
         return
     monkeypatch.setenv("DCT_API_KEY", "test-api-key")
@@ -61,12 +59,16 @@ def _set_test_env(monkeypatch, request):
     monkeypatch.setenv("DCT_LOG_LEVEL", "ERROR")
 
 
+@pytest.fixture(autouse=True)
+def reset_cache():
+    """Clear the loader lru_cache before each test to prevent state leakage."""
+    clear_cache()
+    yield
+
+
 @pytest.fixture
 def mock_dct_client():
-    """
-    A MagicMock standing in for DCTAPIClient. The make_request method is an
-    AsyncMock so tool functions awaiting it get a real coroutine.
-    """
+    """A MagicMock for DCTAPIClient; make_request is an AsyncMock."""
     client = MagicMock()
     client.make_request = AsyncMock(return_value={"items": []})
     return client

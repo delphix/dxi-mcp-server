@@ -38,7 +38,7 @@ This allows server restarts without reconfiguring the client.
 |----------|----------|---------|-------|
 | `DCT_API_KEY` | Yes | — | Do not prefix with `apk` |
 | `DCT_BASE_URL` | Yes | — | No `/dct` suffix |
-| `DCT_TOOLSET` | No | `self_service` | `auto`, `self_service`, `self_service_provision`, `continuous_data_admin`, `platform_admin`, `reporting_insights` |
+| `DCT_TOOLSET` | No | `dynamic` | `dynamic`, `auto`, `self_service`, `self_service_provision`, `continuous_data_admin`, `platform_admin`, `reporting_insights` |
 | `DCT_VERIFY_SSL` | No | `false` | Set `true` in production |
 | `DCT_LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `DCT_TIMEOUT` | No | `30` | Seconds |

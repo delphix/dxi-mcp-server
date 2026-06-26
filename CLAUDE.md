@@ -34,7 +34,7 @@ When running standalone (dev mode), the server prints the port it listens on (e.
 ```
 
 Key optional env vars:
-- `DCT_TOOLSET` — `self_service` (default), `auto`, `continuous_data_admin`, `platform_admin`, `reporting_insights`, `self_service_provision`
+- `DCT_TOOLSET` — `dynamic` (default), `auto`, `self_service`, `continuous_data_admin`, `platform_admin`, `reporting_insights`, `self_service_provision`
 - `DCT_VERIFY_SSL` — default `false`
 - `DCT_LOG_LEVEL` — default `INFO`
 - `DCT_TIMEOUT` — seconds, default `30`

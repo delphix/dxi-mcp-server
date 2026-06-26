@@ -1,0 +1,20 @@
+# Pre-commit hooks for dxi-mcp-server.
+#
+# ruff replaces flake8 (lint) and black (format) with one fast tool — the same
+# checks run here locally AND in .github/workflows/ci.yml, so a green local run
+# means a green CI lint job.
+#
+# Install once:   pip install pre-commit && pre-commit install
+# Run manually:   pre-commit run --all-files
+#
+# These checks are BLOCKING in CI (ci.yml), so run them before pushing.
+# Rule config (per-file ignores, line length) lives in pyproject.toml [tool.ruff].
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      # Linter (flake8-equivalent). --fix auto-applies safe fixes locally.
+      - id: ruff
+        args: [--fix]
+      # Formatter (black-equivalent).
+      - id: ruff-format

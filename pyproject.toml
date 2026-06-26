@@ -1,6 +1,6 @@
 [project]
 name = "dct-mcp-server"
-version = "2026.0.1.0-preview"
+version = "2026.0.2.0-preview"
 description = "Delphix DCT API MCP Server - A Model Context Protocol server for the Delphix Data Control Tower API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -9,7 +9,7 @@ dependencies = [
     "httpx>=0.24.0",
     "pyyaml",
     "requests",
-    "urllib3>=2.6.3"
+    "urllib3>=2.7.0"
 ]
 
 [project.scripts]
@@ -17,13 +17,22 @@ dct-mcp-server = "dct_mcp_server.main:main"
 dct-mcp-test = "dct_mcp_server.testing.cli:main"
 
 [project.optional-dependencies]
-test = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "respx>=0.20",
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "respx>=0.23.1",
+    "pytest-json-report>=1.5.0",
     "starlette>=0.30",
     "uvicorn>=0.27",
     "click>=8.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.4.0",
+    "pytest-json-report>=1.5.0",
+    "respx>=0.23.1",
 ]
 
 [build-system]
@@ -34,18 +43,26 @@ build-backend = "hatchling.build"
 packages = ["src/dct_mcp_server"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "--tb=short"
 markers = [
     "real_dct: tests that require a live DCT instance (DCT_BASE_URL + DCT_API_KEY env vars)",
     "llm_driven: Layer 5 tests driven by the Claude Code CLI (also require a live DCT and the `claude` CLI)",
     "scenario: Claude-driven persona scenario suite vs real DCT (select via SCENARIO_PERSONAS env)",
 ]
 
-[dependency-groups]
-dev = [
-    "pytest-asyncio>=1.4.0",
-    "pytest-json-report>=1.5.0",
-    "respx>=0.23.1",
+[tool.coverage.run]
+source = ["src/dct_mcp_server"]
+omit = [
+    "*/toolsgenerator/*",
+    "*/tools/core/tool_factory.py",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
