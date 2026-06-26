@@ -63,3 +63,4 @@ tests/fixtures/api-external.yaml
 
 # Connector secrets (use .secrets.yaml.example as template)
 tests/fixtures/connectors/.secrets.yaml
+.coverage
