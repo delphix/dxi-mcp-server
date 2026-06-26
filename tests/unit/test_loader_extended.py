@@ -273,7 +273,7 @@ def test_get_configured_toolset_invalid_raises(monkeypatch):
 def test_get_configured_toolset_default(monkeypatch):
     monkeypatch.delenv("DCT_TOOLSET", raising=False)
     result = get_configured_toolset()
-    assert result == "self_service"
+    assert result == "dynamic"
 
 
 # ---------------------------------------------------------------------------

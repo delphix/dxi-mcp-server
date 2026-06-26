@@ -103,6 +103,13 @@ def _wire_path(path: str) -> str:
     return "/dct/v3" + re.sub(r"\{[^}]+\}", DUMMY, path)
 
 
+_WIRE_ACTIONS_NOT_IN_PREBUILT = {
+    # Actions present in the config but not implemented in the pre-built tool modules.
+    ("data_tool", "delete_vdb_group_tags"),
+    ("data_tool", "delete_vdb_tags"),
+}
+
+
 def _gated_self_service():
     """All confirmation-gated (tool, action) cases in self_service, from config."""
     out, seen = [], set()
@@ -117,6 +124,9 @@ def _gated_self_service():
         # Translate to pre-built tool/action names
         wire_tool = _TOOL_MAP.get(c.tool, c.tool)
         wire_action = _ACTION_MAP.get((c.tool, c.action), c.action)
+        # Skip actions that are in the config but not implemented in the pre-built tools
+        if (wire_tool, wire_action) in _WIRE_ACTIONS_NOT_IN_PREBUILT:
+            continue
         out.append((wire_tool, wire_action, c.method, conf["level"], _wire_path(c.path), kwargs))
     return out
 

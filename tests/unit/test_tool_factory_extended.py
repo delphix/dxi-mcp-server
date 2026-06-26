@@ -401,7 +401,7 @@ async def test_create_tool_function_no_client():
 @pytest.mark.asyncio
 async def test_create_tool_function_with_confirmation_required():
     operation = {"operationId": "deleteVdb", "summary": "Delete VDB", "parameters": []}
-    with patch("dct_mcp_server.tools.core.tool_factory.get_confirmation_for_operation") as mock_conf:
+    with patch("dct_mcp_server.tools.core.tool_factory.resolve_confirmation") as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Delete?",
@@ -418,7 +418,7 @@ async def test_create_tool_function_with_confirmation_required():
 @pytest.mark.asyncio
 async def test_create_tool_function_with_confirmed_true():
     operation = {"operationId": "deleteVdb", "summary": "Delete VDB", "parameters": []}
-    with patch("dct_mcp_server.tools.core.tool_factory.get_confirmation_for_operation") as mock_conf:
+    with patch("dct_mcp_server.tools.core.tool_factory.resolve_confirmation") as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Delete?",
@@ -520,7 +520,7 @@ async def test_create_grouped_tool_function_path_param_substitution():
 @pytest.mark.asyncio
 async def test_create_grouped_tool_function_confirmation_required():
     apis = [{"method": "POST", "path": "/vdbs/{vdbId}/delete", "action": "delete"}]
-    with patch("dct_mcp_server.tools.core.tool_factory.get_confirmation_for_operation") as mock_conf:
+    with patch("dct_mcp_server.tools.core.tool_factory.resolve_confirmation") as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Delete this VDB?",

@@ -137,11 +137,5 @@ async def test_vdb_group_workflow(mcp_client_self_service, dct_stub):
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/tags")
 
-    # Prompt 34 — Remove the team=qa tag (standard conf -> pre-confirm).
-    res = await client.call_tool(
-        "data_tool",
-        {"action": "delete_vdb_group_tags", "vdb_group_id": vg_id,
-         "tags": [{"key": "team", "value": "qa"}], "confirmed": True},
-    )
-    assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/tags/delete")
+    # Prompt 34 — Remove the team=qa tag is not supported in pre-built data_tool
+    # (delete_vdb_group_tags action was removed from the pre-built tool in the latest version)

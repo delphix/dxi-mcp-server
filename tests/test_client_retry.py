@@ -230,6 +230,6 @@ def test_authorization_header_prepends_apk():
         f"Expected Authorization header to start with 'apk ', got: {auth_header!r}"
     )
     # The raw key value (without "apk " prefix) should follow
-    assert "test-key" in auth_header, (
-        f"Expected 'test-key' in Authorization header, got: {auth_header!r}"
+    assert "test-api-key" in auth_header, (
+        f"Expected 'test-api-key' in Authorization header, got: {auth_header!r}"
     )

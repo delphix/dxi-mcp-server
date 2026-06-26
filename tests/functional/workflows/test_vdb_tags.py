@@ -44,11 +44,5 @@ async def test_vdb_lists_and_tags(mcp_client_self_service, dct_stub):
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/tags")
 
-    # Prompt 17 — Remove the environment=test tag (standard conf -> pre-confirm).
-    res = await client.call_tool(
-        "data_tool",
-        {"action": "delete_vdb_tags", "vdb_id": vdb_id,
-         "tags": [{"key": "environment", "value": "test"}], "confirmed": True},
-    )
-    assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/tags/delete")
+    # Prompt 17 — Remove the environment=test tag is not supported in pre-built data_tool
+    # (delete_vdb_tags action was removed from the pre-built tool in the latest version)

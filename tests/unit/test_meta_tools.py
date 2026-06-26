@@ -166,7 +166,7 @@ def test_check_operation_confirmation_includes_guidance():
 
 
 def test_check_operation_confirmation_error_handling():
-    with patch("dct_mcp_server.tools.core.meta_tools.get_confirmation_for_operation",
+    with patch("dct_mcp_server.tools.core.meta_tools.resolve_confirmation",
                side_effect=Exception("conf error")):
         result = check_operation_confirmation("GET", "/vdbs")
     assert "error" in result
@@ -325,10 +325,10 @@ def test_register_toolset_tools_in_inventory():
 def test_register_meta_tools_calls_add_tool():
     mock_app = MagicMock()
     register_meta_tools(mock_app)
-    assert mock_app.add_tool.call_count == 6
+    assert mock_app.add_tool.call_count == 8
 
 
-def test_register_meta_tools_registers_all_6():
+def test_register_meta_tools_registers_all_8():
     mock_app = MagicMock()
     registered_names = []
 
@@ -345,6 +345,8 @@ def test_register_meta_tools_registers_all_6():
         "disable_toolset",
         "check_operation_confirmation",
         "execute_action",
+        "find_endpoint",
+        "get_spec_chunk",
     }
     assert expected == set(registered_names)
 
@@ -457,7 +459,7 @@ async def test_execute_action_requires_confirmation_for_destructive():
     mock_client.make_request = AsyncMock(return_value={"status": "success"})
     mt._dct_client = mock_client
 
-    with patch("dct_mcp_server.tools.core.meta_tools.get_confirmation_for_operation") as mock_conf:
+    with patch("dct_mcp_server.tools.core.meta_tools.resolve_confirmation") as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Are you sure?",
@@ -480,7 +482,7 @@ async def test_execute_action_with_confirmed_true():
     mock_client.make_request = AsyncMock(return_value={"status": "success"})
     mt._dct_client = mock_client
 
-    with patch("dct_mcp_server.tools.core.meta_tools.get_confirmation_for_operation") as mock_conf:
+    with patch("dct_mcp_server.tools.core.meta_tools.resolve_confirmation") as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Are you sure?",

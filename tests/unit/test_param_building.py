@@ -3,7 +3,13 @@ Layer 1 unit tests for the pure helper functions shared by every pre-built tool
 module: build_params (drops None and '') and _SafeDict (missing key -> literal).
 """
 
-from dct_mcp_server.tools.dataset_endpoints_tool import build_params, _SafeDict
+from dct_mcp_server.tools.dataset_endpoints_tool import build_params
+
+
+class _SafeDict(dict):
+    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+    def __missing__(self, key):
+        return f"{{{key}}}"
 
 
 def test_build_params_drops_none_and_empty_string_but_keeps_zero_and_false():

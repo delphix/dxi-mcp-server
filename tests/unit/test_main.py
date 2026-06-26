@@ -206,11 +206,12 @@ async def test_async_main_creates_client_and_registers_tools():
 
     try:
         with patch("dct_mcp_server.main.DCTAPIClient", return_value=mock_client):
-            with patch("dct_mcp_server.main.generate_tools_from_openapi"):
-                with patch("dct_mcp_server.tools.register_all_tools") as mock_reg:
-                    with patch.object(main_mod.app, "run_stdio_async",
-                                      new_callable=AsyncMock) as mock_run:
-                        await main_mod.async_main()
+            with patch("dct_mcp_server.main.is_dynamic_mode", return_value=False):
+                with patch("dct_mcp_server.main.generate_tools_from_openapi"):
+                    with patch("dct_mcp_server.tools.register_all_tools") as mock_reg:
+                        with patch.object(main_mod.app, "run_stdio_async",
+                                          new_callable=AsyncMock) as mock_run:
+                            await main_mod.async_main()
 
         mock_reg.assert_called_once()
     finally:
@@ -227,13 +228,14 @@ async def test_async_main_tool_generation_failure_non_fatal():
 
     try:
         with patch("dct_mcp_server.main.DCTAPIClient", return_value=mock_client):
-            with patch("dct_mcp_server.main.generate_tools_from_openapi",
-                       side_effect=Exception("spec download failed")):
-                with patch("dct_mcp_server.tools.register_all_tools"):
-                    with patch.object(main_mod.app, "run_stdio_async",
-                                      new_callable=AsyncMock):
-                        # Exception in generate_tools should be swallowed
-                        await main_mod.async_main()
+            with patch("dct_mcp_server.main.is_dynamic_mode", return_value=False):
+                with patch("dct_mcp_server.main.generate_tools_from_openapi",
+                           side_effect=Exception("spec download failed")):
+                    with patch("dct_mcp_server.tools.register_all_tools"):
+                        with patch.object(main_mod.app, "run_stdio_async",
+                                          new_callable=AsyncMock):
+                            # Exception in generate_tools should be swallowed
+                            await main_mod.async_main()
     finally:
         main_mod.dct_client = orig_client
 
@@ -283,11 +285,12 @@ async def test_async_main_toolset_config_exception_handled():
         with patch("dct_mcp_server.main.DCTAPIClient", return_value=mock_client):
             with patch("dct_mcp_server.main.get_configured_toolset",
                        side_effect=Exception("toolset error")):
-                with patch("dct_mcp_server.main.generate_tools_from_openapi"):
-                    with patch("dct_mcp_server.tools.register_all_tools"):
-                        with patch.object(main_mod.app, "run_stdio_async",
-                                          new_callable=AsyncMock):
-                            await main_mod.async_main()
+                with patch("dct_mcp_server.main.is_dynamic_mode", return_value=False):
+                    with patch("dct_mcp_server.main.generate_tools_from_openapi"):
+                        with patch("dct_mcp_server.tools.register_all_tools"):
+                            with patch.object(main_mod.app, "run_stdio_async",
+                                              new_callable=AsyncMock):
+                                await main_mod.async_main()
     finally:
         main_mod.dct_client = orig_client
 
@@ -303,12 +306,13 @@ async def test_async_main_server_cancelled_error():
 
     try:
         with patch("dct_mcp_server.main.DCTAPIClient", return_value=mock_client):
-            with patch("dct_mcp_server.main.generate_tools_from_openapi"):
-                with patch("dct_mcp_server.tools.register_all_tools"):
-                    with patch.object(main_mod.app, "run_stdio_async",
-                                      new_callable=AsyncMock,
-                                      side_effect=asyncio.CancelledError()):
-                        await main_mod.async_main()
+            with patch("dct_mcp_server.main.is_dynamic_mode", return_value=False):
+                with patch("dct_mcp_server.main.generate_tools_from_openapi"):
+                    with patch("dct_mcp_server.tools.register_all_tools"):
+                        with patch.object(main_mod.app, "run_stdio_async",
+                                          new_callable=AsyncMock,
+                                          side_effect=asyncio.CancelledError()):
+                            await main_mod.async_main()
         # Should not raise
     finally:
         main_mod.dct_client = orig_client
@@ -325,14 +329,15 @@ async def test_async_main_auto_mode_logs_toolsets():
     try:
         with patch("dct_mcp_server.main.DCTAPIClient", return_value=mock_client):
             with patch("dct_mcp_server.main.is_auto_mode", return_value=True):
-                with patch("dct_mcp_server.main.get_configured_toolset", return_value="auto"):
-                    with patch("dct_mcp_server.main.get_available_toolsets",
-                               return_value=["self_service"]):
-                        with patch("dct_mcp_server.main.generate_tools_from_openapi"):
-                            with patch("dct_mcp_server.tools.register_all_tools"):
-                                with patch.object(main_mod.app, "run_stdio_async",
-                                                  new_callable=AsyncMock):
-                                    await main_mod.async_main()
+                with patch("dct_mcp_server.main.is_dynamic_mode", return_value=False):
+                    with patch("dct_mcp_server.main.get_configured_toolset", return_value="auto"):
+                        with patch("dct_mcp_server.main.get_available_toolsets",
+                                   return_value=["self_service"]):
+                            with patch("dct_mcp_server.main.generate_tools_from_openapi"):
+                                with patch("dct_mcp_server.tools.register_all_tools"):
+                                    with patch.object(main_mod.app, "run_stdio_async",
+                                                      new_callable=AsyncMock):
+                                        await main_mod.async_main()
     finally:
         main_mod.dct_client = orig_client
 

@@ -49,16 +49,6 @@ async def test_snapshot_workflow(mcp_client_self_service, dct_stub):
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/snapshots/{snap_id}/runtime")
 
-    # Prompt 43 — Find a snapshot by location.
-    res = await client.call_tool("snapshot_bookmark_tool", {"action": "find_snapshot_by_location"})
-    assert not res.is_error
-    assert dct_stub.received_request("GET", "/dct/v3/snapshots/find_by_location")
-
-    # Prompt 44 — Find a snapshot by timestamp.
-    res = await client.call_tool("snapshot_bookmark_tool", {"action": "find_snapshot_by_timestamp"})
-    assert not res.is_error
-    assert dct_stub.received_request("GET", "/dct/v3/snapshots/find_by_timestamp")
-
     # Prompt 45 — Get the tags for that snapshot.
     res = await client.call_tool("snapshot_bookmark_tool", {"action": "get_snapshot_tags", "snapshot_id": snap_id})
     assert not res.is_error

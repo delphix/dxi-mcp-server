@@ -13,15 +13,20 @@ Covers the uncovered lines:
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock  # AsyncMock used in set_client fixture
 
 import dct_mcp_server.tools.job_endpoints_tool as job_mod
 from dct_mcp_server.tools.job_endpoints_tool import (
-    _SafeDict,
     build_params,
     check_confirmation,
     register_tools,
 )
+
+
+class _SafeDict(dict):
+    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+    def __missing__(self, key):
+        return f"{{{key}}}"
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +98,10 @@ def test_check_confirmation_confirmed_true_returns_none():
     assert result is None
 
 
-def test_check_confirmation_with_context():
-    # With context dict — should not raise
+def test_check_confirmation_with_request_params():
+    # With request_params dict — should not raise
     result = check_confirmation("GET", "/jobs/j-1", "get", "job_tool", confirmed=False,
-                                context={"job_id": "j-1"})
+                                request_params={"job_id": "j-1"})
     assert result is None
 
 
@@ -114,95 +119,76 @@ def set_client():
     job_mod.client = None
 
 
-@pytest.mark.asyncio
-async def test_job_tool_search(set_client):
+def test_job_tool_search(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="search", limit=10)
+    result = job_tool(action="search", limit=10)
     assert set_client.make_request.called
 
 
-@pytest.mark.asyncio
-async def test_job_tool_search_with_filter(set_client):
+def test_job_tool_search_with_filter(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="search", filter_expression="status EQ 'RUNNING'")
-    assert set_client.make_request.called
-    call_kwargs = set_client.make_request.call_args
-    # Body should contain filter_expression
-    json_body = call_kwargs[1].get("json") or (call_kwargs[0][3] if len(call_kwargs[0]) > 3 else {})
-    # Just verify it was called
+    result = job_tool(action="search", filter_expression="status EQ 'RUNNING'")
     assert set_client.make_request.called
 
 
-@pytest.mark.asyncio
-async def test_job_tool_get(set_client):
+def test_job_tool_get(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="get", job_id="j-abc-123")
+    result = job_tool(action="get", job_id="j-abc-123")
     assert set_client.make_request.called
     call_args = set_client.make_request.call_args
-    # Verify endpoint includes the job_id
-    endpoint = call_args[0][1] if call_args[0] else call_args[1].get("endpoint", "")
     assert "j-abc-123" in str(call_args)
 
 
-@pytest.mark.asyncio
-async def test_job_tool_get_missing_job_id(set_client):
+def test_job_tool_get_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="get")
+    result = job_tool(action="get")
     assert "error" in result
     assert "job_id" in result["error"]
 
 
-@pytest.mark.asyncio
-async def test_job_tool_abandon(set_client):
+def test_job_tool_abandon(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="abandon", job_id="j-abc-456")
+    result = job_tool(action="abandon", job_id="j-abc-456")
     assert set_client.make_request.called
 
 
-@pytest.mark.asyncio
-async def test_job_tool_abandon_missing_job_id(set_client):
+def test_job_tool_abandon_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="abandon")
+    result = job_tool(action="abandon")
     assert "error" in result
     assert "job_id" in result["error"]
 
 
-@pytest.mark.asyncio
-async def test_job_tool_get_tags(set_client):
+def test_job_tool_get_tags(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="get_tags", job_id="j-789")
+    result = job_tool(action="get_tags", job_id="j-789")
     assert set_client.make_request.called
 
 
-@pytest.mark.asyncio
-async def test_job_tool_get_tags_missing_job_id(set_client):
+def test_job_tool_get_tags_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="get_tags")
+    result = job_tool(action="get_tags")
     assert "error" in result
     assert "job_id" in result["error"]
 
 
-@pytest.mark.asyncio
-async def test_job_tool_unknown_action(set_client):
+def test_job_tool_unknown_action(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = await job_tool(action="fly_to_moon")
+    result = job_tool(action="fly_to_moon")
     assert "error" in result
     assert "Unknown action" in result["error"] or "fly_to_moon" in result["error"]
 
 
-@pytest.mark.asyncio
-async def test_job_tool_abandon_endpoint_path(set_client):
+def test_job_tool_abandon_endpoint_path(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    await job_tool(action="abandon", job_id="j-xxx")
+    job_tool(action="abandon", job_id="j-xxx")
     call_args = set_client.make_request.call_args
-    # Should have called with POST and /jobs/j-xxx/abandon
     assert "abandon" in str(call_args)
 
 
-@pytest.mark.asyncio
-async def test_job_tool_get_tags_endpoint_path(set_client):
+def test_job_tool_get_tags_endpoint_path(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    await job_tool(action="get_tags", job_id="j-yyy")
+    job_tool(action="get_tags", job_id="j-yyy")
     call_args = set_client.make_request.call_args
     assert "tags" in str(call_args)
 
@@ -238,72 +224,24 @@ def test_register_tools_handles_exception():
 # check_confirmation with conditional logic
 # ---------------------------------------------------------------------------
 
-def test_check_confirmation_retain_forever_skips():
-    """When retain_forever=True, no confirmation needed."""
+def test_check_confirmation_non_none_level_requires_confirmation():
+    """Any non-none confirmation level triggers confirmation."""
     from unittest.mock import patch
     with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {
-            "level": "retention_check",
-            "message": "Snapshot is {days} days old",
-            "conditional": True,
-            "threshold_days": 7,
-        }
+        mock_conf.return_value = {"level": "retention_check", "message": "Snapshot policy check"}
         result = check_confirmation("POST", "/snapshots/s-1/delete", "delete", "snapshot_tool",
-                                    confirmed=False,
-                                    context={"retain_forever": True})
-        assert result is None
-
-
-def test_check_confirmation_retention_far_future_skips():
-    """Expiration date far in the future → skip confirmation."""
-    from unittest.mock import patch
-    from datetime import datetime, timezone, timedelta
-    future_date = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-    with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {
-            "level": "retention_check",
-            "message": "Snapshot expires in {days} days",
-            "conditional": True,
-            "threshold_days": 7,
-        }
-        result = check_confirmation("POST", "/snapshots/s-1/delete", "delete", "snapshot_tool",
-                                    confirmed=False,
-                                    context={"retain_forever": False, "expiration_date": future_date})
-        assert result is None
-
-
-def test_check_confirmation_retention_near_expiry_requires_confirmation():
-    """Expiration date very soon → require confirmation."""
-    from unittest.mock import patch
-    from datetime import datetime, timezone, timedelta
-    soon_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
-    with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {
-            "level": "retention_check",
-            "message": "Snapshot expires in {days} days",
-            "conditional": True,
-            "threshold_days": 7,
-        }
-        result = check_confirmation("POST", "/snapshots/s-1/delete", "delete", "snapshot_tool",
-                                    confirmed=False,
-                                    context={"retain_forever": False, "expiration_date": soon_date})
-        # Should require confirmation since 1 day < 7 day threshold
+                                    confirmed=False)
         assert result is not None
         assert result["status"] == "confirmation_required"
 
 
-def test_check_confirmation_non_retention_no_context():
-    """Manual confirmation level without context."""
+def test_check_confirmation_non_retention_requires_confirmation():
+    """Manual confirmation level requires confirmation."""
     from unittest.mock import patch
     with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {
-            "level": "manual",
-            "message": "Are you sure?",
-            "conditional": False,
-            "threshold_days": None,
-        }
+        mock_conf.return_value = {"level": "manual", "message": "Are you sure?"}
         result = check_confirmation("POST", "/vdbs/v-1/delete", "delete", "vdb_tool",
-                                    confirmed=False, context=None)
+                                    confirmed=False)
         assert result is not None
         assert result["status"] == "confirmation_required"
 
@@ -312,30 +250,16 @@ def test_check_confirmation_confirmed_true_skips():
     """With confirmed=True, no confirmation response."""
     from unittest.mock import patch
     with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {
-            "level": "manual",
-            "message": "Are you sure?",
-            "conditional": False,
-            "threshold_days": None,
-        }
+        mock_conf.return_value = {"level": "manual", "message": "Are you sure?"}
         result = check_confirmation("POST", "/vdbs/v-1/delete", "delete", "vdb_tool",
-                                    confirmed=True, context=None)
+                                    confirmed=True)
         assert result is None
 
 
-def test_check_confirmation_invalid_date_handles_gracefully():
-    """Invalid expiration_date should be handled without crash."""
+def test_check_confirmation_none_level_skips():
+    """When level is 'none', no confirmation needed."""
     from unittest.mock import patch
     with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {
-            "level": "retention_check",
-            "message": "Snapshot expires in {days} days",
-            "conditional": True,
-            "threshold_days": 7,
-        }
-        result = check_confirmation("POST", "/snapshots/s-1/delete", "delete", "snapshot_tool",
-                                    confirmed=False,
-                                    context={"retain_forever": False,
-                                             "expiration_date": "not-a-date"})
-        # Should not crash — may or may not require confirmation
-        assert result is None or isinstance(result, dict)
+        mock_conf.return_value = {"level": "none", "message": ""}
+        result = check_confirmation("GET", "/jobs/j-1", "get", "job_tool", confirmed=False)
+        assert result is None

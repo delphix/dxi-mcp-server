@@ -143,7 +143,7 @@ def _wire_client(monkeypatch, mock_dct_client):
 
 
 @pytest.mark.parametrize("case", _CASES, ids=[config_cases.action_id(c) for c in _CASES])
-async def test_action_routes_to_correct_endpoint(case, _wire_client):
+def test_action_routes_to_correct_endpoint(case, _wire_client):
     module = _module_for(case.tool)
     func_name = _TOOL_FUNC_MAP.get(case.tool, case.tool)
     fn = getattr(module, func_name)
@@ -151,7 +151,7 @@ async def test_action_routes_to_correct_endpoint(case, _wire_client):
     actual_action = _ACTION_MAP.get((case.tool, case.action), case.action)
     kwargs = _path_kwargs(case.path)
 
-    result = await fn(action=actual_action, confirmed=True, **kwargs)
+    result = fn(action=actual_action, confirmed=True, **kwargs)
 
     # Detect generation-only actions: the pre-built function returns an
     # "unknown action" error (or otherwise never calls the client).
@@ -178,14 +178,14 @@ async def test_action_routes_to_correct_endpoint(case, _wire_client):
 # --- explicit guard tests -------------------------------------------------
 
 
-async def test_missing_required_param_returns_error_and_no_call(_wire_client):
-    result = await dataset_endpoints_tool.data_tool(action="get_vdb")
+def test_missing_required_param_returns_error_and_no_call(_wire_client):
+    result = dataset_endpoints_tool.data_tool(action="get_vdb")
     assert isinstance(result, dict) and "error" in result
     assert not _wire_client.make_request.called
 
 
-async def test_unknown_action_returns_error_and_no_call(_wire_client):
-    result = await dataset_endpoints_tool.data_tool(
+def test_unknown_action_returns_error_and_no_call(_wire_client):
+    result = dataset_endpoints_tool.data_tool(
         action="not_a_real_action", vdb_id="X1"
     )
     assert isinstance(result, dict) and "error" in result

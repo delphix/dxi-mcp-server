@@ -36,7 +36,7 @@ def test_defaults(monkeypatch):
     assert cfg["timeout"] == 30
     assert cfg["max_retries"] == 3
     assert cfg["log_level"] == "INFO"
-    assert cfg["toolset"] == "self_service"
+    assert cfg["toolset"] == "dynamic"
     assert cfg["is_local_telemetry_enabled"] is False
 
 

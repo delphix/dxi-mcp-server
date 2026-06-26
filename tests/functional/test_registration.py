@@ -21,7 +21,7 @@ from fastmcp import Client
 from tests._support import config_cases
 from tests.functional.conftest import build_stub_transport
 
-# The 6 meta-tools registered in auto mode (src/dct_mcp_server/tools/core/meta_tools.py).
+# The 8 meta-tools registered in auto mode (src/dct_mcp_server/tools/core/meta_tools.py).
 EXPECTED_META_TOOLS = {
     "list_available_toolsets",
     "get_toolset_tools",
@@ -29,6 +29,8 @@ EXPECTED_META_TOOLS = {
     "disable_toolset",
     "check_operation_confirmation",
     "execute_action",
+    "find_endpoint",
+    "get_spec_chunk",
 }
 
 
@@ -54,7 +56,7 @@ async def test_self_service_registers_exactly_its_configured_tools(mcp_client_se
 
 @pytest.mark.asyncio
 async def test_auto_mode_registers_meta_tools(dct_stub):
-    """In auto mode the server exposes only the 6 meta-tools for runtime switching."""
+    """In auto mode the server exposes only the 8 meta-tools for runtime switching."""
     async with Client(build_stub_transport(dct_stub, "auto")) as client:
         names = {t.name for t in await client.list_tools()}
     assert names == EXPECTED_META_TOOLS, (
