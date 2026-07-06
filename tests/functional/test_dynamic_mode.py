@@ -9,8 +9,10 @@ not need a live DCT connection to load the OpenAPI spec.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 import yaml
@@ -59,9 +61,19 @@ _MINIMAL_SPEC = {
 
 @pytest.fixture(scope="module")
 def dynamic_spec_cache(tmp_path_factory):
-    """Write _MINIMAL_SPEC to a temp YAML file; return its path."""
-    cache_file = tmp_path_factory.mktemp("spec") / "api-external-dynamic.yaml"
+    """Write _MINIMAL_SPEC + .cache-meta.json sidecar; return the spec file path."""
+    spec_dir = tmp_path_factory.mktemp("spec")
+    cache_file = spec_dir / "api-external-dynamic.yaml"
     cache_file.write_text(yaml.dump(_MINIMAL_SPEC))
+    # spec_cache.py requires a .cache-meta.json sidecar with downloaded_at to
+    # skip the live download.  Without it _should_use_cache() returns False and
+    # the server tries to fetch from DCT (404 on the stub → SPEC_LOAD_FAILED).
+    meta = {
+        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "dct_base_url": "http://localhost",
+        "spec_path": str(cache_file),
+    }
+    (spec_dir / ".cache-meta.json").write_text(json.dumps(meta))
     return str(cache_file)
 
 
