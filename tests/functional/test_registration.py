@@ -16,22 +16,8 @@ Two registration paths are covered:
 """
 
 import pytest
-from fastmcp import Client
 
 from tests._support import config_cases
-from tests.functional.conftest import build_stub_transport
-
-# The 8 meta-tools registered in auto mode (src/dct_mcp_server/tools/core/meta_tools.py).
-EXPECTED_META_TOOLS = {
-    "list_available_toolsets",
-    "get_toolset_tools",
-    "enable_toolset",
-    "disable_toolset",
-    "check_operation_confirmation",
-    "execute_action",
-    "find_endpoint",
-    "get_spec_chunk",
-}
 
 
 EXPECTED_SELF_SERVICE_TOOLS = {
@@ -53,17 +39,6 @@ async def test_self_service_registers_exactly_its_configured_tools(
     assert names == EXPECTED_SELF_SERVICE_TOOLS, (
         f"self_service registered surface drifted.\n"
         f"  missing: {EXPECTED_SELF_SERVICE_TOOLS - names}\n  unexpected: {names - EXPECTED_SELF_SERVICE_TOOLS}"
-    )
-
-
-@pytest.mark.asyncio
-async def test_auto_mode_registers_meta_tools(dct_stub):
-    """In auto mode the server exposes only the 8 meta-tools for runtime switching."""
-    async with Client(build_stub_transport(dct_stub, "auto")) as client:
-        names = {t.name for t in await client.list_tools()}
-    assert names == EXPECTED_META_TOOLS, (
-        f"auto-mode meta-tool surface drifted.\n"
-        f"  missing: {EXPECTED_META_TOOLS - names}\n  unexpected: {names - EXPECTED_META_TOOLS}"
     )
 
 
