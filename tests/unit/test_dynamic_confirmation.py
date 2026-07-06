@@ -195,78 +195,51 @@ def test_patch_with_rollback_summary_returns_elevated():
 
 
 # ---------------------------------------------------------------------------
-# resolve_confirmation — mode-aware dispatch
+# resolve_confirmation — always delegates to static rules (auto mode removed)
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_confirmation_auto_mode_calls_dynamic():
+def test_resolve_confirmation_delegates_to_static():
+    """resolve_confirmation always uses static manual_confirmation.txt rules."""
     with patch(
-        "dct_mcp_server.tools.core.dynamic_confirmation.get_dct_config",
-        return_value={"toolset": "auto"},
-    ):
-        with patch(
-            "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation_dynamic",
-        ) as mock_dynamic:
-            mock_dynamic.return_value = {
-                "level": "none",
-                "message": None,
-                "conditional": False,
-                "threshold_days": None,
-            }
-            resolve_confirmation("GET", "/vdbs")
-            mock_dynamic.assert_called_once_with("GET", "/vdbs")
+        "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
+    ) as mock_static:
+        mock_static.return_value = {
+            "level": "none",
+            "message": None,
+            "conditional": False,
+            "threshold_days": None,
+        }
+        resolve_confirmation("GET", "/vdbs")
+    mock_static.assert_called_once_with("GET", "/vdbs")
 
 
-def test_resolve_confirmation_non_auto_mode_calls_static():
+def test_resolve_confirmation_passes_method_and_path():
+    """resolve_confirmation forwards method and path to the static resolver."""
     with patch(
-        "dct_mcp_server.tools.core.dynamic_confirmation.get_dct_config",
-        return_value={"toolset": "self_service"},
-    ):
-        with patch(
-            "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
-        ) as mock_static:
-            mock_static.return_value = {
-                "level": "none",
-                "message": None,
-                "conditional": False,
-                "threshold_days": None,
-            }
-            resolve_confirmation("GET", "/vdbs/search")
-            mock_static.assert_called_once_with("GET", "/vdbs/search")
+        "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
+    ) as mock_static:
+        mock_static.return_value = {"level": "none", "message": None, "conditional": False, "threshold_days": None}
+        resolve_confirmation("POST", "/vdbs/vdb-1/refresh")
+    mock_static.assert_called_once_with("POST", "/vdbs/vdb-1/refresh")
 
 
-def test_resolve_confirmation_dynamic_toolset_calls_static():
+def test_resolve_confirmation_returns_static_result():
+    """resolve_confirmation returns whatever the static resolver returns."""
+    expected = {"level": "manual", "message": "Confirm", "conditional": False, "threshold_days": None}
     with patch(
-        "dct_mcp_server.tools.core.dynamic_confirmation.get_dct_config",
-        return_value={"toolset": "dynamic"},
+        "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
+        return_value=expected,
     ):
-        with patch(
-            "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
-        ) as mock_static:
-            mock_static.return_value = {
-                "level": "none",
-                "message": None,
-                "conditional": False,
-                "threshold_days": None,
-            }
-            resolve_confirmation("POST", "/vdbs/vdb-1/refresh")
-            mock_static.assert_called_once()
+        result = resolve_confirmation("DELETE", "/vdbs/vdb-1")
+    assert result == expected
 
 
-def test_resolve_confirmation_config_exception_falls_back_to_static():
-    """If get_dct_config raises, toolset defaults to '' → static rules."""
+def test_resolve_confirmation_dynamic_toolset_uses_static():
+    """DCT_TOOLSET=dynamic still uses static rules (no auto-mode dispatch)."""
     with patch(
-        "dct_mcp_server.tools.core.dynamic_confirmation.get_dct_config",
-        side_effect=Exception("config error"),
-    ):
-        with patch(
-            "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
-        ) as mock_static:
-            mock_static.return_value = {
-                "level": "none",
-                "message": None,
-                "conditional": False,
-                "threshold_days": None,
-            }
-            resolve_confirmation("GET", "/vdbs")
-            mock_static.assert_called_once()
+        "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
+    ) as mock_static:
+        mock_static.return_value = {"level": "none", "message": None, "conditional": False, "threshold_days": None}
+        resolve_confirmation("GET", "/vdbs/search")
+    mock_static.assert_called_once()

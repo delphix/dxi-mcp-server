@@ -1,5 +1,5 @@
 """
-Unit tests for tools/__init__.py — register_all_tools and register_meta_tools_only.
+Unit tests for tools/__init__.py — register_all_tools.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 import dct_mcp_server.tools as tools_pkg
-from dct_mcp_server.tools import register_all_tools, register_meta_tools_only
+from dct_mcp_server.tools import register_all_tools
 
 
 # ---------------------------------------------------------------------------
@@ -57,74 +57,33 @@ def _pkg_iter(*names):
 
 
 # ---------------------------------------------------------------------------
-# register_meta_tools_only
+# register_all_tools — DYNAMIC mode
 # ---------------------------------------------------------------------------
 
 
-def test_register_meta_tools_only_calls_register_meta_tools():
+def test_register_all_tools_dynamic_mode(monkeypatch):
+    monkeypatch.setenv("DCT_TOOLSET", "dynamic")
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.core.meta_tools.register_meta_tools") as mock_reg:
-        with patch("dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory"):
-            register_meta_tools_only(mock_app, mock_client)
-
-    mock_reg.assert_called_once_with(mock_app)
-
-
-def test_register_meta_tools_only_with_client_calls_initialize():
-    mock_app = MagicMock()
-    mock_client = MagicMock()
-
-    with patch("dct_mcp_server.tools.core.meta_tools.register_meta_tools"):
-        with patch(
-            "dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory"
-        ) as mock_init:
-            register_meta_tools_only(mock_app, mock_client)
-
-    mock_init.assert_called_once_with(mock_app, mock_client)
-
-
-def test_register_meta_tools_only_without_client():
-    mock_app = MagicMock()
-
-    with patch("dct_mcp_server.tools.core.meta_tools.register_meta_tools") as mock_reg:
-        with patch(
-            "dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory"
-        ) as mock_init:
-            register_meta_tools_only(mock_app, dct_client=None)
-
-    mock_reg.assert_called_once_with(mock_app)
-    # initialize_tool_inventory should NOT be called without a client
-    mock_init.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# register_all_tools — AUTO mode
-# ---------------------------------------------------------------------------
-
-
-def test_register_all_tools_auto_mode(monkeypatch):
-    monkeypatch.setenv("DCT_TOOLSET", "auto")
-    mock_app = MagicMock()
-    mock_client = MagicMock()
-
-    with patch("dct_mcp_server.tools.register_meta_tools_only") as mock_meta:
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.register_dynamic_tools"
+    ) as mock_dynamic:
         register_all_tools(mock_app, mock_client)
 
-    mock_meta.assert_called_once_with(mock_app, mock_client)
+    mock_dynamic.assert_called_once_with(mock_app, mock_client)
 
 
-def test_register_all_tools_auto_mode_does_not_scan_modules(monkeypatch):
-    monkeypatch.setenv("DCT_TOOLSET", "auto")
+def test_register_all_tools_dynamic_mode_does_not_scan_modules(monkeypatch):
+    monkeypatch.setenv("DCT_TOOLSET", "dynamic")
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.register_meta_tools_only"):
+    with patch("dct_mcp_server.tools.core.dynamic.register_dynamic_tools"):
         with patch("pkgutil.iter_modules") as mock_iter:
             register_all_tools(mock_app, mock_client)
 
-    # pkgutil.iter_modules should NOT be called in auto mode
+    # pkgutil.iter_modules should NOT be called in dynamic mode
     mock_iter.assert_not_called()
 
 
@@ -138,11 +97,13 @@ def test_register_all_tools_fixed_mode_self_service(monkeypatch):
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    # Should not call register_meta_tools_only
-    with patch("dct_mcp_server.tools.register_meta_tools_only") as mock_meta:
+    # Should not call register_dynamic_tools in fixed mode
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.register_dynamic_tools"
+    ) as mock_dynamic:
         register_all_tools(mock_app, mock_client)
 
-    mock_meta.assert_not_called()
+    mock_dynamic.assert_not_called()
 
 
 def test_register_all_tools_fixed_mode_loads_modules(monkeypatch):
@@ -156,16 +117,18 @@ def test_register_all_tools_fixed_mode_loads_modules(monkeypatch):
     assert mock_app.add_tool.called or True  # Some toolsets use dynamic generation
 
 
-def test_register_all_tools_invalid_toolset_falls_back_to_auto(monkeypatch):
+def test_register_all_tools_invalid_toolset_falls_back_to_dynamic(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "invalid_toolset_xyz")
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.register_meta_tools_only") as mock_meta:
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.register_dynamic_tools"
+    ) as mock_dynamic:
         register_all_tools(mock_app, mock_client)
 
-    # Should fall back to auto mode
-    mock_meta.assert_called_once_with(mock_app, mock_client)
+    # Should fall back to dynamic mode
+    mock_dynamic.assert_called_once_with(mock_app, mock_client)
 
 
 def test_register_all_tools_metadata_loaded(monkeypatch):
@@ -225,9 +188,8 @@ def test_register_all_tools_skips_temp_dir_when_not_site_packages(
     fake_temp = tmp_path / "dct_mcp_tools"
     fake_temp.mkdir()
 
-    with patch("dct_mcp_server.tools.register_meta_tools_only"):
-        # __file__ doesn't contain 'site-packages' in dev env, so temp dir is skipped
-        register_all_tools(mock_app, mock_client)
+    # __file__ doesn't contain 'site-packages' in dev env, so temp dir is skipped
+    register_all_tools(mock_app, mock_client)
 
 
 # ---------------------------------------------------------------------------

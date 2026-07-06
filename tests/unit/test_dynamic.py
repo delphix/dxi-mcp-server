@@ -364,10 +364,14 @@ async def test_execute_destructive_without_confirmed_returns_confirmation_requir
     assert result["confirmation_level"] == "manual"
 
 
-async def test_execute_confirmed_true_skips_confirmation_gate():
+async def test_execute_with_valid_token_skips_confirmation_gate():
+    from dct_mcp_server.tools.core.confirmation_token import make_confirmation_token
+
     app = _make_app_mock()
     client = _make_client_mock(return_value={"deleted": True})
     fn = _make_execute_fn(app, client)
+
+    token = make_confirmation_token("DELETE", "/vdbs/vdb-123")
 
     with patch(
         "dct_mcp_server.tools.core.dynamic.get_cached_spec",
@@ -384,7 +388,7 @@ async def test_execute_confirmed_true_skips_confirmation_gate():
             result = await fn(
                 path="/vdbs/vdb-123",
                 method="DELETE",
-                confirmed=True,
+                confirmation_token=token,
             )
 
     assert result["status"] == "success"

@@ -46,7 +46,7 @@ def test_print_config_help_lists_toolsets(monkeypatch, capsys):
     print_config_help()
     captured = capsys.readouterr()
     assert "self_service" in captured.out
-    assert "auto" in captured.out
+    assert "dynamic" in captured.out
 
 
 # ---------------------------------------------------------------------------

@@ -360,41 +360,6 @@ async def test_async_main_server_cancelled_error():
         main_mod.dct_client = orig_client
 
 
-@pytest.mark.asyncio
-async def test_async_main_auto_mode_logs_toolsets():
-    import dct_mcp_server.main as main_mod
-
-    orig_client = main_mod.dct_client
-
-    mock_client = MagicMock()
-    mock_client.base_url = "https://dct.test"
-
-    try:
-        with patch("dct_mcp_server.main.DCTAPIClient", return_value=mock_client):
-            with patch("dct_mcp_server.main.is_auto_mode", return_value=True):
-                with patch("dct_mcp_server.main.is_dynamic_mode", return_value=False):
-                    with patch(
-                        "dct_mcp_server.main.get_configured_toolset",
-                        return_value="auto",
-                    ):
-                        with patch(
-                            "dct_mcp_server.main.get_available_toolsets",
-                            return_value=["self_service"],
-                        ):
-                            with patch(
-                                "dct_mcp_server.main.generate_tools_from_openapi"
-                            ):
-                                with patch("dct_mcp_server.tools.register_all_tools"):
-                                    with patch.object(
-                                        main_mod.app,
-                                        "run_stdio_async",
-                                        new_callable=AsyncMock,
-                                    ):
-                                        await main_mod.async_main()
-    finally:
-        main_mod.dct_client = orig_client
-
-
 # ---------------------------------------------------------------------------
 # main() synchronous entry point
 # ---------------------------------------------------------------------------

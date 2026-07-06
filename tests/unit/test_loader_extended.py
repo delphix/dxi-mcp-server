@@ -11,7 +11,6 @@ Covers the uncovered statements:
 - validate_toolset_config() / validate_all_configs()
 - clear_cache()
 - get_configured_toolset() — auto, valid, invalid
-- is_auto_mode()
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ from dct_mcp_server.config.loader import (
     get_configured_toolset,
     get_confirmation_for_operation,
     get_tools_for_toolset,
-    is_auto_mode,
     load_all_toolsets_metadata,
     load_toolset_grouped_apis,
     load_toolset_metadata,
@@ -264,9 +262,10 @@ def test_requires_confirmation_safe_ops_false():
 # ---------------------------------------------------------------------------
 
 
-def test_get_configured_toolset_auto(monkeypatch):
+def test_get_configured_toolset_auto_raises(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "auto")
-    assert get_configured_toolset() == "auto"
+    with pytest.raises(ValueError, match="Invalid toolset"):
+        get_configured_toolset()
 
 
 def test_get_configured_toolset_self_service(monkeypatch):
@@ -284,21 +283,6 @@ def test_get_configured_toolset_default(monkeypatch):
     monkeypatch.delenv("DCT_TOOLSET", raising=False)
     result = get_configured_toolset()
     assert result == "dynamic"
-
-
-# ---------------------------------------------------------------------------
-# is_auto_mode
-# ---------------------------------------------------------------------------
-
-
-def test_is_auto_mode_true(monkeypatch):
-    monkeypatch.setenv("DCT_TOOLSET", "auto")
-    assert is_auto_mode() is True
-
-
-def test_is_auto_mode_false(monkeypatch):
-    monkeypatch.setenv("DCT_TOOLSET", "self_service")
-    assert is_auto_mode() is False
 
 
 # ---------------------------------------------------------------------------

@@ -285,9 +285,8 @@ def test_load_api_endpoints_from_toolsets_missing_toolset_file(
     assert driver_mod.TOOLS_BY_NAME == {}
 
 
-def test_load_api_endpoints_from_toolsets_auto_defaults_to_self_service(monkeypatch):
-    monkeypatch.setenv("DCT_TOOLSET", "auto")
-    # auto should fall back to self_service (which exists)
+def test_load_api_endpoints_from_toolsets_self_service_loads_tools(monkeypatch):
+    monkeypatch.setenv("DCT_TOOLSET", "self_service")
     driver_mod.load_api_endpoints_from_toolsets()
     assert len(driver_mod.TOOLS_BY_NAME) > 0
 
