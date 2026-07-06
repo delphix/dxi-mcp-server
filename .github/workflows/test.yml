@@ -27,7 +27,7 @@ jobs:
       # (not src/) because site-packages is detected. This avoids the editable-
       # install footgun where generation deletes *_tool.py from the source tree.
       - name: Install package + test extras (non-editable)
-        run: pip install ".[test]"
+        run: pip install ".[dev]"
 
       # Download the OpenAPI spec from the configured DCT for the functional
       # layer's in-process tool generation. Falls back to cache if unavailable.
