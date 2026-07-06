@@ -1,13 +1,19 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
-import asyncio
+from datetime import datetime, timezone
 import logging
-import threading
-from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+
+class _SafeDict(dict):
+    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+
+    def __missing__(self, key):
+        return f"{{{key}}}"
+
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -35,97 +41,63 @@ def check_confirmation(
     action: str,
     tool_name: str,
     confirmed: bool = False,
-    request_params: Optional[Dict[str, Any]] = None,
-    request_body: Optional[Dict[str, Any]] = None,
+    context: dict = None,
 ) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none" and not confirmed:
-        # Merge query params and body into a single review dict so the LLM can
-        # render the exact payload that will be sent. None values are already
-        # stripped upstream by build_params / body filter.
-        review: Dict[str, Any] = {}
-        if request_params:
-            review.update(request_params)
-        if request_body:
-            review.update(request_body)
-        is_review_critical = (
-            action.startswith("provision_")
-            or action.startswith("dsource_link_")
-            or action == "dsource_create_snapshot"
-        )
-        instructions = (
-            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
-            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
-        )
-        if is_review_critical:
-            instructions = (
-                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
-                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
-                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
-                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
-            )
-        return {
-            "status": "confirmation_required",
-            "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
-            ),
-            "action": action,
-            "tool": tool_name,
-            "api_path": api_path,
-            "method": method,
-            "review_parameters": review,
-            "instructions": instructions,
-        }
-    return None
+
+    if confirmation["level"] == "none":
+        return None
+
+    if confirmation.get("conditional"):
+        level = confirmation["level"]
+        threshold = confirmation.get("threshold_days")
+
+        if level == "retention_check" and context and threshold is not None:
+            retain_forever = context.get("retain_forever")
+            expiration_date = context.get("expiration_date")
+
+            if retain_forever:
+                return None
+
+            if expiration_date is not None:
+                try:
+                    exp = datetime.fromisoformat(
+                        str(expiration_date).replace("Z", "+00:00")
+                    )
+                    days_until = (exp - datetime.now(timezone.utc)).days
+                    if days_until > threshold:
+                        return None
+                    context = dict(context)
+                    context["days"] = max(0, days_until)
+                except (ValueError, TypeError):
+                    pass
+
+    if confirmed:
+        return None
+
+    message = confirmation.get("message", "Please confirm this operation.")
+    if context:
+        message = message.format_map(_SafeDict(context))
+
+    return {
+        "status": "confirmation_required",
+        "confirmation_level": confirmation["level"],
+        "confirmation_message": message,
+        "action": action,
+        "tool": tool_name,
+        "api_path": api_path,
+        "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent.",
+    }
 
 
-def async_to_sync(async_func):
-    """Utility decorator to convert async functions to sync with proper event loop handling."""
-
-    @wraps(async_func)
-    def wrapper(*args, **kwargs):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a task and run it synchronously
-                result = None
-                exception = None
-
-                def run_in_thread():
-                    nonlocal result, exception
-                    try:
-                        result = asyncio.run(async_func(*args, **kwargs))
-                    except Exception as e:
-                        exception = e
-
-                thread = threading.Thread(target=run_in_thread)
-                thread.start()
-                thread.join()
-                if exception:
-                    raise exception
-                return result
-            else:
-                return loop.run_until_complete(async_func(*args, **kwargs))
-        except RuntimeError:
-            return asyncio.run(async_func(*args, **kwargs))
-
-    return wrapper
-
-
-def make_api_request(
+async def make_api_request(
     method: str, endpoint: str, params: dict = None, json_body: dict = None
 ):
     """Utility function to make API requests with consistent parameter handling."""
-
-    @async_to_sync
-    async def _make_request():
-        return await client.make_request(
-            method, endpoint, params=params or {}, json=json_body
-        )
-
-    return _make_request()
+    return await client.make_request(
+        method, endpoint, params=params or {}, json=json_body
+    )
 
 
 def build_params(**kwargs):
@@ -134,8 +106,8 @@ def build_params(**kwargs):
 
 
 @log_tool_execution
-def environment_source_tool(
-    action: str,  # One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+async def environment_source_tool(
+    action: str,  # One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source, create_mssql_source, update_mssql_source
     allow_provisioning: Optional[bool] = None,
     ase_db_azure_vault_name: Optional[str] = None,
     ase_db_azure_vault_secret_key: Optional[str] = None,
@@ -201,6 +173,9 @@ def environment_source_tool(
     linking_enabled: Optional[bool] = None,
     location: Optional[str] = None,
     make_current_account_owner: Optional[bool] = None,
+    mirroring_state: Optional[str] = None,
+    mssql_config_type: Optional[str] = None,
+    mssql_failover_drive_letter: Optional[str] = None,
     name: Optional[str] = None,
     nfs_addresses: Optional[list] = None,
     oracle_base: Optional[str] = None,
@@ -220,6 +195,7 @@ def environment_source_tool(
     port: Optional[int] = None,
     privilege_elevation_profile_reference: Optional[str] = None,
     protocol_addresses: Optional[list] = None,
+    recovery_model: Optional[str] = None,
     remote_listener: Optional[str] = None,
     repository_id: Optional[str] = None,
     scan: Optional[str] = None,
@@ -252,7 +228,7 @@ def environment_source_tool(
     """
     Unified tool for ENVIRONMENT SOURCE operations.
 
-    This tool supports 41 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+    This tool supports 43 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source, create_mssql_source, update_mssql_source
 
     ======================================================================
     ACTION REFERENCE
@@ -294,6 +270,7 @@ def environment_source_tool(
         - os_type: The operating system type of this environment.
         - env_users: Environment users associated with this environment.
         - ase_db_user_name: The username of the SAP ASE database user.
+        - ase_db_credential_type: The credential type used for the SAP ASE database user.
         - ase_enable_tls: True if SAP ASE environment configured with TLS/SSL to di...
         - ase_skip_server_certificate_validation: If True, ASE database connection will skip the server cer...
 
@@ -325,6 +302,12 @@ def environment_source_tool(
 
     Example:
         >>> environment_source_tool(action='create_environment', name=..., engine_id='example-engine-123', os_name=..., is_cluster=..., cluster_home=..., hostname=..., staging_environment=..., connector_port=..., connector_authentication_key=..., is_target=..., ssh_port=..., toolkit_path=..., username=..., password=..., vault=..., vault_username=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., cyberark_vault_query_string=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., use_kerberos_authentication=..., use_engine_public_key=..., use_custom_key_pair=..., custom_private_key=..., custom_public_key=..., nfs_addresses=..., ase_db_vault_username=..., ase_db_username=..., ase_db_password=..., ase_enable_tls=..., ase_skip_server_certificate_validation=..., ase_db_vault=..., ase_db_hashicorp_vault_engine=..., ase_db_hashicorp_vault_secret_path=..., ase_db_hashicorp_vault_username_key=..., ase_db_hashicorp_vault_secret_key=..., ase_db_cyberark_vault_query_string=..., ase_db_use_kerberos_authentication=..., ase_db_azure_vault_name=..., ase_db_azure_vault_username_key=..., ase_db_azure_vault_secret_key=..., java_home=..., dsp_keystore_path=..., dsp_keystore_password=..., dsp_keystore_alias=..., dsp_truststore_path=..., dsp_truststore_password=..., description=..., tags=..., make_current_account_owner=...)
+
+        IMPORTANT — SAP ASE discovery credentials (ONLY relevant when the user has explicitly asked to enable SAP ASE discovery on the environment; otherwise IGNORE this hint and DO NOT prompt for any ase_db_* fields):
+    • ase_db_username / ase_db_password are credentials for the SAP ASE *database instance* and are SEPARATE from username / password (which are the OS SSH credentials for the host).
+    • If — and only if — the user has asked to enable SAP ASE discovery and has NOT explicitly provided ASE DB credentials, STOP and ask for them. Do NOT reuse the OS username/password as ASE DB credentials — they are almost always different and silently copying them will cause discovery to fail.
+    • The same separation applies to the vault-based ASE credential fields (ase_db_vault, ase_db_vault_username, ase_db_hashicorp_vault_*, ase_db_azure_vault_*, ase_db_cyberark_vault_query_string) — these are ASE-specific and must not be inferred from the host credential fields.
+    • For non-ASE environments (Oracle, MSSQL, PostgreSQL, AppData, plain UNIX/Windows hosts, etc.), skip all ase_db_* fields entirely — do not ask the user about them.
 
     ACTION: add_environment_users
     ----------------------------------------
@@ -590,6 +573,7 @@ def environment_source_tool(
         - data_connection_id: The ID of the associated DataConnection.
         - database_name: The name of this source database.
         - database_unique_name: The unique name of the database.
+        - config_params: The parameters specified by the source config schema in t...
 
     Filter Syntax:
         Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
@@ -768,12 +752,34 @@ def environment_source_tool(
     Example:
         >>> environment_source_tool(action='update_appdata_source', environment_id='example-environment-123', name=..., repository_id='example-repository-123', source_id='example-source-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
 
+    ACTION: create_mssql_source
+    ----------------------------------------
+    Summary: Create an MSSQL source.
+    Method: POST
+    Endpoint: /sources/mssql
+    Required Parameters: repository_id, database_name, mssql_config_type
+    Key Parameters (provide as applicable): engine_id, linking_enabled, environment_user, mirroring_state, recovery_model, mssql_failover_drive_letter
+
+    Example:
+        >>> environment_source_tool(action='create_mssql_source', engine_id='example-engine-123', repository_id='example-repository-123', database_name=..., linking_enabled=..., environment_user=..., mssql_config_type=..., mirroring_state=..., recovery_model=..., mssql_failover_drive_letter=...)
+
+    ACTION: update_mssql_source
+    ----------------------------------------
+    Summary: Update an MSSQL source by ID.
+    Method: PATCH
+    Endpoint: /sources/mssql/{sourceId}
+    Required Parameters: source_id
+    Key Parameters (provide as applicable): repository_id, database_name, linking_enabled, environment_user
+
+    Example:
+        >>> environment_source_tool(action='update_mssql_source', repository_id='example-repository-123', source_id='example-source-123', database_name=..., linking_enabled=..., environment_user=...)
+
     ======================================================================
     PARAMETERS
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+        action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source, create_mssql_source, update_mssql_source
 
       -- General parameters (all database types) --
         allow_provisioning (bool): Flag indicating whether the repository should be used for provisioning.
@@ -835,7 +841,7 @@ def environment_source_tool(
         cyberark_vault_query_string (str): Query to find a credential in the CyberArk vault.
             [Optional for all actions]
         database_name (str): The name of the database.
-            [Required for: create_ase_source]
+            [Required for: create_ase_source, create_mssql_source]
         database_password (str): The credentials of the ASE instance database user.
             [Required for: verify_source_jdbc_connection]
         database_username (str): The username of the ASE instance database.
@@ -906,6 +912,12 @@ def environment_source_tool(
             [Optional for all actions]
         make_current_account_owner (bool): Whether the account creating this environment must be configured as owner of ...
             [Optional for all actions]
+        mirroring_state (str): Mirroring state of the database. Valid values: SUSPENDED, DISCONNECTED, SYNCH...
+            [Optional for all actions]
+        mssql_config_type (str): Request body parameter Valid values: MSSqlSIConfig, MSSqlAvailabilityGroupDBC...
+            [Required for: create_mssql_source]
+        mssql_failover_drive_letter (str): Base drive letter location for mount points. (For MSSqlFailoverClusterDBConfi...
+            [Optional for all actions]
         name (str): The name of the environment.
             [Required for: create_postgres_source, create_appdata_source]
         nfs_addresses (list): array of ip address or hostnames (Pass as JSON array)
@@ -944,10 +956,12 @@ def environment_source_tool(
             [Optional for all actions]
         protocol_addresses (list): The protocol addresses of the Oracle listener. (Pass as JSON array)
             [Optional for all actions]
+        recovery_model (str): Recovery model of the database. Valid values: FULL, SIMPLE, BULK_LOGGED. (Def...
+            [Optional for all actions]
         remote_listener (str): Request body parameter
             [Optional for all actions]
         repository_id (str): The unique identifier for the repository.
-            [Required for: update_environment_repository, delete_environment_repository, create_oracle_source, create_ase_source, create_appdata_source]
+            [Required for: update_environment_repository, delete_environment_repository, create_oracle_source, create_ase_source, create_appdata_source, create_mssql_source]
         scan (str): Request body parameter
             [Optional for all actions]
         service_principal_name (str): The Kerberos Service Principal Name (SPN) of the database.
@@ -959,7 +973,7 @@ def environment_source_tool(
         source_data_id (str): The ID of the source object (dSource or VDB) to get the compatible repos. All...
             [Optional for all actions]
         source_id (str): The unique identifier for the source.
-            [Required for: get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, update_oracle_source, update_postgres_source, update_ase_source, update_appdata_source]
+            [Required for: get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, update_oracle_source, update_postgres_source, update_ase_source, update_appdata_source, update_mssql_source]
         ssh_port (int): ssh port of the host. (Default: 22)
             [Optional for all actions]
         ssh_verification_strategy (str): Mechanism to use for ssh host verification.
@@ -1008,19 +1022,21 @@ def environment_source_tool(
     # Route to appropriate API based on action
     if action == "search_environments":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/environments/search",
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/environments/search", params=params, json_body=body
         )
     elif action == "get_environment":
@@ -1030,20 +1046,35 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "create_environment":
         params = build_params(os_name=os_name, hostname=hostname)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1104,18 +1135,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/environments",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/environments", params=params, json_body=body if body else None
         )
     elif action == "add_environment_users":
@@ -1125,6 +1145,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/users"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1148,18 +1181,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "set_environment_primary_user":
@@ -1173,18 +1195,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/users/{user_ref}/primary"
         params = build_params(user_ref=user_ref)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "update_environment_users":
         if environment_id is None:
             return {
@@ -1196,6 +1220,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/users/{user_ref}"
         params = build_params(user_ref=user_ref)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PUT",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1219,18 +1256,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PUT",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PUT", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_environment_users":
@@ -1244,18 +1270,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/users/{user_ref}"
         params = build_params(user_ref=user_ref)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "update_environment":
         if environment_id is None:
             return {
@@ -1263,6 +1291,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1293,18 +1334,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_environment":
@@ -1314,18 +1344,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "enable_environment":
         if environment_id is None:
             return {
@@ -1333,18 +1365,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/enable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "disable_environment":
         if environment_id is None:
             return {
@@ -1352,18 +1386,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/disable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "refresh_environment":
         if environment_id is None:
             return {
@@ -1371,18 +1407,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/refresh"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "list_environment_hosts":
         if environment_id is None:
             return {
@@ -1390,6 +1428,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/hosts"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1412,18 +1463,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "update_environment_host":
@@ -1437,6 +1477,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/hosts/{host_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1463,18 +1516,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_environment_host":
@@ -1488,18 +1530,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/hosts/{host_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "list_environment_listeners":
         if environment_id is None:
             return {
@@ -1507,6 +1551,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/listeners"
         params = build_params(type=type)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1517,18 +1574,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_environment_tags":
@@ -1538,18 +1584,20 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_environment_tags":
         if environment_id is None:
             return {
@@ -1557,19 +1605,21 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_environment_tags":
@@ -1579,10 +1629,8 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/tags/delete"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -1590,16 +1638,33 @@ def environment_source_tool(
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_environment_compatible_repositories_by_snapshot":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments/compatible_repositories_by_snapshot",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1610,18 +1675,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/environments/compatible_repositories_by_snapshot",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/environments/compatible_repositories_by_snapshot",
             params=params,
@@ -1629,6 +1683,19 @@ def environment_source_tool(
         )
     elif action == "get_environment_compatible_repositories_by_timestamp":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments/compatible_repositories_by_timestamp",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1640,18 +1707,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/environments/compatible_repositories_by_timestamp",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/environments/compatible_repositories_by_timestamp",
             params=params,
@@ -1659,6 +1715,19 @@ def environment_source_tool(
         )
     elif action == "get_environment_compatible_repositories_by_location":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/environments/compatible_repositories_by_location",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1670,18 +1739,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/environments/compatible_repositories_by_location",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/environments/compatible_repositories_by_location",
             params=params,
@@ -1698,6 +1756,19 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/repository/{repository_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1717,18 +1788,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_environment_repository":
@@ -1742,49 +1802,55 @@ def environment_source_tool(
             }
         endpoint = f"/environments/{environment_id}/repository/{repository_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "search_sources":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/sources/search",
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/sources/search", params=params, json_body=body
         )
     elif action == "list_sources":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             "/sources",
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", "/sources", params=params)
+        return await make_api_request("GET", "/sources", params=params)
     elif action == "get_source":
         if source_id is None:
             return {
@@ -1792,18 +1858,20 @@ def environment_source_tool(
             }
         endpoint = f"/sources/{source_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "delete_source":
         if source_id is None:
             return {
@@ -1811,18 +1879,20 @@ def environment_source_tool(
             }
         endpoint = f"/sources/{source_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "verify_source_jdbc_connection":
         if source_id is None:
             return {
@@ -1834,6 +1904,19 @@ def environment_source_tool(
             database_password=database_password,
             jdbc_connection_string=jdbc_connection_string,
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1843,18 +1926,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_source_compatible_repositories":
@@ -1864,18 +1936,20 @@ def environment_source_tool(
             }
         endpoint = f"/sources/{source_id}/staging_compatible_repositories"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_source_tags":
         if source_id is None:
             return {
@@ -1883,18 +1957,20 @@ def environment_source_tool(
             }
         endpoint = f"/sources/{source_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_source_tags":
         if source_id is None:
             return {
@@ -1902,19 +1978,21 @@ def environment_source_tool(
             }
         endpoint = f"/sources/{source_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_source_tags":
@@ -1924,10 +2002,8 @@ def environment_source_tool(
             }
         endpoint = f"/sources/{source_id}/tags/delete"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -1935,16 +2011,33 @@ def environment_source_tool(
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "create_oracle_source":
         params = build_params(oracle_config_type=oracle_config_type)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/oracle",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1960,18 +2053,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/sources/oracle",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/sources/oracle", params=params, json_body=body if body else None
         )
     elif action == "update_oracle_source":
@@ -1981,6 +2063,19 @@ def environment_source_tool(
             }
         endpoint = f"/sources/oracle/{source_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -1991,22 +2086,24 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "create_postgres_source":
         params = build_params(name=name)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/postgres",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -2017,18 +2114,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/sources/postgres",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/sources/postgres", params=params, json_body=body if body else None
         )
     elif action == "update_postgres_source":
@@ -2038,23 +2124,38 @@ def environment_source_tool(
             }
         endpoint = f"/sources/postgres/{source_id}"
         params = build_params()
-        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "PATCH",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "create_ase_source":
         params = build_params(database_name=database_name)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/ase",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -2067,18 +2168,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/sources/ase",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/sources/ase", params=params, json_body=body if body else None
         )
     elif action == "update_ase_source":
@@ -2088,6 +2178,19 @@ def environment_source_tool(
             }
         endpoint = f"/sources/ase/{source_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -2101,22 +2204,24 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "create_appdata_source":
         params = build_params(name=name, type=type)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/appdata",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -2132,18 +2237,7 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/sources/appdata",
-            action,
-            "environment_source_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/sources/appdata", params=params, json_body=body if body else None
         )
     elif action == "update_appdata_source":
@@ -2153,6 +2247,19 @@ def environment_source_tool(
             }
         endpoint = f"/sources/appdata/{source_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -2166,28 +2273,85 @@ def environment_source_tool(
             }.items()
             if v is not None
         }
+        return await make_api_request(
+            "PATCH", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "create_mssql_source":
+        params = build_params(
+            database_name=database_name, mssql_config_type=mssql_config_type
+        )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/sources/mssql",
+            action,
+            "environment_source_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
+        body = {
+            k: v
+            for k, v in {
+                "mssql_config_type": mssql_config_type,
+                "database_name": database_name,
+                "repository_id": repository_id,
+                "linking_enabled": linking_enabled,
+                "environment_user": environment_user,
+                "engine_id": engine_id,
+                "mirroring_state": mirroring_state,
+                "recovery_model": recovery_model,
+                "mssql_failover_drive_letter": mssql_failover_drive_letter,
+            }.items()
+            if v is not None
+        }
+        return await make_api_request(
+            "POST", "/sources/mssql", params=params, json_body=body if body else None
+        )
+    elif action == "update_mssql_source":
+        if source_id is None:
+            return {
+                "error": "Missing required parameter: source_id for action update_mssql_source"
+            }
+        endpoint = f"/sources/mssql/{source_id}"
+        params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "PATCH",
             endpoint,
             action,
             "environment_source_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {
+                "database_name": database_name,
+                "repository_id": repository_id,
+                "linking_enabled": linking_enabled,
+                "environment_user": environment_user,
+            }.items()
+            if v is not None
+        }
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source"
+            "error": f"Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source, create_mssql_source, update_mssql_source"
         }
 
 
 @log_tool_execution
-def toolkit_tool(
+async def toolkit_tool(
     action: str,  # One of: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     filter_expression: Optional[str] = None,
@@ -2244,6 +2408,7 @@ def toolkit_tool(
         - host_types:
         - snapshot_schema:
         - resources:
+        - manifest: The manifest of the toolkit.
         - tags: Tags associated to this toolkit.
 
     Filter Syntax:
@@ -2348,19 +2513,21 @@ def toolkit_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/toolkits/search",
             action,
             "toolkit_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/toolkits/search", params=params, json_body=body
         )
     elif action == "get":
@@ -2368,32 +2535,31 @@ def toolkit_tool(
             return {"error": "Missing required parameter: toolkit_id for action get"}
         endpoint = f"/toolkits/{toolkit_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "toolkit_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "toolkit_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "upload_toolkit":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/toolkits/upload",
             action,
             "toolkit_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", "/toolkits/upload", params=params)
+        return await make_api_request("POST", "/toolkits/upload", params=params)
     elif action == "delete_toolkit":
         if toolkit_id is None:
             return {
@@ -2401,18 +2567,15 @@ def toolkit_tool(
             }
         endpoint = f"/toolkits/{toolkit_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "DELETE",
-            endpoint,
-            action,
-            "toolkit_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "DELETE", endpoint, action, "toolkit_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "get_tags":
         if toolkit_id is None:
             return {
@@ -2420,18 +2583,15 @@ def toolkit_tool(
             }
         endpoint = f"/toolkits/{toolkit_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "toolkit_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "toolkit_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if toolkit_id is None:
             return {
@@ -2439,19 +2599,16 @@ def toolkit_tool(
             }
         endpoint = f"/toolkits/{toolkit_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "toolkit_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "toolkit_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -2461,23 +2618,20 @@ def toolkit_tool(
             }
         endpoint = f"/toolkits/{toolkit_id}/tags/delete"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "toolkit_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"key": key, "value": value, "tags": tags}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "toolkit_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:

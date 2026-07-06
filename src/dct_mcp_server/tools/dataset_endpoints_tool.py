@@ -1,13 +1,19 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
-import asyncio
+from datetime import datetime, timezone
 import logging
-import threading
-from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+
+class _SafeDict(dict):
+    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+
+    def __missing__(self, key):
+        return f"{{{key}}}"
+
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -35,97 +41,63 @@ def check_confirmation(
     action: str,
     tool_name: str,
     confirmed: bool = False,
-    request_params: Optional[Dict[str, Any]] = None,
-    request_body: Optional[Dict[str, Any]] = None,
+    context: dict = None,
 ) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none" and not confirmed:
-        # Merge query params and body into a single review dict so the LLM can
-        # render the exact payload that will be sent. None values are already
-        # stripped upstream by build_params / body filter.
-        review: Dict[str, Any] = {}
-        if request_params:
-            review.update(request_params)
-        if request_body:
-            review.update(request_body)
-        is_review_critical = (
-            action.startswith("provision_")
-            or action.startswith("dsource_link_")
-            or action == "dsource_create_snapshot"
-        )
-        instructions = (
-            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
-            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
-        )
-        if is_review_critical:
-            instructions = (
-                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
-                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
-                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
-                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
-            )
-        return {
-            "status": "confirmation_required",
-            "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
-            ),
-            "action": action,
-            "tool": tool_name,
-            "api_path": api_path,
-            "method": method,
-            "review_parameters": review,
-            "instructions": instructions,
-        }
-    return None
+
+    if confirmation["level"] == "none":
+        return None
+
+    if confirmation.get("conditional"):
+        level = confirmation["level"]
+        threshold = confirmation.get("threshold_days")
+
+        if level == "retention_check" and context and threshold is not None:
+            retain_forever = context.get("retain_forever")
+            expiration_date = context.get("expiration_date")
+
+            if retain_forever:
+                return None
+
+            if expiration_date is not None:
+                try:
+                    exp = datetime.fromisoformat(
+                        str(expiration_date).replace("Z", "+00:00")
+                    )
+                    days_until = (exp - datetime.now(timezone.utc)).days
+                    if days_until > threshold:
+                        return None
+                    context = dict(context)
+                    context["days"] = max(0, days_until)
+                except (ValueError, TypeError):
+                    pass
+
+    if confirmed:
+        return None
+
+    message = confirmation.get("message", "Please confirm this operation.")
+    if context:
+        message = message.format_map(_SafeDict(context))
+
+    return {
+        "status": "confirmation_required",
+        "confirmation_level": confirmation["level"],
+        "confirmation_message": message,
+        "action": action,
+        "tool": tool_name,
+        "api_path": api_path,
+        "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent.",
+    }
 
 
-def async_to_sync(async_func):
-    """Utility decorator to convert async functions to sync with proper event loop handling."""
-
-    @wraps(async_func)
-    def wrapper(*args, **kwargs):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a task and run it synchronously
-                result = None
-                exception = None
-
-                def run_in_thread():
-                    nonlocal result, exception
-                    try:
-                        result = asyncio.run(async_func(*args, **kwargs))
-                    except Exception as e:
-                        exception = e
-
-                thread = threading.Thread(target=run_in_thread)
-                thread.start()
-                thread.join()
-                if exception:
-                    raise exception
-                return result
-            else:
-                return loop.run_until_complete(async_func(*args, **kwargs))
-        except RuntimeError:
-            return asyncio.run(async_func(*args, **kwargs))
-
-    return wrapper
-
-
-def make_api_request(
+async def make_api_request(
     method: str, endpoint: str, params: dict = None, json_body: dict = None
 ):
     """Utility function to make API requests with consistent parameter handling."""
-
-    @async_to_sync
-    async def _make_request():
-        return await client.make_request(
-            method, endpoint, params=params or {}, json=json_body
-        )
-
-    return _make_request()
+    return await client.make_request(
+        method, endpoint, params=params or {}, json=json_body
+    )
 
 
 def build_params(**kwargs):
@@ -134,8 +106,8 @@ def build_params(**kwargs):
 
 
 @log_tool_execution
-def data_tool(
-    action: str,  # One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
+async def data_tool(
+    action: str,  # One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, delete_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, delete_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
     abort: Optional[bool] = None,
     account_id: Optional[int] = None,
     additional_mount_points: Optional[list] = None,
@@ -157,6 +129,7 @@ def data_tool(
     backup_host: Optional[str] = None,
     backup_host_user: Optional[str] = None,
     backup_level_enabled: Optional[bool] = None,
+    backup_password: Optional[str] = None,
     backup_server_name: Optional[str] = None,
     bandwidth_limit: Optional[int] = None,
     bookmark_id: Optional[str] = None,
@@ -199,6 +172,7 @@ def data_tool(
     db_password: Optional[str] = None,
     db_state: Optional[str] = None,
     db_unique_name: Optional[str] = None,
+    db_use_kerberos_authentication: Optional[bool] = None,
     db_user: Optional[str] = None,
     db_username: Optional[str] = None,
     db_vault: Optional[str] = None,
@@ -393,19 +367,24 @@ def data_tool(
     snapshot_policy_id: Optional[str] = None,
     sort: Optional[str] = None,
     source_data_id: Optional[str] = None,
+    source_environment_user_ref: Optional[str] = None,
     source_host_user: Optional[str] = None,
     source_id: Optional[str] = None,
+    source_of_production_backup: Optional[str] = None,
     staging_container_database_reference: Optional[str] = None,
     staging_database_config_params: Optional[dict] = None,
     staging_database_name: Optional[str] = None,
     staging_database_templates: Optional[list] = None,
     staging_environment: Optional[str] = None,
+    staging_environment_id: Optional[str] = None,
     staging_environment_user: Optional[str] = None,
+    staging_environment_user_ref: Optional[str] = None,
     staging_host_user: Optional[str] = None,
     staging_mount_base: Optional[str] = None,
     staging_post_script: Optional[str] = None,
     staging_pre_script: Optional[str] = None,
     staging_repository: Optional[str] = None,
+    staging_repository_id: Optional[str] = None,
     sync_parameters: Optional[dict] = None,
     sync_policy_id: Optional[str] = None,
     sync_strategy: Optional[str] = None,
@@ -431,6 +410,7 @@ def data_tool(
     validate_by_opening_db_in_read_only_mode: Optional[bool] = None,
     validate_db_credentials: Optional[bool] = None,
     validate_snapshot_in_readonly: Optional[bool] = None,
+    validated_sync_enabled: Optional[bool] = None,
     validated_sync_mode: Optional[str] = None,
     value: Optional[str] = None,
     vcdb_database_name: Optional[str] = None,
@@ -453,7 +433,7 @@ def data_tool(
     """
         Unified tool for DATA operations.
 
-        This tool supports 122 actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
+        This tool supports 124 actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, delete_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, delete_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
 
         IMPORTANT — Delphix domain terminology:
       • "dSource" is often used as a VERB meaning "create/link a dSource" (i.e. ingest a source database). When a user says "dSource database X", they want to LINK a new dSource for database X, NOT look up an existing dSource named X. Use the appropriate dsource_link_* action (dsource_link_oracle, dsource_link_mssql, dsource_link_ase, dsource_link_appdata) depending on the database type.
@@ -574,6 +554,8 @@ def data_tool(
             - recycle_days: Number of days to retain VDB in the recycle bin before it...
             - recycle_bin_date: The date this VDB was moved to recycle bin.
             - recycle_bin_account_id: The ID of the account that moved this VDB to recycle bin.
+            - truncate_log_on_checkpoint: True if configured to truncate log on checkpoint (ASE only).
+            - durability_level: SAP ASE database durability level (ASE only).
 
         Filter Syntax:
             Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
@@ -1052,6 +1034,17 @@ def data_tool(
         Example:
             >>> data_tool(action='add_vdb_tags', vdb_id='example-vdb-123', tags=...)
 
+        ACTION: delete_vdb_tags
+        ----------------------------------------
+        Summary: Delete tags for a VDB.
+        Method: POST
+        Endpoint: /vdbs/{vdbId}/tags/delete
+        Required Parameters: vdb_id
+        Key Parameters (provide as applicable): tags, key, value
+
+        Example:
+            >>> data_tool(action='delete_vdb_tags', vdb_id='example-vdb-123', tags=..., key=..., value=...)
+
         ACTION: export_vdb_in_place
         ----------------------------------------
         Summary: Convert a virtual database to a physical database on physical file system.
@@ -1498,6 +1491,17 @@ def data_tool(
         Example:
             >>> data_tool(action='add_vdb_group_tags', tags=..., vdb_group_id='example-vdb_group-123')
 
+        ACTION: delete_vdb_group_tags
+        ----------------------------------------
+        Summary: Delete tags for a VDB Group.
+        Method: POST
+        Endpoint: /vdb-groups/{vdbGroupId}/tags/delete
+        Required Parameters: vdb_group_id
+        Key Parameters (provide as applicable): tags, key, value
+
+        Example:
+            >>> data_tool(action='delete_vdb_group_tags', tags=..., key=..., value=..., vdb_group_id='example-vdb_group-123')
+
         ACTION: list_dsources
         ----------------------------------------
         Summary: List all dSources.
@@ -1529,6 +1533,8 @@ def data_tool(
             - data_uuid: A universal ID that uniquely identifies the dSource datab...
             - storage_size: The actual space used by this dSource, in bytes.
             - plugin_version: The version of the plugin associated with this source dat...
+            - excludes: List of subdirectories in the source to exclude when sync...
+            - follow_symlinks: List of symlinks in the source to follow when syncing dat...
             - creation_date: The date this dSource was created.
             - group_name: The name of the group containing this dSource.
             - enabled: A value indicating whether this dSource is enabled.
@@ -1608,6 +1614,17 @@ def data_tool(
             - bandwidth_limit: Bandwidth limit (MB/s) for SnapSync and LogSync network t...
             - number_of_connections: Total number of transport connections to use during SnapS...
             - data_connection_id: The ID of the associated DataConnection.
+            - truncate_log_on_checkpoint: True if configured to truncate log on checkpoint (ASE only).
+            - durability_level: SAP ASE database durability level (ASE only).
+            - external_file_path: ASE External file path.
+            - load_backup_path: ASE Source database backup location.
+            - validated_sync_enabled: True if ASE validated sync mode is set to ENABLED
+            - dump_history_file_enabled: Specifies if Dump History File is enabled for backup hist...
+            - source_of_production_backup: Denotes whether it's a remote backup server or staging ba...
+            - backup_password_set: True if ASE dump is password protected.
+            - backup_server_name: Name of the ASE backup server instance.
+            - backup_host: Host environment where the ASE backup server is located.
+            - backup_host_user: OS user for the host where the ASE backup server is located.
 
         Filter Syntax:
             Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
@@ -1741,7 +1758,7 @@ def data_tool(
         Key Parameters (provide as applicable): tags, key, value
 
         Example:
-            >>> data_tool(action='delete_dsource_tags', tags=..., dsource_id='example-dsource-123', key=..., value=...)
+            >>> data_tool(action='delete_dsource_tags', tags=..., key=..., value=..., dsource_id='example-dsource-123')
 
         ACTION: dsource_link_oracle
         ----------------------------------------
@@ -1830,10 +1847,10 @@ def data_tool(
         Summary: Link an ASE database as dSource.
         Method: POST
         Endpoint: /dsources/ase
-        Key Parameters (provide as applicable): db_password, mount_base, drop_and_recreate_devices, sync_strategy, ase_backup_files, external_file_path, load_backup_path, backup_server_name, backup_host_user, backup_host, dump_credentials, source_host_user, db_user, db_vault_username, db_vault, db_hashicorp_vault_engine, db_hashicorp_vault_secret_path, db_hashicorp_vault_username_key, db_hashicorp_vault_secret_key, db_azure_vault_name, db_azure_vault_username_key, db_azure_vault_secret_key, db_cyberark_vault_query_string, staging_repository, staging_host_user, validated_sync_mode, dump_history_file_enabled, pre_validated_sync, post_validated_sync
+        Key Parameters (provide as applicable): db_password, mount_base, drop_and_recreate_devices, sync_strategy, ase_backup_files, external_file_path, load_backup_path, backup_server_name, backup_host_user, backup_host, dump_credentials, source_host_user, db_user, db_use_kerberos_authentication, staging_repository, staging_host_user, validated_sync_mode, dump_history_file_enabled, pre_validated_sync, post_validated_sync
 
         Example:
-            >>> data_tool(action='dsource_link_ase', db_password=..., mount_base=..., drop_and_recreate_devices=..., sync_strategy=..., ase_backup_files=..., external_file_path=..., load_backup_path=..., backup_server_name=..., backup_host_user=..., backup_host=..., dump_credentials=..., source_host_user=..., db_user=..., db_vault_username=..., db_vault=..., db_hashicorp_vault_engine=..., db_hashicorp_vault_secret_path=..., db_hashicorp_vault_username_key=..., db_hashicorp_vault_secret_key=..., db_azure_vault_name=..., db_azure_vault_username_key=..., db_azure_vault_secret_key=..., db_cyberark_vault_query_string=..., staging_repository=..., staging_host_user=..., validated_sync_mode=..., dump_history_file_enabled=..., pre_validated_sync=..., post_validated_sync=...)
+            >>> data_tool(action='dsource_link_ase', db_password=..., mount_base=..., drop_and_recreate_devices=..., sync_strategy=..., ase_backup_files=..., external_file_path=..., load_backup_path=..., backup_server_name=..., backup_host_user=..., backup_host=..., dump_credentials=..., source_host_user=..., db_user=..., db_use_kerberos_authentication=..., staging_repository=..., staging_host_user=..., validated_sync_mode=..., dump_history_file_enabled=..., pre_validated_sync=..., post_validated_sync=...)
 
         ACTION: dsource_link_ase_defaults
         ----------------------------------------
@@ -1851,10 +1868,10 @@ def data_tool(
         Method: PATCH
         Endpoint: /dsources/ase/{dsourceId}
         Required Parameters: dsource_id
-        Key Parameters (provide as applicable): name, description, hooks, retention_policy_id, sync_policy_id
+        Key Parameters (provide as applicable): name, description, db_username, db_password, hooks, retention_policy_id, sync_policy_id, external_file_path, logsync_enabled, load_backup_path, backup_server_name, backup_host_user, backup_host, db_use_kerberos_authentication, dump_history_file_enabled, staging_environment_id, staging_environment_user_ref, staging_repository_id, source_environment_user_ref, validated_sync_enabled, source_of_production_backup, backup_password
 
         Example:
-            >>> data_tool(action='update_ase_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123')
+            >>> data_tool(action='update_ase_dsource', name=..., description=..., db_username=..., db_password=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', external_file_path=..., logsync_enabled=..., load_backup_path=..., backup_server_name=..., backup_host_user=..., backup_host=..., db_use_kerberos_authentication=..., dump_history_file_enabled=..., staging_environment_id='example-staging_environment-123', staging_environment_user_ref=..., staging_repository_id='example-staging_repository-123', source_environment_user_ref=..., validated_sync_enabled=..., source_of_production_backup=..., backup_password=...)
 
         ACTION: dsource_link_appdata
         ----------------------------------------
@@ -1888,10 +1905,10 @@ def data_tool(
         Method: PATCH
         Endpoint: /dsources/appdata/{dsourceId}
         Required Parameters: dsource_id
-        Key Parameters (provide as applicable): name, description, hooks, retention_policy_id, sync_policy_id, ops_pre_sync, ops_post_sync, environment_user, staging_environment, staging_environment_user, parameters
+        Key Parameters (provide as applicable): name, description, hooks, retention_policy_id, sync_policy_id, ops_pre_sync, ops_post_sync, environment_user, staging_environment, staging_environment_user, excludes, follow_symlinks, parameters
 
         Example:
-            >>> data_tool(action='update_appdata_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., parameters=...)
+            >>> data_tool(action='update_appdata_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., excludes=..., follow_symlinks=..., parameters=...)
 
             IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
         Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
@@ -2072,7 +2089,7 @@ def data_tool(
         ======================================================================
 
         Args:
-            action (str): The operation to perform. One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
+            action (str): The operation to perform. One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, delete_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, delete_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
 
           -- General parameters (all database types) --
             abort (bool): Whether to issue 'shutdown abort' to shutdown Oracle Virtual DB instances. (D...
@@ -2112,6 +2129,8 @@ def data_tool(
             backup_host_user (str): OS user for the host where the backup server is located.
                 [Optional for all actions]
             backup_level_enabled (bool): Boolean value indicates whether LEVEL-based incremental backups can be used o...
+                [Optional for all actions]
+            backup_password (str): The password for the Sybase Backup Server user.
                 [Optional for all actions]
             backup_server_name (str): Name of the backup server instance.
                 [Optional for all actions]
@@ -2186,6 +2205,8 @@ def data_tool(
             db_state (str): User provided db state that will be used to create staging push db. Default i...
                 [Optional for all actions]
             db_unique_name (str): Unique name to be given to the database after it is converted to physical.
+                [Optional for all actions]
+            db_use_kerberos_authentication (bool): Whether to use kerberos authentication.
                 [Optional for all actions]
             db_user (str): The user name for the source DB user.
                 [Optional for all actions]
@@ -2313,7 +2334,7 @@ def data_tool(
                 [Optional for all actions]
             instances (list): The instances of this RAC database. (Pass as JSON array)
                 [Optional for all actions]
-            invoke_datapatch (bool): Indicates whether datapatch should be invoked.
+            invoke_datapatch (bool): Indicates whether to invoke Oracle's datapatch utility during post recovery s...
                 [Optional for all actions]
             is_incremental_v2p (bool): Whether to enable incremental V2P (Virtual to Physical) export. When enabled,...
                 [Optional for all actions]
@@ -2552,10 +2573,14 @@ def data_tool(
                 [Required for: list_vdbs, search_vdbs, list_vdb_bookmarks, search_vdb_bookmarks, list_vdb_groups, search_vdb_groups, list_vdb_group_bookmarks, search_vdb_group_bookmarks, list_dsources, search_dsources]
             source_data_id (str): The ID of the source object (dSource or VDB) to provision from. All other obj...
                 [Required for: provision_by_timestamp, provision_by_timestamp_defaults]
+            source_environment_user_ref (str): The OS user to use for linking.
+                [Optional for all actions]
             source_host_user (str): ID or user reference of the host OS user to use for linking.
                 [Optional for all actions]
             source_id (str): Id of the source to link.
                 [Required for: dsource_link_oracle_defaults, attach_oracle_dsource, dsource_link_ase_defaults, dsource_link_appdata_defaults, dsource_link_mssql_defaults, attach_mssql_dsource]
+            source_of_production_backup (str): Denotes whether it's a remote backup server or staging backup server. Valid v...
+                [Optional for all actions]
             staging_container_database_reference (str): Reference of the CDB source config.
                 [Optional for all actions]
             staging_database_config_params (dict): Oracle database configuration parameter overrides. If both staging_database_t...
@@ -2566,7 +2591,11 @@ def data_tool(
                 [Optional for all actions]
             staging_environment (str): The environment used as an intermediate stage to pull data into Delphix [AppD...
                 [Optional for all actions]
+            staging_environment_id (str): The environment used as an intermediate stage to pull data into Delphix.
+                [Optional for all actions]
             staging_environment_user (str): The environment user used to access the staging environment [AppDataStaged on...
+                [Optional for all actions]
+            staging_environment_user_ref (str): Information about the host OS user on the staging environment to use for link...
                 [Optional for all actions]
             staging_host_user (str): Information about the host OS user on the staging environment to use for link...
                 [Optional for all actions]
@@ -2577,6 +2606,8 @@ def data_tool(
             staging_pre_script (str): A user-provided PowerShell script or executable to run prior to restoring fro...
                 [Optional for all actions]
             staging_repository (str): The SAP ASE instance on the staging environment that we want to use for valid...
+                [Optional for all actions]
+            staging_repository_id (str): The SAP ASE repository(instance) on the staging environment that we want to u...
                 [Optional for all actions]
             sync_parameters (dict): The JSON payload conforming to the snapshot parameters definition in a LUA to...
                 [Optional for all actions]
@@ -2624,6 +2655,8 @@ def data_tool(
                 [Optional for all actions]
             validate_snapshot_in_readonly (bool): Boolean value indicates whether this staging database snapshot will be valida...
                 [Optional for all actions]
+            validated_sync_enabled (bool): True if validated sync is enabled for this dSource.
+                [Optional for all actions]
             validated_sync_mode (str): Information about the host OS user on the staging environment to use for link...
                 [Optional for all actions]
             value (str): Value of the tag
@@ -2633,9 +2666,9 @@ def data_tool(
             vdb_enable_param_mappings (list): Request body parameter (Pass as JSON array)
                 [Optional for all actions]
             vdb_group_id (str): The unique identifier for the vdbGroup.
-                [Required for: get_vdb_group, update_vdb_group, delete_vdb_group, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags]
+                [Required for: get_vdb_group, update_vdb_group, delete_vdb_group, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, delete_vdb_group_tags]
             vdb_id (str): The unique identifier for the vdb.
-                [Required for: get_vdb, update_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize]
+                [Required for: get_vdb, update_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, delete_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize]
             vdb_ids (list): Request body parameter (Pass as JSON array)
                 [Optional for all actions]
             vdb_restart (bool): Indicates whether the Engine should automatically restart this virtual source...
@@ -2722,57 +2755,63 @@ def data_tool(
         params = build_params(
             limit=limit, cursor=cursor, sort=sort, permission=permission
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            "/vdbs",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", "/vdbs", action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", "/vdbs", params=params)
+        return await make_api_request("GET", "/vdbs", params=params)
     elif action == "search_vdbs":
         params = build_params(
             limit=limit, cursor=cursor, sort=sort, permission=permission
         )
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/vdbs/search",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", "/vdbs/search", params=params, json_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
+            "POST", "/vdbs/search", params=params, json_body=body
+        )
     elif action == "get_vdb":
         if vdb_id is None:
             return {"error": "Missing required parameter: vdb_id for action get_vdb"}
         endpoint = f"/vdbs/{vdb_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "update_vdb":
         if vdb_id is None:
             return {"error": "Missing required parameter: vdb_id for action update_vdb"}
         endpoint = f"/vdbs/{vdb_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -2820,22 +2859,24 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "provision_by_timestamp":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_by_timestamp",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -2930,18 +2971,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_by_timestamp",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_by_timestamp",
             params=params,
@@ -2949,6 +2979,19 @@ def data_tool(
         )
     elif action == "provision_by_timestamp_defaults":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_by_timestamp/defaults",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -2960,18 +3003,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_by_timestamp/defaults",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_by_timestamp/defaults",
             params=params,
@@ -2979,6 +3011,19 @@ def data_tool(
         )
     elif action == "provision_by_snapshot":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_by_snapshot",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -3071,18 +3116,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_by_snapshot",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_by_snapshot",
             params=params,
@@ -3090,6 +3124,19 @@ def data_tool(
         )
     elif action == "provision_by_snapshot_defaults":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_by_snapshot/defaults",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3099,18 +3146,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_by_snapshot/defaults",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_by_snapshot/defaults",
             params=params,
@@ -3118,6 +3154,19 @@ def data_tool(
         )
     elif action == "provision_from_bookmark":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_from_bookmark",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -3208,18 +3257,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_from_bookmark",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_from_bookmark",
             params=params,
@@ -3227,19 +3265,21 @@ def data_tool(
         )
     elif action == "provision_from_bookmark_defaults":
         params = build_params()
-        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/vdbs/provision_from_bookmark/defaults",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        return await make_api_request(
             "POST",
             "/vdbs/provision_from_bookmark/defaults",
             params=params,
@@ -3247,6 +3287,19 @@ def data_tool(
         )
     elif action == "provision_by_location":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_by_location",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -3340,18 +3393,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_by_location",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_by_location",
             params=params,
@@ -3359,6 +3401,19 @@ def data_tool(
         )
     elif action == "provision_by_location_defaults":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/provision_by_location/defaults",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3369,18 +3424,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/provision_by_location/defaults",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdbs/provision_by_location/defaults",
             params=params,
@@ -3388,6 +3432,19 @@ def data_tool(
         )
     elif action == "provision_empty_vdb":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdbs/empty_vdb",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -3477,18 +3534,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdbs/empty_vdb",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/vdbs/empty_vdb", params=params, json_body=body if body else None
         )
     elif action == "delete_vdb":
@@ -3496,6 +3542,14 @@ def data_tool(
             return {"error": "Missing required parameter: vdb_id for action delete_vdb"}
         endpoint = f"/vdbs/{vdb_id}/delete"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3504,18 +3558,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "start_vdb":
@@ -3523,19 +3566,16 @@ def data_tool(
             return {"error": "Missing required parameter: vdb_id for action start_vdb"}
         endpoint = f"/vdbs/{vdb_id}/start"
         params = build_params()
-        body = {k: v for k, v in {"instances": instances}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"instances": instances}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "stop_vdb":
@@ -3543,23 +3583,20 @@ def data_tool(
             return {"error": "Missing required parameter: vdb_id for action stop_vdb"}
         endpoint = f"/vdbs/{vdb_id}/stop"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"instances": instances, "abort": abort}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "enable_vdb":
@@ -3567,6 +3604,14 @@ def data_tool(
             return {"error": "Missing required parameter: vdb_id for action enable_vdb"}
         endpoint = f"/vdbs/{vdb_id}/enable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3576,18 +3621,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "disable_vdb":
@@ -3597,6 +3631,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/disable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3605,18 +3647,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_by_timestamp":
@@ -3626,6 +3657,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/refresh_by_timestamp"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3636,18 +3675,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_by_snapshot":
@@ -3657,19 +3685,16 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/refresh_by_snapshot"
         params = build_params()
-        body = {k: v for k, v in {"snapshot_id": snapshot_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"snapshot_id": snapshot_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_from_bookmark":
@@ -3679,19 +3704,16 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/refresh_from_bookmark"
         params = build_params()
-        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_by_location":
@@ -3701,6 +3723,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/refresh_by_location"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3710,18 +3740,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "undo_vdb_refresh":
@@ -3731,18 +3750,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/undo_refresh"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "rollback_vdb_by_timestamp":
         if vdb_id is None:
             return {
@@ -3750,6 +3766,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/rollback_by_timestamp"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3759,18 +3783,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "rollback_vdb_by_snapshot":
@@ -3780,19 +3793,16 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/rollback_by_snapshot"
         params = build_params()
-        body = {k: v for k, v in {"snapshot_id": snapshot_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"snapshot_id": snapshot_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "rollback_vdb_from_bookmark":
@@ -3802,19 +3812,16 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/rollback_from_bookmark"
         params = build_params()
-        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "switch_vdb_timeflow":
@@ -3824,19 +3831,16 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/switch_timeflow"
         params = build_params()
-        body = {k: v for k, v in {"timeflow_id": timeflow_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"timeflow_id": timeflow_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "lock_vdb":
@@ -3844,19 +3848,16 @@ def data_tool(
             return {"error": "Missing required parameter: vdb_id for action lock_vdb"}
         endpoint = f"/vdbs/{vdb_id}/lock"
         params = build_params()
-        body = {k: v for k, v in {"account_id": account_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"account_id": account_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "unlock_vdb":
@@ -3864,18 +3865,15 @@ def data_tool(
             return {"error": "Missing required parameter: vdb_id for action unlock_vdb"}
         endpoint = f"/vdbs/{vdb_id}/unlock"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "migrate_vdb":
         if vdb_id is None:
             return {
@@ -3883,6 +3881,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/migrate"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -3895,18 +3901,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_migrate_compatible_repositories":
@@ -3916,18 +3911,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/migrate_compatible_repositories"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "upgrade_vdb":
         if vdb_id is None:
             return {
@@ -3935,6 +3927,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/upgrade"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -3946,18 +3946,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "upgrade_oracle_vdb":
@@ -3967,6 +3956,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/oracle/{vdb_id}/upgrade"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -3977,18 +3974,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_upgrade_compatible_repositories":
@@ -3998,18 +3984,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/upgrade_compatible_repositories"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "list_vdb_snapshots":
         if vdb_id is None:
             return {
@@ -4017,18 +4000,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/snapshots"
         params = build_params(limit=limit, cursor=cursor)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "snapshot_vdb":
         if vdb_id is None:
             return {
@@ -4036,18 +4016,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/snapshots"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "list_vdb_bookmarks":
         if vdb_id is None:
             return {
@@ -4055,18 +4032,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/bookmarks"
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "search_vdb_bookmarks":
         if vdb_id is None:
             return {
@@ -4074,19 +4048,16 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/bookmarks/search"
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params, json_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request("POST", endpoint, params=params, json_body=body)
     elif action == "get_vdb_deletion_dependencies":
         if vdb_id is None:
             return {
@@ -4094,18 +4065,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/deletion-dependencies"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "verify_vdb_jdbc_connection":
         if vdb_id is None:
             return {
@@ -4117,6 +4085,14 @@ def data_tool(
             database_password=database_password,
             jdbc_connection_string=jdbc_connection_string,
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4126,18 +4102,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_vdb_tags":
@@ -4147,18 +4112,15 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_vdb_tags":
         if vdb_id is None:
             return {
@@ -4166,19 +4128,39 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_vdb_tags":
+        if vdb_id is None:
+            return {
+                "error": "Missing required parameter: vdb_id for action delete_vdb_tags"
+            }
+        endpoint = f"/vdbs/{vdb_id}/tags/delete"
+        params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_in_place":
@@ -4188,6 +4170,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/in-place-export"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4206,18 +4196,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_asm_in_place":
@@ -4227,6 +4206,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/asm-in-place-export"
         params = build_params(default_data_diskgroup=default_data_diskgroup)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4240,18 +4227,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_by_snapshot":
@@ -4261,6 +4237,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/export-by-snapshot"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4294,6 +4278,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -4307,18 +4292,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_by_timestamp":
@@ -4328,6 +4302,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/export-by-timestamp"
         params = build_params(timestamp=timestamp)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4361,6 +4343,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -4375,18 +4358,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_by_location":
@@ -4396,6 +4368,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/export-by-location"
         params = build_params(location=location)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4429,6 +4409,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -4442,18 +4423,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_from_bookmark":
@@ -4463,6 +4433,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/export-from-bookmark"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4496,6 +4474,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -4509,18 +4488,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_to_asm_by_snapshot":
@@ -4530,6 +4498,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/asm-export-by-snapshot"
         params = build_params(default_data_diskgroup=default_data_diskgroup)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4563,6 +4539,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -4571,18 +4548,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_to_asm_by_timestamp":
@@ -4594,6 +4560,14 @@ def data_tool(
         params = build_params(
             timestamp=timestamp, default_data_diskgroup=default_data_diskgroup
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4627,6 +4601,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -4636,18 +4611,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_to_asm_by_location":
@@ -4659,6 +4623,14 @@ def data_tool(
         params = build_params(
             location=location, default_data_diskgroup=default_data_diskgroup
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4692,6 +4664,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -4700,18 +4673,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_vdb_to_asm_from_bookmark":
@@ -4721,6 +4683,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/asm-export-from-bookmark"
         params = build_params(default_data_diskgroup=default_data_diskgroup)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4754,6 +4724,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -4762,18 +4733,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_cleanup":
@@ -4783,6 +4743,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/export_cleanup"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4791,18 +4759,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_finalize":
@@ -4812,6 +4769,14 @@ def data_tool(
             }
         endpoint = f"/vdbs/{vdb_id}/export_finalize"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4820,49 +4785,37 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "list_vdb_groups":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            "/vdb-groups",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", "/vdb-groups", action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", "/vdb-groups", params=params)
+        return await make_api_request("GET", "/vdb-groups", params=params)
     elif action == "search_vdb_groups":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/vdb-groups/search",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/vdb-groups/search", params=params, json_body=body
         )
     elif action == "get_vdb_group":
@@ -4872,20 +4825,25 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "create_vdb_group":
         params = build_params(name=name)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", "/vdb-groups", action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4898,18 +4856,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdb-groups",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/vdb-groups", params=params, json_body=body if body else None
         )
     elif action == "update_vdb_group":
@@ -4919,6 +4866,14 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4929,18 +4884,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_vdb_group":
@@ -4950,20 +4894,30 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "DELETE",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "DELETE", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "provision_vdb_group_from_bookmark":
         params = build_params(name=name, provision_parameters=provision_parameters)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/vdb-groups/provision_from_bookmark",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -4975,18 +4929,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/vdb-groups/provision_from_bookmark",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/vdb-groups/provision_from_bookmark",
             params=params,
@@ -4999,19 +4942,16 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/refresh"
         params = build_params()
-        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_group_from_bookmark":
@@ -5021,19 +4961,16 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/refresh_from_bookmark"
         params = build_params()
-        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_group_by_snapshot":
@@ -5043,23 +4980,20 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/refresh_by_snapshot"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"vdb_snapshot_mappings": vdb_snapshot_mappings}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "refresh_vdb_group_by_timestamp":
@@ -5069,6 +5003,14 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/refresh_by_timestamp"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5077,18 +5019,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "rollback_vdb_group":
@@ -5098,19 +5029,16 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/rollback"
         params = build_params()
-        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"bookmark_id": bookmark_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "lock_vdb_group":
@@ -5120,19 +5048,16 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/lock"
         params = build_params()
-        body = {k: v for k, v in {"account_id": account_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"account_id": account_id}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "unlock_vdb_group":
@@ -5142,18 +5067,15 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/unlock"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "start_vdb_group":
         if vdb_group_id is None:
             return {
@@ -5161,23 +5083,20 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/start"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"vdb_start_param_mappings": vdb_start_param_mappings}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "stop_vdb_group":
@@ -5187,23 +5106,20 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/stop"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"vdb_stop_param_mappings": vdb_stop_param_mappings}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "enable_vdb_group":
@@ -5213,23 +5129,20 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/enable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"vdb_enable_param_mappings": vdb_enable_param_mappings}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "disable_vdb_group":
@@ -5239,6 +5152,14 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/disable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5246,18 +5167,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_vdb_group_latest_snapshots":
@@ -5267,18 +5177,15 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/latest-snapshots"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_vdb_group_timestamp_summary":
         if vdb_group_id is None:
             return {
@@ -5286,6 +5193,14 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/timestamp-summary"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5295,18 +5210,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "list_vdb_group_bookmarks":
@@ -5316,18 +5220,15 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/bookmarks"
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "search_vdb_group_bookmarks":
         if vdb_group_id is None:
             return {
@@ -5335,19 +5236,16 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/bookmarks/search"
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params, json_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request("POST", endpoint, params=params, json_body=body)
     elif action == "get_vdb_group_tags":
         if vdb_group_id is None:
             return {
@@ -5355,18 +5253,15 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_vdb_group_tags":
         if vdb_group_id is None:
             return {
@@ -5374,54 +5269,73 @@ def data_tool(
             }
         endpoint = f"/vdb-groups/{vdb_group_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
+            "POST", endpoint, params=params, json_body=body if body else None
+        )
+    elif action == "delete_vdb_group_tags":
+        if vdb_group_id is None:
+            return {
+                "error": "Missing required parameter: vdb_group_id for action delete_vdb_group_tags"
+            }
+        endpoint = f"/vdb-groups/{vdb_group_id}/tags/delete"
+        params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "list_dsources":
         params = build_params(
             limit=limit, cursor=cursor, sort=sort, permission=permission
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            "/dsources",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", "/dsources", action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", "/dsources", params=params)
+        return await make_api_request("GET", "/dsources", params=params)
     elif action == "search_dsources":
         params = build_params(
             limit=limit, cursor=cursor, sort=sort, permission=permission
         )
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/dsources/search",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/dsources/search", params=params, json_body=body
         )
     elif action == "get_dsource":
@@ -5431,20 +5345,30 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "delete_dsource":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/delete",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5456,18 +5380,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/delete",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/dsources/delete", params=params, json_body=body if body else None
         )
     elif action == "enable_dsource":
@@ -5477,21 +5390,18 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/enable"
         params = build_params()
-        body = {
-            k: v for k, v in {"attempt_start": attempt_start}.items() if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v for k, v in {"attempt_start": attempt_start}.items() if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "disable_dsource":
@@ -5501,23 +5411,20 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/disable"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"attempt_cleanup": attempt_cleanup}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "list_dsource_snapshots":
@@ -5527,18 +5434,15 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/snapshots"
         params = build_params(limit=limit, cursor=cursor)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "dsource_create_snapshot":
         if dsource_id is None:
             return {
@@ -5546,6 +5450,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/snapshots"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5565,18 +5477,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "upgrade_dsource":
@@ -5586,6 +5487,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/upgrade"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -5597,18 +5506,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_dsource_upgrade_compatible_repositories":
@@ -5618,18 +5516,15 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/upgrade_compatible_repositories"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_dsource_deletion_dependencies":
         if dsource_id is None:
             return {
@@ -5637,18 +5532,15 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/deletion-dependencies"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_dsource_tags":
         if dsource_id is None:
             return {
@@ -5656,18 +5548,15 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_dsource_tags":
         if dsource_id is None:
             return {
@@ -5675,19 +5564,16 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_dsource_tags":
@@ -5697,27 +5583,37 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/tags/delete"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"key": key, "value": value, "tags": tags}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "dsource_link_oracle":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/oracle",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -5783,35 +5679,26 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/oracle",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/dsources/oracle", params=params, json_body=body if body else None
         )
     elif action == "dsource_link_oracle_defaults":
         params = build_params()
-        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/dsources/oracle/defaults",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        return await make_api_request(
             "POST",
             "/dsources/oracle/defaults",
             params=params,
@@ -5819,6 +5706,19 @@ def data_tool(
         )
     elif action == "dsource_link_oracle_staging_push":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/oracle/staging-push",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -5859,18 +5759,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/oracle/staging-push",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/dsources/oracle/staging-push",
             params=params,
@@ -5878,6 +5767,19 @@ def data_tool(
         )
     elif action == "dsource_link_oracle_staging_push_defaults":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/oracle/staging-push/defaults",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5886,18 +5788,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/oracle/staging-push/defaults",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/dsources/oracle/staging-push/defaults",
             params=params,
@@ -5910,6 +5801,14 @@ def data_tool(
             }
         endpoint = f"/dsources/oracle/{dsource_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -5950,18 +5849,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "attach_oracle_dsource":
@@ -5971,6 +5859,14 @@ def data_tool(
             }
         endpoint = f"/dsources/oracle/{dsource_id}/attachSource"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -5994,18 +5890,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "detach_oracle_dsource":
@@ -6015,18 +5900,15 @@ def data_tool(
             }
         endpoint = f"/dsources/oracle/{dsource_id}/detachSource"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "upgrade_oracle_dsource":
         if dsource_id is None:
             return {
@@ -6034,6 +5916,14 @@ def data_tool(
             }
         endpoint = f"/dsources/oracle/{dsource_id}/upgrade"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         if not environment_user_id:
             environment_user_id = environment_user_ref or environment_user
         body = {
@@ -6044,22 +5934,24 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "dsource_link_ase":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/ase",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6074,16 +5966,6 @@ def data_tool(
                 "tags": tags,
                 "ops_pre_sync": ops_pre_sync,
                 "ops_post_sync": ops_post_sync,
-                "external_file_path": external_file_path,
-                "mount_base": mount_base,
-                "load_backup_path": load_backup_path,
-                "backup_server_name": backup_server_name,
-                "backup_host_user": backup_host_user,
-                "backup_host": backup_host,
-                "dump_credentials": dump_credentials,
-                "source_host_user": source_host_user,
-                "db_user": db_user,
-                "db_password": db_password,
                 "db_vault_username": db_vault_username,
                 "db_vault": db_vault,
                 "db_hashicorp_vault_engine": db_hashicorp_vault_engine,
@@ -6094,6 +5976,17 @@ def data_tool(
                 "db_azure_vault_username_key": db_azure_vault_username_key,
                 "db_azure_vault_secret_key": db_azure_vault_secret_key,
                 "db_cyberark_vault_query_string": db_cyberark_vault_query_string,
+                "external_file_path": external_file_path,
+                "mount_base": mount_base,
+                "load_backup_path": load_backup_path,
+                "backup_server_name": backup_server_name,
+                "backup_host_user": backup_host_user,
+                "backup_host": backup_host,
+                "dump_credentials": dump_credentials,
+                "source_host_user": source_host_user,
+                "db_user": db_user,
+                "db_password": db_password,
+                "db_use_kerberos_authentication": db_use_kerberos_authentication,
                 "staging_repository": staging_repository,
                 "staging_host_user": staging_host_user,
                 "validated_sync_mode": validated_sync_mode,
@@ -6106,35 +5999,26 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/ase",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/dsources/ase", params=params, json_body=body if body else None
         )
     elif action == "dsource_link_ase_defaults":
         params = build_params()
-        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/dsources/ase/defaults",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        return await make_api_request(
             "POST",
             "/dsources/ase/defaults",
             params=params,
@@ -6147,33 +6031,70 @@ def data_tool(
             }
         endpoint = f"/dsources/ase/{dsource_id}"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {
-                "name": name,
-                "description": description,
-                "sync_policy_id": sync_policy_id,
-                "retention_policy_id": retention_policy_id,
-                "hooks": hooks,
-            }.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "PATCH", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {
+                "db_vault_username": db_vault_username,
+                "db_vault": db_vault,
+                "db_hashicorp_vault_engine": db_hashicorp_vault_engine,
+                "db_hashicorp_vault_secret_path": db_hashicorp_vault_secret_path,
+                "db_hashicorp_vault_username_key": db_hashicorp_vault_username_key,
+                "db_hashicorp_vault_secret_key": db_hashicorp_vault_secret_key,
+                "db_azure_vault_name": db_azure_vault_name,
+                "db_azure_vault_username_key": db_azure_vault_username_key,
+                "db_azure_vault_secret_key": db_azure_vault_secret_key,
+                "db_cyberark_vault_query_string": db_cyberark_vault_query_string,
+                "name": name,
+                "description": description,
+                "staging_environment_id": staging_environment_id,
+                "staging_environment_user_ref": staging_environment_user_ref,
+                "staging_repository_id": staging_repository_id,
+                "source_environment_user_ref": source_environment_user_ref,
+                "sync_policy_id": sync_policy_id,
+                "retention_policy_id": retention_policy_id,
+                "load_backup_path": load_backup_path,
+                "dump_history_file_enabled": dump_history_file_enabled,
+                "validated_sync_enabled": validated_sync_enabled,
+                "logsync_enabled": logsync_enabled,
+                "source_of_production_backup": source_of_production_backup,
+                "backup_server_name": backup_server_name,
+                "external_file_path": external_file_path,
+                "backup_password": backup_password,
+                "backup_host": backup_host,
+                "backup_host_user": backup_host_user,
+                "hooks": hooks,
+                "db_username": db_username,
+                "db_password": db_password,
+                "db_use_kerberos_authentication": db_use_kerberos_authentication,
+            }.items()
+            if v is not None
+        }
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "dsource_link_appdata":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/appdata",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6200,35 +6121,26 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/appdata",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/dsources/appdata", params=params, json_body=body if body else None
         )
     elif action == "dsource_link_appdata_defaults":
         params = build_params()
-        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/dsources/appdata/defaults",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        return await make_api_request(
             "POST",
             "/dsources/appdata/defaults",
             params=params,
@@ -6241,6 +6153,14 @@ def data_tool(
             }
         endpoint = f"/dsources/appdata/{dsource_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6250,6 +6170,8 @@ def data_tool(
                 "staging_environment_user": staging_environment_user,
                 "environment_user": environment_user,
                 "parameters": parameters,
+                "excludes": excludes,
+                "follow_symlinks": follow_symlinks,
                 "sync_policy_id": sync_policy_id,
                 "retention_policy_id": retention_policy_id,
                 "ops_pre_sync": ops_pre_sync,
@@ -6258,22 +6180,24 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "dsource_link_mssql":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/mssql",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6330,35 +6254,26 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/mssql",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/dsources/mssql", params=params, json_body=body if body else None
         )
     elif action == "dsource_link_mssql_defaults":
         params = build_params()
-        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/dsources/mssql/defaults",
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
+        return await make_api_request(
             "POST",
             "/dsources/mssql/defaults",
             params=params,
@@ -6366,6 +6281,19 @@ def data_tool(
         )
     elif action == "dsource_link_mssql_staging_push":
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/dsources/mssql/staging-push",
+            action,
+            "data_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6391,18 +6319,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/dsources/mssql/staging-push",
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/dsources/mssql/staging-push",
             params=params,
@@ -6410,8 +6327,8 @@ def data_tool(
         )
     elif action == "dsource_link_mssql_staging_push_defaults":
         params = build_params()
-        body = {
-            k: v for k, v in {"environment_id": environment_id}.items() if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -6419,12 +6336,14 @@ def data_tool(
             action,
             "data_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v for k, v in {"environment_id": environment_id}.items() if v is not None
+        }
+        return await make_api_request(
             "POST",
             "/dsources/mssql/staging-push/defaults",
             params=params,
@@ -6439,6 +6358,14 @@ def data_tool(
         params = build_params(
             ppt_repository=ppt_repository, staging_database_name=staging_database_name
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6454,18 +6381,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "update_mssql_dsource":
@@ -6475,6 +6391,14 @@ def data_tool(
             }
         endpoint = f"/dsources/mssql/{dsource_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6521,18 +6445,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "attach_mssql_dsource":
@@ -6542,6 +6455,14 @@ def data_tool(
             }
         endpoint = f"/dsources/mssql/{dsource_id}/attachSource"
         params = build_params(ppt_repository=ppt_repository)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6586,18 +6507,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "detach_mssql_dsource":
@@ -6607,18 +6517,15 @@ def data_tool(
             }
         endpoint = f"/dsources/mssql/{dsource_id}/detachSource"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "export_dsource_by_snapshot":
         if dsource_id is None:
             return {
@@ -6626,6 +6533,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/export-by-snapshot"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6659,6 +6574,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -6672,18 +6588,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_by_timestamp":
@@ -6693,6 +6598,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/export-by-timestamp"
         params = build_params(timestamp=timestamp)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6726,6 +6639,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -6740,18 +6654,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_by_location":
@@ -6761,6 +6664,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/export-by-location"
         params = build_params(location=location)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6794,6 +6705,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -6807,18 +6719,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_from_bookmark":
@@ -6828,6 +6729,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/export-from-bookmark"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6861,6 +6770,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "targetDirectory": target_directory,
                 "dataDirectory": data_directory,
                 "archiveDirectory": archive_directory,
@@ -6874,18 +6784,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_to_asm_by_snapshot":
@@ -6895,6 +6794,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/asm-export-by-snapshot"
         params = build_params(default_data_diskgroup=default_data_diskgroup)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6928,6 +6835,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -6936,18 +6844,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_to_asm_by_timestamp":
@@ -6959,6 +6856,14 @@ def data_tool(
         params = build_params(
             timestamp=timestamp, default_data_diskgroup=default_data_diskgroup
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -6992,6 +6897,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -7001,18 +6907,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_to_asm_by_location":
@@ -7024,6 +6919,14 @@ def data_tool(
         params = build_params(
             location=location, default_data_diskgroup=default_data_diskgroup
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -7057,6 +6960,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -7065,18 +6969,7 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "export_dsource_to_asm_from_bookmark":
@@ -7086,6 +6979,14 @@ def data_tool(
             }
         endpoint = f"/dsources/{dsource_id}/asm-export-from-bookmark"
         params = build_params(default_data_diskgroup=default_data_diskgroup)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "data_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -7119,6 +7020,7 @@ def data_tool(
                 "rman_channels_for_incremental_backup": rman_channels_for_incremental_backup,
                 "rman_files_per_set_for_incremental_backup": rman_files_per_set_for_incremental_backup,
                 "rman_file_section_size_in_gb_for_incremental_backup": rman_file_section_size_in_gb_for_incremental_backup,
+                "invoke_datapatch": invoke_datapatch,
                 "default_data_diskgroup": default_data_diskgroup,
                 "redo_diskgroup": redo_diskgroup,
                 "rman_channels": rman_channels,
@@ -7127,29 +7029,18 @@ def data_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "data_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark"
+            "error": f"Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, delete_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, delete_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark"
         }
 
 
 @log_tool_execution
-def snapshot_bookmark_tool(
-    action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+async def snapshot_bookmark_tool(
+    action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, find_snapshot_by_location, find_snapshot_by_timestamp, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
     bookmark_id: Optional[str] = None,
     bookmark_type: Optional[str] = None,
     cursor: Optional[str] = None,
@@ -7183,7 +7074,7 @@ def snapshot_bookmark_tool(
     """
     Unified tool for SNAPSHOT BOOKMARK operations.
 
-    This tool supports 19 actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+    This tool supports 21 actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, find_snapshot_by_location, find_snapshot_by_timestamp, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
 
     ======================================================================
     ACTION REFERENCE
@@ -7304,6 +7195,24 @@ def snapshot_bookmark_tool(
 
     Example:
         >>> snapshot_bookmark_tool(action='get_runtime', snapshot_id='example-snapshot-123')
+
+    ACTION: find_snapshot_by_location
+    ----------------------------------------
+    Summary: Get the snapshots at this location for a dataset.
+    Method: GET
+    Endpoint: /snapshots/find_by_location
+
+    Example:
+        >>> snapshot_bookmark_tool(action='find_snapshot_by_location')
+
+    ACTION: find_snapshot_by_timestamp
+    ----------------------------------------
+    Summary: Get the snapshots at this timestamp for a dataset.
+    Method: GET
+    Endpoint: /snapshots/find_by_timestamp
+
+    Example:
+        >>> snapshot_bookmark_tool(action='find_snapshot_by_timestamp')
 
     ACTION: get_snapshot_tags
     ----------------------------------------
@@ -7475,7 +7384,7 @@ def snapshot_bookmark_tool(
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+        action (str): The operation to perform. One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, find_snapshot_by_location, find_snapshot_by_timestamp, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
 
       -- General parameters (all database types) --
         bookmark_id (str): The unique identifier for the bookmark.
@@ -7544,19 +7453,21 @@ def snapshot_bookmark_tool(
     # Route to appropriate API based on action
     if action == "search_snapshots":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/snapshots/search",
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/snapshots/search", params=params, json_body=body
         )
     elif action == "get_snapshot":
@@ -7566,18 +7477,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "update_snapshot":
         if snapshot_id is None:
             return {
@@ -7585,6 +7498,19 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "snapshot_bookmark_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -7593,18 +7519,7 @@ def snapshot_bookmark_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "snapshot_bookmark_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_snapshot":
@@ -7614,10 +7529,8 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/delete"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {"delete_all_dependencies": delete_all_dependencies}.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -7625,12 +7538,16 @@ def snapshot_bookmark_tool(
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {"delete_all_dependencies": delete_all_dependencies}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "unset_snapshot_expiration":
@@ -7640,18 +7557,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/unset_expiration"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params)
+        return await make_api_request("POST", endpoint, params=params)
     elif action == "get_snapshot_timeflow_range":
         if snapshot_id is None:
             return {
@@ -7659,18 +7578,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/timeflow_range"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_runtime":
         if snapshot_id is None:
             return {
@@ -7678,18 +7599,56 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/runtime"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
+    elif action == "find_snapshot_by_location":
+        params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "GET",
+            "/snapshots/find_by_location",
+            action,
+            "snapshot_bookmark_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
+        return await make_api_request(
+            "GET", "/snapshots/find_by_location", params=params
+        )
+    elif action == "find_snapshot_by_timestamp":
+        params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "GET",
+            "/snapshots/find_by_timestamp",
+            action,
+            "snapshot_bookmark_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
+        return await make_api_request(
+            "GET", "/snapshots/find_by_timestamp", params=params
+        )
     elif action == "get_snapshot_tags":
         if snapshot_id is None:
             return {
@@ -7697,18 +7656,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_snapshot_tags":
         if snapshot_id is None:
             return {
@@ -7716,19 +7677,21 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_snapshot_tags":
@@ -7738,10 +7701,8 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/snapshots/{snapshot_id}/tags/delete"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -7749,29 +7710,35 @@ def snapshot_bookmark_tool(
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "search_bookmarks":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/bookmarks/search",
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/bookmarks/search", params=params, json_body=body
         )
     elif action == "get_bookmark":
@@ -7781,20 +7748,35 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "create_bookmark":
         params = build_params(name=name)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/bookmarks",
+            action,
+            "snapshot_bookmark_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -7820,18 +7802,7 @@ def snapshot_bookmark_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/bookmarks",
-            action,
-            "snapshot_bookmark_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", "/bookmarks", params=params, json_body=body if body else None
         )
     elif action == "update_bookmark":
@@ -7841,6 +7812,19 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "snapshot_bookmark_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -7851,18 +7835,7 @@ def snapshot_bookmark_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "snapshot_bookmark_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_bookmark":
@@ -7872,18 +7845,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "get_bookmark_vdb_groups":
         if bookmark_id is None:
             return {
@@ -7891,18 +7866,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}/vdb-groups"
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_bookmark_tags":
         if bookmark_id is None:
             return {
@@ -7910,18 +7887,20 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_bookmark_tags":
         if bookmark_id is None:
             return {
@@ -7929,19 +7908,21 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_bookmark_tags":
@@ -7951,10 +7932,8 @@ def snapshot_bookmark_tool(
             }
         endpoint = f"/bookmarks/{bookmark_id}/tags/delete"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -7962,22 +7941,26 @@ def snapshot_bookmark_tool(
             action,
             "snapshot_bookmark_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags"
+            "error": f"Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, find_snapshot_by_location, find_snapshot_by_timestamp, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags"
         }
 
 
 @log_tool_execution
-def data_connection_tool(
+async def data_connection_tool(
     action: str,  # One of: search, get, update, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     data_connection_id: Optional[str] = None,
@@ -8010,7 +7993,7 @@ def data_connection_tool(
     Filterable Fields:
         - id: ID of the data connection.
         - name: Name of the data connection.
-        - status: ACTIVE if used by a masking job or a linked dSource or VDB.
+        - status: ACTIVE if used by a masking job or a linked dSource or VD...
         - type: The type of the data connection.
         - platform: The dataset platform of the data connection.
         - dsource_count: The number of dSources linked from this data connection.
@@ -8118,19 +8101,21 @@ def data_connection_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/data-connections/search",
             action,
             "data_connection_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/data-connections/search", params=params, json_body=body
         )
     elif action == "get":
@@ -8140,18 +8125,20 @@ def data_connection_tool(
             }
         endpoint = f"/data-connections/{data_connection_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "data_connection_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "update":
         if data_connection_id is None:
             return {
@@ -8159,19 +8146,21 @@ def data_connection_tool(
             }
         endpoint = f"/data-connections/{data_connection_id}"
         params = build_params()
-        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "PATCH",
             endpoint,
             action,
             "data_connection_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_tags":
@@ -8181,18 +8170,20 @@ def data_connection_tool(
             }
         endpoint = f"/data-connections/{data_connection_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "data_connection_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if data_connection_id is None:
             return {
@@ -8200,19 +8191,21 @@ def data_connection_tool(
             }
         endpoint = f"/data-connections/{data_connection_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "data_connection_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -8222,10 +8215,8 @@ def data_connection_tool(
             }
         endpoint = f"/data-connections/{data_connection_id}/tags/delete"
         params = build_params()
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
         }
         conf = check_confirmation(
             "POST",
@@ -8233,12 +8224,16 @@ def data_connection_tool(
             action,
             "data_connection_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
+        }
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:
@@ -8248,7 +8243,7 @@ def data_connection_tool(
 
 
 @log_tool_execution
-def timeflow_tool(
+async def timeflow_tool(
     action: str,  # One of: list, search, get, update, delete, get_snapshot_day_range, repair, get_tags, add_tags, delete_tags
     azure_vault_name: Optional[str] = None,
     azure_vault_secret_key: Optional[str] = None,
@@ -8506,33 +8501,37 @@ def timeflow_tool(
     # Route to appropriate API based on action
     if action == "list":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "GET",
             "/timeflows",
             action,
             "timeflow_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("GET", "/timeflows", params=params)
+        return await make_api_request("GET", "/timeflows", params=params)
     elif action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/timeflows/search",
             action,
             "timeflow_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/timeflows/search", params=params, json_body=body
         )
     elif action == "get":
@@ -8540,18 +8539,15 @@ def timeflow_tool(
             return {"error": "Missing required parameter: timeflow_id for action get"}
         endpoint = f"/timeflows/{timeflow_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "update":
         if timeflow_id is None:
             return {
@@ -8559,19 +8555,16 @@ def timeflow_tool(
             }
         endpoint = f"/timeflows/{timeflow_id}"
         params = build_params()
-        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "PATCH", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"name": name}.items() if v is not None}
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete":
@@ -8581,18 +8574,20 @@ def timeflow_tool(
             }
         endpoint = f"/timeflows/{timeflow_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "timeflow_tool",
             confirmed or False,
-            request_params=params,
-            request_body=None,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "get_snapshot_day_range":
         if timeflow_id is None:
             return {
@@ -8600,18 +8595,15 @@ def timeflow_tool(
             }
         endpoint = f"/timeflows/{timeflow_id}/timeflowSnapshotDayRange"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "repair":
         if timeflow_id is None:
             return {
@@ -8625,6 +8617,14 @@ def timeflow_tool(
             start_location=start_location,
             end_location=end_location,
         )
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -8652,18 +8652,7 @@ def timeflow_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_tags":
@@ -8673,18 +8662,15 @@ def timeflow_tool(
             }
         endpoint = f"/timeflows/{timeflow_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if timeflow_id is None:
             return {
@@ -8692,19 +8678,16 @@ def timeflow_tool(
             }
         endpoint = f"/timeflows/{timeflow_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -8714,23 +8697,20 @@ def timeflow_tool(
             }
         endpoint = f"/timeflows/{timeflow_id}/tags/delete"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "timeflow_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"key": key, "value": value, "tags": tags}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "timeflow_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:

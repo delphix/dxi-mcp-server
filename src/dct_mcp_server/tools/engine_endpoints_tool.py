@@ -1,13 +1,19 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
-import asyncio
+from datetime import datetime, timezone
 import logging
-import threading
-from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
+
+
+class _SafeDict(dict):
+    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+
+    def __missing__(self, key):
+        return f"{{{key}}}"
+
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -35,97 +41,63 @@ def check_confirmation(
     action: str,
     tool_name: str,
     confirmed: bool = False,
-    request_params: Optional[Dict[str, Any]] = None,
-    request_body: Optional[Dict[str, Any]] = None,
+    context: dict = None,
 ) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none" and not confirmed:
-        # Merge query params and body into a single review dict so the LLM can
-        # render the exact payload that will be sent. None values are already
-        # stripped upstream by build_params / body filter.
-        review: Dict[str, Any] = {}
-        if request_params:
-            review.update(request_params)
-        if request_body:
-            review.update(request_body)
-        is_review_critical = (
-            action.startswith("provision_")
-            or action.startswith("dsource_link_")
-            or action == "dsource_create_snapshot"
-        )
-        instructions = (
-            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
-            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
-        )
-        if is_review_critical:
-            instructions = (
-                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
-                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
-                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
-                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
-            )
-        return {
-            "status": "confirmation_required",
-            "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
-            ),
-            "action": action,
-            "tool": tool_name,
-            "api_path": api_path,
-            "method": method,
-            "review_parameters": review,
-            "instructions": instructions,
-        }
-    return None
+
+    if confirmation["level"] == "none":
+        return None
+
+    if confirmation.get("conditional"):
+        level = confirmation["level"]
+        threshold = confirmation.get("threshold_days")
+
+        if level == "retention_check" and context and threshold is not None:
+            retain_forever = context.get("retain_forever")
+            expiration_date = context.get("expiration_date")
+
+            if retain_forever:
+                return None
+
+            if expiration_date is not None:
+                try:
+                    exp = datetime.fromisoformat(
+                        str(expiration_date).replace("Z", "+00:00")
+                    )
+                    days_until = (exp - datetime.now(timezone.utc)).days
+                    if days_until > threshold:
+                        return None
+                    context = dict(context)
+                    context["days"] = max(0, days_until)
+                except (ValueError, TypeError):
+                    pass
+
+    if confirmed:
+        return None
+
+    message = confirmation.get("message", "Please confirm this operation.")
+    if context:
+        message = message.format_map(_SafeDict(context))
+
+    return {
+        "status": "confirmation_required",
+        "confirmation_level": confirmation["level"],
+        "confirmation_message": message,
+        "action": action,
+        "tool": tool_name,
+        "api_path": api_path,
+        "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent.",
+    }
 
 
-def async_to_sync(async_func):
-    """Utility decorator to convert async functions to sync with proper event loop handling."""
-
-    @wraps(async_func)
-    def wrapper(*args, **kwargs):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a task and run it synchronously
-                result = None
-                exception = None
-
-                def run_in_thread():
-                    nonlocal result, exception
-                    try:
-                        result = asyncio.run(async_func(*args, **kwargs))
-                    except Exception as e:
-                        exception = e
-
-                thread = threading.Thread(target=run_in_thread)
-                thread.start()
-                thread.join()
-                if exception:
-                    raise exception
-                return result
-            else:
-                return loop.run_until_complete(async_func(*args, **kwargs))
-        except RuntimeError:
-            return asyncio.run(async_func(*args, **kwargs))
-
-    return wrapper
-
-
-def make_api_request(
+async def make_api_request(
     method: str, endpoint: str, params: dict = None, json_body: dict = None
 ):
     """Utility function to make API requests with consistent parameter handling."""
-
-    @async_to_sync
-    async def _make_request():
-        return await client.make_request(
-            method, endpoint, params=params or {}, json=json_body
-        )
-
-    return _make_request()
+    return await client.make_request(
+        method, endpoint, params=params or {}, json=json_body
+    )
 
 
 def build_params(**kwargs):
@@ -134,7 +106,7 @@ def build_params(**kwargs):
 
 
 @log_tool_execution
-def engine_tool(
+async def engine_tool(
     action: str,  # One of: search, get, update, get_tags, add_tags, delete_tags, register, unregister, get_auto_tagging, get_compliance_settings, search_compliance_settings
     auto_tagging_config: Optional[dict] = None,
     connection_status: Optional[str] = None,
@@ -147,11 +119,6 @@ def engine_tool(
     engine_connection_status_details: Optional[str] = None,
     engine_id: Optional[str] = None,
     filter_expression: Optional[str] = None,
-    hashicorp_vault_id: Optional[int] = None,
-    hashicorp_vault_masking_password_command_args: Optional[list] = None,
-    hashicorp_vault_masking_username_command_args: Optional[list] = None,
-    hashicorp_vault_password_command_args: Optional[list] = None,
-    hashicorp_vault_username_command_args: Optional[list] = None,
     hostname: Optional[str] = None,
     hyperscale_instance_ids: Optional[list] = None,
     hyperscale_truststore_filename: Optional[str] = None,
@@ -162,7 +129,6 @@ def engine_tool(
     limit: Optional[int] = 100,
     masking_allocated_memory: Optional[int] = None,
     masking_available_cores: Optional[int] = None,
-    masking_hashicorp_vault_id: Optional[int] = None,
     masking_jobs_running: Optional[int] = None,
     masking_max_concurrent_jobs: Optional[int] = None,
     masking_memory_used: Optional[int] = None,
@@ -230,12 +196,6 @@ def engine_tool(
             - password: The virtualization domain admin password.
             - masking_username: The masking admin username.
             - masking_password: The masking admin password.
-            - hashicorp_vault_username_command_args: Arguments to pass to the Vault CLI tool to retrieve the v...
-            - hashicorp_vault_masking_username_command_args: Arguments to pass to the Vault CLI tool to retrieve the m...
-            - hashicorp_vault_password_command_args: Arguments to pass to the Vault CLI tool to retrieve the v...
-            - hashicorp_vault_masking_password_command_args: Arguments to pass to the Vault CLI tool to retrieve the m...
-            - masking_hashicorp_vault_id: Reference to the Hashicorp vault to use to retrieve maski...
-            - hashicorp_vault_id: Reference to the Hashicorp vault to use to retrieve virtu...
             - tags: The tags to be created for this engine.
             - masking_memory_used: The current amount of memory used by running masking jobs...
             - masking_allocated_memory: The maximum amount of memory available for running maskin...
@@ -276,10 +236,10 @@ def engine_tool(
         Method: PATCH
         Endpoint: /management/engines/{engineId}
         Required Parameters: engine_id
-        Key Parameters (provide as applicable): id, uuid, type, version, name, ssh_public_key, hostname, cpu_core_count, memory_size, data_storage_capacity, data_storage_used, insecure_ssl, unsafe_ssl_hostname_check, status, connection_status, engine_connection_status, connection_status_details, engine_connection_status_details, username, password, masking_username, masking_password, hashicorp_vault_username_command_args, hashicorp_vault_masking_username_command_args, hashicorp_vault_password_command_args, hashicorp_vault_masking_password_command_args, masking_hashicorp_vault_id, hashicorp_vault_id, tags, masking_memory_used, masking_allocated_memory, masking_jobs_running, masking_max_concurrent_jobs, masking_available_cores, hyperscale_instance_ids, hyperscale_truststore_filename, hyperscale_truststore_password, using_object_storage, using_continuous_vault, platform, storage_cache_bytes, priority_cache_max_bytes, priority_cache_used_bytes
+        Key Parameters (provide as applicable): id, uuid, type, version, name, ssh_public_key, hostname, cpu_core_count, memory_size, data_storage_capacity, data_storage_used, insecure_ssl, unsafe_ssl_hostname_check, status, connection_status, engine_connection_status, connection_status_details, engine_connection_status_details, username, password, masking_username, masking_password, tags, masking_memory_used, masking_allocated_memory, masking_jobs_running, masking_max_concurrent_jobs, masking_available_cores, hyperscale_instance_ids, hyperscale_truststore_filename, hyperscale_truststore_password, using_object_storage, using_continuous_vault, platform, storage_cache_bytes, priority_cache_max_bytes, priority_cache_used_bytes
 
         Example:
-            >>> engine_tool(action='update', engine_id='example-engine-123', id=..., uuid=..., type=..., version=..., name=..., ssh_public_key=..., hostname=..., cpu_core_count=..., memory_size=..., data_storage_capacity=..., data_storage_used=..., insecure_ssl=..., unsafe_ssl_hostname_check=..., status=..., connection_status=..., engine_connection_status=..., connection_status_details=..., engine_connection_status_details=..., username=..., password=..., masking_username=..., masking_password=..., hashicorp_vault_username_command_args=..., hashicorp_vault_masking_username_command_args=..., hashicorp_vault_password_command_args=..., hashicorp_vault_masking_password_command_args=..., masking_hashicorp_vault_id='example-masking_hashicorp_vault-123', hashicorp_vault_id='example-hashicorp_vault-123', tags=..., masking_memory_used=..., masking_allocated_memory=..., masking_jobs_running=..., masking_max_concurrent_jobs=..., masking_available_cores=..., hyperscale_instance_ids=..., hyperscale_truststore_filename=..., hyperscale_truststore_password=..., using_object_storage=..., using_continuous_vault=..., platform=..., storage_cache_bytes=..., priority_cache_max_bytes=..., priority_cache_used_bytes=...)
+            >>> engine_tool(action='update', engine_id='example-engine-123', id=..., uuid=..., type=..., version=..., name=..., ssh_public_key=..., hostname=..., cpu_core_count=..., memory_size=..., data_storage_capacity=..., data_storage_used=..., insecure_ssl=..., unsafe_ssl_hostname_check=..., status=..., connection_status=..., engine_connection_status=..., connection_status_details=..., engine_connection_status_details=..., username=..., password=..., masking_username=..., masking_password=..., tags=..., masking_memory_used=..., masking_allocated_memory=..., masking_jobs_running=..., masking_max_concurrent_jobs=..., masking_available_cores=..., hyperscale_instance_ids=..., hyperscale_truststore_filename=..., hyperscale_truststore_password=..., using_object_storage=..., using_continuous_vault=..., platform=..., storage_cache_bytes=..., priority_cache_max_bytes=..., priority_cache_used_bytes=...)
 
         ACTION: get_tags
         ----------------------------------------
@@ -318,10 +278,10 @@ def engine_tool(
         Method: POST
         Endpoint: /management/engines
         Required Parameters: name, hostname
-        Key Parameters (provide as applicable): insecure_ssl, unsafe_ssl_hostname_check, username, password, masking_username, masking_password, hashicorp_vault_username_command_args, hashicorp_vault_masking_username_command_args, hashicorp_vault_password_command_args, hashicorp_vault_masking_password_command_args, masking_hashicorp_vault_id, hashicorp_vault_id, tags, auto_tagging_config
+        Key Parameters (provide as applicable): insecure_ssl, unsafe_ssl_hostname_check, username, password, masking_username, masking_password, tags, auto_tagging_config
 
         Example:
-            >>> engine_tool(action='register', name=..., hostname=..., insecure_ssl=..., unsafe_ssl_hostname_check=..., username=..., password=..., masking_username=..., masking_password=..., hashicorp_vault_username_command_args=..., hashicorp_vault_masking_username_command_args=..., hashicorp_vault_password_command_args=..., hashicorp_vault_masking_password_command_args=..., masking_hashicorp_vault_id='example-masking_hashicorp_vault-123', hashicorp_vault_id='example-hashicorp_vault-123', tags=..., auto_tagging_config=...)
+            >>> engine_tool(action='register', name=..., hostname=..., insecure_ssl=..., unsafe_ssl_hostname_check=..., username=..., password=..., masking_username=..., masking_password=..., tags=..., auto_tagging_config=...)
 
         ACTION: unregister
         ----------------------------------------
@@ -406,16 +366,6 @@ def engine_tool(
                 [Required for: get, update, get_tags, add_tags, delete_tags, unregister, get_auto_tagging, get_compliance_settings, search_compliance_settings]
             filter_expression (str): Request body parameter
                 [Optional for all actions]
-            hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve virtualization engine cre...
-                [Optional for all actions]
-            hashicorp_vault_masking_password_command_args (list): Arguments to pass to the Vault CLI tool to retrieve the masking password for ...
-                [Optional for all actions]
-            hashicorp_vault_masking_username_command_args (list): Arguments to pass to the Vault CLI tool to retrieve the masking username for ...
-                [Optional for all actions]
-            hashicorp_vault_password_command_args (list): Arguments to pass to the Vault CLI tool to retrieve the virtualization passwo...
-                [Optional for all actions]
-            hashicorp_vault_username_command_args (list): Arguments to pass to the Vault CLI tool to retrieve the virtualization userna...
-                [Optional for all actions]
             hostname (str): The hostname of this engine.
                 [Required for: register]
             hyperscale_instance_ids (list): List of Hyperscale Instances that this engine is connected to. (Pass as JSON ...
@@ -436,8 +386,6 @@ def engine_tool(
             masking_allocated_memory (int): The maximum amount of memory available for running masking jobs in bytes.
                 [Optional for all actions]
             masking_available_cores (int): The number of CPU cores available to the masking engine.
-                [Optional for all actions]
-            masking_hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve masking engine credentials.
                 [Optional for all actions]
             masking_jobs_running (int): The number of masking jobs currently running.
                 [Optional for all actions]
@@ -500,19 +448,21 @@ def engine_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
             "POST",
             "/management/engines/search",
             action,
             "engine_tool",
             confirmed or False,
-            request_params=params,
-            request_body=body,
+            context=_ctx,
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request(
             "POST", "/management/engines/search", params=params, json_body=body
         )
     elif action == "get":
@@ -520,23 +470,28 @@ def engine_tool(
             return {"error": "Missing required parameter: engine_id for action get"}
         endpoint = f"/management/engines/{engine_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "update":
         if engine_id is None:
             return {"error": "Missing required parameter: engine_id for action update"}
         endpoint = f"/management/engines/{engine_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "PATCH", endpoint, action, "engine_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -562,12 +517,6 @@ def engine_tool(
                 "password": password,
                 "masking_username": masking_username,
                 "masking_password": masking_password,
-                "hashicorp_vault_username_command_args": hashicorp_vault_username_command_args,
-                "hashicorp_vault_masking_username_command_args": hashicorp_vault_masking_username_command_args,
-                "hashicorp_vault_password_command_args": hashicorp_vault_password_command_args,
-                "hashicorp_vault_masking_password_command_args": hashicorp_vault_masking_password_command_args,
-                "masking_hashicorp_vault_id": masking_hashicorp_vault_id,
-                "hashicorp_vault_id": hashicorp_vault_id,
                 "tags": tags,
                 "masking_memory_used": masking_memory_used,
                 "masking_allocated_memory": masking_allocated_memory,
@@ -586,18 +535,7 @@ def engine_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "get_tags":
@@ -607,18 +545,15 @@ def engine_tool(
             }
         endpoint = f"/management/engines/{engine_id}/tags"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if engine_id is None:
             return {
@@ -626,19 +561,16 @@ def engine_tool(
             }
         endpoint = f"/management/engines/{engine_id}/tags"
         params = build_params(tags=tags)
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request(
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -648,27 +580,37 @@ def engine_tool(
             }
         endpoint = f"/management/engines/{engine_id}/tags/delete"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST", endpoint, action, "engine_tool", confirmed or False, context=_ctx
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {"key": key, "value": value, "tags": tags}.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "register":
         params = build_params(name=name, hostname=hostname)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
+        conf = check_confirmation(
+            "POST",
+            "/management/engines",
+            action,
+            "engine_tool",
+            confirmed or False,
+            context=_ctx,
+        )
+        if conf:
+            return conf
         body = {
             k: v
             for k, v in {
@@ -678,12 +620,6 @@ def engine_tool(
                 "password": password,
                 "masking_username": masking_username,
                 "masking_password": masking_password,
-                "hashicorp_vault_username_command_args": hashicorp_vault_username_command_args,
-                "hashicorp_vault_masking_username_command_args": hashicorp_vault_masking_username_command_args,
-                "hashicorp_vault_password_command_args": hashicorp_vault_password_command_args,
-                "hashicorp_vault_masking_password_command_args": hashicorp_vault_masking_password_command_args,
-                "hashicorp_vault_id": hashicorp_vault_id,
-                "masking_hashicorp_vault_id": masking_hashicorp_vault_id,
                 "insecure_ssl": insecure_ssl,
                 "unsafe_ssl_hostname_check": unsafe_ssl_hostname_check,
                 "auto_tagging_config": auto_tagging_config,
@@ -691,18 +627,7 @@ def engine_tool(
             }.items()
             if v is not None
         }
-        conf = check_confirmation(
-            "POST",
-            "/management/engines",
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
-        )
-        if conf:
-            return conf
-        return make_api_request(
+        return await make_api_request(
             "POST",
             "/management/engines",
             params=params,
@@ -715,18 +640,15 @@ def engine_tool(
             }
         endpoint = f"/management/engines/{engine_id}"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "DELETE",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "DELETE", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("DELETE", endpoint, params=params)
+        return await make_api_request("DELETE", endpoint, params=params)
     elif action == "get_auto_tagging":
         if engine_id is None:
             return {
@@ -734,18 +656,15 @@ def engine_tool(
             }
         endpoint = f"/management/engines/{engine_id}/auto-tagging"
         params = build_params()
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "get_compliance_settings":
         if engine_id is None:
             return {
@@ -753,18 +672,15 @@ def engine_tool(
             }
         endpoint = f"/management/engines/{engine_id}/compliance-application-settings"
         params = build_params(limit=limit, cursor=cursor, sort=sort)
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "GET",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=None,
+            "GET", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("GET", endpoint, params=params)
+        return await make_api_request("GET", endpoint, params=params)
     elif action == "search_compliance_settings":
         if engine_id is None:
             return {
@@ -774,19 +690,16 @@ def engine_tool(
             f"/management/engines/{engine_id}/compliance-application-settings/search"
         )
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        body = {"filter_expression": filter_expression} if filter_expression else {}
+        _ctx = {
+            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        }
         conf = check_confirmation(
-            "POST",
-            endpoint,
-            action,
-            "engine_tool",
-            confirmed or False,
-            request_params=params,
-            request_body=body,
+            "POST", endpoint, action, "engine_tool", confirmed or False, context=_ctx
         )
         if conf:
             return conf
-        return make_api_request("POST", endpoint, params=params, json_body=body)
+        body = {"filter_expression": filter_expression} if filter_expression else {}
+        return await make_api_request("POST", endpoint, params=params, json_body=body)
     else:
         return {
             "error": f"Unknown action: {action}. Valid actions: search, get, update, get_tags, add_tags, delete_tags, register, unregister, get_auto_tagging, get_compliance_settings, search_compliance_settings"
