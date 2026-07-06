@@ -219,14 +219,24 @@ def test_resolve_confirmation_passes_method_and_path():
     with patch(
         "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
     ) as mock_static:
-        mock_static.return_value = {"level": "none", "message": None, "conditional": False, "threshold_days": None}
+        mock_static.return_value = {
+            "level": "none",
+            "message": None,
+            "conditional": False,
+            "threshold_days": None,
+        }
         resolve_confirmation("POST", "/vdbs/vdb-1/refresh")
     mock_static.assert_called_once_with("POST", "/vdbs/vdb-1/refresh")
 
 
 def test_resolve_confirmation_returns_static_result():
     """resolve_confirmation returns whatever the static resolver returns."""
-    expected = {"level": "manual", "message": "Confirm", "conditional": False, "threshold_days": None}
+    expected = {
+        "level": "manual",
+        "message": "Confirm",
+        "conditional": False,
+        "threshold_days": None,
+    }
     with patch(
         "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
         return_value=expected,
@@ -240,6 +250,11 @@ def test_resolve_confirmation_dynamic_toolset_uses_static():
     with patch(
         "dct_mcp_server.tools.core.dynamic_confirmation.get_confirmation_for_operation",
     ) as mock_static:
-        mock_static.return_value = {"level": "none", "message": None, "conditional": False, "threshold_days": None}
+        mock_static.return_value = {
+            "level": "none",
+            "message": None,
+            "conditional": False,
+            "threshold_days": None,
+        }
         resolve_confirmation("GET", "/vdbs/search")
     mock_static.assert_called_once()
