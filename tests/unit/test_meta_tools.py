@@ -14,8 +14,7 @@ from __future__ import annotations
 # registered in sys.modules).
 from pydantic import RootModel  # noqa: F401 — must be first import
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from dct_mcp_server.tools.core.meta_tools import find_endpoint, get_spec_chunk
 
@@ -54,11 +53,7 @@ _FAKE_SPEC = {
         },
         "requestBodies": {
             "SearchBody": {
-                "content": {
-                    "application/json": {
-                        "schema": {"type": "object"}
-                    }
-                }
+                "content": {"application/json": {"schema": {"type": "object"}}}
             }
         },
     },
@@ -193,7 +188,7 @@ def test_find_endpoint_respects_limit():
                 "dct_mcp_server.tools.core.meta_tools.rank_candidates",
                 return_value=many[:3],  # rank_candidates already applies limit
             ) as mock_rank:
-                result = find_endpoint("things", limit=3)
+                find_endpoint("things", limit=3)
     # rank_candidates was called with capped_limit=3
     call_args = mock_rank.call_args
     assert call_args.args[3] == 3 or call_args.args[4] == 3 or 3 in call_args.args
@@ -267,7 +262,14 @@ def test_find_endpoint_candidate_has_required_fields():
                 result = find_endpoint("search vdbs")
     assert len(result["candidates"]) == 1
     cand = result["candidates"][0]
-    for field in ("score", "method", "path", "operation_id", "requires_confirmation", "confirmation_level"):
+    for field in (
+        "score",
+        "method",
+        "path",
+        "operation_id",
+        "requires_confirmation",
+        "confirmation_level",
+    ):
         assert field in cand, f"missing field: {field}"
 
 
