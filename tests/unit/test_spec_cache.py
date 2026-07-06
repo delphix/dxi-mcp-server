@@ -36,11 +36,7 @@ from dct_mcp_server.tools.core.spec_cache import (
 _VALID_SPEC = {
     "openapi": "3.0.0",
     "info": {"title": "DCT API", "version": "1.0.0"},
-    "paths": {
-        "/vdbs": {
-            "get": {"operationId": "listVdbs", "summary": "List VDBs"}
-        }
-    },
+    "paths": {"/vdbs": {"get": {"operationId": "listVdbs", "summary": "List VDBs"}}},
 }
 
 
@@ -327,7 +323,9 @@ def test_load_and_cache_spec_uses_fresh_cache(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_load_and_cache_spec_raises_mcp_error_when_no_cache_and_download_fails(tmp_path):
+def test_load_and_cache_spec_raises_mcp_error_when_no_cache_and_download_fails(
+    tmp_path,
+):
     cache_path = tmp_path / "nonexistent.yaml"  # does not exist
 
     with patch(

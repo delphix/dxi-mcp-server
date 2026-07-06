@@ -27,11 +27,12 @@ async def test_purge_tagged_resources(real_mcp_client):
     # Bookmarks are fully manageable in self_service (create + delete), so they are
     # the resource the L4 mutation test creates — purge any named with this run tag.
     # (Skips cleanly if the DCT license forbids bookmarks — then nothing was created.)
-    res = await call_tool_tolerant(real_mcp_client, "bookmark_tool", {"action": "search", "limit": 500})
+    res = await call_tool_tolerant(
+        real_mcp_client, "bookmark_tool", {"action": "search", "limit": 500}
+    )
 
     leftovers = [
-        b for b in _payload(res).get("items", [])
-        if run_tag in (b.get("name") or "")
+        b for b in _payload(res).get("items", []) if run_tag in (b.get("name") or "")
     ]
     for b in leftovers:
         await real_mcp_client.call_tool(
@@ -45,5 +46,11 @@ async def test_purge_tagged_resources(real_mcp_client):
         "bookmark_tool", {"action": "search", "limit": 500}, raise_on_error=False
     )
     if not after.is_error:
-        still = [b for b in _payload(after).get("items", []) if run_tag in (b.get("name") or "")]
-        assert not still, f"purge left tagged bookmarks behind: {[b['id'] for b in still]}"
+        still = [
+            b
+            for b in _payload(after).get("items", [])
+            if run_tag in (b.get("name") or "")
+        ]
+        assert not still, (
+            f"purge left tagged bookmarks behind: {[b['id'] for b in still]}"
+        )

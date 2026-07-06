@@ -206,7 +206,12 @@ def test_extract_hot_keywords_empty_spec():
 
 
 def test_score_candidate_empty_query_returns_zero():
-    candidate = {"path": "/vdbs/search", "summary": "Search VDBs", "operation_id": "", "tags": []}
+    candidate = {
+        "path": "/vdbs/search",
+        "summary": "Search VDBs",
+        "operation_id": "",
+        "tags": [],
+    }
     result = score_candidate(set(), frozenset(), candidate)
     assert result == 0.0
 
@@ -218,7 +223,9 @@ def test_score_candidate_returns_float_in_range():
         "operation_id": "searchVdbs",
         "tags": ["VDBs"],
     }
-    result = score_candidate({"search", "vdb"}, frozenset({"vdbs", "search"}), candidate)
+    result = score_candidate(
+        {"search", "vdb"}, frozenset({"vdbs", "search"}), candidate
+    )
     assert 0.0 <= result <= 1.0
 
 
@@ -263,10 +270,34 @@ def test_score_candidate_uses_precomputed_tokens():
 # ---------------------------------------------------------------------------
 
 _CORPUS = [
-    {"method": "GET", "path": "/vdbs", "summary": "List VDBs", "operation_id": "listVdbs", "tags": ["VDBs"]},
-    {"method": "POST", "path": "/vdbs/search", "summary": "Search VDBs", "operation_id": "searchVdbs", "tags": ["VDBs"]},
-    {"method": "DELETE", "path": "/vdbs/{vdbId}", "summary": "Delete VDB", "operation_id": "deleteVdb", "tags": ["VDBs"]},
-    {"method": "GET", "path": "/environments", "summary": "List environments", "operation_id": "listEnvs", "tags": ["Environments"]},
+    {
+        "method": "GET",
+        "path": "/vdbs",
+        "summary": "List VDBs",
+        "operation_id": "listVdbs",
+        "tags": ["VDBs"],
+    },
+    {
+        "method": "POST",
+        "path": "/vdbs/search",
+        "summary": "Search VDBs",
+        "operation_id": "searchVdbs",
+        "tags": ["VDBs"],
+    },
+    {
+        "method": "DELETE",
+        "path": "/vdbs/{vdbId}",
+        "summary": "Delete VDB",
+        "operation_id": "deleteVdb",
+        "tags": ["VDBs"],
+    },
+    {
+        "method": "GET",
+        "path": "/environments",
+        "summary": "List environments",
+        "operation_id": "listEnvs",
+        "tags": ["Environments"],
+    },
 ]
 
 
@@ -367,7 +398,7 @@ def test_get_discovery_index_cache_invalidated_on_new_spec():
     spec_old = {"paths": {"/old": {"get": {"operationId": "old", "summary": "Old"}}}}
     spec_new = {"paths": {"/new": {"get": {"operationId": "new", "summary": "New"}}}}
 
-    idx_old = get_discovery_index(spec_old)
+    get_discovery_index(spec_old)
     idx_new = get_discovery_index(spec_new)
 
     assert len(idx_new["corpus"]) == 1

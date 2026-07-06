@@ -36,7 +36,9 @@ def _gated_cda():
     """All confirmation-gated (tool, action) cases in CDA, from config."""
     out, seen = [], set()
     for c in config_cases.action_cases("continuous_data_admin"):
-        conf = get_confirmation_for_operation(c.method, re.sub(r"\{[^}]+\}", DUMMY, c.path))
+        conf = get_confirmation_for_operation(
+            c.method, re.sub(r"\{[^}]+\}", DUMMY, c.path)
+        )
         if conf.get("level", "none") == "none":
             continue
         if (c.tool, c.action) in seen:
@@ -44,7 +46,9 @@ def _gated_cda():
         seen.add((c.tool, c.action))
         # Path params take the LITERAL placeholder name as the kwarg.
         kwargs = {ph: DUMMY for ph in re.findall(r"\{(\w+)\}", c.path)}
-        out.append((c.tool, c.action, c.method, conf["level"], _wire_path(c.path), kwargs))
+        out.append(
+            (c.tool, c.action, c.method, conf["level"], _wire_path(c.path), kwargs)
+        )
     return out
 
 

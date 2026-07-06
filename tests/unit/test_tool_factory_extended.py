@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import pytest
 import yaml
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 
 import dct_mcp_server.tools.core.tool_factory as tf_mod
@@ -97,15 +96,19 @@ def reset_spec_cache():
 # _get_python_type
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("openapi_type,expected", [
-    ("integer", "int"),
-    ("string", "str"),
-    ("boolean", "bool"),
-    ("number", "float"),
-    ("array", "list"),
-    ("object", "dict"),
-    ("unknown_type", "Any"),
-])
+
+@pytest.mark.parametrize(
+    "openapi_type,expected",
+    [
+        ("integer", "int"),
+        ("string", "str"),
+        ("boolean", "bool"),
+        ("number", "float"),
+        ("array", "list"),
+        ("object", "dict"),
+        ("unknown_type", "Any"),
+    ],
+)
 def test_get_python_type(openapi_type, expected):
     assert _get_python_type(openapi_type) == expected
 
@@ -113,6 +116,7 @@ def test_get_python_type(openapi_type, expected):
 # ---------------------------------------------------------------------------
 # _resolve_ref
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_ref_simple():
     spec = {"components": {"schemas": {"Foo": {"type": "object"}}}}
@@ -122,11 +126,7 @@ def test_resolve_ref_simple():
 
 def test_resolve_ref_nested():
     spec = {
-        "components": {
-            "schemas": {
-                "Bar": {"properties": {"id": {"type": "string"}}}
-            }
-        }
+        "components": {"schemas": {"Bar": {"properties": {"id": {"type": "string"}}}}}
     }
     result = _resolve_ref("#/components/schemas/Bar", spec)
     assert "properties" in result
@@ -147,6 +147,7 @@ def test_resolve_ref_missing_path():
 # ---------------------------------------------------------------------------
 # _download_openapi_spec
 # ---------------------------------------------------------------------------
+
 
 def test_download_openapi_spec_success():
     mock_response = MagicMock()
@@ -229,6 +230,7 @@ def test_download_openapi_spec_url_construction():
 # _load_bundled_spec
 # ---------------------------------------------------------------------------
 
+
 def test_load_bundled_spec_when_file_exists():
     with patch("pathlib.Path.exists", return_value=True):
         with patch("builtins.open", mock_open(read_data=SPEC_YAML)):
@@ -246,6 +248,7 @@ def test_load_bundled_spec_when_file_missing():
 # ---------------------------------------------------------------------------
 # get_cached_spec / clear_spec_cache
 # ---------------------------------------------------------------------------
+
 
 def test_get_cached_spec_initially_none():
     assert get_cached_spec() is None
@@ -266,6 +269,7 @@ def test_clear_spec_cache():
 # initialize_openapi_cache
 # ---------------------------------------------------------------------------
 
+
 def test_initialize_openapi_cache_already_cached():
     tf_mod._openapi_spec = MINIMAL_SPEC
     result = initialize_openapi_cache()
@@ -278,8 +282,10 @@ def test_initialize_openapi_cache_downloads_spec(monkeypatch):
     monkeypatch.setenv("DCT_API_KEY", "k")
     monkeypatch.setenv("DCT_BASE_URL", "https://dct.example.com")
 
-    with patch("dct_mcp_server.tools.core.tool_factory._download_openapi_spec",
-               return_value=MINIMAL_SPEC) as mock_dl:
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory._download_openapi_spec",
+        return_value=MINIMAL_SPEC,
+    ) as mock_dl:
         result = initialize_openapi_cache()
 
     assert result is True
@@ -291,10 +297,14 @@ def test_initialize_openapi_cache_falls_back_to_bundled(monkeypatch):
     monkeypatch.setenv("DCT_API_KEY", "k")
     monkeypatch.setenv("DCT_BASE_URL", "https://dct.example.com")
 
-    with patch("dct_mcp_server.tools.core.tool_factory._download_openapi_spec",
-               side_effect=Exception("network error")):
-        with patch("dct_mcp_server.tools.core.tool_factory._load_bundled_spec",
-                   return_value=MINIMAL_SPEC):
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory._download_openapi_spec",
+        side_effect=Exception("network error"),
+    ):
+        with patch(
+            "dct_mcp_server.tools.core.tool_factory._load_bundled_spec",
+            return_value=MINIMAL_SPEC,
+        ):
             result = initialize_openapi_cache()
 
     assert result is True
@@ -305,8 +315,10 @@ def test_initialize_openapi_cache_no_base_url(monkeypatch):
     monkeypatch.setenv("DCT_API_KEY", "k")
     monkeypatch.delenv("DCT_BASE_URL", raising=False)
 
-    with patch("dct_mcp_server.tools.core.tool_factory._load_bundled_spec",
-               return_value=MINIMAL_SPEC):
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory._load_bundled_spec",
+        return_value=MINIMAL_SPEC,
+    ):
         result = initialize_openapi_cache()
 
     assert result is True
@@ -316,10 +328,14 @@ def test_initialize_openapi_cache_no_spec_available(monkeypatch):
     monkeypatch.setenv("DCT_API_KEY", "k")
     monkeypatch.setenv("DCT_BASE_URL", "https://dct.example.com")
 
-    with patch("dct_mcp_server.tools.core.tool_factory._download_openapi_spec",
-               side_effect=Exception("network error")):
-        with patch("dct_mcp_server.tools.core.tool_factory._load_bundled_spec",
-                   return_value=None):
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory._download_openapi_spec",
+        side_effect=Exception("network error"),
+    ):
+        with patch(
+            "dct_mcp_server.tools.core.tool_factory._load_bundled_spec",
+            return_value=None,
+        ):
             result = initialize_openapi_cache()
 
     assert result is False
@@ -336,13 +352,16 @@ def test_initialize_openapi_cache_stores_client():
 # _create_tool_function
 # ---------------------------------------------------------------------------
 
+
 def test_create_tool_function_returns_callable_and_name():
     operation = {
         "operationId": "searchVdbs",
         "summary": "Search VDBs",
         "parameters": [],
     }
-    func, name = _create_tool_function("/vdbs/search", "POST", "search", operation, MINIMAL_SPEC)
+    func, name = _create_tool_function(
+        "/vdbs/search", "POST", "search", operation, MINIMAL_SPEC
+    )
     assert callable(func)
     assert name == "searchVdbs"
 
@@ -361,7 +380,9 @@ def test_create_tool_function_with_params():
             }
         ],
     }
-    func, name = _create_tool_function("/vdbs/{vdbId}", "GET", "get", operation, MINIMAL_SPEC)
+    func, name = _create_tool_function(
+        "/vdbs/{vdbId}", "GET", "get", operation, MINIMAL_SPEC
+    )
     assert callable(func)
     assert name == "getVdb"
 
@@ -385,14 +406,18 @@ def test_create_tool_function_with_ref_param():
         "summary": "Get VDB",
         "parameters": [{"$ref": "#/components/parameters/VdbId"}],
     }
-    func, name = _create_tool_function("/vdbs/{vdbId}", "GET", "get", operation, spec_with_ref)
+    func, name = _create_tool_function(
+        "/vdbs/{vdbId}", "GET", "get", operation, spec_with_ref
+    )
     assert callable(func)
 
 
 @pytest.mark.asyncio
 async def test_create_tool_function_no_client():
     operation = {"operationId": "searchVdbs", "summary": "Search", "parameters": []}
-    func, _ = _create_tool_function("/vdbs/search", "POST", "search", operation, MINIMAL_SPEC)
+    func, _ = _create_tool_function(
+        "/vdbs/search", "POST", "search", operation, MINIMAL_SPEC
+    )
     tf_mod._dct_client = None
     result = await func()
     assert "error" in result
@@ -401,14 +426,18 @@ async def test_create_tool_function_no_client():
 @pytest.mark.asyncio
 async def test_create_tool_function_with_confirmation_required():
     operation = {"operationId": "deleteVdb", "summary": "Delete VDB", "parameters": []}
-    with patch("dct_mcp_server.tools.core.tool_factory.resolve_confirmation") as mock_conf:
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory.resolve_confirmation"
+    ) as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Delete?",
             "conditional": False,
             "threshold_days": None,
         }
-        func, _ = _create_tool_function("/vdbs/{vdbId}/delete", "POST", "delete", operation, MINIMAL_SPEC)
+        func, _ = _create_tool_function(
+            "/vdbs/{vdbId}/delete", "POST", "delete", operation, MINIMAL_SPEC
+        )
 
     tf_mod._dct_client = MagicMock()
     result = await func(vdbId="v-1")
@@ -418,19 +447,23 @@ async def test_create_tool_function_with_confirmation_required():
 @pytest.mark.asyncio
 async def test_create_tool_function_with_confirmed_true():
     operation = {"operationId": "deleteVdb", "summary": "Delete VDB", "parameters": []}
-    with patch("dct_mcp_server.tools.core.tool_factory.resolve_confirmation") as mock_conf:
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory.resolve_confirmation"
+    ) as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Delete?",
             "conditional": False,
             "threshold_days": None,
         }
-        func, _ = _create_tool_function("/vdbs/{vdbId}/delete", "POST", "delete", operation, MINIMAL_SPEC)
+        func, _ = _create_tool_function(
+            "/vdbs/{vdbId}/delete", "POST", "delete", operation, MINIMAL_SPEC
+        )
 
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"status": "success"})
     tf_mod._dct_client = mock_client
-    result = await func(vdbId="v-1", confirmed=True)
+    await func(vdbId="v-1", confirmed=True)
     assert mock_client.make_request.called
 
 
@@ -442,11 +475,13 @@ async def test_create_tool_function_with_filter_expression():
         "parameters": [],
         "x-filterable": True,
     }
-    func, _ = _create_tool_function("/vdbs/search", "POST", "search", operation, MINIMAL_SPEC)
+    func, _ = _create_tool_function(
+        "/vdbs/search", "POST", "search", operation, MINIMAL_SPEC
+    )
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"items": []})
     tf_mod._dct_client = mock_client
-    result = await func(filter_expression="name EQ 'test'")
+    await func(filter_expression="name EQ 'test'")
     assert mock_client.make_request.called
     call_args = mock_client.make_request.call_args
     json_body = call_args[1].get("json") or {}
@@ -457,12 +492,15 @@ async def test_create_tool_function_with_filter_expression():
 # _create_grouped_tool_function
 # ---------------------------------------------------------------------------
 
+
 def test_create_grouped_tool_function_returns_callable():
     apis = [
         {"method": "POST", "path": "/vdbs/search", "action": "search"},
         {"method": "GET", "path": "/vdbs/{vdbId}", "action": "get"},
     ]
-    func, name = _create_grouped_tool_function("vdb_tool", "VDB operations", apis, MINIMAL_SPEC)
+    func, name = _create_grouped_tool_function(
+        "vdb_tool", "VDB operations", apis, MINIMAL_SPEC
+    )
     assert callable(func)
     assert name == "vdb_tool"
 
@@ -501,7 +539,7 @@ async def test_create_grouped_tool_function_search():
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"items": []})
     tf_mod._dct_client = mock_client
-    result = await func(action="search")
+    await func(action="search")
     assert mock_client.make_request.called
 
 
@@ -512,7 +550,7 @@ async def test_create_grouped_tool_function_path_param_substitution():
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"id": "v-123"})
     tf_mod._dct_client = mock_client
-    result = await func(action="get", vdbId="v-123")
+    await func(action="get", vdbId="v-123")
     call_args = mock_client.make_request.call_args
     assert "v-123" in str(call_args)
 
@@ -520,7 +558,9 @@ async def test_create_grouped_tool_function_path_param_substitution():
 @pytest.mark.asyncio
 async def test_create_grouped_tool_function_confirmation_required():
     apis = [{"method": "POST", "path": "/vdbs/{vdbId}/delete", "action": "delete"}]
-    with patch("dct_mcp_server.tools.core.tool_factory.resolve_confirmation") as mock_conf:
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory.resolve_confirmation"
+    ) as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Delete this VDB?",
@@ -543,7 +583,7 @@ async def test_create_grouped_tool_function_with_filter_expression():
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"items": []})
     tf_mod._dct_client = mock_client
-    result = await func(action="search", filter_expression="name EQ 'prod'")
+    await func(action="search", filter_expression="name EQ 'prod'")
     call_args = mock_client.make_request.call_args
     json_body = call_args[1].get("json") or {}
     assert json_body.get("filter_expression") == "name EQ 'prod'"
@@ -557,7 +597,7 @@ async def test_create_grouped_tool_function_body_param():
     mock_client.make_request = AsyncMock(return_value={"id": "new-vdb"})
     tf_mod._dct_client = mock_client
     body_data = {"name": "my-vdb", "source_id": "s-1"}
-    result = await func(action="provision", body=body_data)
+    await func(action="provision", body=body_data)
     assert mock_client.make_request.called
 
 
@@ -568,10 +608,10 @@ async def test_create_grouped_tool_function_get_with_query_params():
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"items": []})
     tf_mod._dct_client = mock_client
-    result = await func(action="list", limit=10)
+    await func(action="list", limit=10)
     call_args = mock_client.make_request.call_args
     # query_params should include limit
-    params = call_args[1].get("params") or {}
+    call_args[1].get("params") or {}
     # May be None if empty dict — just verify call happened
     assert mock_client.make_request.called
 
@@ -579,6 +619,7 @@ async def test_create_grouped_tool_function_get_with_query_params():
 # ---------------------------------------------------------------------------
 # generate_tools_for_toolset
 # ---------------------------------------------------------------------------
+
 
 def test_generate_tools_for_toolset_returns_list():
     tf_mod._openapi_spec = MINIMAL_SPEC
@@ -589,7 +630,10 @@ def test_generate_tools_for_toolset_returns_list():
 
 def test_generate_tools_for_toolset_without_spec():
     tf_mod._openapi_spec = None
-    with patch("dct_mcp_server.tools.core.tool_factory.initialize_openapi_cache", return_value=False):
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory.initialize_openapi_cache",
+        return_value=False,
+    ):
         tools = generate_tools_for_toolset("self_service")
     assert isinstance(tools, list)
 
@@ -606,6 +650,7 @@ def test_generate_tools_for_toolset_each_has_callable_and_name():
 # ---------------------------------------------------------------------------
 # register_toolset_tools
 # ---------------------------------------------------------------------------
+
 
 def test_register_toolset_tools_returns_count():
     tf_mod._openapi_spec = MINIMAL_SPEC

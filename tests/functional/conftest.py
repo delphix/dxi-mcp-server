@@ -12,9 +12,7 @@ shared stub in tests/fixtures/dct_stub.py.
 """
 
 import os
-import re
 import sys
-import warnings
 from pathlib import Path
 from typing import AsyncIterator, Iterator
 
@@ -41,13 +39,17 @@ def _download_spec() -> dict | None:
     if not base_url or not api_key:
         return None
     import requests
+
     try:
         url = f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
         r = requests.get(
             url,
-            headers={"Authorization": f"apk {api_key}",
-                     "Accept": "application/x-yaml, text/yaml"},
-            verify=False, timeout=30,
+            headers={
+                "Authorization": f"apk {api_key}",
+                "Accept": "application/x-yaml, text/yaml",
+            },
+            verify=False,
+            timeout=30,
         )
         r.raise_for_status()
         spec = yaml.safe_load(r.text)
@@ -57,6 +59,7 @@ def _download_spec() -> dict | None:
         return spec
     except Exception as e:
         import warnings
+
         warnings.warn(f"Could not download api-external.yaml from DCT: {e}")
         return None
 
@@ -156,8 +159,11 @@ async def persona_tools(dct_stub: DctStub, monkeypatch):
     monkeypatch.setenv("DCT_VERIFY_SSL", "false")
 
     saved_spec, saved_client = tf._openapi_spec, tf._dct_client
-    spec_data = (yaml.safe_load(_SPEC_CACHE.read_text()) if _SPEC_CACHE.exists()
-                 else _download_spec())
+    spec_data = (
+        yaml.safe_load(_SPEC_CACHE.read_text())
+        if _SPEC_CACHE.exists()
+        else _download_spec()
+    )
     if spec_data is None:
         pytest.skip("OpenAPI spec not available — ensure cache exists or set DCT creds")
     tf._openapi_spec = spec_data
@@ -168,7 +174,9 @@ async def persona_tools(dct_stub: DctStub, monkeypatch):
 
     def make(toolset: str) -> dict:
         if toolset not in generated:
-            generated[toolset] = {n: f for f, n in tf.generate_tools_for_toolset(toolset)}
+            generated[toolset] = {
+                n: f for f, n in tf.generate_tools_for_toolset(toolset)
+            }
         return generated[toolset]
 
     yield make

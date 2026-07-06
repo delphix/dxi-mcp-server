@@ -16,7 +16,6 @@ Covers the uncovered statements:
 
 from __future__ import annotations
 
-import os
 import pytest
 
 from dct_mcp_server.config.loader import (
@@ -40,6 +39,7 @@ from dct_mcp_server.config.loader import (
 # get_available_toolsets
 # ---------------------------------------------------------------------------
 
+
 def test_get_available_toolsets_returns_list():
     toolsets = get_available_toolsets()
     assert isinstance(toolsets, list)
@@ -60,6 +60,7 @@ def test_get_available_toolsets_includes_expected_toolsets():
 # ---------------------------------------------------------------------------
 # load_toolset_metadata
 # ---------------------------------------------------------------------------
+
 
 def test_load_toolset_metadata_self_service():
     meta = load_toolset_metadata("self_service")
@@ -102,6 +103,7 @@ def test_load_toolset_metadata_has_primary_use_case():
 # load_all_toolsets_metadata
 # ---------------------------------------------------------------------------
 
+
 def test_load_all_toolsets_metadata_returns_dict():
     all_meta = load_all_toolsets_metadata()
     assert isinstance(all_meta, dict)
@@ -122,6 +124,7 @@ def test_load_all_toolsets_metadata_all_have_name():
 # ---------------------------------------------------------------------------
 # load_toolset_grouped_apis
 # ---------------------------------------------------------------------------
+
 
 def test_load_toolset_grouped_apis_self_service():
     grouped = load_toolset_grouped_apis("self_service")
@@ -174,6 +177,7 @@ def test_load_toolset_grouped_apis_nonexistent_raises():
 # _path_matches
 # ---------------------------------------------------------------------------
 
+
 def test_path_matches_exact():
     assert _path_matches("/vdbs/search", "/vdbs/search") is True
 
@@ -183,7 +187,10 @@ def test_path_matches_with_placeholder():
 
 
 def test_path_matches_with_multiple_placeholders():
-    assert _path_matches("/vdbs/abc/snapshots/snap-1", "/vdbs/{vdbId}/snapshots/{snapId}") is True
+    assert (
+        _path_matches("/vdbs/abc/snapshots/snap-1", "/vdbs/{vdbId}/snapshots/{snapId}")
+        is True
+    )
 
 
 def test_path_matches_no_match():
@@ -201,6 +208,7 @@ def test_path_no_match_different_depth():
 # ---------------------------------------------------------------------------
 # get_confirmation_for_operation
 # ---------------------------------------------------------------------------
+
 
 def test_get_confirmation_for_operation_safe_get():
     result = get_confirmation_for_operation("GET", "/vdbs/search")
@@ -241,6 +249,7 @@ def test_get_confirmation_for_operation_conditional_structure():
 # requires_confirmation
 # ---------------------------------------------------------------------------
 
+
 def test_requires_confirmation_returns_bool():
     result = requires_confirmation("GET", "/vdbs/search")
     assert isinstance(result, bool)
@@ -253,6 +262,7 @@ def test_requires_confirmation_safe_ops_false():
 # ---------------------------------------------------------------------------
 # get_configured_toolset
 # ---------------------------------------------------------------------------
+
 
 def test_get_configured_toolset_auto(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "auto")
@@ -280,6 +290,7 @@ def test_get_configured_toolset_default(monkeypatch):
 # is_auto_mode
 # ---------------------------------------------------------------------------
 
+
 def test_is_auto_mode_true(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "auto")
     assert is_auto_mode() is True
@@ -293,6 +304,7 @@ def test_is_auto_mode_false(monkeypatch):
 # ---------------------------------------------------------------------------
 # get_tools_for_toolset
 # ---------------------------------------------------------------------------
+
 
 def test_get_tools_for_toolset_self_service():
     tools = get_tools_for_toolset("self_service")
@@ -318,6 +330,7 @@ def test_get_tools_for_toolset_sorted():
 # validate_toolset_config / validate_all_configs
 # ---------------------------------------------------------------------------
 
+
 def test_validate_toolset_config_self_service_no_errors():
     errors = validate_toolset_config("self_service")
     assert errors == []
@@ -336,6 +349,7 @@ def test_validate_all_configs_returns_dict():
 # ---------------------------------------------------------------------------
 # clear_cache
 # ---------------------------------------------------------------------------
+
 
 def test_clear_cache_no_error():
     # Just verify it doesn't raise

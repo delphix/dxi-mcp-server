@@ -16,7 +16,7 @@ refresh/rollback steps. Rollbacks are pre-confirmed (standard confirmation).
 
 import pytest
 
-from tests.functional.workflows._helpers import payload, first_id
+from tests.functional.workflows._helpers import first_id
 
 
 @pytest.mark.asyncio
@@ -27,11 +27,16 @@ async def test_vdb_refresh_rollback(mcp_client_self_service, dct_stub):
     # Prompt 7 — Refresh by timestamp (one hour ago).
     res = await client.call_tool(
         "data_tool",
-        {"action": "refresh_vdb_by_timestamp", "vdb_id": vdb_id,
-         "timestamp": "2024-01-01T00:00:00.000Z"},
+        {
+            "action": "refresh_vdb_by_timestamp",
+            "vdb_id": vdb_id,
+            "timestamp": "2024-01-01T00:00:00.000Z",
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/refresh_by_timestamp")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdbs/{vdb_id}/refresh_by_timestamp"
+    )
 
     # Prompt 8 — List snapshots, then refresh by the most recent snapshot.
     res = await client.call_tool(
@@ -43,10 +48,16 @@ async def test_vdb_refresh_rollback(mcp_client_self_service, dct_stub):
 
     res = await client.call_tool(
         "data_tool",
-        {"action": "refresh_vdb_by_snapshot", "vdb_id": vdb_id, "snapshot_id": snapshot_id},
+        {
+            "action": "refresh_vdb_by_snapshot",
+            "vdb_id": vdb_id,
+            "snapshot_id": snapshot_id,
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/refresh_by_snapshot")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdbs/{vdb_id}/refresh_by_snapshot"
+    )
 
     # Prompt 9 — List bookmarks, then refresh from the first bookmark.
     res = await client.call_tool(
@@ -58,34 +69,58 @@ async def test_vdb_refresh_rollback(mcp_client_self_service, dct_stub):
 
     res = await client.call_tool(
         "data_tool",
-        {"action": "refresh_vdb_from_bookmark", "vdb_id": vdb_id, "bookmark_id": bookmark_id},
+        {
+            "action": "refresh_vdb_from_bookmark",
+            "vdb_id": vdb_id,
+            "bookmark_id": bookmark_id,
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/refresh_from_bookmark")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdbs/{vdb_id}/refresh_from_bookmark"
+    )
 
     # Prompt 10 — Roll back by timestamp (standard confirmation -> pre-confirm).
     res = await client.call_tool(
         "data_tool",
-        {"action": "rollback_vdb_by_timestamp", "vdb_id": vdb_id,
-         "timestamp": "2024-01-01T00:00:00.000Z", "confirmed": True},
+        {
+            "action": "rollback_vdb_by_timestamp",
+            "vdb_id": vdb_id,
+            "timestamp": "2024-01-01T00:00:00.000Z",
+            "confirmed": True,
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/rollback_by_timestamp")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdbs/{vdb_id}/rollback_by_timestamp"
+    )
 
     # Prompt 11 — Roll back by the most recent snapshot (standard conf).
     res = await client.call_tool(
         "data_tool",
-        {"action": "rollback_vdb_by_snapshot", "vdb_id": vdb_id,
-         "snapshot_id": snapshot_id, "confirmed": True},
+        {
+            "action": "rollback_vdb_by_snapshot",
+            "vdb_id": vdb_id,
+            "snapshot_id": snapshot_id,
+            "confirmed": True,
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/rollback_by_snapshot")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdbs/{vdb_id}/rollback_by_snapshot"
+    )
 
     # Prompt 12 — Roll back from the first bookmark (standard conf).
     res = await client.call_tool(
         "data_tool",
-        {"action": "rollback_vdb_from_bookmark", "vdb_id": vdb_id,
-         "bookmark_id": bookmark_id, "confirmed": True},
+        {
+            "action": "rollback_vdb_from_bookmark",
+            "vdb_id": vdb_id,
+            "bookmark_id": bookmark_id,
+            "confirmed": True,
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/rollback_from_bookmark")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdbs/{vdb_id}/rollback_from_bookmark"
+    )

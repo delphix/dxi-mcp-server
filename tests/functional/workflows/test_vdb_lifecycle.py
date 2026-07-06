@@ -50,7 +50,9 @@ async def test_vdb_lifecycle(mcp_client_self_service, dct_stub):
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")
 
     # Prompt 5 — Enable that VDB.
-    res = await client.call_tool("data_tool", {"action": "enable_vdb", "vdb_id": vdb_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "enable_vdb", "vdb_id": vdb_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/enable")
 

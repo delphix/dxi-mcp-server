@@ -19,7 +19,6 @@ placeholder env override for that marker so real credentials flow through.
 
 import json
 import os
-import sys
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -57,15 +56,17 @@ def build_real_transport(toolset: str = "self_service") -> StdioTransport:
         for k, v in server.get("env", {}).items()
     }
     # Override with explicit runtime values
-    server_env.update({
-        "DCT_API_KEY": api_key,
-        "DCT_BASE_URL": base_url,
-        "DCT_TOOLSET": toolset,
-        "DCT_VERIFY_SSL": "false",
-        "DCT_LOG_LEVEL": "ERROR",
-        "DCT_TIMEOUT": "30",
-        "DCT_MAX_RETRIES": "3",
-    })
+    server_env.update(
+        {
+            "DCT_API_KEY": api_key,
+            "DCT_BASE_URL": base_url,
+            "DCT_TOOLSET": toolset,
+            "DCT_VERIFY_SSL": "false",
+            "DCT_LOG_LEVEL": "ERROR",
+            "DCT_TIMEOUT": "30",
+            "DCT_MAX_RETRIES": "3",
+        }
+    )
     # Propagate TMPDIR for generation isolation (safe-run venv writes to $TEMP)
     if os.environ.get("TMPDIR"):
         server_env["TMPDIR"] = os.environ["TMPDIR"]

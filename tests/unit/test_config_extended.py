@@ -9,9 +9,6 @@ Covers:
 
 from __future__ import annotations
 
-import io
-import sys
-from unittest.mock import patch
 
 import pytest
 
@@ -38,6 +35,7 @@ def _clear_optionals(monkeypatch):
 # print_config_help
 # ---------------------------------------------------------------------------
 
+
 def test_print_config_help_no_exception(monkeypatch, capsys):
     print_config_help()
     captured = capsys.readouterr()
@@ -54,6 +52,7 @@ def test_print_config_help_lists_toolsets(monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 # get_dct_config — various env combos
 # ---------------------------------------------------------------------------
+
 
 def test_get_dct_config_auto_toolset(monkeypatch):
     _clear_optionals(monkeypatch)
@@ -150,6 +149,7 @@ def test_get_dct_config_custom_timeout_and_retries(monkeypatch):
 # Validation errors
 # ---------------------------------------------------------------------------
 
+
 def test_get_dct_config_missing_api_key_raises(monkeypatch):
     _clear_optionals(monkeypatch)
     monkeypatch.delenv("DCT_API_KEY", raising=False)
@@ -169,8 +169,16 @@ def test_get_dct_config_contains_required_keys(monkeypatch):
     _clear_optionals(monkeypatch)
     monkeypatch.setenv("DCT_API_KEY", "k")
     cfg = get_dct_config()
-    required_keys = {"api_key", "base_url", "verify_ssl", "timeout", "max_retries",
-                     "log_level", "is_local_telemetry_enabled", "toolset"}
+    required_keys = {
+        "api_key",
+        "base_url",
+        "verify_ssl",
+        "timeout",
+        "max_retries",
+        "log_level",
+        "is_local_telemetry_enabled",
+        "toolset",
+    }
     assert required_keys.issubset(set(cfg.keys()))
 
 

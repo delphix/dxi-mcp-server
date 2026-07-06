@@ -41,8 +41,7 @@ def test_every_confirmation_rule_is_reachable(rule):
     # The rule must MATCH (some rule may shadow it earlier in the file; in that
     # case the matched level should still be a real confirmation level).
     assert result["level"] != "none", (
-        f"rule {rule.method}|{rule.path}|{rule.level} did not match "
-        f"{method} {path}"
+        f"rule {rule.method}|{rule.path}|{rule.level} did not match {method} {path}"
     )
 
     # The base level returned must equal this rule's base level — unless an

@@ -60,14 +60,18 @@ def _generated_tools(request):
     else:
         spec_data = _download_spec()
         if spec_data is None:
-            pytest.skip("OpenAPI spec not available — set DCT_BASE_URL+DCT_API_KEY or ensure cache exists")
+            pytest.skip(
+                "OpenAPI spec not available — set DCT_BASE_URL+DCT_API_KEY or ensure cache exists"
+            )
 
     saved_spec, saved_client = tf._openapi_spec, tf._dct_client
     tf._openapi_spec = spec_data
 
     tools_by_toolset = {}
     for ts in NON_SELF_SERVICE:
-        tools_by_toolset[ts] = {name: func for func, name in tf.generate_tools_for_toolset(ts)}
+        tools_by_toolset[ts] = {
+            name: func for func, name in tf.generate_tools_for_toolset(ts)
+        }
 
     def _restore():
         tf._openapi_spec = saved_spec

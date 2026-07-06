@@ -7,7 +7,6 @@ pytest or DCT instance is needed. The CliRunner catches SystemExit naturally.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,6 +30,7 @@ def _proc(returncode: int = 0) -> MagicMock:
 # Helpers: invoke with subprocess mocked
 # ---------------------------------------------------------------------------
 
+
 def _invoke(runner, args, *, env=None, is_dir=False, returncode=0):
     """Invoke CLI with subprocess.run mocked out.
 
@@ -52,6 +52,7 @@ def _invoke(runner, args, *, env=None, is_dir=False, returncode=0):
 # ---------------------------------------------------------------------------
 # Basic layer invocations (no DCT creds needed)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("layer", ["unit", "integration", "functional", "ci"])
 def test_layers_no_creds_exits_zero(runner, layer):
@@ -84,6 +85,7 @@ def test_ci_layer_includes_all_three(runner):
 # layer=scenarios validation
 # ---------------------------------------------------------------------------
 
+
 def test_scenarios_without_persona_raises(runner):
     result = runner.invoke(main, ["--layer", "scenarios"], catch_exceptions=True)
     # Click UsageError → exit_code == 2
@@ -92,12 +94,19 @@ def test_scenarios_without_persona_raises(runner):
 
 
 def test_scenarios_with_persona_and_creds(runner):
-    result, calls = _invoke(runner, [
-        "--layer", "scenarios",
-        "--persona", "self_service",
-        "--base-url", "https://dct.example.com",
-        "--api-key", "test-key",
-    ])
+    result, calls = _invoke(
+        runner,
+        [
+            "--layer",
+            "scenarios",
+            "--persona",
+            "self_service",
+            "--base-url",
+            "https://dct.example.com",
+            "--api-key",
+            "test-key",
+        ],
+    )
     assert result.exit_code == 0
 
 
@@ -111,12 +120,20 @@ def test_scenarios_sets_persona_env(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, [
-                "--layer", "scenarios",
-                "--persona", "self_service",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "scenarios",
+                    "--persona",
+                    "self_service",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     assert captured_env.get("SCENARIO_PERSONAS") == "self_service"
 
@@ -131,13 +148,21 @@ def test_scenarios_mutations_flag(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, [
-                "--layer", "scenarios",
-                "--persona", "self_service",
-                "--mutations",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "scenarios",
+                    "--persona",
+                    "self_service",
+                    "--mutations",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     assert captured_env.get("SCENARIO_MUTATIONS") == "1"
 
@@ -152,12 +177,20 @@ def test_scenarios_no_mutations_flag(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, [
-                "--layer", "scenarios",
-                "--persona", "self_service",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "scenarios",
+                    "--persona",
+                    "self_service",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     assert "SCENARIO_MUTATIONS" not in captured_env
 
@@ -172,13 +205,22 @@ def test_scenarios_scenario_limit(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, [
-                "--layer", "scenarios",
-                "--persona", "self_service",
-                "--scenario-limit", "5",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "scenarios",
+                    "--persona",
+                    "self_service",
+                    "--scenario-limit",
+                    "5",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     assert captured_env.get("SCENARIO_LIMIT") == "5"
 
@@ -187,21 +229,35 @@ def test_scenarios_scenario_limit(runner):
 # layer=e2e validation
 # ---------------------------------------------------------------------------
 
+
 def test_e2e_without_creds_raises(runner):
     # Clear any env-injected creds (autouse _set_test_env sets them globally)
-    result = runner.invoke(main, ["--layer", "e2e"],
-                           env={"DCT_BASE_URL": "", "DCT_API_KEY": ""},
-                           catch_exceptions=True)
+    result = runner.invoke(
+        main,
+        ["--layer", "e2e"],
+        env={"DCT_BASE_URL": "", "DCT_API_KEY": ""},
+        catch_exceptions=True,
+    )
     assert result.exit_code == 2
-    assert "base-url" in result.output.lower() or "api-key" in result.output.lower() or "require" in result.output.lower()
+    assert (
+        "base-url" in result.output.lower()
+        or "api-key" in result.output.lower()
+        or "require" in result.output.lower()
+    )
 
 
 def test_e2e_with_creds_runs(runner):
-    result, calls = _invoke(runner, [
-        "--layer", "e2e",
-        "--base-url", "https://dct.example.com",
-        "--api-key", "my-key",
-    ])
+    result, calls = _invoke(
+        runner,
+        [
+            "--layer",
+            "e2e",
+            "--base-url",
+            "https://dct.example.com",
+            "--api-key",
+            "my-key",
+        ],
+    )
     assert result.exit_code == 0
     assert len(calls) >= 1
 
@@ -216,11 +272,18 @@ def test_e2e_sets_dct_env_vars(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, [
-                "--layer", "e2e",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "e2e",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     assert captured_env.get("DCT_BASE_URL") == "https://dct.example.com"
     assert captured_env.get("DCT_API_KEY") == "my-key"
@@ -237,11 +300,18 @@ def test_e2e_cleanup_runs_when_dir_exists(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=True):
-            runner.invoke(main, [
-                "--layer", "e2e",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "e2e",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     # Main run + cleanup run = 2
     assert call_count["n"] >= 2
@@ -256,11 +326,18 @@ def test_e2e_cleanup_skipped_when_dir_missing(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, [
-                "--layer", "e2e",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "e2e",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                ],
+                catch_exceptions=True,
+            )
 
     assert call_count["n"] == 1
 
@@ -274,12 +351,19 @@ def test_e2e_no_cleanup_flag_skips_cleanup(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=True):
-            runner.invoke(main, [
-                "--layer", "e2e",
-                "--base-url", "https://dct.example.com",
-                "--api-key", "my-key",
-                "--no-cleanup",
-            ], catch_exceptions=True)
+            runner.invoke(
+                main,
+                [
+                    "--layer",
+                    "e2e",
+                    "--base-url",
+                    "https://dct.example.com",
+                    "--api-key",
+                    "my-key",
+                    "--no-cleanup",
+                ],
+                catch_exceptions=True,
+            )
 
     # Cleanup skipped — only the main run
     assert call_count["n"] == 1
@@ -289,29 +373,45 @@ def test_e2e_no_cleanup_flag_skips_cleanup(runner):
 # layer=all
 # ---------------------------------------------------------------------------
 
+
 def test_all_requires_creds(runner):
     # Clear any env-injected creds (autouse _set_test_env sets them globally)
-    result = runner.invoke(main, ["--layer", "all"],
-                           env={"DCT_BASE_URL": "", "DCT_API_KEY": ""},
-                           catch_exceptions=True)
+    result = runner.invoke(
+        main,
+        ["--layer", "all"],
+        env={"DCT_BASE_URL": "", "DCT_API_KEY": ""},
+        catch_exceptions=True,
+    )
     assert result.exit_code == 2
 
 
 def test_all_with_creds_runs(runner):
-    result, calls = _invoke(runner, [
-        "--layer", "all",
-        "--base-url", "https://dct.example.com",
-        "--api-key", "my-key",
-    ])
+    result, calls = _invoke(
+        runner,
+        [
+            "--layer",
+            "all",
+            "--base-url",
+            "https://dct.example.com",
+            "--api-key",
+            "my-key",
+        ],
+    )
     assert result.exit_code == 0
 
 
 def test_all_includes_e2e_path(runner):
-    result, calls = _invoke(runner, [
-        "--layer", "all",
-        "--base-url", "https://dct.example.com",
-        "--api-key", "my-key",
-    ])
+    result, calls = _invoke(
+        runner,
+        [
+            "--layer",
+            "all",
+            "--base-url",
+            "https://dct.example.com",
+            "--api-key",
+            "my-key",
+        ],
+    )
     cmd_str = " ".join(str(a) for a in calls[0])
     assert "tests/e2e" in cmd_str
 
@@ -319,6 +419,7 @@ def test_all_includes_e2e_path(runner):
 # ---------------------------------------------------------------------------
 # --report flag
 # ---------------------------------------------------------------------------
+
 
 def test_report_flag_passes_junit_xml(runner):
     result, calls = _invoke(runner, ["--layer", "unit", "--report", "/tmp/report.xml"])
@@ -332,6 +433,7 @@ def test_report_flag_passes_junit_xml(runner):
 # --workflow flag
 # ---------------------------------------------------------------------------
 
+
 def test_workflow_flag_passes_k_filter(runner):
     result, calls = _invoke(runner, ["--layer", "unit", "--workflow", "test_vdb"])
     assert result.exit_code == 0
@@ -344,6 +446,7 @@ def test_workflow_flag_passes_k_filter(runner):
 # --verbose flag
 # ---------------------------------------------------------------------------
 
+
 def test_verbose_flag_passes_tb_long(runner):
     result, calls = _invoke(runner, ["--layer", "unit", "--verbose"])
     assert result.exit_code == 0
@@ -353,6 +456,7 @@ def test_verbose_flag_passes_tb_long(runner):
 # ---------------------------------------------------------------------------
 # Non-zero exit propagation
 # ---------------------------------------------------------------------------
+
 
 def test_exit_code_propagated(runner):
     result, _ = _invoke(runner, ["--layer", "unit"], returncode=2)
@@ -364,6 +468,7 @@ def test_exit_code_propagated(runner):
 # Env var fallback for --base-url / --api-key
 # ---------------------------------------------------------------------------
 
+
 def test_env_var_base_url_used(runner):
     captured_env = {}
 
@@ -374,10 +479,15 @@ def test_env_var_base_url_used(runner):
 
     with patch("subprocess.run", side_effect=fake_run):
         with patch("os.path.isdir", return_value=False):
-            runner.invoke(main, ["--layer", "e2e"],
-                          env={"DCT_BASE_URL": "https://from-env.example.com",
-                               "DCT_API_KEY": "env-key"},
-                          catch_exceptions=True)
+            runner.invoke(
+                main,
+                ["--layer", "e2e"],
+                env={
+                    "DCT_BASE_URL": "https://from-env.example.com",
+                    "DCT_API_KEY": "env-key",
+                },
+                catch_exceptions=True,
+            )
 
     assert captured_env.get("DCT_BASE_URL") == "https://from-env.example.com"
 
@@ -386,12 +496,19 @@ def test_env_var_base_url_used(runner):
 # Layer markers
 # ---------------------------------------------------------------------------
 
+
 def test_e2e_layer_includes_real_dct_marker(runner):
-    result, calls = _invoke(runner, [
-        "--layer", "e2e",
-        "--base-url", "https://dct.example.com",
-        "--api-key", "my-key",
-    ])
+    result, calls = _invoke(
+        runner,
+        [
+            "--layer",
+            "e2e",
+            "--base-url",
+            "https://dct.example.com",
+            "--api-key",
+            "my-key",
+        ],
+    )
     cmd_list = calls[0]
     assert "-m" in cmd_list
     assert "real_dct" in cmd_list

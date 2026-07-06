@@ -32,6 +32,7 @@ from dct_mcp_server.tools.core.meta_tools import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def reset_meta_tools_state():
     """Reset global meta_tools state before/after each test."""
@@ -51,6 +52,7 @@ def reset_meta_tools_state():
 # ---------------------------------------------------------------------------
 # list_available_toolsets
 # ---------------------------------------------------------------------------
+
 
 def test_list_available_toolsets_returns_dict():
     result = list_available_toolsets()
@@ -84,8 +86,10 @@ def test_list_available_toolsets_has_instructions():
 
 
 def test_list_available_toolsets_error_handling():
-    with patch("dct_mcp_server.tools.core.meta_tools.load_all_toolsets_metadata",
-               side_effect=Exception("boom")):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.load_all_toolsets_metadata",
+        side_effect=Exception("boom"),
+    ):
         result = list_available_toolsets()
     assert "error" in result
 
@@ -93,6 +97,7 @@ def test_list_available_toolsets_error_handling():
 # ---------------------------------------------------------------------------
 # get_toolset_tools
 # ---------------------------------------------------------------------------
+
 
 def test_get_toolset_tools_self_service():
     result = get_toolset_tools("self_service")
@@ -127,8 +132,10 @@ def test_get_toolset_tools_total_counts():
 
 
 def test_get_toolset_tools_error_handling():
-    with patch("dct_mcp_server.tools.core.meta_tools.get_available_toolsets",
-               side_effect=Exception("toolset error")):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.get_available_toolsets",
+        side_effect=Exception("toolset error"),
+    ):
         result = get_toolset_tools("self_service")
     assert "error" in result
 
@@ -136,6 +143,7 @@ def test_get_toolset_tools_error_handling():
 # ---------------------------------------------------------------------------
 # check_operation_confirmation
 # ---------------------------------------------------------------------------
+
 
 def test_check_operation_confirmation_safe_get():
     result = check_operation_confirmation("GET", "/vdbs/search")
@@ -166,8 +174,10 @@ def test_check_operation_confirmation_includes_guidance():
 
 
 def test_check_operation_confirmation_error_handling():
-    with patch("dct_mcp_server.tools.core.meta_tools.resolve_confirmation",
-               side_effect=Exception("conf error")):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.resolve_confirmation",
+        side_effect=Exception("conf error"),
+    ):
         result = check_operation_confirmation("GET", "/vdbs")
     assert "error" in result
 
@@ -175,6 +185,7 @@ def test_check_operation_confirmation_error_handling():
 # ---------------------------------------------------------------------------
 # _get_confirmation_guidance
 # ---------------------------------------------------------------------------
+
 
 def test_get_confirmation_guidance_none():
     guidance = _get_confirmation_guidance("none")
@@ -194,7 +205,11 @@ def test_get_confirmation_guidance_elevated():
 def test_get_confirmation_guidance_manual():
     guidance = _get_confirmation_guidance("manual")
     assert len(guidance) > 0
-    assert "destructive" in guidance.lower() or "manual" in guidance.lower() or "confirm" in guidance.lower()
+    assert (
+        "destructive" in guidance.lower()
+        or "manual" in guidance.lower()
+        or "confirm" in guidance.lower()
+    )
 
 
 def test_get_confirmation_guidance_unknown_level():
@@ -207,10 +222,14 @@ def test_get_confirmation_guidance_unknown_level():
 # initialize_tool_inventory
 # ---------------------------------------------------------------------------
 
+
 def test_initialize_tool_inventory_sets_app():
     mock_app = MagicMock()
     mock_client = MagicMock()
-    with patch("dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache", return_value=True):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache",
+        return_value=True,
+    ):
         initialize_tool_inventory(mock_app, mock_client)
     assert mt._app is mock_app
     assert mt._dct_client is mock_client
@@ -219,7 +238,10 @@ def test_initialize_tool_inventory_sets_app():
 def test_initialize_tool_inventory_populates_inventory():
     mock_app = MagicMock()
     mock_client = MagicMock()
-    with patch("dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache", return_value=True):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache",
+        return_value=True,
+    ):
         initialize_tool_inventory(mock_app, mock_client)
     assert len(mt._tool_inventory) > 0
 
@@ -227,7 +249,10 @@ def test_initialize_tool_inventory_populates_inventory():
 def test_initialize_tool_inventory_spec_not_available():
     mock_app = MagicMock()
     mock_client = MagicMock()
-    with patch("dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache", return_value=False):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache",
+        return_value=False,
+    ):
         initialize_tool_inventory(mock_app, mock_client)
     # Should still initialize without spec
     assert len(mt._tool_inventory) > 0
@@ -236,7 +261,10 @@ def test_initialize_tool_inventory_spec_not_available():
 def test_initialize_tool_inventory_all_toolsets_dynamic():
     mock_app = MagicMock()
     mock_client = MagicMock()
-    with patch("dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache", return_value=True):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.initialize_openapi_cache",
+        return_value=True,
+    ):
         initialize_tool_inventory(mock_app, mock_client)
     for name, info in mt._tool_inventory.items():
         assert info.get("dynamic") is True
@@ -246,6 +274,7 @@ def test_initialize_tool_inventory_all_toolsets_dynamic():
 # ---------------------------------------------------------------------------
 # _disable_current_toolset_internal
 # ---------------------------------------------------------------------------
+
 
 def test_disable_current_toolset_internal_no_tools():
     mt._registered_tool_names = []
@@ -291,6 +320,7 @@ def test_disable_current_toolset_local_provider_path():
 # _register_toolset_tools
 # ---------------------------------------------------------------------------
 
+
 def test_register_toolset_tools_unknown_toolset():
     mt._app = MagicMock()
     mt._tool_inventory = {}
@@ -311,8 +341,10 @@ def test_register_toolset_tools_in_inventory():
         # Simulate adding tools
         mock_app._tool_manager._tools["vdb_tool"] = MagicMock()
 
-    with patch("dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
-               side_effect=fake_register):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
+        side_effect=fake_register,
+    ):
         count = _register_toolset_tools("self_service")
 
     assert count >= 1
@@ -321,6 +353,7 @@ def test_register_toolset_tools_in_inventory():
 # ---------------------------------------------------------------------------
 # register_meta_tools
 # ---------------------------------------------------------------------------
+
 
 def test_register_meta_tools_calls_add_tool():
     mock_app = MagicMock()
@@ -362,26 +395,31 @@ def test_register_meta_tools_raises_on_failure():
 # get_current_toolset / get_registered_tool_count
 # ---------------------------------------------------------------------------
 
+
 def test_get_current_toolset_default():
     from dct_mcp_server.tools.core.meta_tools import get_current_toolset
+
     mt._current_toolset = None
     assert get_current_toolset() is None
 
 
 def test_get_current_toolset_after_set():
     from dct_mcp_server.tools.core.meta_tools import get_current_toolset
+
     mt._current_toolset = "self_service"
     assert get_current_toolset() == "self_service"
 
 
 def test_get_registered_tool_count_empty():
     from dct_mcp_server.tools.core.meta_tools import get_registered_tool_count
+
     mt._registered_tool_names = []
     assert get_registered_tool_count() == 0
 
 
 def test_get_registered_tool_count_with_tools():
     from dct_mcp_server.tools.core.meta_tools import get_registered_tool_count
+
     mt._registered_tool_names = ["vdb_tool", "job_tool", "dsource_tool"]
     assert get_registered_tool_count() == 3
 
@@ -390,9 +428,11 @@ def test_get_registered_tool_count_with_tools():
 # execute_action (async)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_execute_action_no_client():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mt._dct_client = None
     result = await execute_action(
         toolset_name="self_service",
@@ -405,6 +445,7 @@ async def test_execute_action_no_client():
 @pytest.mark.asyncio
 async def test_execute_action_unknown_toolset():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mt._dct_client = MagicMock()
     result = await execute_action(
         toolset_name="fake_toolset_xyz",
@@ -417,6 +458,7 @@ async def test_execute_action_unknown_toolset():
 @pytest.mark.asyncio
 async def test_execute_action_unknown_tool():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mt._dct_client = MagicMock()
     result = await execute_action(
         toolset_name="self_service",
@@ -429,6 +471,7 @@ async def test_execute_action_unknown_tool():
 @pytest.mark.asyncio
 async def test_execute_action_unknown_action():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mt._dct_client = MagicMock()
     result = await execute_action(
         toolset_name="self_service",
@@ -441,10 +484,11 @@ async def test_execute_action_unknown_action():
 @pytest.mark.asyncio
 async def test_execute_action_search_vdbs():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"items": []})
     mt._dct_client = mock_client
-    result = await execute_action(
+    await execute_action(
         toolset_name="self_service",
         tool_name="vdb_tool",
         action="search",
@@ -455,11 +499,14 @@ async def test_execute_action_search_vdbs():
 @pytest.mark.asyncio
 async def test_execute_action_requires_confirmation_for_destructive():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"status": "success"})
     mt._dct_client = mock_client
 
-    with patch("dct_mcp_server.tools.core.meta_tools.resolve_confirmation") as mock_conf:
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.resolve_confirmation"
+    ) as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Are you sure?",
@@ -472,24 +519,30 @@ async def test_execute_action_requires_confirmation_for_destructive():
             action="search",
             confirmed=False,
         )
-    assert result.get("status") == "confirmation_required" or mock_client.make_request.called
+    assert (
+        result.get("status") == "confirmation_required"
+        or mock_client.make_request.called
+    )
 
 
 @pytest.mark.asyncio
 async def test_execute_action_with_confirmed_true():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"status": "success"})
     mt._dct_client = mock_client
 
-    with patch("dct_mcp_server.tools.core.meta_tools.resolve_confirmation") as mock_conf:
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.resolve_confirmation"
+    ) as mock_conf:
         mock_conf.return_value = {
             "level": "manual",
             "message": "Are you sure?",
             "conditional": False,
             "threshold_days": None,
         }
-        result = await execute_action(
+        await execute_action(
             toolset_name="self_service",
             tool_name="vdb_tool",
             action="search",
@@ -502,10 +555,11 @@ async def test_execute_action_with_confirmed_true():
 @pytest.mark.asyncio
 async def test_execute_action_with_path_params():
     from dct_mcp_server.tools.core.meta_tools import execute_action
+
     mock_client = MagicMock()
     mock_client.make_request = AsyncMock(return_value={"id": "v-123"})
     mt._dct_client = mock_client
-    result = await execute_action(
+    await execute_action(
         toolset_name="self_service",
         tool_name="vdb_tool",
         action="get",
@@ -521,9 +575,11 @@ async def test_execute_action_with_path_params():
 # enable_toolset / disable_toolset (async)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_enable_toolset_unknown_toolset():
     from dct_mcp_server.tools.core.meta_tools import enable_toolset
+
     mock_ctx = MagicMock()
     mt._app = MagicMock()
     result = await enable_toolset("totally_fake_toolset_xyz", mock_ctx)
@@ -533,6 +589,7 @@ async def test_enable_toolset_unknown_toolset():
 @pytest.mark.asyncio
 async def test_enable_toolset_app_not_initialized():
     from dct_mcp_server.tools.core.meta_tools import enable_toolset
+
     mt._app = None
     mock_ctx = MagicMock()
     result = await enable_toolset("self_service", mock_ctx)
@@ -542,6 +599,7 @@ async def test_enable_toolset_app_not_initialized():
 @pytest.mark.asyncio
 async def test_disable_toolset_no_current_toolset():
     from dct_mcp_server.tools.core.meta_tools import disable_toolset
+
     mt._current_toolset = None
     mock_ctx = MagicMock()
     result = await disable_toolset(mock_ctx)
@@ -551,6 +609,7 @@ async def test_disable_toolset_no_current_toolset():
 @pytest.mark.asyncio
 async def test_disable_toolset_with_active_toolset():
     from dct_mcp_server.tools.core.meta_tools import disable_toolset
+
     mt._current_toolset = "self_service"
     mt._registered_tool_names = ["vdb_tool"]
     mock_ctx = MagicMock()
@@ -567,10 +626,13 @@ async def test_disable_toolset_with_active_toolset():
 @pytest.mark.asyncio
 async def test_disable_toolset_notification_failure_handled():
     from dct_mcp_server.tools.core.meta_tools import disable_toolset
+
     mt._current_toolset = "self_service"
     mt._registered_tool_names = ["vdb_tool"]
     mock_ctx = MagicMock()
-    mock_ctx.session.send_tool_list_changed = AsyncMock(side_effect=Exception("network error"))
+    mock_ctx.session.send_tool_list_changed = AsyncMock(
+        side_effect=Exception("network error")
+    )
     mock_app = MagicMock()
     mock_app._tool_manager = MagicMock()
     mock_app._tool_manager._tools = {}
@@ -583,6 +645,7 @@ async def test_disable_toolset_notification_failure_handled():
 # ---------------------------------------------------------------------------
 # enable_toolset — SUCCESS paths (lines 228-256)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_enable_toolset_fresh_enable_no_previous():
@@ -603,8 +666,10 @@ async def test_enable_toolset_fresh_enable_no_previous():
     def fake_register(app, toolset_name, dct_client):
         mock_app._tool_manager._tools["vdb_tool"] = MagicMock()
 
-    with patch("dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
-               side_effect=fake_register):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
+        side_effect=fake_register,
+    ):
         result = await enable_toolset("self_service", mock_ctx)
 
     assert result["status"] == "enabled"
@@ -636,8 +701,10 @@ async def test_enable_toolset_switch_from_existing():
     def fake_register(app, toolset_name, dct_client):
         mock_app._tool_manager._tools["vdb_tool"] = MagicMock()
 
-    with patch("dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
-               side_effect=fake_register):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
+        side_effect=fake_register,
+    ):
         result = await enable_toolset("self_service", mock_ctx)
 
     assert result["status"] == "enabled"
@@ -659,7 +726,9 @@ async def test_enable_toolset_notification_failure_handled():
     mt._tool_inventory = {"self_service": {"dynamic": True, "loaded": False}}
 
     mock_ctx = MagicMock()
-    mock_ctx.session.send_tool_list_changed = AsyncMock(side_effect=Exception("network down"))
+    mock_ctx.session.send_tool_list_changed = AsyncMock(
+        side_effect=Exception("network down")
+    )
 
     with patch("dct_mcp_server.tools.core.meta_tools.register_toolset_tools"):
         result = await enable_toolset("self_service", mock_ctx)
@@ -681,8 +750,10 @@ async def test_enable_toolset_outer_exception_handler():
     mock_ctx = MagicMock()
 
     # Patch _register_toolset_tools (called inside enable_toolset body) to raise.
-    with patch("dct_mcp_server.tools.core.meta_tools._register_toolset_tools",
-               side_effect=RuntimeError("registration crash")):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools._register_toolset_tools",
+        side_effect=RuntimeError("registration crash"),
+    ):
         result = await enable_toolset("self_service", mock_ctx)
 
     assert "error" in result
@@ -692,6 +763,7 @@ async def test_enable_toolset_outer_exception_handler():
 # ---------------------------------------------------------------------------
 # disable_toolset — exception handler (lines 304-306)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_disable_toolset_exception_handler():
@@ -704,8 +776,10 @@ async def test_disable_toolset_exception_handler():
     mock_ctx = MagicMock()
     mock_ctx.session.send_tool_list_changed = AsyncMock()
 
-    with patch("dct_mcp_server.tools.core.meta_tools._disable_current_toolset_internal",
-               side_effect=RuntimeError("unexpected internal error")):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools._disable_current_toolset_internal",
+        side_effect=RuntimeError("unexpected internal error"),
+    ):
         result = await disable_toolset(mock_ctx)
 
     assert "error" in result
@@ -715,6 +789,7 @@ async def test_disable_toolset_exception_handler():
 # ---------------------------------------------------------------------------
 # _register_toolset_tools — local_provider branch (lines 320-321, 328-329)
 # ---------------------------------------------------------------------------
+
 
 def test_register_toolset_tools_local_provider_branch():
     """Lines 320-321 & 328-329: app has no _tool_manager but has local_provider._tools."""
@@ -729,8 +804,10 @@ def test_register_toolset_tools_local_provider_branch():
     def fake_register(app, toolset_name, dct_client):
         mock_app.local_provider._tools["vdb_tool"] = MagicMock()
 
-    with patch("dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
-               side_effect=fake_register):
+    with patch(
+        "dct_mcp_server.tools.core.meta_tools.register_toolset_tools",
+        side_effect=fake_register,
+    ):
         count = _register_toolset_tools("self_service")
 
     assert count >= 1
@@ -740,6 +817,7 @@ def test_register_toolset_tools_local_provider_branch():
 # ---------------------------------------------------------------------------
 # _disable_current_toolset_internal — local_provider no remove_tool (lines 357-361)
 # ---------------------------------------------------------------------------
+
 
 def test_disable_toolset_internal_local_provider_no_remove_tool():
     """Lines 357-359: local_provider has _tools dict but no remove_tool method."""
@@ -778,6 +856,7 @@ def test_disable_toolset_internal_local_provider_deletion_raises():
 # execute_action — filter_expression body injection (line 511)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_execute_action_filter_expression_search():
     """Line 511: filter_expression kwarg + search action → json_body set."""
@@ -787,7 +866,7 @@ async def test_execute_action_filter_expression_search():
     mock_client.make_request = AsyncMock(return_value={"items": []})
     mt._dct_client = mock_client
 
-    result = await execute_action(
+    await execute_action(
         toolset_name="self_service",
         tool_name="vdb_tool",
         action="search",
@@ -797,13 +876,15 @@ async def test_execute_action_filter_expression_search():
     assert mock_client.make_request.called
     call_kwargs = mock_client.make_request.call_args
     # json body should contain filter_expression
-    assert call_kwargs.kwargs.get("json") == {"filter_expression": "name like '%test%'"} or \
-        (call_kwargs.args and "filter_expression" in str(call_kwargs))
+    assert call_kwargs.kwargs.get("json") == {
+        "filter_expression": "name like '%test%'"
+    } or (call_kwargs.args and "filter_expression" in str(call_kwargs))
 
 
 # ---------------------------------------------------------------------------
 # execute_action — explicit body param (line 516)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_execute_action_explicit_body_param():
@@ -814,7 +895,7 @@ async def test_execute_action_explicit_body_param():
     mock_client.make_request = AsyncMock(return_value={"items": []})
     mt._dct_client = mock_client
 
-    result = await execute_action(
+    await execute_action(
         toolset_name="self_service",
         tool_name="vdb_tool",
         action="search",
@@ -830,6 +911,7 @@ async def test_execute_action_explicit_body_param():
 # execute_action — POST with json_body + extra clean_remaining (lines 521-525)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_execute_action_post_body_merged_with_remaining():
     """Lines 521-522: filter_expression sets json_body, extra POST kwargs merged via update()."""
@@ -841,7 +923,7 @@ async def test_execute_action_post_body_merged_with_remaining():
 
     # Pass filter_expression (sets json_body) AND an extra kwarg.
     # Hits the "if json_body: json_body.update(clean_remaining)" branch (line 522).
-    result = await execute_action(
+    await execute_action(
         toolset_name="self_service",
         tool_name="vdb_tool",
         action="search",
@@ -869,7 +951,7 @@ async def test_execute_action_post_no_json_body_uses_clean_remaining():
 
     # Pass only limit (no filter_expression, no body=) for a POST action.
     # json_body starts as None → else branch: json_body = clean_remaining (line 524).
-    result = await execute_action(
+    await execute_action(
         toolset_name="self_service",
         tool_name="vdb_tool",
         action="search",
@@ -885,6 +967,7 @@ async def test_execute_action_post_no_json_body_uses_clean_remaining():
 # ---------------------------------------------------------------------------
 # execute_action — exception handlers (lines 536-540)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_execute_action_value_error_returns_error_dict():

@@ -44,7 +44,9 @@ EXPECTED_SELF_SERVICE_TOOLS = {
 
 
 @pytest.mark.asyncio
-async def test_self_service_registers_exactly_its_configured_tools(mcp_client_self_service):
+async def test_self_service_registers_exactly_its_configured_tools(
+    mcp_client_self_service,
+):
     """self_service must expose exactly the pre-built tools from dataset_endpoints_tool and job_endpoints_tool."""
     tools = await mcp_client_self_service.list_tools()
     names = {t.name for t in tools}
@@ -66,7 +68,9 @@ async def test_auto_mode_registers_meta_tools(dct_stub):
 
 
 @pytest.mark.parametrize("toolset", config_cases.toolset_names())
-def test_persona_generates_exactly_its_configured_tools(seed_tool_factory_spec, toolset):
+def test_persona_generates_exactly_its_configured_tools(
+    seed_tool_factory_spec, toolset
+):
     """
     Every persona's tools generate correctly from the OpenAPI spec — the dynamic path
     that backs registration for personas without a pre-built module. Asserts the

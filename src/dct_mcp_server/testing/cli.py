@@ -30,15 +30,15 @@ import click
 # "all" runs everything in sequence (also requires DCT creds). It excludes "llm"
 # on purpose: Layer 5 is advisory, needs the `claude` CLI, and may mutate.
 _LAYER_PATHS: dict[str, list[str]] = {
-    "unit":        ["tests/unit"],
+    "unit": ["tests/unit"],
     "integration": ["tests/integration"],
-    "functional":  ["tests/functional"],
-    "ci":          ["tests/unit", "tests/integration", "tests/functional"],
-    "e2e":         ["tests/e2e"],
-    "llm":         ["tests/llm_local"],
-    "connector":   ["tests/llm_local/test_connector_workflows.py"],
-    "scenarios":   ["tests/llm_local/test_scenarios.py"],
-    "all":         ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
+    "functional": ["tests/functional"],
+    "ci": ["tests/unit", "tests/integration", "tests/functional"],
+    "e2e": ["tests/e2e"],
+    "llm": ["tests/llm_local"],
+    "connector": ["tests/llm_local/test_connector_workflows.py"],
+    "scenarios": ["tests/llm_local/test_scenarios.py"],
+    "all": ["tests/unit", "tests/integration", "tests/functional", "tests/e2e"],
 }
 
 # Marker passed to pytest -m for layers that select a subset by marker.
@@ -78,27 +78,47 @@ def _print_requirements(connector: str) -> None:
         )
 
     click.secho(f"\n{req['display_name']}  (connector={req['connector']})", bold=True)
-    click.echo(f"Workflows that will run: {', '.join(req['workflows']) or '(none defined)'}")
+    click.echo(
+        f"Workflows that will run: {', '.join(req['workflows']) or '(none defined)'}"
+    )
 
     click.secho("\nRequired inputs:", bold=True)
     for row in req["inputs"]:
-        mark = click.style("✓", fg="green") if row["provided"] else click.style("✗ MISSING", fg="red")
+        mark = (
+            click.style("✓", fg="green")
+            if row["provided"]
+            else click.style("✗ MISSING", fg="red")
+        )
         click.echo(f"  {mark}  {row['field']:<14} — {row['description']}")
 
-    eng = click.style("✓", fg="green") if req["engine_ok"] else click.style("✗ MISSING", fg="red")
+    eng = (
+        click.style("✓", fg="green")
+        if req["engine_ok"]
+        else click.style("✗ MISSING", fg="red")
+    )
     click.echo(f"  {eng}  engine          — Delphix engine hostname + password")
 
     click.secho("\nProvide them via EITHER:", bold=True)
     exists = "exists" if req["secrets_file_exists"] else "NOT created yet"
     click.echo(f"  • file:    {req['secrets_file']}  ({exists})")
-    click.echo(f"             copy tests/fixtures/connectors/.secrets.yaml.example and fill '{connector}'")
-    click.echo(f"  • env vars: {req['env_prefix']}<FIELD>  (e.g. {req['env_prefix']}TARGET_HOST)")
+    click.echo(
+        f"             copy tests/fixtures/connectors/.secrets.yaml.example and fill '{connector}'"
+    )
+    click.echo(
+        f"  • env vars: {req['env_prefix']}<FIELD>  (e.g. {req['env_prefix']}TARGET_HOST)"
+    )
 
     if req["missing"] or not req["engine_ok"]:
-        click.secho(f"\n⚠ Not ready to run — fill the MISSING fields above.", fg="yellow")
+        click.secho(
+            "\n⚠ Not ready to run — fill the MISSING fields above.", fg="yellow"
+        )
     else:
-        click.secho(f"\n✓ Ready. Run: dct-mcp-test --connector {connector} "
-                    f"--base-url <url> --api-key <key>", fg="green")
+        click.secho(
+            f"\n✓ Ready. Run: dct-mcp-test --connector {connector} "
+            f"--base-url <url> --api-key <key>",
+            fg="green",
+        )
+
 
 # IMPORTANT for live layers (e2e/llm/scenarios): run this CLI from the non-editable
 # safe-run venv so the server generates tools into $TEMP, not src/:
@@ -121,18 +141,18 @@ def _print_requirements(connector: str) -> None:
     type=click.Choice(list(_LAYER_PATHS)),
     default=None,
     help="Which test layer(s) to run. Default 'ci' = unit + integration + functional "
-         "(no DCT needed). Defaults to 'connector' when --connector is given.",
+    "(no DCT needed). Defaults to 'connector' when --connector is given.",
 )
 @click.option(
     "--connector",
     help="For --layer connector: which connector to test (e.g. mysql, db2, postgresql). "
-         "Sets CONNECTOR_TYPE. Use with --show-requirements to see what it needs.",
+    "Sets CONNECTOR_TYPE. Use with --show-requirements to see what it needs.",
 )
 @click.option(
     "--show-requirements",
     is_flag=True,
     help="Print what --connector needs (hosts/creds) and what is still missing, then exit. "
-         "Does not run any tests or touch DCT.",
+    "Does not run any tests or touch DCT.",
 )
 @click.option(
     "--workflow",
@@ -141,7 +161,7 @@ def _print_requirements(connector: str) -> None:
 @click.option(
     "--persona",
     help="For --layer scenarios: comma-separated personas to run "
-         "(e.g. self_service,continuous_data_admin). Sets SCENARIO_PERSONAS.",
+    "(e.g. self_service,continuous_data_admin). Sets SCENARIO_PERSONAS.",
 )
 @click.option(
     "--mutations",
@@ -165,7 +185,8 @@ def _print_requirements(connector: str) -> None:
     help="Skip the e2e cleanup pass. Dangerous on a persistent DCT — leaves orphaned resources.",
 )
 @click.option(
-    "-v", "--verbose",
+    "-v",
+    "--verbose",
     is_flag=True,
     help="Pass --tb=long to pytest for more detailed failure output.",
 )
@@ -201,7 +222,7 @@ def main(
     if layer == "connector":
         ctype = connector or os.environ.get("CONNECTOR_TYPE", "mysql")
         env["CONNECTOR_TYPE"] = ctype
-        env["LLM_ALLOW_MUTATION"] = "1"   # workflows mutate; this layer implies it
+        env["LLM_ALLOW_MUTATION"] = "1"  # workflows mutate; this layer implies it
         # Preflight: fail fast with a clear message instead of 10 min into a run.
         req = _connector_requirements(ctype)
         if req is None:
@@ -287,13 +308,18 @@ def main(
         if results_file and os.path.exists(results_file):
             report_script = str(_REPO_ROOT / "scripts" / "connector_workflow_report.py")
             out_base = f"test-results/{connector or 'mysql'}-MCP-test-results"
-            click.secho(f"\n→ report: {results_file} → {out_base}(Results|Summary).csv", fg="yellow")
+            click.secho(
+                f"\n→ report: {results_file} → {out_base}(Results|Summary).csv",
+                fg="yellow",
+            )
             subprocess.run(
                 [sys.executable, report_script, results_file, "--out-base", out_base],
                 env=env,
             )
         else:
-            click.secho("\n(no workflow results recorded — nothing to report)", fg="yellow")
+            click.secho(
+                "\n(no workflow results recorded — nothing to report)", fg="yellow"
+            )
 
     sys.exit(result.returncode)
 

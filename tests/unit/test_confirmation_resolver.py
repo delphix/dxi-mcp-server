@@ -7,7 +7,6 @@ _parse_threshold and _reconstruct_level_string.
 
 from unittest.mock import patch
 
-import pytest
 
 from dct_mcp_server.tools.core.confirmation_resolver import (
     _parse_threshold,
@@ -60,7 +59,12 @@ def test_reconstruct_level_string_full_string_already():
 # check_confirmation — level="none" cases
 # ---------------------------------------------------------------------------
 
-_NONE_RESULT = {"level": "none", "message": None, "conditional": False, "threshold_days": None}
+_NONE_RESULT = {
+    "level": "none",
+    "message": None,
+    "conditional": False,
+    "threshold_days": None,
+}
 
 
 def test_level_none_returns_no_confirmation():

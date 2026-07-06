@@ -5,13 +5,10 @@ Extended unit tests for core/logging.py.
 from __future__ import annotations
 
 import logging
-import os
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 
 from dct_mcp_server.core.logging import (
     GlobalLogger,
@@ -25,6 +22,7 @@ from dct_mcp_server.core.logging import (
 # LoggingConfig constants
 # ---------------------------------------------------------------------------
 
+
 def test_logging_config_defaults():
     assert LoggingConfig.DEFAULT_LOG_LEVEL == "INFO"
     assert LoggingConfig.BACKUP_COUNT == 7
@@ -35,6 +33,7 @@ def test_logging_config_defaults():
 # ---------------------------------------------------------------------------
 # setup_logging
 # ---------------------------------------------------------------------------
+
 
 def test_setup_logging_no_exception(tmp_path):
     log_file = str(tmp_path / "test.log")
@@ -71,15 +70,17 @@ def test_setup_logging_idempotent(tmp_path):
     gl = GlobalLogger()
     gl.setup(log_level="INFO", log_file=log_file)
     # Second call should be a no-op (setup_complete=True)
-    initial_handlers = len(logging.getLogger().handlers)
+    len(logging.getLogger().handlers)
     gl.setup(log_level="DEBUG", log_file=log_file)
 
 
 def test_setup_logging_file_handler_failure(tmp_path):
     """When file creation fails, setup should not crash (falls back gracefully)."""
     gl = GlobalLogger()
-    with patch("dct_mcp_server.core.logging.TimedRotatingFileHandler",
-               side_effect=OSError("cannot create")):
+    with patch(
+        "dct_mcp_server.core.logging.TimedRotatingFileHandler",
+        side_effect=OSError("cannot create"),
+    ):
         # Should not raise; error is printed to stderr
         gl.setup(log_level="INFO", log_file=str(tmp_path / "fail.log"))
 
@@ -87,6 +88,7 @@ def test_setup_logging_file_handler_failure(tmp_path):
 # ---------------------------------------------------------------------------
 # get_logger
 # ---------------------------------------------------------------------------
+
 
 def test_get_logger_returns_logger():
     logger = get_logger("test.module")
@@ -114,6 +116,7 @@ def test_get_logger_same_name_same_instance():
 # ---------------------------------------------------------------------------
 # GlobalLogger
 # ---------------------------------------------------------------------------
+
 
 def test_global_logger_get_project_root():
     root = GlobalLogger._get_project_root()
@@ -143,7 +146,7 @@ def test_global_logger_auto_setup_on_get():
     # _setup_complete is False initially
     assert not gl._setup_complete
     # Calling get_logger should trigger setup
-    with patch.object(gl, "setup", wraps=gl.setup) as mock_setup:
+    with patch.object(gl, "setup", wraps=gl.setup):
         lg = gl.get_logger("test")
     # After the call, _setup_complete or setup was called
     assert isinstance(lg, logging.Logger)

@@ -114,7 +114,9 @@ def _gated_self_service():
     """All confirmation-gated (tool, action) cases in self_service, from config."""
     out, seen = [], set()
     for c in config_cases.action_cases("self_service"):
-        conf = get_confirmation_for_operation(c.method, re.sub(r"\{[^}]+\}", DUMMY, c.path))
+        conf = get_confirmation_for_operation(
+            c.method, re.sub(r"\{[^}]+\}", DUMMY, c.path)
+        )
         if conf.get("level", "none") == "none":
             continue
         if (c.tool, c.action) in seen:
@@ -127,7 +129,16 @@ def _gated_self_service():
         # Skip actions that are in the config but not implemented in the pre-built tools
         if (wire_tool, wire_action) in _WIRE_ACTIONS_NOT_IN_PREBUILT:
             continue
-        out.append((wire_tool, wire_action, c.method, conf["level"], _wire_path(c.path), kwargs))
+        out.append(
+            (
+                wire_tool,
+                wire_action,
+                c.method,
+                conf["level"],
+                _wire_path(c.path),
+                kwargs,
+            )
+        )
     return out
 
 

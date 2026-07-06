@@ -172,7 +172,9 @@ def test_discovery_list_operations_pagination(discovery_spec_loaded):
 # =========================================================================== #
 
 
-def test_discovery_get_operation_schema_missing_path_returns_error(discovery_spec_loaded):
+def test_discovery_get_operation_schema_missing_path_returns_error(
+    discovery_spec_loaded,
+):
     result = discovery_spec_loaded(
         action="get_operation_schema",
         path=None,
@@ -183,7 +185,9 @@ def test_discovery_get_operation_schema_missing_path_returns_error(discovery_spe
     assert "path" in result["message"]
 
 
-def test_discovery_get_operation_schema_missing_method_returns_error(discovery_spec_loaded):
+def test_discovery_get_operation_schema_missing_method_returns_error(
+    discovery_spec_loaded,
+):
     result = discovery_spec_loaded(
         action="get_operation_schema",
         path="/vdbs",
@@ -252,7 +256,11 @@ async def test_execute_resolves_path_params():
     ):
         with patch(
             "dct_mcp_server.tools.core.dynamic.check_confirmation",
-            return_value={"requires_confirmation": False, "confirmation_level": None, "message_template": None},
+            return_value={
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            },
         ):
             result = await fn(
                 path="/vdbs/{vdbId}",
@@ -263,7 +271,9 @@ async def test_execute_resolves_path_params():
     assert result["status"] == "success"
     client.make_request.assert_called_once()
     call_kwargs = client.make_request.call_args
-    assert "vdb-123" in call_kwargs[1].get("endpoint", call_kwargs[0][1] if len(call_kwargs[0]) > 1 else "")
+    assert "vdb-123" in call_kwargs[1].get(
+        "endpoint", call_kwargs[0][1] if len(call_kwargs[0]) > 1 else ""
+    )
 
 
 async def test_execute_missing_path_params_returns_validation_error():
@@ -391,9 +401,7 @@ async def test_execute_dct_client_error_returns_dct_api_error():
 
     app = _make_app_mock()
     client = _make_client_mock()
-    client.make_request = AsyncMock(
-        side_effect=DCTClientError("HTTP 404 Not Found")
-    )
+    client.make_request = AsyncMock(side_effect=DCTClientError("HTTP 404 Not Found"))
     fn = _make_execute_fn(app, client)
 
     with patch(

@@ -36,7 +36,9 @@ async def _search_get(tools, dct_stub, tool):
     assert get_res.get("id") == first_id, f"{tool} get did not echo the id: {get_res}"
 
     assert dct_stub.received_request(search_m, "/dct/v3" + search_p)
-    assert dct_stub.received_request(get_m, "/dct/v3" + re.sub(r"\{\w+\}", first_id, get_p))
+    assert dct_stub.received_request(
+        get_m, "/dct/v3" + re.sub(r"\{\w+\}", first_id, get_p)
+    )
     return func, first_id
 
 
@@ -46,7 +48,9 @@ async def _get_tags_step(func, dct_stub, tool, first_id):
     placeholder = re.search(r"\{(\w+)\}", tags_p).group(1)
     tags_res = await func(action="get_tags", **{placeholder: first_id})
     assert "items" in tags_res, f"{tool} get_tags unexpected shape: {tags_res}"
-    assert dct_stub.received_request(tags_m, "/dct/v3" + re.sub(r"\{\w+\}", first_id, tags_p))
+    assert dct_stub.received_request(
+        tags_m, "/dct/v3" + re.sub(r"\{\w+\}", first_id, tags_p)
+    )
 
 
 @pytest.mark.asyncio

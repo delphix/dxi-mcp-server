@@ -142,7 +142,9 @@ def _wire_client(monkeypatch, mock_dct_client):
     return mock_dct_client
 
 
-@pytest.mark.parametrize("case", _CASES, ids=[config_cases.action_id(c) for c in _CASES])
+@pytest.mark.parametrize(
+    "case", _CASES, ids=[config_cases.action_id(c) for c in _CASES]
+)
 def test_action_routes_to_correct_endpoint(case, _wire_client):
     module = _module_for(case.tool)
     func_name = _TOOL_FUNC_MAP.get(case.tool, case.tool)
@@ -185,8 +187,6 @@ def test_missing_required_param_returns_error_and_no_call(_wire_client):
 
 
 def test_unknown_action_returns_error_and_no_call(_wire_client):
-    result = dataset_endpoints_tool.data_tool(
-        action="not_a_real_action", vdb_id="X1"
-    )
+    result = dataset_endpoints_tool.data_tool(action="not_a_real_action", vdb_id="X1")
     assert isinstance(result, dict) and "error" in result
     assert not _wire_client.make_request.called

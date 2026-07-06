@@ -39,14 +39,17 @@ async def test_timeflow_workflow(mcp_client_self_service, dct_stub):
     tf_id = first_id(res)
 
     # Prompt 63 — Get the first timeflow's details.
-    res = await client.call_tool("timeflow_tool", {"action": "get", "timeflow_id": tf_id})
+    res = await client.call_tool(
+        "timeflow_tool", {"action": "get", "timeflow_id": tf_id}
+    )
     assert not res.is_error
     assert payload(res).get("id") == tf_id
     assert dct_stub.received_request("GET", f"/dct/v3/timeflows/{tf_id}")
 
     # Prompt 64 — Update the timeflow name (PATCH; no confirmation rule).
     res = await client.call_tool(
-        "timeflow_tool", {"action": "update", "timeflow_id": tf_id, "name": "test-timeflow"}
+        "timeflow_tool",
+        {"action": "update", "timeflow_id": tf_id, "name": "test-timeflow"},
     )
     assert not res.is_error
     assert dct_stub.received_request("PATCH", f"/dct/v3/timeflows/{tf_id}")
@@ -61,23 +64,30 @@ async def test_timeflow_workflow(mcp_client_self_service, dct_stub):
     )
 
     # Prompt 66 — Repair the timeflow.
-    res = await client.call_tool("timeflow_tool", {"action": "repair", "timeflow_id": tf_id})
+    res = await client.call_tool(
+        "timeflow_tool", {"action": "repair", "timeflow_id": tf_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/timeflows/{tf_id}/repair")
 
     # Prompt 67 — Get tags.
-    res = await client.call_tool("timeflow_tool", {"action": "get_tags", "timeflow_id": tf_id})
+    res = await client.call_tool(
+        "timeflow_tool", {"action": "get_tags", "timeflow_id": tf_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/timeflows/{tf_id}/tags")
 
     # Prompt 68 — Add a tag.
-    res = await client.call_tool("timeflow_tool", {"action": "add_tags", "timeflow_id": tf_id})
+    res = await client.call_tool(
+        "timeflow_tool", {"action": "add_tags", "timeflow_id": tf_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/timeflows/{tf_id}/tags")
 
     # Prompt 69 — Remove the tag (delete_tags — standard confirmation, pre-confirmed).
     res = await client.call_tool(
-        "timeflow_tool", {"action": "delete_tags", "timeflow_id": tf_id, "confirmed": True}
+        "timeflow_tool",
+        {"action": "delete_tags", "timeflow_id": tf_id, "confirmed": True},
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/timeflows/{tf_id}/tags/delete")

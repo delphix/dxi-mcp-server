@@ -12,8 +12,6 @@ Translates `.claude/test/testing/self_service.md` prompts 13-17:
 
 import pytest
 
-from tests.functional.workflows._helpers import payload
-
 
 @pytest.mark.asyncio
 async def test_vdb_lists_and_tags(mcp_client_self_service, dct_stub):
@@ -21,25 +19,34 @@ async def test_vdb_lists_and_tags(mcp_client_self_service, dct_stub):
     vdb_id = "v-1"
 
     # Prompt 13 — List all snapshots.
-    res = await client.call_tool("data_tool", {"action": "list_vdb_snapshots", "vdb_id": vdb_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "list_vdb_snapshots", "vdb_id": vdb_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/vdbs/{vdb_id}/snapshots")
 
     # Prompt 14 — List all bookmarks.
-    res = await client.call_tool("data_tool", {"action": "list_vdb_bookmarks", "vdb_id": vdb_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "list_vdb_bookmarks", "vdb_id": vdb_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/vdbs/{vdb_id}/bookmarks")
 
     # Prompt 15 — Get the tags.
-    res = await client.call_tool("data_tool", {"action": "get_vdb_tags", "vdb_id": vdb_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "get_vdb_tags", "vdb_id": vdb_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/vdbs/{vdb_id}/tags")
 
     # Prompt 16 — Add the tag environment=test.
     res = await client.call_tool(
         "data_tool",
-        {"action": "add_vdb_tags", "vdb_id": vdb_id,
-         "tags": [{"key": "environment", "value": "test"}]},
+        {
+            "action": "add_vdb_tags",
+            "vdb_id": vdb_id,
+            "tags": [{"key": "environment", "value": "test"}],
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/tags")

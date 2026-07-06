@@ -29,24 +29,65 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 TESTING_DIR = _REPO_ROOT / ".claude" / "test" / "testing"
 
-_HEADER = re.compile(r"^\*\*([a-z][a-z0-9_]*)")   # **vdb_tool** or **data_tool — VDB operations**
+_HEADER = re.compile(
+    r"^\*\*([a-z][a-z0-9_]*)"
+)  # **vdb_tool** or **data_tool — VDB operations**
 _PROMPT = re.compile(r"^(\d+)\.\s+(.*\S)\s*$")
 
 # Verbs that mean "read only". A prompt whose first word is one of these is a read;
 # everything else (provision/create/delete/start/refresh/...) is treated as a mutation.
 _READ_VERBS = {
-    "search", "get", "list", "find", "show", "what", "which", "how", "view",
-    "count", "display", "describe", "fetch", "retrieve", "check",
+    "search",
+    "get",
+    "list",
+    "find",
+    "show",
+    "what",
+    "which",
+    "how",
+    "view",
+    "count",
+    "display",
+    "describe",
+    "fetch",
+    "retrieve",
+    "check",
 }
 
 # Mutation verbs used to catch COMPOUND read-prefixed prompts, e.g.
 # "List the snapshots for that VDB, then refresh it ...". If a read-prefixed prompt
 # contains one of these after a "then"/"and"/";"/"," it actually mutates.
 _MUTATION_VERBS = {
-    "provision", "create", "delete", "remove", "start", "stop", "enable", "disable",
-    "refresh", "rollback", "roll back", "add", "register", "unregister", "update",
-    "abandon", "repair", "lock", "unlock", "link", "apply", "set ", "unset",
-    "snapshot", "purge", "import", "attach", "detach", "assign", "revoke",
+    "provision",
+    "create",
+    "delete",
+    "remove",
+    "start",
+    "stop",
+    "enable",
+    "disable",
+    "refresh",
+    "rollback",
+    "roll back",
+    "add",
+    "register",
+    "unregister",
+    "update",
+    "abandon",
+    "repair",
+    "lock",
+    "unlock",
+    "link",
+    "apply",
+    "set ",
+    "unset",
+    "snapshot",
+    "purge",
+    "import",
+    "attach",
+    "detach",
+    "assign",
+    "revoke",
 }
 
 
@@ -55,8 +96,8 @@ class Scenario:
     persona: str
     num: int
     prompt: str
-    tool: str          # expected tool (from the bold section header)
-    tier: str          # "read" | "mutation"
+    tool: str  # expected tool (from the bold section header)
+    tier: str  # "read" | "mutation"
 
     @property
     def id(self) -> str:
@@ -94,7 +135,9 @@ def load_scenarios(persona: str) -> tuple:
         m = _PROMPT.match(line)
         if m and current_tool:
             num, prompt = int(m.group(1)), m.group(2)
-            scenarios.append(Scenario(persona, num, prompt, current_tool, _classify(prompt)))
+            scenarios.append(
+                Scenario(persona, num, prompt, current_tool, _classify(prompt))
+            )
     return tuple(scenarios)
 
 

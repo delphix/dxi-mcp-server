@@ -47,7 +47,9 @@ async def test_cda_registers_all_configured_tools(cda_mcp_client):
     names = {t.name for t in await cda_mcp_client.list_tools()}
     expected = set(config_cases.tools_for(_TOOLSET))
     missing = expected - names
-    assert not missing, f"missing CDA tools against real DCT: {missing}; registered: {sorted(names)}"
+    assert not missing, (
+        f"missing CDA tools against real DCT: {missing}; registered: {sorted(names)}"
+    )
 
 
 @pytest.mark.parametrize("tool", SEARCH_TOOLS)
@@ -56,8 +58,12 @@ async def test_cda_read_only_search_well_shaped(cda_mcp_client, tool):
     Each CDA resource's search returns a well-shaped paginated response from the real
     DCT. The list may be empty — we assert SHAPE, not contents.
     """
-    result = await call_tool_tolerant(cda_mcp_client, tool, {"action": "search", "limit": 5})
+    result = await call_tool_tolerant(
+        cda_mcp_client, tool, {"action": "search", "limit": 5}
+    )
     body = _payload(result)
     assert isinstance(body, dict), f"{tool} search returned non-dict: {body!r}"
     assert "items" in body, f"{tool} search response missing 'items': {body}"
-    assert isinstance(body["items"], list), f"{tool} 'items' not a list: {type(body['items'])}"
+    assert isinstance(body["items"], list), (
+        f"{tool} 'items' not a list: {type(body['items'])}"
+    )

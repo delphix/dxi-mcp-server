@@ -17,7 +17,7 @@ LICENSE_MARKER = "License does not permit"
 def result_text(result) -> str:
     """Concatenate the text content of a CallToolResult (works for error results too)."""
     parts = []
-    for c in (result.content or []):
+    for c in result.content or []:
         t = getattr(c, "text", None)
         if t:
             parts.append(t)
@@ -40,6 +40,10 @@ async def call_tool_tolerant(client, tool, args):
     if result.is_error:
         text = result_text(result)
         if LICENSE_MARKER in text:
-            pytest.skip(f"{tool}: DCT license does not permit this resource — {text[:140]}")
-        pytest.fail(f"{tool} {args.get('action')!r} failed against real DCT: {text[:300]}")
+            pytest.skip(
+                f"{tool}: DCT license does not permit this resource — {text[:140]}"
+            )
+        pytest.fail(
+            f"{tool} {args.get('action')!r} failed against real DCT: {text[:300]}"
+        )
     return result

@@ -34,19 +34,25 @@ async def test_vdb_group_workflow(mcp_client_self_service, dct_stub):
     client = mcp_client_self_service
 
     # Prompt 18 — Search for all VDB groups.
-    res = await client.call_tool("data_tool", {"action": "search_vdb_groups", "limit": 10})
+    res = await client.call_tool(
+        "data_tool", {"action": "search_vdb_groups", "limit": 10}
+    )
     assert not res.is_error, f"search failed: {res}"
     assert dct_stub.received_request("POST", "/dct/v3/vdb-groups/search")
     vg_id = first_id(res)
 
     # Prompt 19 — Get the first VDB group's details.
-    res = await client.call_tool("data_tool", {"action": "get_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "get_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert payload(res).get("id") == vg_id
     assert dct_stub.received_request("GET", f"/dct/v3/vdb-groups/{vg_id}")
 
     # Prompt 20 — Refresh that VDB group.
-    res = await client.call_tool("data_tool", {"action": "refresh_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "refresh_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/refresh")
 
@@ -60,59 +66,82 @@ async def test_vdb_group_workflow(mcp_client_self_service, dct_stub):
 
     res = await client.call_tool(
         "data_tool",
-        {"action": "refresh_vdb_group_from_bookmark", "vdb_group_id": vg_id, "bookmark_id": bookmark_id},
+        {
+            "action": "refresh_vdb_group_from_bookmark",
+            "vdb_group_id": vg_id,
+            "bookmark_id": bookmark_id,
+        },
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_from_bookmark")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_from_bookmark"
+    )
 
     # Prompt 22 — Refresh by snapshot.
     res = await client.call_tool(
         "data_tool", {"action": "refresh_vdb_group_by_snapshot", "vdb_group_id": vg_id}
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_by_snapshot")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_by_snapshot"
+    )
 
     # Prompt 23 — Refresh by timestamp (one hour ago).
     res = await client.call_tool(
         "data_tool", {"action": "refresh_vdb_group_by_timestamp", "vdb_group_id": vg_id}
     )
     assert not res.is_error
-    assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_by_timestamp")
+    assert dct_stub.received_request(
+        "POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_by_timestamp"
+    )
 
     # Prompt 24 — Roll back (standard conf -> pre-confirm).
     res = await client.call_tool(
-        "data_tool", {"action": "rollback_vdb_group", "vdb_group_id": vg_id, "confirmed": True}
+        "data_tool",
+        {"action": "rollback_vdb_group", "vdb_group_id": vg_id, "confirmed": True},
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/rollback")
 
     # Prompt 25 — Lock.
-    res = await client.call_tool("data_tool", {"action": "lock_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "lock_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/lock")
 
     # Prompt 26 — Unlock.
-    res = await client.call_tool("data_tool", {"action": "unlock_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "unlock_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/unlock")
 
     # Prompt 27 — Start.
-    res = await client.call_tool("data_tool", {"action": "start_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "start_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/start")
 
     # Prompt 28 — Stop.
-    res = await client.call_tool("data_tool", {"action": "stop_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "stop_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/stop")
 
     # Prompt 29 — Enable.
-    res = await client.call_tool("data_tool", {"action": "enable_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "enable_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/enable")
 
     # Prompt 30 — Disable.
-    res = await client.call_tool("data_tool", {"action": "disable_vdb_group", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "disable_vdb_group", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/disable")
 
@@ -124,15 +153,20 @@ async def test_vdb_group_workflow(mcp_client_self_service, dct_stub):
     assert dct_stub.received_request("GET", f"/dct/v3/vdb-groups/{vg_id}/bookmarks")
 
     # Prompt 32 — Get the tags.
-    res = await client.call_tool("data_tool", {"action": "get_vdb_group_tags", "vdb_group_id": vg_id})
+    res = await client.call_tool(
+        "data_tool", {"action": "get_vdb_group_tags", "vdb_group_id": vg_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/vdb-groups/{vg_id}/tags")
 
     # Prompt 33 — Add the tag team=qa.
     res = await client.call_tool(
         "data_tool",
-        {"action": "add_vdb_group_tags", "vdb_group_id": vg_id,
-         "tags": [{"key": "team", "value": "qa"}]},
+        {
+            "action": "add_vdb_group_tags",
+            "vdb_group_id": vg_id,
+            "tags": [{"key": "team", "value": "qa"}],
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/vdb-groups/{vg_id}/tags")

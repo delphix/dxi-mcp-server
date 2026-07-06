@@ -68,7 +68,9 @@ async def test_platform_admin_engine_search_get(persona_tools, dct_stub):
 async def test_reporting_insights_report_search(persona_tools, dct_stub):
     """reporting_insights: reporting_tool search of the VDB inventory report."""
     tools = persona_tools("reporting_insights")
-    method, path = _path_for("reporting_insights", "reporting_tool", "search_vdb_inventory_report")
+    method, path = _path_for(
+        "reporting_insights", "reporting_tool", "search_vdb_inventory_report"
+    )
     res = await tools["reporting_tool"](action="search_vdb_inventory_report")
     assert "items" in res, f"expected a search result list, got: {res}"
     assert dct_stub.received_request(method, "/dct/v3" + path)
@@ -84,13 +86,17 @@ async def test_self_service_provision_gated(persona_tools, dct_stub):
     confirmation-over-generated-tool check.
     """
     tools = persona_tools("self_service_provision")
-    method, path = _path_for("self_service_provision", "vdb_tool", "provision_by_snapshot")
+    method, path = _path_for(
+        "self_service_provision", "vdb_tool", "provision_by_snapshot"
+    )
     wire_path = "/dct/v3" + path
 
     gated = await tools["vdb_tool"](action="provision_by_snapshot")
     assert gated.get("status") == "confirmation_required"
     assert gated.get("confirmation_level") == "elevated"
-    assert not dct_stub.received_request(method, wire_path), "gated call must not hit DCT"
+    assert not dct_stub.received_request(method, wire_path), (
+        "gated call must not hit DCT"
+    )
 
     await tools["vdb_tool"](action="provision_by_snapshot", confirmed=True)
     assert dct_stub.received_request(method, wire_path)

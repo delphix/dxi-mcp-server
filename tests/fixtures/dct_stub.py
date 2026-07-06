@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import uvicorn
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 
@@ -46,8 +46,9 @@ _FIXTURE_VDBS = [
 ]
 
 
-def _generic_item(resource: str, item_id: Optional[str] = None,
-                  parent_id: Optional[str] = None) -> Dict[str, Any]:
+def _generic_item(
+    resource: str, item_id: Optional[str] = None, parent_id: Optional[str] = None
+) -> Dict[str, Any]:
     """A deterministic canned object for the catch-all routes.
 
     Stable per-resource id (e.g. vg-1 for vdb-groups) so `search` ->
@@ -156,13 +157,15 @@ class DctStub:
         path = request.url.path  # e.g. /dct/v3/vdb-groups/vg-1/snapshots
         method = request.method
         # Strip the /dct/v3 prefix, split into segments.
-        rel = path[len("/dct/v3"):].lstrip("/")
+        rel = path[len("/dct/v3") :].lstrip("/")
         segs = [s for s in rel.split("/") if s]
 
         # POST .../search -> a list with a stable first item.
         if method == "POST" and segs and segs[-1] == "search":
             resource = segs[-2] if len(segs) >= 2 else "item"
-            return JSONResponse({"items": [_generic_item(resource), _generic_item(resource, "2")]})
+            return JSONResponse(
+                {"items": [_generic_item(resource), _generic_item(resource, "2")]}
+            )
 
         # GET sub-resource lists / detail blobs.
         if method == "GET" and segs:
@@ -170,10 +173,18 @@ class DctStub:
             if tail in ("snapshots", "bookmarks", "tags", "vdb-groups"):
                 # Parent id is segs[-2] when present.
                 parent = segs[-2] if len(segs) >= 2 else tail
-                return JSONResponse({"items": [_generic_item(tail.rstrip("s"), parent_id=parent)]})
+                return JSONResponse(
+                    {"items": [_generic_item(tail.rstrip("s"), parent_id=parent)]}
+                )
             if tail in ("runtime", "timeflow_range", "timeflowSnapshotDayRange"):
-                return JSONResponse({tail: {"start": "2024-01-01T00:00:00.000Z",
-                                            "end": "2024-01-02T00:00:00.000Z"}})
+                return JSONResponse(
+                    {
+                        tail: {
+                            "start": "2024-01-01T00:00:00.000Z",
+                            "end": "2024-01-02T00:00:00.000Z",
+                        }
+                    }
+                )
             if tail in ("find_by_location", "find_by_timestamp"):
                 return JSONResponse({"items": [_generic_item("snapshot")]})
             if tail == "timeflows":
@@ -213,25 +224,50 @@ def build_app(stub: DctStub) -> Starlette:
             Route("/dct/v3/vdbs/{vdbId}/delete", stub.vdb_delete, methods=["POST"]),
             # --- Confirmation-gated self_service endpoints (3c) ---
             Route("/dct/v3/vdbs/{vdbId}/disable", stub.ack, methods=["POST"]),
-            Route("/dct/v3/vdbs/{vdbId}/rollback_by_timestamp", stub.ack, methods=["POST"]),
-            Route("/dct/v3/vdbs/{vdbId}/rollback_by_snapshot", stub.ack, methods=["POST"]),
-            Route("/dct/v3/vdbs/{vdbId}/rollback_from_bookmark", stub.ack, methods=["POST"]),
+            Route(
+                "/dct/v3/vdbs/{vdbId}/rollback_by_timestamp", stub.ack, methods=["POST"]
+            ),
+            Route(
+                "/dct/v3/vdbs/{vdbId}/rollback_by_snapshot", stub.ack, methods=["POST"]
+            ),
+            Route(
+                "/dct/v3/vdbs/{vdbId}/rollback_from_bookmark",
+                stub.ack,
+                methods=["POST"],
+            ),
             Route("/dct/v3/vdbs/{vdbId}/tags/delete", stub.ack, methods=["POST"]),
-            Route("/dct/v3/vdb-groups/{vdbGroupId}/rollback", stub.ack, methods=["POST"]),
-            Route("/dct/v3/vdb-groups/{vdbGroupId}/tags/delete", stub.ack, methods=["POST"]),
-            Route("/dct/v3/snapshots/{snapshotId}/tags/delete", stub.ack, methods=["POST"]),
-            Route("/dct/v3/bookmarks/{bookmarkId}", stub.ack, methods=["PATCH", "DELETE"]),
-            Route("/dct/v3/bookmarks/{bookmarkId}/tags/delete", stub.ack, methods=["POST"]),
+            Route(
+                "/dct/v3/vdb-groups/{vdbGroupId}/rollback", stub.ack, methods=["POST"]
+            ),
+            Route(
+                "/dct/v3/vdb-groups/{vdbGroupId}/tags/delete",
+                stub.ack,
+                methods=["POST"],
+            ),
+            Route(
+                "/dct/v3/snapshots/{snapshotId}/tags/delete", stub.ack, methods=["POST"]
+            ),
+            Route(
+                "/dct/v3/bookmarks/{bookmarkId}", stub.ack, methods=["PATCH", "DELETE"]
+            ),
+            Route(
+                "/dct/v3/bookmarks/{bookmarkId}/tags/delete", stub.ack, methods=["POST"]
+            ),
             Route("/dct/v3/timeflows/{timeflowId}", stub.ack, methods=["DELETE"]),
-            Route("/dct/v3/timeflows/{timeflowId}/tags/delete", stub.ack, methods=["POST"]),
+            Route(
+                "/dct/v3/timeflows/{timeflowId}/tags/delete", stub.ack, methods=["POST"]
+            ),
             # --- Workflow catch-all (3b) ---
             # Last route: handles every other /dct/v3 endpoint for the workflow
             # chains (vdb-groups, dsources, snapshots, bookmarks, jobs,
             # timeflows + sub-resources). Declared LAST so all explicit routes
             # above win. Does NOT match /dct/static/... so the OpenAPI bootstrap
             # still 404s and the pre-built tools remain the active toolset.
-            Route("/dct/v3/{rest:path}", stub.catch_all,
-                  methods=["GET", "POST", "PATCH", "DELETE", "PUT"]),
+            Route(
+                "/dct/v3/{rest:path}",
+                stub.catch_all,
+                methods=["GET", "POST", "PATCH", "DELETE", "PUT"],
+            ),
             # Anything outside /dct/v3 (including /dct/static/api-external.yaml)
             # → 404. That is intentional: the OpenAPI bootstrap fails fast, MCP
             # server falls back to pre-built tools, and we get a clean toolset.

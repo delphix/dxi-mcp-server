@@ -77,7 +77,11 @@ def tools_for(toolset: str) -> dict:
             parts = line.split("|")
             if len(parts) < 3 or current is None:
                 continue
-            method, api_path, action = parts[0].strip(), parts[1].strip(), parts[2].strip()
+            method, api_path, action = (
+                parts[0].strip(),
+                parts[1].strip(),
+                parts[2].strip(),
+            )
             entry = (method, api_path, action)
             if entry not in tools[current]:
                 tools[current].append(entry)

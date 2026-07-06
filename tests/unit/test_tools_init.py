@@ -36,19 +36,23 @@ def _mod_without_register():
 
 def _temp_iter(*names):
     """pkgutil.iter_modules returns given names for the temp dir, nothing for package dir."""
+
     def _iter(paths):
         if paths and _TEMP_DIR in str(paths[0]):
             return [(None, n, False) for n in names]
         return []
+
     return _iter
 
 
 def _pkg_iter(*names):
     """pkgutil.iter_modules returns nothing for temp dir, given names for package dir."""
+
     def _iter(paths):
         if paths and _TEMP_DIR in str(paths[0]):
             return []
         return [(None, n, False) for n in names]
+
     return _iter
 
 
@@ -56,12 +60,13 @@ def _pkg_iter(*names):
 # register_meta_tools_only
 # ---------------------------------------------------------------------------
 
+
 def test_register_meta_tools_only_calls_register_meta_tools():
     mock_app = MagicMock()
     mock_client = MagicMock()
 
     with patch("dct_mcp_server.tools.core.meta_tools.register_meta_tools") as mock_reg:
-        with patch("dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory") as mock_init:
+        with patch("dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory"):
             register_meta_tools_only(mock_app, mock_client)
 
     mock_reg.assert_called_once_with(mock_app)
@@ -72,7 +77,9 @@ def test_register_meta_tools_only_with_client_calls_initialize():
     mock_client = MagicMock()
 
     with patch("dct_mcp_server.tools.core.meta_tools.register_meta_tools"):
-        with patch("dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory") as mock_init:
+        with patch(
+            "dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory"
+        ) as mock_init:
             register_meta_tools_only(mock_app, mock_client)
 
     mock_init.assert_called_once_with(mock_app, mock_client)
@@ -82,7 +89,9 @@ def test_register_meta_tools_only_without_client():
     mock_app = MagicMock()
 
     with patch("dct_mcp_server.tools.core.meta_tools.register_meta_tools") as mock_reg:
-        with patch("dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory") as mock_init:
+        with patch(
+            "dct_mcp_server.tools.core.meta_tools.initialize_tool_inventory"
+        ) as mock_init:
             register_meta_tools_only(mock_app, dct_client=None)
 
     mock_reg.assert_called_once_with(mock_app)
@@ -93,6 +102,7 @@ def test_register_meta_tools_only_without_client():
 # ---------------------------------------------------------------------------
 # register_all_tools — AUTO mode
 # ---------------------------------------------------------------------------
+
 
 def test_register_all_tools_auto_mode(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "auto")
@@ -110,7 +120,7 @@ def test_register_all_tools_auto_mode_does_not_scan_modules(monkeypatch):
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.register_meta_tools_only") as mock_meta:
+    with patch("dct_mcp_server.tools.register_meta_tools_only"):
         with patch("pkgutil.iter_modules") as mock_iter:
             register_all_tools(mock_app, mock_client)
 
@@ -121,6 +131,7 @@ def test_register_all_tools_auto_mode_does_not_scan_modules(monkeypatch):
 # ---------------------------------------------------------------------------
 # register_all_tools — FIXED mode
 # ---------------------------------------------------------------------------
+
 
 def test_register_all_tools_fixed_mode_self_service(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
@@ -162,8 +173,10 @@ def test_register_all_tools_metadata_loaded(monkeypatch):
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.load_toolset_metadata",
-               return_value={"description": "test", "tool_count": 2}) as mock_meta:
+    with patch(
+        "dct_mcp_server.tools.load_toolset_metadata",
+        return_value={"description": "test", "tool_count": 2},
+    ) as mock_meta:
         register_all_tools(mock_app, mock_client)
 
     mock_meta.assert_called_once_with("self_service")
@@ -174,8 +187,10 @@ def test_register_all_tools_metadata_exception_handled(monkeypatch):
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.load_toolset_metadata",
-               side_effect=Exception("metadata error")):
+    with patch(
+        "dct_mcp_server.tools.load_toolset_metadata",
+        side_effect=Exception("metadata error"),
+    ):
         # Should not raise
         register_all_tools(mock_app, mock_client)
 
@@ -185,8 +200,10 @@ def test_register_all_tools_modules_exception_handled(monkeypatch):
     mock_app = MagicMock()
     mock_client = MagicMock()
 
-    with patch("dct_mcp_server.tools.get_modules_for_toolset",
-               side_effect=Exception("modules error")):
+    with patch(
+        "dct_mcp_server.tools.get_modules_for_toolset",
+        side_effect=Exception("modules error"),
+    ):
         # Should not raise; falls back to loading all modules
         register_all_tools(mock_app, mock_client)
 
@@ -195,7 +212,10 @@ def test_register_all_tools_modules_exception_handled(monkeypatch):
 # register_all_tools — TEMP directory path
 # ---------------------------------------------------------------------------
 
-def test_register_all_tools_skips_temp_dir_when_not_site_packages(monkeypatch, tmp_path):
+
+def test_register_all_tools_skips_temp_dir_when_not_site_packages(
+    monkeypatch, tmp_path
+):
     """When not in site-packages, temp dir should be skipped."""
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
     mock_app = MagicMock()
@@ -214,12 +234,16 @@ def test_register_all_tools_skips_temp_dir_when_not_site_packages(monkeypatch, t
 # Various toolsets
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("toolset", [
-    "self_service",
-    "continuous_data_admin",
-    "platform_admin",
-    "reporting_insights",
-])
+
+@pytest.mark.parametrize(
+    "toolset",
+    [
+        "self_service",
+        "continuous_data_admin",
+        "platform_admin",
+        "reporting_insights",
+    ],
+)
 def test_register_all_tools_various_toolsets(monkeypatch, toolset):
     monkeypatch.setenv("DCT_TOOLSET", toolset)
     mock_app = MagicMock()
@@ -232,6 +256,7 @@ def test_register_all_tools_various_toolsets(monkeypatch, toolset):
 # ---------------------------------------------------------------------------
 # register_all_tools — site-packages / temp-dir branch (lines 109-146)
 # ---------------------------------------------------------------------------
+
 
 def test_site_packages_branch_entered_dir_absent(monkeypatch):
     """Lines 109-110, 113: temp_tools_dir is set but skipped when the dir doesn't exist."""
@@ -266,7 +291,9 @@ def test_temp_dir_loop_skips_meta_tools(monkeypatch):
             with patch("pkgutil.iter_modules", side_effect=_temp_iter("meta_tools")):
                 with patch("dct_mcp_server.tools.importlib.import_module") as mock_imp:
                     register_all_tools(MagicMock(), MagicMock())
-                    assert not any("meta_tools" in str(c) for c in mock_imp.call_args_list)
+                    assert not any(
+                        "meta_tools" in str(c) for c in mock_imp.call_args_list
+                    )
 
 
 def test_temp_dir_loop_skips_module_not_in_required(monkeypatch):
@@ -274,11 +301,20 @@ def test_temp_dir_loop_skips_module_not_in_required(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
     with patch.object(tools_pkg, "__file__", _SITE_PKG_FILE):
         with patch("os.path.exists", return_value=True):
-            with patch("pkgutil.iter_modules", side_effect=_temp_iter("unrelated_tool")):
-                with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-                    with patch("dct_mcp_server.tools.importlib.import_module") as mock_imp:
+            with patch(
+                "pkgutil.iter_modules", side_effect=_temp_iter("unrelated_tool")
+            ):
+                with patch(
+                    "dct_mcp_server.tools.get_modules_for_toolset",
+                    return_value=["dataset_endpoints_tool"],
+                ):
+                    with patch(
+                        "dct_mcp_server.tools.importlib.import_module"
+                    ) as mock_imp:
                         register_all_tools(MagicMock(), MagicMock())
-                        assert not any("unrelated_tool" in str(c) for c in mock_imp.call_args_list)
+                        assert not any(
+                            "unrelated_tool" in str(c) for c in mock_imp.call_args_list
+                        )
 
 
 def test_temp_dir_loads_module_with_register_tools(monkeypatch):
@@ -289,11 +325,21 @@ def test_temp_dir_loads_module_with_register_tools(monkeypatch):
 
     with patch.object(tools_pkg, "__file__", _SITE_PKG_FILE):
         with patch("os.path.exists", return_value=True):
-            with patch("pkgutil.iter_modules", side_effect=_temp_iter("dataset_endpoints_tool")):
-                with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-                    with patch("dct_mcp_server.tools.importlib.import_module", return_value=fake_mod):
+            with patch(
+                "pkgutil.iter_modules", side_effect=_temp_iter("dataset_endpoints_tool")
+            ):
+                with patch(
+                    "dct_mcp_server.tools.get_modules_for_toolset",
+                    return_value=["dataset_endpoints_tool"],
+                ):
+                    with patch(
+                        "dct_mcp_server.tools.importlib.import_module",
+                        return_value=fake_mod,
+                    ):
                         register_all_tools(mock_app, mock_client)
-                        fake_mod.register_tools.assert_called_once_with(mock_app, mock_client)
+                        fake_mod.register_tools.assert_called_once_with(
+                            mock_app, mock_client
+                        )
 
 
 def test_temp_dir_module_without_register_tools(monkeypatch):
@@ -301,9 +347,17 @@ def test_temp_dir_module_without_register_tools(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
     with patch.object(tools_pkg, "__file__", _SITE_PKG_FILE):
         with patch("os.path.exists", return_value=True):
-            with patch("pkgutil.iter_modules", side_effect=_temp_iter("dataset_endpoints_tool")):
-                with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-                    with patch("dct_mcp_server.tools.importlib.import_module", return_value=_mod_without_register()):
+            with patch(
+                "pkgutil.iter_modules", side_effect=_temp_iter("dataset_endpoints_tool")
+            ):
+                with patch(
+                    "dct_mcp_server.tools.get_modules_for_toolset",
+                    return_value=["dataset_endpoints_tool"],
+                ):
+                    with patch(
+                        "dct_mcp_server.tools.importlib.import_module",
+                        return_value=_mod_without_register(),
+                    ):
                         register_all_tools(MagicMock(), MagicMock())
 
 
@@ -312,9 +366,17 @@ def test_temp_dir_import_exception_swallowed(monkeypatch):
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
     with patch.object(tools_pkg, "__file__", _SITE_PKG_FILE):
         with patch("os.path.exists", return_value=True):
-            with patch("pkgutil.iter_modules", side_effect=_temp_iter("dataset_endpoints_tool")):
-                with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-                    with patch("dct_mcp_server.tools.importlib.import_module", side_effect=ImportError("broken")):
+            with patch(
+                "pkgutil.iter_modules", side_effect=_temp_iter("dataset_endpoints_tool")
+            ):
+                with patch(
+                    "dct_mcp_server.tools.get_modules_for_toolset",
+                    return_value=["dataset_endpoints_tool"],
+                ):
+                    with patch(
+                        "dct_mcp_server.tools.importlib.import_module",
+                        side_effect=ImportError("broken"),
+                    ):
                         register_all_tools(MagicMock(), MagicMock())
 
 
@@ -322,10 +384,14 @@ def test_temp_dir_import_exception_swallowed(monkeypatch):
 # register_all_tools — pre-built scan branches (lines 156-183)
 # ---------------------------------------------------------------------------
 
+
 def test_prebuilt_scan_skips_meta_tools(monkeypatch):
     """Lines 156-157: 'meta_tools' in the pre-built scan is always skipped."""
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
-    with patch("pkgutil.iter_modules", side_effect=_pkg_iter("meta_tools", "dataset_endpoints_tool")):
+    with patch(
+        "pkgutil.iter_modules",
+        side_effect=_pkg_iter("meta_tools", "dataset_endpoints_tool"),
+    ):
         with patch("dct_mcp_server.tools.importlib.import_module") as mock_imp:
             mock_imp.return_value = _mod_with_register()
             register_all_tools(MagicMock(), MagicMock())
@@ -336,8 +402,14 @@ def test_prebuilt_scan_skips_meta_tools(monkeypatch):
 def test_prebuilt_scan_skips_module_not_in_required(monkeypatch):
     """Lines 160-162: module in pre-built scan not in required_modules is filtered out."""
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
-    with patch("pkgutil.iter_modules", side_effect=_pkg_iter("unrelated_tool", "dataset_endpoints_tool")):
-        with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
+    with patch(
+        "pkgutil.iter_modules",
+        side_effect=_pkg_iter("unrelated_tool", "dataset_endpoints_tool"),
+    ):
+        with patch(
+            "dct_mcp_server.tools.get_modules_for_toolset",
+            return_value=["dataset_endpoints_tool"],
+        ):
             with patch("dct_mcp_server.tools.importlib.import_module") as mock_imp:
                 mock_imp.return_value = _mod_with_register()
                 register_all_tools(MagicMock(), MagicMock())
@@ -357,8 +429,14 @@ def test_prebuilt_scan_skips_already_registered_from_temp(monkeypatch):
     with patch.object(tools_pkg, "__file__", _SITE_PKG_FILE):
         with patch("os.path.exists", return_value=True):
             with patch("pkgutil.iter_modules", side_effect=fake_iter):
-                with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-                    with patch("dct_mcp_server.tools.importlib.import_module", return_value=fake_mod):
+                with patch(
+                    "dct_mcp_server.tools.get_modules_for_toolset",
+                    return_value=["dataset_endpoints_tool"],
+                ):
+                    with patch(
+                        "dct_mcp_server.tools.importlib.import_module",
+                        return_value=fake_mod,
+                    ):
                         register_all_tools(MagicMock(), MagicMock())
                         # register_tools called exactly once (temp dir wins; pre-built scan deduped)
                         assert fake_mod.register_tools.call_count == 1
@@ -368,8 +446,14 @@ def test_prebuilt_module_without_register_tools(monkeypatch):
     """Lines 179-180: pre-built module with no register_tools is logged and skipped gracefully."""
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
     with patch("pkgutil.iter_modules", side_effect=_pkg_iter("dataset_endpoints_tool")):
-        with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-            with patch("dct_mcp_server.tools.importlib.import_module", return_value=_mod_without_register()):
+        with patch(
+            "dct_mcp_server.tools.get_modules_for_toolset",
+            return_value=["dataset_endpoints_tool"],
+        ):
+            with patch(
+                "dct_mcp_server.tools.importlib.import_module",
+                return_value=_mod_without_register(),
+            ):
                 register_all_tools(MagicMock(), MagicMock())
 
 
@@ -377,14 +461,21 @@ def test_prebuilt_module_import_exception_handled(monkeypatch):
     """Lines 182-183: ImportError during pre-built scan is logged; execution continues."""
     monkeypatch.setenv("DCT_TOOLSET", "self_service")
     with patch("pkgutil.iter_modules", side_effect=_pkg_iter("dataset_endpoints_tool")):
-        with patch("dct_mcp_server.tools.get_modules_for_toolset", return_value=["dataset_endpoints_tool"]):
-            with patch("dct_mcp_server.tools.importlib.import_module", side_effect=ImportError("broken")):
+        with patch(
+            "dct_mcp_server.tools.get_modules_for_toolset",
+            return_value=["dataset_endpoints_tool"],
+        ):
+            with patch(
+                "dct_mcp_server.tools.importlib.import_module",
+                side_effect=ImportError("broken"),
+            ):
                 register_all_tools(MagicMock(), MagicMock())
 
 
 # ---------------------------------------------------------------------------
 # register_all_tools — NameError on __path__ (lines 187-192)
 # ---------------------------------------------------------------------------
+
 
 def test_register_all_tools_name_error_on_path(monkeypatch):
     """Lines 187-192: NameError when __path__ is absent is caught; returns gracefully."""

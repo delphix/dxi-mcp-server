@@ -25,6 +25,7 @@ from dct_mcp_server.tools.job_endpoints_tool import (
 
 class _SafeDict(dict):
     """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+
     def __missing__(self, key):
         return f"{{{key}}}"
 
@@ -32,6 +33,7 @@ class _SafeDict(dict):
 # ---------------------------------------------------------------------------
 # _SafeDict
 # ---------------------------------------------------------------------------
+
 
 def test_safedict_returns_value_for_existing_key():
     d = _SafeDict(name="Alice")
@@ -53,6 +55,7 @@ def test_safedict_format_map_with_missing_keys():
 # ---------------------------------------------------------------------------
 # build_params
 # ---------------------------------------------------------------------------
+
 
 def test_build_params_excludes_none():
     result = build_params(a=1, b=None, c="hello")
@@ -83,31 +86,43 @@ def test_build_params_zero_is_kept():
 # check_confirmation (in job_endpoints_tool)
 # ---------------------------------------------------------------------------
 
+
 def test_check_confirmation_safe_get_returns_none():
     result = check_confirmation("GET", "/jobs/j-1", "get", "job_tool", confirmed=False)
     assert result is None
 
 
 def test_check_confirmation_safe_post_search_returns_none():
-    result = check_confirmation("POST", "/jobs/search", "search", "job_tool", confirmed=False)
+    result = check_confirmation(
+        "POST", "/jobs/search", "search", "job_tool", confirmed=False
+    )
     assert result is None
 
 
 def test_check_confirmation_confirmed_true_returns_none():
-    result = check_confirmation("GET", "/jobs/j-1/tags", "get_tags", "job_tool", confirmed=True)
+    result = check_confirmation(
+        "GET", "/jobs/j-1/tags", "get_tags", "job_tool", confirmed=True
+    )
     assert result is None
 
 
 def test_check_confirmation_with_request_params():
     # With request_params dict — should not raise
-    result = check_confirmation("GET", "/jobs/j-1", "get", "job_tool", confirmed=False,
-                                request_params={"job_id": "j-1"})
+    result = check_confirmation(
+        "GET",
+        "/jobs/j-1",
+        "get",
+        "job_tool",
+        confirmed=False,
+        request_params={"job_id": "j-1"},
+    )
     assert result is None
 
 
 # ---------------------------------------------------------------------------
 # job_tool — action routing
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def set_client():
@@ -121,19 +136,22 @@ def set_client():
 
 def test_job_tool_search(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = job_tool(action="search", limit=10)
+
+    job_tool(action="search", limit=10)
     assert set_client.make_request.called
 
 
 def test_job_tool_search_with_filter(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = job_tool(action="search", filter_expression="status EQ 'RUNNING'")
+
+    job_tool(action="search", filter_expression="status EQ 'RUNNING'")
     assert set_client.make_request.called
 
 
 def test_job_tool_get(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = job_tool(action="get", job_id="j-abc-123")
+
+    job_tool(action="get", job_id="j-abc-123")
     assert set_client.make_request.called
     call_args = set_client.make_request.call_args
     assert "j-abc-123" in str(call_args)
@@ -141,6 +159,7 @@ def test_job_tool_get(set_client):
 
 def test_job_tool_get_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
+
     result = job_tool(action="get")
     assert "error" in result
     assert "job_id" in result["error"]
@@ -148,12 +167,14 @@ def test_job_tool_get_missing_job_id(set_client):
 
 def test_job_tool_abandon(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = job_tool(action="abandon", job_id="j-abc-456")
+
+    job_tool(action="abandon", job_id="j-abc-456")
     assert set_client.make_request.called
 
 
 def test_job_tool_abandon_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
+
     result = job_tool(action="abandon")
     assert "error" in result
     assert "job_id" in result["error"]
@@ -161,12 +182,14 @@ def test_job_tool_abandon_missing_job_id(set_client):
 
 def test_job_tool_get_tags(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
-    result = job_tool(action="get_tags", job_id="j-789")
+
+    job_tool(action="get_tags", job_id="j-789")
     assert set_client.make_request.called
 
 
 def test_job_tool_get_tags_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
+
     result = job_tool(action="get_tags")
     assert "error" in result
     assert "job_id" in result["error"]
@@ -174,6 +197,7 @@ def test_job_tool_get_tags_missing_job_id(set_client):
 
 def test_job_tool_unknown_action(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
+
     result = job_tool(action="fly_to_moon")
     assert "error" in result
     assert "Unknown action" in result["error"] or "fly_to_moon" in result["error"]
@@ -181,6 +205,7 @@ def test_job_tool_unknown_action(set_client):
 
 def test_job_tool_abandon_endpoint_path(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
+
     job_tool(action="abandon", job_id="j-xxx")
     call_args = set_client.make_request.call_args
     assert "abandon" in str(call_args)
@@ -188,6 +213,7 @@ def test_job_tool_abandon_endpoint_path(set_client):
 
 def test_job_tool_get_tags_endpoint_path(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
+
     job_tool(action="get_tags", job_id="j-yyy")
     call_args = set_client.make_request.call_args
     assert "tags" in str(call_args)
@@ -196,6 +222,7 @@ def test_job_tool_get_tags_endpoint_path(set_client):
 # ---------------------------------------------------------------------------
 # register_tools
 # ---------------------------------------------------------------------------
+
 
 def test_register_tools_sets_client():
     mock_app = MagicMock()
@@ -224,13 +251,21 @@ def test_register_tools_handles_exception():
 # check_confirmation with conditional logic
 # ---------------------------------------------------------------------------
 
+
 def test_check_confirmation_non_none_level_requires_confirmation():
     """Any non-none confirmation level triggers confirmation."""
     from unittest.mock import patch
-    with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
-        mock_conf.return_value = {"level": "retention_check", "message": "Snapshot policy check"}
-        result = check_confirmation("POST", "/snapshots/s-1/delete", "delete", "snapshot_tool",
-                                    confirmed=False)
+
+    with patch(
+        "dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation"
+    ) as mock_conf:
+        mock_conf.return_value = {
+            "level": "retention_check",
+            "message": "Snapshot policy check",
+        }
+        result = check_confirmation(
+            "POST", "/snapshots/s-1/delete", "delete", "snapshot_tool", confirmed=False
+        )
         assert result is not None
         assert result["status"] == "confirmation_required"
 
@@ -238,10 +273,14 @@ def test_check_confirmation_non_none_level_requires_confirmation():
 def test_check_confirmation_non_retention_requires_confirmation():
     """Manual confirmation level requires confirmation."""
     from unittest.mock import patch
-    with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
+
+    with patch(
+        "dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation"
+    ) as mock_conf:
         mock_conf.return_value = {"level": "manual", "message": "Are you sure?"}
-        result = check_confirmation("POST", "/vdbs/v-1/delete", "delete", "vdb_tool",
-                                    confirmed=False)
+        result = check_confirmation(
+            "POST", "/vdbs/v-1/delete", "delete", "vdb_tool", confirmed=False
+        )
         assert result is not None
         assert result["status"] == "confirmation_required"
 
@@ -249,17 +288,26 @@ def test_check_confirmation_non_retention_requires_confirmation():
 def test_check_confirmation_confirmed_true_skips():
     """With confirmed=True, no confirmation response."""
     from unittest.mock import patch
-    with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
+
+    with patch(
+        "dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation"
+    ) as mock_conf:
         mock_conf.return_value = {"level": "manual", "message": "Are you sure?"}
-        result = check_confirmation("POST", "/vdbs/v-1/delete", "delete", "vdb_tool",
-                                    confirmed=True)
+        result = check_confirmation(
+            "POST", "/vdbs/v-1/delete", "delete", "vdb_tool", confirmed=True
+        )
         assert result is None
 
 
 def test_check_confirmation_none_level_skips():
     """When level is 'none', no confirmation needed."""
     from unittest.mock import patch
-    with patch("dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation") as mock_conf:
+
+    with patch(
+        "dct_mcp_server.tools.job_endpoints_tool.get_confirmation_for_operation"
+    ) as mock_conf:
         mock_conf.return_value = {"level": "none", "message": ""}
-        result = check_confirmation("GET", "/jobs/j-1", "get", "job_tool", confirmed=False)
+        result = check_confirmation(
+            "GET", "/jobs/j-1", "get", "job_tool", confirmed=False
+        )
         assert result is None

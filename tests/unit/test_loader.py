@@ -24,7 +24,9 @@ def test_loader_tool_names_match_oracle():
 
 
 def test_loader_actions_match_oracle_per_tool():
-    loader = {t["name"]: set(t["actions"]) for t in get_tools_for_toolset("self_service")}
+    loader = {
+        t["name"]: set(t["actions"]) for t in get_tools_for_toolset("self_service")
+    }
     for tool, apis in config_cases.tools_for("self_service").items():
         oracle_actions = {action for (_m, _p, action) in apis}
         assert loader[tool] == oracle_actions, f"action mismatch for {tool}"
@@ -39,9 +41,9 @@ def test_provision_inherits_self_service():
 def test_provision_adds_provision_actions():
     provision_tools = config_cases.tools_for("self_service_provision")
     all_actions = {
-        action
-        for apis in provision_tools.values()
-        for (_m, _p, action) in apis
+        action for apis in provision_tools.values() for (_m, _p, action) in apis
     }
     provision_actions = {a for a in all_actions if a.startswith("provision_")}
-    assert provision_actions, "expected self_service_provision to add provision_* actions"
+    assert provision_actions, (
+        "expected self_service_provision to add provision_* actions"
+    )

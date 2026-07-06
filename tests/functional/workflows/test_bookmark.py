@@ -27,13 +27,17 @@ async def test_bookmark_workflow(mcp_client_self_service, dct_stub):
     client = mcp_client_self_service
 
     # Prompt 48 — Search for all bookmarks.
-    res = await client.call_tool("snapshot_bookmark_tool", {"action": "search_bookmarks", "limit": 10})
+    res = await client.call_tool(
+        "snapshot_bookmark_tool", {"action": "search_bookmarks", "limit": 10}
+    )
     assert not res.is_error, f"search failed: {res}"
     assert dct_stub.received_request("POST", "/dct/v3/bookmarks/search")
     bk_id = first_id(res)
 
     # Prompt 49 — Get the first bookmark's details.
-    res = await client.call_tool("snapshot_bookmark_tool", {"action": "get_bookmark", "bookmark_id": bk_id})
+    res = await client.call_tool(
+        "snapshot_bookmark_tool", {"action": "get_bookmark", "bookmark_id": bk_id}
+    )
     assert not res.is_error
     assert payload(res).get("id") == bk_id
     assert dct_stub.received_request("GET", f"/dct/v3/bookmarks/{bk_id}")
@@ -51,29 +55,39 @@ async def test_bookmark_workflow(mcp_client_self_service, dct_stub):
     # Prompt 51 — Update that bookmark's name (retention_check conf -> pre-confirm).
     res = await client.call_tool(
         "snapshot_bookmark_tool",
-        {"action": "update_bookmark", "bookmark_id": created_id,
-         "name": "test-bookmark-updated", "confirmed": True},
+        {
+            "action": "update_bookmark",
+            "bookmark_id": created_id,
+            "name": "test-bookmark-updated",
+            "confirmed": True,
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request("PATCH", f"/dct/v3/bookmarks/{created_id}")
 
     # Prompt 52 — Get the VDB groups associated with that bookmark.
     res = await client.call_tool(
-        "snapshot_bookmark_tool", {"action": "get_bookmark_vdb_groups", "bookmark_id": bk_id}
+        "snapshot_bookmark_tool",
+        {"action": "get_bookmark_vdb_groups", "bookmark_id": bk_id},
     )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/bookmarks/{bk_id}/vdb-groups")
 
     # Prompt 53 — Get the tags for that bookmark.
-    res = await client.call_tool("snapshot_bookmark_tool", {"action": "get_bookmark_tags", "bookmark_id": bk_id})
+    res = await client.call_tool(
+        "snapshot_bookmark_tool", {"action": "get_bookmark_tags", "bookmark_id": bk_id}
+    )
     assert not res.is_error
     assert dct_stub.received_request("GET", f"/dct/v3/bookmarks/{bk_id}/tags")
 
     # Prompt 54 — Add the tag test=true.
     res = await client.call_tool(
         "snapshot_bookmark_tool",
-        {"action": "add_bookmark_tags", "bookmark_id": bk_id,
-         "tags": [{"key": "test", "value": "true"}]},
+        {
+            "action": "add_bookmark_tags",
+            "bookmark_id": bk_id,
+            "tags": [{"key": "test", "value": "true"}],
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/bookmarks/{bk_id}/tags")
@@ -81,8 +95,12 @@ async def test_bookmark_workflow(mcp_client_self_service, dct_stub):
     # Prompt 55 — Remove the test=true tag (standard conf -> pre-confirm).
     res = await client.call_tool(
         "snapshot_bookmark_tool",
-        {"action": "delete_bookmark_tags", "bookmark_id": bk_id,
-         "tags": [{"key": "test", "value": "true"}], "confirmed": True},
+        {
+            "action": "delete_bookmark_tags",
+            "bookmark_id": bk_id,
+            "tags": [{"key": "test", "value": "true"}],
+            "confirmed": True,
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", f"/dct/v3/bookmarks/{bk_id}/tags/delete")

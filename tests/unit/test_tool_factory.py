@@ -30,7 +30,6 @@ def test_grouped_apis_method_path_match_oracle_per_tool():
     for tool, apis in config_cases.tools_for("self_service").items():
         oracle_triples = {(m, p, a) for (m, p, a) in apis}
         grouped_triples = {
-            (api["method"], api["path"], api["action"])
-            for api in grouped[tool]["apis"]
+            (api["method"], api["path"], api["action"]) for api in grouped[tool]["apis"]
         }
         assert grouped_triples == oracle_triples, f"triple mismatch for {tool}"

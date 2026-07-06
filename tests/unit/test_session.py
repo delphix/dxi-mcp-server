@@ -6,12 +6,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from dct_mcp_server.core.session import (
     SessionJsonFormatter,
@@ -27,6 +25,7 @@ from dct_mcp_server.core.session import (
 # ---------------------------------------------------------------------------
 # SessionManager — direct tests
 # ---------------------------------------------------------------------------
+
 
 class TestSessionManager:
     def test_initial_state(self):
@@ -76,7 +75,7 @@ class TestSessionManager:
     def test_start_session_ends_existing(self, tmp_path):
         mgr = SessionManager()
         with patch.object(mgr, "_get_project_root", return_value=tmp_path):
-            sid1 = mgr.start_session("first-session")
+            mgr.start_session("first-session")
             sid2 = mgr.start_session("second-session")
         assert mgr.current_session_id == "second-session"
         mgr.end_session(sid2)
@@ -96,7 +95,7 @@ class TestSessionManager:
     def test_end_session_without_arg_uses_current(self, tmp_path):
         mgr = SessionManager()
         with patch.object(mgr, "_get_project_root", return_value=tmp_path):
-            sid = mgr.start_session()
+            mgr.start_session()
         mgr.end_session()
         assert mgr.current_session_id is None
 
@@ -131,7 +130,7 @@ class TestSessionManager:
 
     def test_log_tool_call_without_session_logs_warning(self):
         mgr = SessionManager()
-        with patch.object(logging.Logger, "warning") as mock_warn:
+        with patch.object(logging.Logger, "warning"):
             mgr.log_tool_call({"tool_name": "test_tool", "status": "success"})
         # warning should have been called (or at least no exception)
 
@@ -174,6 +173,7 @@ class TestSessionManager:
 # ---------------------------------------------------------------------------
 # SessionJsonFormatter
 # ---------------------------------------------------------------------------
+
 
 class TestSessionJsonFormatter:
     def _make_record(self, message: str) -> logging.LogRecord:
@@ -230,6 +230,7 @@ class TestSessionJsonFormatter:
 # Public API (module-level functions)
 # ---------------------------------------------------------------------------
 
+
 class TestPublicApi:
     def test_get_current_session_id_returns_none_by_default(self):
         # The global _session_manager may or may not have an active session;
@@ -240,9 +241,11 @@ class TestPublicApi:
 
     def test_start_session_returns_string(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
-        orig_root = _sess_mod._session_manager._get_project_root
+
         try:
-            with patch.object(_sess_mod._session_manager, "_get_project_root", return_value=tmp_path):
+            with patch.object(
+                _sess_mod._session_manager, "_get_project_root", return_value=tmp_path
+            ):
                 sid = start_session()
             assert isinstance(sid, str)
             end_session(sid)
@@ -251,14 +254,20 @@ class TestPublicApi:
 
     def test_start_session_with_id(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
-        with patch.object(_sess_mod._session_manager, "_get_project_root", return_value=tmp_path):
+
+        with patch.object(
+            _sess_mod._session_manager, "_get_project_root", return_value=tmp_path
+        ):
             sid = start_session("pub-test-id")
         assert sid == "pub-test-id"
         end_session(sid)
 
     def test_end_session_clears_id(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
-        with patch.object(_sess_mod._session_manager, "_get_project_root", return_value=tmp_path):
+
+        with patch.object(
+            _sess_mod._session_manager, "_get_project_root", return_value=tmp_path
+        ):
             start_session("my-end-test")
         end_session("my-end-test")
         # After ending, it should not be the current session
@@ -266,7 +275,10 @@ class TestPublicApi:
 
     def test_end_session_no_arg(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
-        with patch.object(_sess_mod._session_manager, "_get_project_root", return_value=tmp_path):
+
+        with patch.object(
+            _sess_mod._session_manager, "_get_project_root", return_value=tmp_path
+        ):
             start_session("no-arg-end")
         end_session()
         assert get_current_session_id() is None
@@ -283,7 +295,10 @@ class TestPublicApi:
 
     def test_get_session_logger_returns_logger_with_session(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
-        with patch.object(_sess_mod._session_manager, "_get_project_root", return_value=tmp_path):
+
+        with patch.object(
+            _sess_mod._session_manager, "_get_project_root", return_value=tmp_path
+        ):
             sid = start_session()
         lg = get_session_logger(sid)
         assert lg is not None

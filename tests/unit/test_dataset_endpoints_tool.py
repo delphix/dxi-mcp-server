@@ -7,6 +7,7 @@ Coverage targets:
   - Each action in each tool: check_confirmation mocked to return conf → conf returned
   - register_tools error path (lines 2336-2337)
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -105,7 +106,10 @@ class TestCheckConfirmation:
             return_value=conf,
         ):
             result = dataset_endpoints_tool.check_confirmation(
-                "PATCH", "/bookmarks/b-1", "update", "bookmark_tool",
+                "PATCH",
+                "/bookmarks/b-1",
+                "update",
+                "bookmark_tool",
                 confirmed=False,
             )
         # retention_check is a non-"none" level → confirmation required
@@ -124,7 +128,10 @@ class TestCheckConfirmation:
             return_value=conf,
         ):
             result = dataset_endpoints_tool.check_confirmation(
-                "PATCH", "/bookmarks/b-1", "update", "bookmark_tool",
+                "PATCH",
+                "/bookmarks/b-1",
+                "update",
+                "bookmark_tool",
                 confirmed=False,
             )
         # retention_check is a non-"none" level → confirmation required
@@ -143,7 +150,10 @@ class TestCheckConfirmation:
             return_value=conf,
         ):
             result = dataset_endpoints_tool.check_confirmation(
-                "PATCH", "/bookmarks/b-1", "update", "bookmark_tool",
+                "PATCH",
+                "/bookmarks/b-1",
+                "update",
+                "bookmark_tool",
                 confirmed=False,
             )
         assert result is not None
@@ -161,7 +171,10 @@ class TestCheckConfirmation:
             return_value=conf,
         ):
             result = dataset_endpoints_tool.check_confirmation(
-                "PATCH", "/bookmarks/b-1", "update", "bookmark_tool",
+                "PATCH",
+                "/bookmarks/b-1",
+                "update",
+                "bookmark_tool",
                 confirmed=False,
             )
         assert result is not None
@@ -179,7 +192,10 @@ class TestCheckConfirmation:
             return_value=conf,
         ):
             result = dataset_endpoints_tool.check_confirmation(
-                "PATCH", "/bookmarks/b-1", "update", "bookmark_tool",
+                "PATCH",
+                "/bookmarks/b-1",
+                "update",
+                "bookmark_tool",
                 confirmed=False,
             )
         assert result is not None
@@ -196,7 +212,10 @@ class TestCheckConfirmation:
             return_value=conf,
         ):
             result = dataset_endpoints_tool.check_confirmation(
-                "PATCH", "/bookmarks/b-1", "update", "bookmark_tool",
+                "PATCH",
+                "/bookmarks/b-1",
+                "update",
+                "bookmark_tool",
                 confirmed=False,
             )
         assert result is not None
@@ -219,6 +238,7 @@ class TestCheckConfirmation:
 # Category 2 + 3: per-tool, per-action: missing required param & conf early-return
 # ---------------------------------------------------------------------------
 
+
 # Shared confirmation stub returned by monkeypatched check_confirmation
 def _make_conf_stub(action, tool, api_path):
     return {
@@ -237,10 +257,21 @@ def _make_conf_stub(action, tool, api_path):
 # ---------------------------------------------------------------------------
 
 VDB_ACTIONS_NEED_VDB_ID = [
-    "get_vdb", "start_vdb", "stop_vdb", "enable_vdb", "disable_vdb",
-    "refresh_vdb_by_timestamp", "refresh_vdb_by_snapshot", "refresh_vdb_from_bookmark",
-    "rollback_vdb_by_timestamp", "rollback_vdb_by_snapshot", "rollback_vdb_from_bookmark",
-    "list_vdb_snapshots", "list_vdb_bookmarks", "get_vdb_tags", "add_vdb_tags",
+    "get_vdb",
+    "start_vdb",
+    "stop_vdb",
+    "enable_vdb",
+    "disable_vdb",
+    "refresh_vdb_by_timestamp",
+    "refresh_vdb_by_snapshot",
+    "refresh_vdb_from_bookmark",
+    "rollback_vdb_by_timestamp",
+    "rollback_vdb_by_snapshot",
+    "rollback_vdb_from_bookmark",
+    "list_vdb_snapshots",
+    "list_vdb_bookmarks",
+    "get_vdb_tags",
+    "add_vdb_tags",
 ]
 
 VDB_ALL_ACTIONS = ["search_vdbs"] + VDB_ACTIONS_NEED_VDB_ID
@@ -261,9 +292,14 @@ class TestVdbTool:
     def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "data_tool", "/vdbs/stub")
-        monkeypatch.setattr(dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub)
+        monkeypatch.setattr(
+            dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
+        )
         result = dataset_endpoints_tool.data_tool(
-            action=action, vdb_id="v-1", bookmark_id="b-1", tags=[{"key": "k", "value": "v"}]
+            action=action,
+            vdb_id="v-1",
+            bookmark_id="b-1",
+            tags=[{"key": "k", "value": "v"}],
         )
         assert result == stub
         assert not mock_dct_client.make_request.called
@@ -280,11 +316,21 @@ class TestVdbTool:
 # ---------------------------------------------------------------------------
 
 VDB_GROUP_ACTIONS_NEED_GROUP_ID = [
-    "get_vdb_group", "refresh_vdb_group", "refresh_vdb_group_from_bookmark",
-    "refresh_vdb_group_by_snapshot", "refresh_vdb_group_by_timestamp",
-    "rollback_vdb_group", "lock_vdb_group", "unlock_vdb_group",
-    "start_vdb_group", "stop_vdb_group", "enable_vdb_group", "disable_vdb_group",
-    "list_vdb_group_bookmarks", "get_vdb_group_tags", "add_vdb_group_tags",
+    "get_vdb_group",
+    "refresh_vdb_group",
+    "refresh_vdb_group_from_bookmark",
+    "refresh_vdb_group_by_snapshot",
+    "refresh_vdb_group_by_timestamp",
+    "rollback_vdb_group",
+    "lock_vdb_group",
+    "unlock_vdb_group",
+    "start_vdb_group",
+    "stop_vdb_group",
+    "enable_vdb_group",
+    "disable_vdb_group",
+    "list_vdb_group_bookmarks",
+    "get_vdb_group_tags",
+    "add_vdb_group_tags",
 ]
 
 VDB_GROUP_ALL_ACTIONS = ["search_vdb_groups"] + VDB_GROUP_ACTIONS_NEED_GROUP_ID
@@ -294,7 +340,9 @@ class TestVdbGroupTool:
     """Tests for data_tool (VDB group actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", VDB_GROUP_ACTIONS_NEED_GROUP_ID)
-    def test_missing_vdb_group_id_returns_error(self, action, monkeypatch, mock_dct_client):
+    def test_missing_vdb_group_id_returns_error(
+        self, action, monkeypatch, mock_dct_client
+    ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         result = dataset_endpoints_tool.data_tool(action=action)
         assert isinstance(result, dict)
@@ -305,10 +353,14 @@ class TestVdbGroupTool:
     def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "data_tool", "/vdb-groups/stub")
-        monkeypatch.setattr(dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub)
+        monkeypatch.setattr(
+            dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
+        )
         result = dataset_endpoints_tool.data_tool(
-            action=action, vdb_group_id="g-1", bookmark_id="b-1",
-            tags=[{"key": "k", "value": "v"}]
+            action=action,
+            vdb_group_id="g-1",
+            bookmark_id="b-1",
+            tags=[{"key": "k", "value": "v"}],
         )
         assert result == stub
         assert not mock_dct_client.make_request.called
@@ -324,7 +376,11 @@ class TestVdbGroupTool:
 # data_tool (dSource actions)
 # ---------------------------------------------------------------------------
 
-DSOURCE_ACTIONS_NEED_DSOURCE_ID = ["get_dsource", "list_dsource_snapshots", "get_dsource_tags"]
+DSOURCE_ACTIONS_NEED_DSOURCE_ID = [
+    "get_dsource",
+    "list_dsource_snapshots",
+    "get_dsource_tags",
+]
 
 DSOURCE_ALL_ACTIONS = ["search_dsources"] + DSOURCE_ACTIONS_NEED_DSOURCE_ID
 
@@ -333,7 +389,9 @@ class TestDsourceTool:
     """Tests for data_tool (dSource actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", DSOURCE_ACTIONS_NEED_DSOURCE_ID)
-    def test_missing_dsource_id_returns_error(self, action, monkeypatch, mock_dct_client):
+    def test_missing_dsource_id_returns_error(
+        self, action, monkeypatch, mock_dct_client
+    ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         result = dataset_endpoints_tool.data_tool(action=action)
         assert isinstance(result, dict)
@@ -344,16 +402,18 @@ class TestDsourceTool:
     def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "data_tool", "/dsources/stub")
-        monkeypatch.setattr(dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub)
-        result = dataset_endpoints_tool.data_tool(
-            action=action, dsource_id="ds-1"
+        monkeypatch.setattr(
+            dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
+        result = dataset_endpoints_tool.data_tool(action=action, dsource_id="ds-1")
         assert result == stub
         assert not mock_dct_client.make_request.called
 
     def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(action="nonexistent_dsource_action_xyz")
+        result = dataset_endpoints_tool.data_tool(
+            action="nonexistent_dsource_action_xyz"
+        )
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
@@ -363,8 +423,12 @@ class TestDsourceTool:
 # ---------------------------------------------------------------------------
 
 SNAPSHOT_ACTIONS_NEED_SNAPSHOT_ID = [
-    "get_snapshot", "get_snapshot_timeflow_range", "get_runtime",
-    "get_snapshot_tags", "add_snapshot_tags", "delete_snapshot_tags",
+    "get_snapshot",
+    "get_snapshot_timeflow_range",
+    "get_runtime",
+    "get_snapshot_tags",
+    "add_snapshot_tags",
+    "delete_snapshot_tags",
 ]
 
 SNAPSHOT_ALL_ACTIONS = [
@@ -376,7 +440,9 @@ class TestSnapshotTool:
     """Tests for snapshot_bookmark_tool (snapshot actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", SNAPSHOT_ACTIONS_NEED_SNAPSHOT_ID)
-    def test_missing_snapshot_id_returns_error(self, action, monkeypatch, mock_dct_client):
+    def test_missing_snapshot_id_returns_error(
+        self, action, monkeypatch, mock_dct_client
+    ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         result = dataset_endpoints_tool.snapshot_bookmark_tool(action=action)
         assert isinstance(result, dict)
@@ -387,7 +453,9 @@ class TestSnapshotTool:
     def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "snapshot_bookmark_tool", "/snapshots/stub")
-        monkeypatch.setattr(dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub)
+        monkeypatch.setattr(
+            dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
+        )
         result = dataset_endpoints_tool.snapshot_bookmark_tool(
             action=action, snapshot_id="s-1", tags=[{"key": "k", "value": "v"}]
         )
@@ -406,18 +474,28 @@ class TestSnapshotTool:
 # ---------------------------------------------------------------------------
 
 BOOKMARK_ACTIONS_NEED_BOOKMARK_ID = [
-    "get_bookmark", "update_bookmark", "delete_bookmark",
-    "get_bookmark_vdb_groups", "get_bookmark_tags", "add_bookmark_tags", "delete_bookmark_tags",
+    "get_bookmark",
+    "update_bookmark",
+    "delete_bookmark",
+    "get_bookmark_vdb_groups",
+    "get_bookmark_tags",
+    "add_bookmark_tags",
+    "delete_bookmark_tags",
 ]
 
-BOOKMARK_ALL_ACTIONS = ["search_bookmarks", "create_bookmark"] + BOOKMARK_ACTIONS_NEED_BOOKMARK_ID
+BOOKMARK_ALL_ACTIONS = [
+    "search_bookmarks",
+    "create_bookmark",
+] + BOOKMARK_ACTIONS_NEED_BOOKMARK_ID
 
 
 class TestBookmarkTool:
     """Tests for snapshot_bookmark_tool (bookmark actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", BOOKMARK_ACTIONS_NEED_BOOKMARK_ID)
-    def test_missing_bookmark_id_returns_error(self, action, monkeypatch, mock_dct_client):
+    def test_missing_bookmark_id_returns_error(
+        self, action, monkeypatch, mock_dct_client
+    ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         result = dataset_endpoints_tool.snapshot_bookmark_tool(action=action)
         assert isinstance(result, dict)
@@ -428,10 +506,14 @@ class TestBookmarkTool:
     def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "snapshot_bookmark_tool", "/bookmarks/stub")
-        monkeypatch.setattr(dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub)
+        monkeypatch.setattr(
+            dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
+        )
         result = dataset_endpoints_tool.snapshot_bookmark_tool(
-            action=action, bookmark_id="b-1", name="my-bookmark",
-            tags=[{"key": "k", "value": "v"}]
+            action=action,
+            bookmark_id="b-1",
+            name="my-bookmark",
+            tags=[{"key": "k", "value": "v"}],
         )
         assert result == stub
         assert not mock_dct_client.make_request.called
@@ -448,8 +530,14 @@ class TestBookmarkTool:
 # ---------------------------------------------------------------------------
 
 TIMEFLOW_ACTIONS_NEED_TIMEFLOW_ID = [
-    "get", "update", "delete", "get_snapshot_day_range", "repair",
-    "get_tags", "add_tags", "delete_tags",
+    "get",
+    "update",
+    "delete",
+    "get_snapshot_day_range",
+    "repair",
+    "get_tags",
+    "add_tags",
+    "delete_tags",
 ]
 
 TIMEFLOW_ALL_ACTIONS = ["list", "search"] + TIMEFLOW_ACTIONS_NEED_TIMEFLOW_ID
@@ -459,7 +547,9 @@ class TestTimeflowTool:
     """Tests for timeflow_tool: missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", TIMEFLOW_ACTIONS_NEED_TIMEFLOW_ID)
-    def test_missing_timeflow_id_returns_error(self, action, monkeypatch, mock_dct_client):
+    def test_missing_timeflow_id_returns_error(
+        self, action, monkeypatch, mock_dct_client
+    ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         result = dataset_endpoints_tool.timeflow_tool(action=action)
         assert isinstance(result, dict)
@@ -470,12 +560,18 @@ class TestTimeflowTool:
     def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "timeflow_tool", "/timeflows/stub")
-        monkeypatch.setattr(dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub)
+        monkeypatch.setattr(
+            dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
+        )
         result = dataset_endpoints_tool.timeflow_tool(
-            action=action, timeflow_id="tf-1",
+            action=action,
+            timeflow_id="tf-1",
             tags=[{"key": "k", "value": "v"}],
-            host="h", username="u", directory="/d",
-            start_location="0:0", end_location="1:0",
+            host="h",
+            username="u",
+            directory="/d",
+            start_location="0:0",
+            end_location="1:0",
         )
         assert result == stub
         assert not mock_dct_client.make_request.called

@@ -8,6 +8,7 @@ from dct_mcp_server.tools.dataset_endpoints_tool import build_params
 
 class _SafeDict(dict):
     """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
+
     def __missing__(self, key):
         return f"{{{key}}}"
 

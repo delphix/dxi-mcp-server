@@ -18,6 +18,7 @@ from dct_mcp_server.core.decorators import log_tool_execution
 # Sync function — success path
 # ---------------------------------------------------------------------------
 
+
 def test_sync_function_returns_result():
     @log_tool_execution
     def add(a, b):
@@ -56,6 +57,7 @@ def test_sync_function_preserves_docstring():
 # Sync function — error path
 # ---------------------------------------------------------------------------
 
+
 def test_sync_function_raises_propagates():
     @log_tool_execution
     def failing_tool():
@@ -80,6 +82,7 @@ def test_sync_function_raises_with_args():
 # Async function — success path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_async_function_returns_result():
     @log_tool_execution
@@ -102,6 +105,7 @@ async def test_async_function_preserves_name():
 # ---------------------------------------------------------------------------
 # Async function — error path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_async_function_raises_propagates():
@@ -129,6 +133,7 @@ async def test_async_function_raises_with_args():
 # Decorator identifies async vs sync correctly
 # ---------------------------------------------------------------------------
 
+
 def test_sync_wrapper_is_not_coroutine():
     import inspect
 
@@ -152,6 +157,7 @@ def test_async_wrapper_is_coroutine():
 # ---------------------------------------------------------------------------
 # Multiple calls work correctly
 # ---------------------------------------------------------------------------
+
 
 def test_sync_function_multiple_calls():
     call_count = {"n": 0}
