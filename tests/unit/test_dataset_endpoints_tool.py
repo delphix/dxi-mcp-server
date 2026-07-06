@@ -281,21 +281,23 @@ class TestVdbTool:
     """Tests for data_tool (VDB actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", VDB_ACTIONS_NEED_VDB_ID)
-    def test_missing_vdb_id_returns_error(self, action, monkeypatch, mock_dct_client):
+    async def test_missing_vdb_id_returns_error(
+        self, action, monkeypatch, mock_dct_client
+    ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(action=action)
+        result = await dataset_endpoints_tool.data_tool(action=action)
         assert isinstance(result, dict)
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
     @pytest.mark.parametrize("action", VDB_ALL_ACTIONS)
-    def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
+    async def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "data_tool", "/vdbs/stub")
         monkeypatch.setattr(
             dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
-        result = dataset_endpoints_tool.data_tool(
+        result = await dataset_endpoints_tool.data_tool(
             action=action,
             vdb_id="v-1",
             bookmark_id="b-1",
@@ -304,9 +306,9 @@ class TestVdbTool:
         assert result == stub
         assert not mock_dct_client.make_request.called
 
-    def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
+    async def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(action="nonexistent")
+        result = await dataset_endpoints_tool.data_tool(action="nonexistent")
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
@@ -340,23 +342,23 @@ class TestVdbGroupTool:
     """Tests for data_tool (VDB group actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", VDB_GROUP_ACTIONS_NEED_GROUP_ID)
-    def test_missing_vdb_group_id_returns_error(
+    async def test_missing_vdb_group_id_returns_error(
         self, action, monkeypatch, mock_dct_client
     ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(action=action)
+        result = await dataset_endpoints_tool.data_tool(action=action)
         assert isinstance(result, dict)
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
     @pytest.mark.parametrize("action", VDB_GROUP_ALL_ACTIONS)
-    def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
+    async def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "data_tool", "/vdb-groups/stub")
         monkeypatch.setattr(
             dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
-        result = dataset_endpoints_tool.data_tool(
+        result = await dataset_endpoints_tool.data_tool(
             action=action,
             vdb_group_id="g-1",
             bookmark_id="b-1",
@@ -365,9 +367,11 @@ class TestVdbGroupTool:
         assert result == stub
         assert not mock_dct_client.make_request.called
 
-    def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
+    async def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(action="nonexistent_group_action_xyz")
+        result = await dataset_endpoints_tool.data_tool(
+            action="nonexistent_group_action_xyz"
+        )
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
@@ -389,29 +393,31 @@ class TestDsourceTool:
     """Tests for data_tool (dSource actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", DSOURCE_ACTIONS_NEED_DSOURCE_ID)
-    def test_missing_dsource_id_returns_error(
+    async def test_missing_dsource_id_returns_error(
         self, action, monkeypatch, mock_dct_client
     ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(action=action)
+        result = await dataset_endpoints_tool.data_tool(action=action)
         assert isinstance(result, dict)
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
     @pytest.mark.parametrize("action", DSOURCE_ALL_ACTIONS)
-    def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
+    async def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "data_tool", "/dsources/stub")
         monkeypatch.setattr(
             dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
-        result = dataset_endpoints_tool.data_tool(action=action, dsource_id="ds-1")
+        result = await dataset_endpoints_tool.data_tool(
+            action=action, dsource_id="ds-1"
+        )
         assert result == stub
         assert not mock_dct_client.make_request.called
 
-    def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
+    async def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.data_tool(
+        result = await dataset_endpoints_tool.data_tool(
             action="nonexistent_dsource_action_xyz"
         )
         assert "error" in result
@@ -440,31 +446,33 @@ class TestSnapshotTool:
     """Tests for snapshot_bookmark_tool (snapshot actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", SNAPSHOT_ACTIONS_NEED_SNAPSHOT_ID)
-    def test_missing_snapshot_id_returns_error(
+    async def test_missing_snapshot_id_returns_error(
         self, action, monkeypatch, mock_dct_client
     ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.snapshot_bookmark_tool(action=action)
+        result = await dataset_endpoints_tool.snapshot_bookmark_tool(action=action)
         assert isinstance(result, dict)
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
     @pytest.mark.parametrize("action", SNAPSHOT_ALL_ACTIONS)
-    def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
+    async def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "snapshot_bookmark_tool", "/snapshots/stub")
         monkeypatch.setattr(
             dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
-        result = dataset_endpoints_tool.snapshot_bookmark_tool(
+        result = await dataset_endpoints_tool.snapshot_bookmark_tool(
             action=action, snapshot_id="s-1", tags=[{"key": "k", "value": "v"}]
         )
         assert result == stub
         assert not mock_dct_client.make_request.called
 
-    def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
+    async def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.snapshot_bookmark_tool(action="nonexistent")
+        result = await dataset_endpoints_tool.snapshot_bookmark_tool(
+            action="nonexistent"
+        )
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
@@ -493,23 +501,23 @@ class TestBookmarkTool:
     """Tests for snapshot_bookmark_tool (bookmark actions): missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", BOOKMARK_ACTIONS_NEED_BOOKMARK_ID)
-    def test_missing_bookmark_id_returns_error(
+    async def test_missing_bookmark_id_returns_error(
         self, action, monkeypatch, mock_dct_client
     ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.snapshot_bookmark_tool(action=action)
+        result = await dataset_endpoints_tool.snapshot_bookmark_tool(action=action)
         assert isinstance(result, dict)
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
     @pytest.mark.parametrize("action", BOOKMARK_ALL_ACTIONS)
-    def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
+    async def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "snapshot_bookmark_tool", "/bookmarks/stub")
         monkeypatch.setattr(
             dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
-        result = dataset_endpoints_tool.snapshot_bookmark_tool(
+        result = await dataset_endpoints_tool.snapshot_bookmark_tool(
             action=action,
             bookmark_id="b-1",
             name="my-bookmark",
@@ -518,9 +526,11 @@ class TestBookmarkTool:
         assert result == stub
         assert not mock_dct_client.make_request.called
 
-    def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
+    async def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.snapshot_bookmark_tool(action="nonexistent")
+        result = await dataset_endpoints_tool.snapshot_bookmark_tool(
+            action="nonexistent"
+        )
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
@@ -547,23 +557,23 @@ class TestTimeflowTool:
     """Tests for timeflow_tool: missing params and confirmation early-return."""
 
     @pytest.mark.parametrize("action", TIMEFLOW_ACTIONS_NEED_TIMEFLOW_ID)
-    def test_missing_timeflow_id_returns_error(
+    async def test_missing_timeflow_id_returns_error(
         self, action, monkeypatch, mock_dct_client
     ):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.timeflow_tool(action=action)
+        result = await dataset_endpoints_tool.timeflow_tool(action=action)
         assert isinstance(result, dict)
         assert "error" in result
         assert not mock_dct_client.make_request.called
 
     @pytest.mark.parametrize("action", TIMEFLOW_ALL_ACTIONS)
-    def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
+    async def test_conf_early_return(self, action, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
         stub = _make_conf_stub(action, "timeflow_tool", "/timeflows/stub")
         monkeypatch.setattr(
             dataset_endpoints_tool, "check_confirmation", lambda *a, **kw: stub
         )
-        result = dataset_endpoints_tool.timeflow_tool(
+        result = await dataset_endpoints_tool.timeflow_tool(
             action=action,
             timeflow_id="tf-1",
             tags=[{"key": "k", "value": "v"}],
@@ -576,9 +586,9 @@ class TestTimeflowTool:
         assert result == stub
         assert not mock_dct_client.make_request.called
 
-    def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
+    async def test_unknown_action_returns_error(self, monkeypatch, mock_dct_client):
         monkeypatch.setattr(dataset_endpoints_tool, "client", mock_dct_client)
-        result = dataset_endpoints_tool.timeflow_tool(action="nonexistent")
+        result = await dataset_endpoints_tool.timeflow_tool(action="nonexistent")
         assert "error" in result
         assert not mock_dct_client.make_request.called
 

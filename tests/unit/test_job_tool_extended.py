@@ -107,14 +107,14 @@ def test_check_confirmation_confirmed_true_returns_none():
 
 
 def test_check_confirmation_with_request_params():
-    # With request_params dict — should not raise
+    # With context dict — should not raise
     result = check_confirmation(
         "GET",
         "/jobs/j-1",
         "get",
         "job_tool",
         confirmed=False,
-        request_params={"job_id": "j-1"},
+        context={"job_id": "j-1"},
     )
     assert result is None
 
@@ -134,87 +134,87 @@ def set_client():
     job_mod.client = None
 
 
-def test_job_tool_search(set_client):
+async def test_job_tool_search(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="search", limit=10)
+    await job_tool(action="search", limit=10)
     assert set_client.make_request.called
 
 
-def test_job_tool_search_with_filter(set_client):
+async def test_job_tool_search_with_filter(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="search", filter_expression="status EQ 'RUNNING'")
+    await job_tool(action="search", filter_expression="status EQ 'RUNNING'")
     assert set_client.make_request.called
 
 
-def test_job_tool_get(set_client):
+async def test_job_tool_get(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="get", job_id="j-abc-123")
+    await job_tool(action="get", job_id="j-abc-123")
     assert set_client.make_request.called
     call_args = set_client.make_request.call_args
     assert "j-abc-123" in str(call_args)
 
 
-def test_job_tool_get_missing_job_id(set_client):
+async def test_job_tool_get_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    result = job_tool(action="get")
+    result = await job_tool(action="get")
     assert "error" in result
     assert "job_id" in result["error"]
 
 
-def test_job_tool_abandon(set_client):
+async def test_job_tool_abandon(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="abandon", job_id="j-abc-456")
+    await job_tool(action="abandon", job_id="j-abc-456")
     assert set_client.make_request.called
 
 
-def test_job_tool_abandon_missing_job_id(set_client):
+async def test_job_tool_abandon_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    result = job_tool(action="abandon")
+    result = await job_tool(action="abandon")
     assert "error" in result
     assert "job_id" in result["error"]
 
 
-def test_job_tool_get_tags(set_client):
+async def test_job_tool_get_tags(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="get_tags", job_id="j-789")
+    await job_tool(action="get_tags", job_id="j-789")
     assert set_client.make_request.called
 
 
-def test_job_tool_get_tags_missing_job_id(set_client):
+async def test_job_tool_get_tags_missing_job_id(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    result = job_tool(action="get_tags")
+    result = await job_tool(action="get_tags")
     assert "error" in result
     assert "job_id" in result["error"]
 
 
-def test_job_tool_unknown_action(set_client):
+async def test_job_tool_unknown_action(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    result = job_tool(action="fly_to_moon")
+    result = await job_tool(action="fly_to_moon")
     assert "error" in result
     assert "Unknown action" in result["error"] or "fly_to_moon" in result["error"]
 
 
-def test_job_tool_abandon_endpoint_path(set_client):
+async def test_job_tool_abandon_endpoint_path(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="abandon", job_id="j-xxx")
+    await job_tool(action="abandon", job_id="j-xxx")
     call_args = set_client.make_request.call_args
     assert "abandon" in str(call_args)
 
 
-def test_job_tool_get_tags_endpoint_path(set_client):
+async def test_job_tool_get_tags_endpoint_path(set_client):
     from dct_mcp_server.tools.job_endpoints_tool import job_tool
 
-    job_tool(action="get_tags", job_id="j-yyy")
+    await job_tool(action="get_tags", job_id="j-yyy")
     call_args = set_client.make_request.call_args
     assert "tags" in str(call_args)
 
