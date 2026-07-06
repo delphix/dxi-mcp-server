@@ -505,3 +505,209 @@ async def test_execute_post_operation_type_is_mutating():
 
     assert result["status"] == "success"
     assert result["operation_type"] == "mutating"
+
+
+# =========================================================================== #
+# register_dynamic_tools — registration contract
+# =========================================================================== #
+
+
+def test_register_dynamic_tools_registers_two_tools():
+    """register_dynamic_tools must call app.add_tool exactly twice."""
+    from dct_mcp_server.tools.core.dynamic import register_dynamic_tools
+
+    app = MagicMock()
+    client = MagicMock()
+    register_dynamic_tools(app, client)
+    assert app.add_tool.call_count == 2
+
+
+def test_register_dynamic_tools_names_are_discovery_and_execute():
+    """The two tools must be named 'discovery' and 'execute'."""
+    from dct_mcp_server.tools.core.dynamic import register_dynamic_tools
+
+    app = MagicMock()
+    register_dynamic_tools(app, MagicMock())
+    names = {call.kwargs.get("name") for call in app.add_tool.call_args_list}
+    assert names == {"discovery", "execute"}
+
+
+# =========================================================================== #
+# discovery — get_operation_schema space-separated format
+# =========================================================================== #
+
+
+def test_discovery_get_operation_schema_space_separated_overrides_method(
+    discovery_spec_loaded,
+):
+    """'POST /vdbs/search' in path should override the operation_method argument."""
+    result = discovery_spec_loaded(
+        action="get_operation_schema",
+        path="POST /vdbs/search",
+        operation_method="GET",  # should be overridden by the space-separated prefix
+    )
+    assert (
+        result.get("status") != "error" or result.get("code") != "OPERATION_NOT_FOUND"
+    )
+    assert result.get("method") == "POST"
+
+
+# =========================================================================== #
+# execute — GET with body stripped
+# =========================================================================== #
+
+
+async def test_execute_get_with_body_strips_body():
+    """Body passed to a GET request must be silently discarded."""
+    app = _make_app_mock()
+    client = _make_client_mock(return_value={"items": []})
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_VALID_SPEC,
+    ):
+        result = await fn(
+            path="/vdbs",
+            method="GET",
+            body={"should_be_ignored": True},
+        )
+
+    assert result["status"] == "success"
+    _, call_kwargs = client.make_request.call_args
+    assert call_kwargs.get("json") is None
+
+
+# =========================================================================== #
+# execute — /dct/v3 prefix stripped for spec lookup
+# =========================================================================== #
+
+_SPEC_NO_DCT_PREFIX = {
+    "openapi": "3.0.0",
+    "info": {"title": "DCT", "version": "1"},
+    "paths": {
+        "/vdbs": {
+            "get": {
+                "operationId": "listVdbs",
+                "summary": "List VDBs",
+                "tags": ["VDBs"],
+            }
+        }
+    },
+}
+
+
+async def test_execute_strips_dct_v3_prefix_for_spec_lookup():
+    """execute must find /vdbs in the spec even when caller passes /dct/v3/vdbs."""
+    app = _make_app_mock()
+    client = _make_client_mock(return_value={"items": []})
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_SPEC_NO_DCT_PREFIX,
+    ):
+        result = await fn(path="/dct/v3/vdbs", method="GET")
+
+    assert result["status"] == "success"
+
+
+# =========================================================================== #
+# execute — unexpected (non-DCTClientError) exception
+# =========================================================================== #
+
+
+async def test_execute_unexpected_exception_returns_error():
+    """Any non-DCTClientError exception must surface as DCT_API_ERROR with http_status=None."""
+    app = _make_app_mock()
+    client = _make_client_mock()
+    client.make_request = AsyncMock(side_effect=RuntimeError("connection reset"))
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_VALID_SPEC,
+    ):
+        result = await fn(path="/vdbs", method="GET")
+
+    assert result["status"] == "error"
+    assert result["code"] == "DCT_API_ERROR"
+    assert result["http_status"] is None
+    assert "connection reset" in result["message"]
+
+
+# =========================================================================== #
+# _classify_operation_type — full method coverage
+# =========================================================================== #
+
+
+def test_classify_put_is_mutating():
+    from dct_mcp_server.tools.core.dynamic import _classify_operation_type
+
+    assert _classify_operation_type("PUT") == "mutating"
+
+
+def test_classify_patch_is_mutating():
+    from dct_mcp_server.tools.core.dynamic import _classify_operation_type
+
+    assert _classify_operation_type("PATCH") == "mutating"
+
+
+def test_classify_post_is_mutating():
+    from dct_mcp_server.tools.core.dynamic import _classify_operation_type
+
+    assert _classify_operation_type("POST") == "mutating"
+
+
+# =========================================================================== #
+# _validate_required_params — required query parameter
+# =========================================================================== #
+
+
+def test_validate_required_query_param_missing_returns_error():
+    from dct_mcp_server.tools.core.dynamic import _validate_required_params
+
+    operation = {
+        "parameters": [
+            {"name": "version", "in": "query", "required": True},
+        ]
+    }
+    result = _validate_required_params(operation, {}, {}, None)
+    assert result is not None
+    assert result["code"] == "VALIDATION_ERROR"
+    assert "query:version" in result["missing_fields"]
+
+
+def test_validate_optional_query_param_absent_is_ok():
+    from dct_mcp_server.tools.core.dynamic import _validate_required_params
+
+    operation = {
+        "parameters": [
+            {"name": "limit", "in": "query", "required": False},
+        ]
+    }
+    result = _validate_required_params(operation, {}, {}, None)
+    assert result is None
+
+
+# =========================================================================== #
+# _extract_http_status — direct coverage
+# =========================================================================== #
+
+
+def test_extract_http_status_parses_404():
+    from dct_mcp_server.tools.core.dynamic import _extract_http_status
+
+    assert _extract_http_status("HTTP 404 Not Found") == 404
+
+
+def test_extract_http_status_parses_500():
+    from dct_mcp_server.tools.core.dynamic import _extract_http_status
+
+    assert _extract_http_status("upstream returned HTTP 500") == 500
+
+
+def test_extract_http_status_returns_none_for_no_match():
+    from dct_mcp_server.tools.core.dynamic import _extract_http_status
+
+    assert _extract_http_status("connection timed out") is None
