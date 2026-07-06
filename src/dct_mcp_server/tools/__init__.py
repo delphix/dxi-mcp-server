@@ -7,9 +7,6 @@ import tempfile
 
 from dct_mcp_server.config import (
     get_configured_toolset,
-    is_auto_mode,
-    is_dynamic_mode,
-    get_available_toolsets,
     load_toolset_metadata,
     get_modules_for_toolset,
 )
@@ -17,47 +14,12 @@ from dct_mcp_server.config import (
 logger = logging.getLogger(__name__)
 
 
-def register_meta_tools_only(app, dct_client=None):
-    """
-    Register only the meta-tools for auto mode with runtime switching support.
-
-    In auto mode, the LLM can discover available toolsets using:
-    - list_available_toolsets
-    - get_toolset_tools
-    - enable_toolset (runtime registration - no restart required)
-    - disable_toolset (return to meta-tools only)
-    - check_operation_confirmation
-    - execute_action (direct execution without tool list refresh)
-
-    Args:
-        app: FastMCP application instance
-        dct_client: DCT API client instance (needed for runtime tool registration)
-    """
-    from .core.meta_tools import register_meta_tools, initialize_tool_inventory
-
-    # Register the 6 meta-tools
-    register_meta_tools(app)
-
-    # Initialize tool inventory for runtime switching
-    if dct_client is not None:
-        initialize_tool_inventory(app, dct_client)
-        logger.info("Tool inventory initialized for runtime toolset switching")
-    else:
-        logger.warning(
-            "DCT client not provided - runtime toolset switching will be limited"
-        )
-
-    logger.info(
-        "Auto mode: 6 meta-tools registered. Use list_available_toolsets to discover toolsets."
-    )
-
-
 def register_all_tools(app, dct_client):
     """
     Dynamically discovers and registers all tool modules inside this package.
 
     Behavior depends on DCT_TOOLSET environment variable:
-    - "auto" (default): Register only meta-tools for toolset discovery (dynamic at runtime)
+    - "dynamic" (default): Register the 2 discovery + execute tools
     - "<toolset_name>": Register pre-generated tools (created during installation)
 
     Priority for tool loading in fixed mode:
@@ -76,16 +38,8 @@ def register_all_tools(app, dct_client):
         logger.info(f"Configured toolset: {toolset}")
     except ValueError as e:
         logger.error(f"Invalid toolset configuration: {e}")
-        logger.info("Falling back to 'auto' mode")
-        toolset = "auto"
-
-    # In auto mode, register only meta-tools
-    if toolset == "auto":
-        logger.info(
-            "Running in AUTO mode - registering meta-tools with runtime switching support"
-        )
-        register_meta_tools_only(app, dct_client)
-        return
+        logger.info("Falling back to 'dynamic' mode")
+        toolset = "dynamic"
 
     # In dynamic mode, register only the 2 discovery+execute tools
     if toolset == "dynamic":
@@ -141,10 +95,6 @@ def register_all_tools(app, dct_client):
                 if ispkg:
                     continue
 
-                # Skip meta_tools as they're for auto mode only
-                if module_name == "meta_tools":
-                    continue
-
                 # Filter: Only load modules required by this toolset
                 if required_modules is not None and module_name not in required_modules:
                     logger.debug(
@@ -185,10 +135,6 @@ def register_all_tools(app, dct_client):
                 [search_path]
             ):
                 if ispkg:
-                    continue
-
-                # Skip meta_tools in fixed toolset mode
-                if module_name == "meta_tools":
                     continue
 
                 # Filter: Only load modules required by this toolset

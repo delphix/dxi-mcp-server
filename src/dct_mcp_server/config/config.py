@@ -72,7 +72,6 @@ def print_config_help():
     print(
         "                   - dynamic: 2-tool mode (discovery + execute) driven by live OpenAPI spec (default)"
     )
-    print("                   - auto: Dynamic discovery mode with meta-tools")
     print("                   - self_service: Basic VDB operations for developers/QA")
     print(
         "                   - self_service_provision: Extended self-service with provisioning"

@@ -1,18 +1,15 @@
 """
-Spec-derived confirmation resolver for auto mode (DCT_TOOLSET=auto only).
+Spec-derived confirmation resolver (retained utility).
 
-Note: this is distinct from the ``dynamic`` toolset (DCT_TOOLSET=dynamic),
-which has its own confirmation gate in ``tools/core/confirmation_resolver.py``
-backed by ``manual_confirmation.txt``. The spec-derived logic here applies
-*only* when DCT_TOOLSET=auto.
+Auto mode (DCT_TOOLSET=auto), which this module originally served, has been
+removed (DLPXECO-14257). ``resolve_confirmation()`` now delegates unconditionally
+to the static ``manual_confirmation.txt`` rules. The spec-derived
+``get_confirmation_for_operation_dynamic()`` below is kept as a standalone
+utility — available to wire into dynamic mode later — but is no longer dispatched
+automatically.
 
-In auto mode the server exposes the *entire* OpenAPI spec, not just the
-hand-curated persona endpoints. The static rule file
-``config/mappings/manual_confirmation.txt`` predates that and only covers a
-fraction of those endpoints, so it cannot be the source of truth for auto
-mode.
-
-This module derives the confirmation requirement straight from the spec:
+The spec-derived logic derives the confirmation requirement straight from the
+OpenAPI spec:
 
   * DELETE on any path                       -> confirm (manual)
   * POST/PUT/PATCH whose operation summary or
@@ -25,14 +22,12 @@ GET/HEAD/OPTIONS are treated as non-destructive reads and always pass, even when
 their summary mentions a hot keyword (e.g. "Search for snapshots") — otherwise
 read/search endpoints would be gated, which is not the intent.
 
-``resolve_confirmation()`` is the single mode-aware entry point: it uses this
-spec-derived logic when DCT_TOOLSET=auto and falls back to the static txt rules
-for every other toolset (preserving their existing behaviour).
+Note: the ``dynamic`` toolset (DCT_TOOLSET=dynamic) has its own confirmation gate
+in ``tools/core/confirmation_resolver.py``, also backed by ``manual_confirmation.txt``.
 """
 
 from typing import Any, Dict, Optional
 
-from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.config.loader import get_confirmation_for_operation
 from dct_mcp_server.core.logging import get_logger
 
@@ -139,16 +134,10 @@ def get_confirmation_for_operation_dynamic(
 
 
 def resolve_confirmation(method: str, path: str) -> Dict[str, Any]:
-    """Mode-aware confirmation lookup.
+    """Confirmation lookup using the static ``manual_confirmation.txt`` rules.
 
-    Auto mode (DCT_TOOLSET=auto) derives the requirement from the OpenAPI spec;
-    every other toolset keeps using the static ``manual_confirmation.txt`` rules.
+    Auto mode has been removed (DLPXECO-14257), so this delegates to the static
+    rule resolver for every toolset. ``get_confirmation_for_operation_dynamic``
+    above remains available as a standalone spec-derived utility.
     """
-    try:
-        toolset = get_dct_config().get("toolset", "")
-    except Exception:
-        toolset = ""
-
-    if toolset == "auto":
-        return get_confirmation_for_operation_dynamic(method, path)
     return get_confirmation_for_operation(method, path)

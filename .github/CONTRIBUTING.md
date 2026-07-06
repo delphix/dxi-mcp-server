@@ -39,7 +39,7 @@ Then [observable expected outcome].
 
 **Project-specific example** (checkbox format — use this style in your PRs):
 
-- [ ] AC-1: Given `DCT_TOOLSET=auto` and no toolset is currently enabled, when `enable_toolset("self_service")` is called, then the MCP client's tool list includes `vdb_tool` within one round-trip notification and `list_available_toolsets` still returns the full toolset catalogue.
+- [ ] AC-1: Given `DCT_TOOLSET=self_service`, when the MCP server starts, then the client's tool list includes `vdb_tool`, and a `vdb_tool(action="delete_vdb", ...)` call without `confirmed=True` returns `status=confirmation_required`.
 
 Use concrete, observable outcomes — "the response body contains `status=enabled`" is testable; "it works correctly" is not. Reference real domain concepts (`DCT_TOOLSET`, `vdb_tool`, `confirmation_required`, toolset names) rather than generic placeholders.
 

@@ -1,12 +1,13 @@
 """
-Core tools module containing meta-tools and tool factory for dynamic tool generation.
+Core tools module containing spec helpers and the tool factory.
 
 This module contains:
-- meta_tools: Meta-tools for toolset discovery and runtime switching
+- meta_tools: Retained spec-reading helpers (find_endpoint, get_spec_chunk) —
+  formerly the auto-mode meta-tools; auto mode was removed in DLPXECO-14257.
 - tool_factory: Dynamic tool generation from OpenAPI spec
 """
 
-from .meta_tools import register_meta_tools, initialize_tool_inventory
+from .meta_tools import find_endpoint, get_spec_chunk
 from .tool_factory import (
     initialize_openapi_cache,
     register_toolset_tools,
@@ -15,8 +16,8 @@ from .tool_factory import (
 )
 
 __all__ = [
-    "register_meta_tools",
-    "initialize_tool_inventory",
+    "find_endpoint",
+    "get_spec_chunk",
     "initialize_openapi_cache",
     "register_toolset_tools",
     "generate_tools_for_toolset",

@@ -305,8 +305,8 @@ Change `DCT_TOOLSET` in `.mcp.json` and restart the MCP client:
 
 | Value | Description |
 |-------|-------------|
-| `auto` | 6 meta-tools; dynamic toolset switching at runtime |
-| `self_service` | Basic VDB operations (default) |
+| `dynamic` | 2 tools (`discovery` + `execute`) driven by the live OpenAPI spec (default) |
+| `self_service` | Basic VDB operations |
 | `self_service_provision` | Extended self-service with provisioning |
 | `continuous_data_admin` | Full DBA operations |
 | `platform_admin` | System administration |

@@ -23,12 +23,14 @@ from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
 from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
+from dct_mcp_server.tools.core.confirmation_token import (
+    make_confirmation_token,
+    verify_confirmation_token,
+)
 from dct_mcp_server.tools.core.spec_cache import get_cached_spec
+from dct_mcp_server.tools.core.spec_model import OpenAPISpec, RequestBody
 
 logger = get_logger(__name__)
-
-# Maximum $ref resolution depth to prevent infinite recursion on circular schemas
-_MAX_REF_DEPTH = 10
 
 # Pagination hard cap
 _MAX_PAGE_SIZE = 50
@@ -76,6 +78,16 @@ def _get_spec(app: FastMCP) -> dict[str, Any] | None:
     spec_cache.load_and_cache_spec(); discovery/execute read it here.
     """
     return get_cached_spec()
+
+
+def _get_spec_model(app: FastMCP) -> OpenAPISpec | None:
+    """Return the cached spec wrapped in the shared :class:`OpenAPISpec` model.
+
+    All structural traversal ($ref/allOf resolution, path-template matching,
+    request-body flattening) flows through this object rather than ad-hoc dict
+    walking; see tools/core/spec_model.py.
+    """
+    return OpenAPISpec.wrap(get_cached_spec())
 
 
 def _make_discovery_fn(app: FastMCP):
@@ -154,10 +166,9 @@ def _make_discovery_fn(app: FastMCP):
                     "message": "'operation_method' is required for get_operation_schema",
                 }
             return _action_get_operation_schema(
-                paths_map=paths_map,
+                model=OpenAPISpec.wrap(spec),
                 path=path,
                 operation_method=operation_method.upper(),
-                spec=spec,
             )
 
         return {
@@ -183,6 +194,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         query_params: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
         confirmed: bool = False,
+        confirmation_token: str | None = None,
     ) -> dict[str, Any]:
         """
         Validate, confirm, and dispatch a DCT API call.
@@ -191,7 +203,10 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
           1. Substitutes {paramName} placeholders in path using path_params
           2. Looks up the operation in the cached spec (OPERATION_NOT_FOUND if absent)
           3. Validates required parameters against the spec (VALIDATION_ERROR if missing)
-          4. Checks confirmation gates for destructive operations (confirmation_required if confirmed=False)
+          4. Checks confirmation gates for destructive operations. A destructive
+             op returns confirmation_required (with a confirmation_token) until the
+             caller re-calls with that exact token — a bare confirmed=true cannot
+             bypass it.
           5. Dispatches the call via DCTAPIClient
 
         Args:
@@ -201,7 +216,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             path_params:  Key-value map for {paramName} substitution in path
             query_params: Key-value map for query string parameters
             body:         JSON request body
-            confirmed:    Set to True to proceed through a pending confirmation gate
+            confirmed:    Deprecated/ignored for destructive operations — a bare
+                          confirmed=true no longer bypasses the gate. Use
+                          confirmation_token instead.
+            confirmation_token: Echo the token returned in a prior
+                          confirmation_required response to proceed with a
+                          destructive operation (only after explicit user approval).
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
@@ -219,7 +239,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             }
 
         method_upper = method.upper()
-        paths_map: dict[str, Any] = spec.get("paths", {}) or {}
+        model = OpenAPISpec.wrap(spec)
 
         # ---------------------------------------------------------------- #
         # Step 1 — Resolve path parameters
@@ -241,14 +261,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # ---------------------------------------------------------------- #
         # Step 2 — Look up operation in spec
         # ---------------------------------------------------------------- #
-        # Try to find by the resolved path first, then by the template path
-        path_item = _find_path_item(paths_map, resolved_path) or _find_path_item(
-            paths_map, path
-        )
+        # Try the resolved path first, then the template path, then without a
+        # leading /dct/v3 prefix in case the caller included it.
+        path_item = model.find_path_item(resolved_path) or model.find_path_item(path)
         if path_item is None:
-            # Also try without leading /dct/v3 prefix in case caller included it
             stripped = re.sub(r"^/dct/v3", "", resolved_path)
-            path_item = _find_path_item(paths_map, stripped)
+            path_item = model.find_path_item(stripped)
 
         if path_item is None:
             return {
@@ -285,7 +303,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             query_params or {},
             body,
             resolved_path=resolved_path,
-            spec=spec,
+            model=model,
         )
         if validation_error:
             return validation_error
@@ -295,16 +313,30 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # ---------------------------------------------------------------- #
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
             conf = check_confirmation(method_upper, resolved_path)
-            if conf["requires_confirmation"] and not confirmed:
+            # A bare confirmed=true does NOT bypass the gate: the caller must echo
+            # the server-issued confirmation_token from the prior
+            # confirmation_required response, proving it saw the STOP instructions.
+            if conf["requires_confirmation"] and not verify_confirmation_token(
+                confirmation_token, method_upper, resolved_path
+            ):
                 return {
                     "status": "confirmation_required",
                     "confirmation_level": conf["confirmation_level"],
                     "message": (
                         conf["message_template"]
-                        or f"This operation ({method_upper} {resolved_path}) requires confirmation. "
-                        "Re-call with confirmed=True to proceed."
+                        or f"This operation ({method_upper} {resolved_path}) requires confirmation."
+                    ),
+                    "confirmation_token": make_confirmation_token(
+                        method_upper, resolved_path
                     ),
                     "operation": {"path": resolved_path, "method": method_upper},
+                    "instructions": (
+                        "STOP. Display the message to the user and obtain their EXPLICIT "
+                        "approval before proceeding — do NOT approve on their behalf. Once "
+                        "the user approves, re-call execute with the IDENTICAL arguments "
+                        "plus confirmation_token set to the value above. A bare "
+                        "confirmed=true is ignored; the token is required."
+                    ),
                 }
 
         # ---------------------------------------------------------------- #
@@ -463,19 +495,29 @@ def _action_list_operations(
 
 
 def _action_get_operation_schema(
-    paths_map: dict[str, Any],
+    model: OpenAPISpec | None,
     path: str,
     operation_method: str,
-    spec: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return the fully-resolved schema for a specific operation."""
+    """Return the fully-resolved schema for a specific operation.
+
+    All $ref resolution and request-body flattening is delegated to the shared
+    :class:`OpenAPISpec` model (tools/core/spec_model.py).
+    """
+    if model is None:
+        return {
+            "status": "error",
+            "code": "SPEC_NOT_LOADED",
+            "message": "OpenAPI spec is not loaded. Server may still be starting up.",
+        }
+
     # Support "POST /vdbs/{vdbId}/delete" format in path argument
     if " " in path:
         parts = path.split(" ", 1)
         operation_method = parts[0].upper()
         path = parts[1].strip()
 
-    path_item = _find_path_item(paths_map, path)
+    path_item = model.find_path_item(path)
     if path_item is None:
         return {
             "status": "error",
@@ -486,8 +528,7 @@ def _action_get_operation_schema(
             ),
         }
 
-    op = path_item.get(operation_method.lower())
-    if op is None:
+    if path_item.get(operation_method.lower()) is None:
         available = [
             m.upper()
             for m in path_item
@@ -502,42 +543,36 @@ def _action_get_operation_schema(
             ),
         }
 
-    if not isinstance(op, dict):
+    op = model.operation_at(path, operation_method)
+    if op is None:
         return {
             "status": "error",
             "code": "SCHEMA_PARSE_ERROR",
             "message": f"Unexpected operation format for {operation_method} {path}",
         }
 
+    schema_truncated = False
+
     # Resolve $ref in parameters
     parameters: list[dict] = []
-    schema_truncated = False
-    for param in op.get("parameters", []) or []:
-        resolved, truncated = _resolve_refs(param, spec, depth=0, visited=frozenset())
-        if truncated:
-            schema_truncated = True
+    for param in op.parameters:
+        resolved, truncated = model.resolve_refs(param.raw)
+        schema_truncated = schema_truncated or truncated
         parameters.append(resolved)
 
     # Resolve $ref in requestBody → flatten to field list
     request_body_fields: list[dict] = []
-    request_body = op.get("requestBody", {}) or {}
-    if request_body:
-        resolved_rb, truncated = _resolve_refs(
-            request_body, spec, depth=0, visited=frozenset()
-        )
-        if truncated:
-            schema_truncated = True
-        request_body_fields = _flatten_request_body(resolved_rb)
+    if op.request_body is not None:
+        _, truncated = model.resolve_refs(op.request_body.raw)
+        schema_truncated = schema_truncated or truncated
+        request_body_fields = op.request_body.fields()
 
     # Resolve $ref in responses
     responses: dict = {}
-    for status_code, resp_obj in (op.get("responses", {}) or {}).items():
-        resolved_resp, truncated = _resolve_refs(
-            resp_obj, spec, depth=0, visited=frozenset()
-        )
-        if truncated:
-            schema_truncated = True
-        responses[str(status_code)] = resolved_resp
+    for status_code, response in op.responses.items():
+        resolved_resp, truncated = model.resolve_refs(response.raw)
+        schema_truncated = schema_truncated or truncated
+        responses[status_code] = resolved_resp
 
     # Confirmation annotation
     conf = check_confirmation(operation_method.upper(), path)
@@ -545,9 +580,9 @@ def _action_get_operation_schema(
     result = {
         "path": path,
         "method": operation_method.upper(),
-        "operationId": op.get("operationId", ""),
-        "summary": op.get("summary", ""),
-        "description": op.get("description", ""),
+        "operationId": op.operation_id,
+        "summary": op.summary,
+        "description": op.description,
         "parameters": parameters,
         "request_body_fields": request_body_fields,
         "responses": responses,
@@ -586,39 +621,13 @@ def _substitute_path_params(
     return resolved, missing
 
 
-def _find_path_item(paths_map: dict[str, Any], path: str) -> dict[str, Any] | None:
-    """
-    Find the path item in the spec for the given resolved path.
-
-    Tries exact match first, then pattern match (treating {paramName} segments
-    in spec paths as wildcards).
-    """
-    # Exact match
-    if path in paths_map:
-        return paths_map[path]
-
-    # Pattern match: compare resolved path against spec path templates
-    path_segments = path.split("/")
-    for spec_path, item in paths_map.items():
-        spec_segments = spec_path.split("/")
-        if len(spec_segments) != len(path_segments):
-            continue
-        if all(
-            sp == rp or (sp.startswith("{") and sp.endswith("}"))
-            for sp, rp in zip(spec_segments, path_segments)
-        ):
-            return item
-
-    return None
-
-
 def _validate_required_params(
     operation: dict[str, Any],
     path_params: dict[str, Any],
     query_params: dict[str, Any],
     body: dict[str, Any] | None,
     resolved_path: str = "",
-    spec: dict[str, Any] | None = None,
+    model: OpenAPISpec | None = None,
 ) -> dict[str, Any] | None:
     """
     Check that all required parameters are present.
@@ -652,9 +661,13 @@ def _validate_required_params(
     request_body = operation.get("requestBody", {}) or {}
     if request_body.get("required", False) and body is None:
         missing.append("requestBody")
-    elif body is not None and request_body:
-        # Check individual required properties in the body schema
-        _check_required_body_fields(request_body, body, missing, spec)
+    elif body is not None and request_body and model is not None:
+        # Real DCT requestBody schemas are $ref pointers carrying no inline
+        # required key, so RequestBody resolves the pointer (via the shared
+        # OpenAPISpec model) before reading required field names.
+        for field in RequestBody(model, request_body).required_field_names():
+            if field not in body:
+                missing.append(f"body:{field}")
 
     if missing:
         return {
@@ -664,39 +677,6 @@ def _validate_required_params(
             "message": f"Required fields missing: {missing}",
         }
     return None
-
-
-def _check_required_body_fields(
-    request_body: dict[str, Any],
-    body: dict[str, Any],
-    missing: list[str],
-    spec: dict[str, Any] | None = None,
-) -> None:
-    """Extract required property names from requestBody.content schema and check against body.
-
-    Real DCT requestBody schemas are ``$ref`` pointers (e.g.
-    ``#/components/schemas/ProvisionVDBByTimestampParameters``) which carry no
-    inline ``required`` key, so the schema is resolved against the spec before
-    its required fields are read. Without this the check is a silent no-op for
-    every mutating endpoint.
-    """
-    try:
-        content = request_body.get("content", {}) or {}
-        for media_type, media_obj in content.items():
-            if not isinstance(media_obj, dict):
-                continue
-            schema = media_obj.get("schema", {}) or {}
-            if spec is not None:
-                schema, _ = _resolve_refs(schema, spec, depth=0, visited=frozenset())
-                if not isinstance(schema, dict):
-                    break
-            required_fields = schema.get("required", []) or []
-            for field in required_fields:
-                if field not in body:
-                    missing.append(f"body:{field}")
-            break  # Only check the first media type
-    except Exception:
-        pass  # Non-fatal — best-effort validation only
 
 
 def _classify_operation_type(method: str) -> str:
@@ -716,117 +696,5 @@ def _extract_http_status(error_message: str) -> int | None:
     return None
 
 
-# =========================================================================== #
-# $ref resolution helpers
-# =========================================================================== #
-
-
-def _resolve_refs(
-    obj: Any,
-    spec: dict[str, Any],
-    depth: int,
-    visited: frozenset[str],
-) -> tuple[Any, bool]:
-    """
-    Recursively resolve $ref pointers in obj up to _MAX_REF_DEPTH levels.
-
-    Returns:
-        (resolved_obj, schema_truncated)
-        schema_truncated is True if a cycle or depth limit was hit.
-    """
-    truncated = False
-
-    if depth > _MAX_REF_DEPTH:
-        return {"$ref_truncated": True, "reason": "max_depth_exceeded"}, True
-
-    if not isinstance(obj, dict):
-        return obj, False
-
-    if "$ref" in obj:
-        ref = obj["$ref"]
-        if ref in visited:
-            return {
-                "$ref_truncated": True,
-                "reason": "cycle_detected",
-                "ref": ref,
-            }, True
-        try:
-            resolved_target = _lookup_ref(ref, spec)
-            resolved, truncated = _resolve_refs(
-                resolved_target, spec, depth + 1, visited | {ref}
-            )
-            return resolved, truncated
-        except (KeyError, TypeError, ValueError) as exc:
-            return {
-                "status": "error",
-                "code": "SCHEMA_REF_NOT_FOUND",
-                "ref": ref,
-                "message": str(exc),
-            }, False
-
-    result: dict[str, Any] = {}
-    for k, v in obj.items():
-        if isinstance(v, dict):
-            resolved_v, child_truncated = _resolve_refs(v, spec, depth + 1, visited)
-            if child_truncated:
-                truncated = True
-            result[k] = resolved_v
-        elif isinstance(v, list):
-            resolved_list: list[Any] = []
-            for item in v:
-                resolved_item, child_truncated = _resolve_refs(
-                    item, spec, depth + 1, visited
-                )
-                if child_truncated:
-                    truncated = True
-                resolved_list.append(resolved_item)
-            result[k] = resolved_list
-        else:
-            result[k] = v
-
-    return result, truncated
-
-
-def _lookup_ref(ref: str, spec: dict[str, Any]) -> Any:
-    """Resolve a JSON $ref pointer string against the spec dict."""
-    if not ref.startswith("#/"):
-        raise ValueError(f"Unsupported $ref format: {ref}")
-    parts = ref.lstrip("#/").split("/")
-    node: Any = spec
-    for part in parts:
-        node = node[part]
-    return node
-
-
-def _flatten_request_body(
-    resolved_request_body: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """
-    Flatten a resolved requestBody into a list of field descriptors.
-
-    Each entry: {name, required, type, description}
-    """
-    fields: list[dict[str, Any]] = []
-    try:
-        content = resolved_request_body.get("content", {}) or {}
-        for _media_type, media_obj in content.items():
-            if not isinstance(media_obj, dict):
-                continue
-            schema = media_obj.get("schema", {}) or {}
-            properties = schema.get("properties", {}) or {}
-            required_fields = set(schema.get("required", []) or [])
-            for name, prop in properties.items():
-                if not isinstance(prop, dict):
-                    continue
-                fields.append(
-                    {
-                        "name": name,
-                        "required": name in required_fields,
-                        "type": prop.get("type", "object"),
-                        "description": prop.get("description", ""),
-                    }
-                )
-            break  # Only process first media type
-    except Exception as exc:
-        logger.debug("Could not flatten requestBody fields: %s", exc)
-    return fields
+# $ref resolution, path-template matching, and request-body flattening now live
+# in the shared OpenAPISpec model (tools/core/spec_model.py).
