@@ -80,16 +80,10 @@ class DCTAPIClient:
         data: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
-        files: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Make HTTP request to DCT API with retry logic"""
 
         url = urljoin(f"{self.base_url}/dct/v3/", endpoint.lstrip("/"))
-
-        # For multipart file uploads, don't set Content-Type header (httpx will set it)
-        headers = self.headers.copy()
-        if files:
-            del headers["Content-Type"]
 
         # Use json parameter if provided, otherwise use data
         json_data = json if json is not None else data
@@ -100,10 +94,8 @@ class DCTAPIClient:
                     response = await client.request(
                         method=method,
                         url=url,
-                        headers=headers,
-                        json=json_data if not files else None,
-                        data=data if files else None,
-                        files=files,
+                        headers=self.headers,
+                        json=json_data,
                         params=params,
                         timeout=self.timeout,
                     )

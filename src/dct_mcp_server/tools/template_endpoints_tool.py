@@ -1,19 +1,13 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
-from datetime import datetime, timezone
+import asyncio
 import logging
+import threading
+from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
-
-
-class _SafeDict(dict):
-    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
-
-    def __missing__(self, key):
-        return f"{{{key}}}"
-
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -41,63 +35,97 @@ def check_confirmation(
     action: str,
     tool_name: str,
     confirmed: bool = False,
-    context: dict = None,
+    request_params: Optional[Dict[str, Any]] = None,
+    request_body: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-
-    if confirmation["level"] == "none":
-        return None
-
-    if confirmation.get("conditional"):
-        level = confirmation["level"]
-        threshold = confirmation.get("threshold_days")
-
-        if level == "retention_check" and context and threshold is not None:
-            retain_forever = context.get("retain_forever")
-            expiration_date = context.get("expiration_date")
-
-            if retain_forever:
-                return None
-
-            if expiration_date is not None:
-                try:
-                    exp = datetime.fromisoformat(
-                        str(expiration_date).replace("Z", "+00:00")
-                    )
-                    days_until = (exp - datetime.now(timezone.utc)).days
-                    if days_until > threshold:
-                        return None
-                    context = dict(context)
-                    context["days"] = max(0, days_until)
-                except (ValueError, TypeError):
-                    pass
-
-    if confirmed:
-        return None
-
-    message = confirmation.get("message", "Please confirm this operation.")
-    if context:
-        message = message.format_map(_SafeDict(context))
-
-    return {
-        "status": "confirmation_required",
-        "confirmation_level": confirmation["level"],
-        "confirmation_message": message,
-        "action": action,
-        "tool": tool_name,
-        "api_path": api_path,
-        "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent.",
-    }
+    if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = (
+            action.startswith("provision_")
+            or action.startswith("dsource_link_")
+            or action == "dsource_create_snapshot"
+        )
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
+        return {
+            "status": "confirmation_required",
+            "confirmation_level": confirmation["level"],
+            "confirmation_message": confirmation.get(
+                "message", "Please confirm this operation."
+            ),
+            "action": action,
+            "tool": tool_name,
+            "api_path": api_path,
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
+        }
+    return None
 
 
-async def make_api_request(
+def async_to_sync(async_func):
+    """Utility decorator to convert async functions to sync with proper event loop handling."""
+
+    @wraps(async_func)
+    def wrapper(*args, **kwargs):
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create a task and run it synchronously
+                result = None
+                exception = None
+
+                def run_in_thread():
+                    nonlocal result, exception
+                    try:
+                        result = asyncio.run(async_func(*args, **kwargs))
+                    except Exception as e:
+                        exception = e
+
+                thread = threading.Thread(target=run_in_thread)
+                thread.start()
+                thread.join()
+                if exception:
+                    raise exception
+                return result
+            else:
+                return loop.run_until_complete(async_func(*args, **kwargs))
+        except RuntimeError:
+            return asyncio.run(async_func(*args, **kwargs))
+
+    return wrapper
+
+
+def make_api_request(
     method: str, endpoint: str, params: dict = None, json_body: dict = None
 ):
     """Utility function to make API requests with consistent parameter handling."""
-    return await client.make_request(
-        method, endpoint, params=params or {}, json=json_body
-    )
+
+    @async_to_sync
+    async def _make_request():
+        return await client.make_request(
+            method, endpoint, params=params or {}, json=json_body
+        )
+
+    return _make_request()
 
 
 def build_params(**kwargs):
@@ -106,7 +134,7 @@ def build_params(**kwargs):
 
 
 @log_tool_execution
-async def database_template_tool(
+def database_template_tool(
     action: str,  # One of: search, get, create, update, delete, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     database_template_id: Optional[str] = None,
@@ -273,21 +301,19 @@ async def database_template_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {"filter_expression": filter_expression} if filter_expression else {}
         conf = check_confirmation(
             "POST",
             "/database-templates/search",
             action,
             "database_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {"filter_expression": filter_expression} if filter_expression else {}
-        return await make_api_request(
+        return make_api_request(
             "POST", "/database-templates/search", params=params, json_body=body
         )
     elif action == "get":
@@ -297,35 +323,20 @@ async def database_template_tool(
             }
         endpoint = f"/database-templates/{database_template_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "database_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "create":
         params = build_params(name=name, source_type=source_type)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "POST",
-            "/database-templates",
-            action,
-            "database_template_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -338,7 +349,18 @@ async def database_template_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "POST",
+            "/database-templates",
+            action,
+            "database_template_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "POST",
             "/database-templates",
             params=params,
@@ -351,19 +373,6 @@ async def database_template_tool(
             }
         endpoint = f"/database-templates/{database_template_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "database_template_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -374,7 +383,18 @@ async def database_template_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "database_template_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete":
@@ -384,20 +404,18 @@ async def database_template_tool(
             }
         endpoint = f"/database-templates/{database_template_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "database_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("DELETE", endpoint, params=params)
+        return make_api_request("DELETE", endpoint, params=params)
     elif action == "get_tags":
         if database_template_id is None:
             return {
@@ -405,20 +423,18 @@ async def database_template_tool(
             }
         endpoint = f"/database-templates/{database_template_id}/tags"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "database_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if database_template_id is None:
             return {
@@ -426,21 +442,19 @@ async def database_template_tool(
             }
         endpoint = f"/database-templates/{database_template_id}/tags"
         params = build_params(tags=tags)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "database_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -450,8 +464,10 @@ async def database_template_tool(
             }
         endpoint = f"/database-templates/{database_template_id}/tags/delete"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
         }
         conf = check_confirmation(
             "POST",
@@ -459,16 +475,12 @@ async def database_template_tool(
             action,
             "database_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
-        }
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:
@@ -478,7 +490,7 @@ async def database_template_tool(
 
 
 @log_tool_execution
-async def hook_template_tool(
+def hook_template_tool(
     action: str,  # One of: search, get, create, update, delete, get_tags, add_tags, delete_tags
     command: Optional[str] = None,
     credentials_env_vars: Optional[list] = None,
@@ -649,21 +661,19 @@ async def hook_template_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {"filter_expression": filter_expression} if filter_expression else {}
         conf = check_confirmation(
             "POST",
             "/hook-templates/search",
             action,
             "hook_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {"filter_expression": filter_expression} if filter_expression else {}
-        return await make_api_request(
+        return make_api_request(
             "POST", "/hook-templates/search", params=params, json_body=body
         )
     elif action == "get":
@@ -673,35 +683,20 @@ async def hook_template_tool(
             }
         endpoint = f"/hook-templates/{hook_template_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "hook_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "create":
         params = build_params(name=name, command=command)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "POST",
-            "/hook-templates",
-            action,
-            "hook_template_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -714,7 +709,18 @@ async def hook_template_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "POST",
+            "/hook-templates",
+            action,
+            "hook_template_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "POST", "/hook-templates", params=params, json_body=body if body else None
         )
     elif action == "update":
@@ -724,19 +730,6 @@ async def hook_template_tool(
             }
         endpoint = f"/hook-templates/{hook_template_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "hook_template_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -748,7 +741,18 @@ async def hook_template_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "hook_template_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete":
@@ -758,20 +762,18 @@ async def hook_template_tool(
             }
         endpoint = f"/hook-templates/{hook_template_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "hook_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("DELETE", endpoint, params=params)
+        return make_api_request("DELETE", endpoint, params=params)
     elif action == "get_tags":
         if hook_template_id is None:
             return {
@@ -779,20 +781,18 @@ async def hook_template_tool(
             }
         endpoint = f"/hook-templates/{hook_template_id}/tags"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "hook_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if hook_template_id is None:
             return {
@@ -800,21 +800,19 @@ async def hook_template_tool(
             }
         endpoint = f"/hook-templates/{hook_template_id}/tags"
         params = build_params(tags=tags)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "hook_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -824,8 +822,10 @@ async def hook_template_tool(
             }
         endpoint = f"/hook-templates/{hook_template_id}/tags/delete"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
         }
         conf = check_confirmation(
             "POST",
@@ -833,16 +833,12 @@ async def hook_template_tool(
             action,
             "hook_template_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
-        }
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:

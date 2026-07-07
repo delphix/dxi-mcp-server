@@ -1,19 +1,13 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
-from datetime import datetime, timezone
+import asyncio
 import logging
+import threading
+from functools import wraps
 
 client = None
 logger = logging.getLogger(__name__)
-
-
-class _SafeDict(dict):
-    """Returns '{key}' for missing keys so unresolvable placeholders stay readable."""
-
-    def __missing__(self, key):
-        return f"{{{key}}}"
-
 
 # =============================================================================
 # CONFIRMATION INTEGRATION
@@ -41,63 +35,97 @@ def check_confirmation(
     action: str,
     tool_name: str,
     confirmed: bool = False,
-    context: dict = None,
+    request_params: Optional[Dict[str, Any]] = None,
+    request_body: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-
-    if confirmation["level"] == "none":
-        return None
-
-    if confirmation.get("conditional"):
-        level = confirmation["level"]
-        threshold = confirmation.get("threshold_days")
-
-        if level == "retention_check" and context and threshold is not None:
-            retain_forever = context.get("retain_forever")
-            expiration_date = context.get("expiration_date")
-
-            if retain_forever:
-                return None
-
-            if expiration_date is not None:
-                try:
-                    exp = datetime.fromisoformat(
-                        str(expiration_date).replace("Z", "+00:00")
-                    )
-                    days_until = (exp - datetime.now(timezone.utc)).days
-                    if days_until > threshold:
-                        return None
-                    context = dict(context)
-                    context["days"] = max(0, days_until)
-                except (ValueError, TypeError):
-                    pass
-
-    if confirmed:
-        return None
-
-    message = confirmation.get("message", "Please confirm this operation.")
-    if context:
-        message = message.format_map(_SafeDict(context))
-
-    return {
-        "status": "confirmation_required",
-        "confirmation_level": confirmation["level"],
-        "confirmation_message": message,
-        "action": action,
-        "tool": tool_name,
-        "api_path": api_path,
-        "instructions": "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT approval before re-calling with confirmed=True. Do NOT proceed without user consent.",
-    }
+    if confirmation["level"] != "none" and not confirmed:
+        # Merge query params and body into a single review dict so the LLM can
+        # render the exact payload that will be sent. None values are already
+        # stripped upstream by build_params / body filter.
+        review: Dict[str, Any] = {}
+        if request_params:
+            review.update(request_params)
+        if request_body:
+            review.update(request_body)
+        is_review_critical = (
+            action.startswith("provision_")
+            or action.startswith("dsource_link_")
+            or action == "dsource_create_snapshot"
+        )
+        instructions = (
+            "STOP: You MUST display the confirmation_message to the user and wait for their EXPLICIT "
+            "approval before re-calling with confirmed=True. Do NOT proceed without user consent."
+        )
+        if is_review_critical:
+            instructions = (
+                "STOP — REVIEW AND SUBMIT: Before asking the user to confirm, render 'review_parameters' "
+                "as a Markdown table with columns | Parameter | Value | (one row per key). Then show the "
+                "'confirmation_message' and the endpoint (method + api_path). Wait for EXPLICIT user approval, "
+                "then re-call with confirmed=True and the SAME parameters. Do NOT proceed without consent."
+            )
+        return {
+            "status": "confirmation_required",
+            "confirmation_level": confirmation["level"],
+            "confirmation_message": confirmation.get(
+                "message", "Please confirm this operation."
+            ),
+            "action": action,
+            "tool": tool_name,
+            "api_path": api_path,
+            "method": method,
+            "review_parameters": review,
+            "instructions": instructions,
+        }
+    return None
 
 
-async def make_api_request(
+def async_to_sync(async_func):
+    """Utility decorator to convert async functions to sync with proper event loop handling."""
+
+    @wraps(async_func)
+    def wrapper(*args, **kwargs):
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create a task and run it synchronously
+                result = None
+                exception = None
+
+                def run_in_thread():
+                    nonlocal result, exception
+                    try:
+                        result = asyncio.run(async_func(*args, **kwargs))
+                    except Exception as e:
+                        exception = e
+
+                thread = threading.Thread(target=run_in_thread)
+                thread.start()
+                thread.join()
+                if exception:
+                    raise exception
+                return result
+            else:
+                return loop.run_until_complete(async_func(*args, **kwargs))
+        except RuntimeError:
+            return asyncio.run(async_func(*args, **kwargs))
+
+    return wrapper
+
+
+def make_api_request(
     method: str, endpoint: str, params: dict = None, json_body: dict = None
 ):
     """Utility function to make API requests with consistent parameter handling."""
-    return await client.make_request(
-        method, endpoint, params=params or {}, json=json_body
-    )
+
+    @async_to_sync
+    async def _make_request():
+        return await client.make_request(
+            method, endpoint, params=params or {}, json=json_body
+        )
+
+    return _make_request()
 
 
 def build_params(**kwargs):
@@ -106,7 +134,7 @@ def build_params(**kwargs):
 
 
 @log_tool_execution
-async def virtualization_policy_tool(
+def virtualization_policy_tool(
     action: str,  # One of: search, get, create, update, delete, apply, unapply, search_targets, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     data_duration: Optional[int] = None,
@@ -383,21 +411,19 @@ async def virtualization_policy_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {"filter_expression": filter_expression} if filter_expression else {}
         conf = check_confirmation(
             "POST",
             "/virtualization-policies/search",
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {"filter_expression": filter_expression} if filter_expression else {}
-        return await make_api_request(
+        return make_api_request(
             "POST", "/virtualization-policies/search", params=params, json_body=body
         )
     elif action == "get":
@@ -405,35 +431,20 @@ async def virtualization_policy_tool(
             return {"error": "Missing required parameter: policy_id for action get"}
         endpoint = f"/virtualization-policies/{policy_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "create":
         params = build_params(name=name, policy_type=policy_type)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "POST",
-            "/virtualization-policies",
-            action,
-            "virtualization_policy_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -459,7 +470,18 @@ async def virtualization_policy_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "POST",
+            "/virtualization-policies",
+            action,
+            "virtualization_policy_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "POST",
             "/virtualization-policies",
             params=params,
@@ -470,19 +492,6 @@ async def virtualization_policy_tool(
             return {"error": "Missing required parameter: policy_id for action update"}
         endpoint = f"/virtualization-policies/{policy_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "virtualization_policy_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -505,7 +514,18 @@ async def virtualization_policy_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "virtualization_policy_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete":
@@ -513,75 +533,67 @@ async def virtualization_policy_tool(
             return {"error": "Missing required parameter: policy_id for action delete"}
         endpoint = f"/virtualization-policies/{policy_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("DELETE", endpoint, params=params)
+        return make_api_request("DELETE", endpoint, params=params)
     elif action == "apply":
         if policy_id is None:
             return {"error": "Missing required parameter: policy_id for action apply"}
         endpoint = f"/virtualization-policies/{policy_id}/apply"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "unapply":
         if policy_id is None:
             return {"error": "Missing required parameter: policy_id for action unapply"}
         endpoint = f"/virtualization-policies/{policy_id}/unapply"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "search_targets":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {"filter_expression": filter_expression} if filter_expression else {}
         conf = check_confirmation(
             "POST",
             "/virtualization-policies/targets/search",
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {"filter_expression": filter_expression} if filter_expression else {}
-        return await make_api_request(
+        return make_api_request(
             "POST",
             "/virtualization-policies/targets/search",
             params=params,
@@ -594,20 +606,18 @@ async def virtualization_policy_tool(
             }
         endpoint = f"/virtualization-policies/{policy_id}/tags"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if policy_id is None:
             return {
@@ -615,21 +625,19 @@ async def virtualization_policy_tool(
             }
         endpoint = f"/virtualization-policies/{policy_id}/tags"
         params = build_params(tags=tags)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -639,8 +647,10 @@ async def virtualization_policy_tool(
             }
         endpoint = f"/virtualization-policies/{policy_id}/tags/delete"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
         }
         conf = check_confirmation(
             "POST",
@@ -648,16 +658,12 @@ async def virtualization_policy_tool(
             action,
             "virtualization_policy_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
-        }
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     else:
@@ -667,7 +673,7 @@ async def virtualization_policy_tool(
 
 
 @log_tool_execution
-async def replication_tool(
+def replication_tool(
     action: str,  # One of: search, get, create, update, delete, execute, enable_tag_replication, disable_tag_replication, get_tags, add_tags, delete_tags, list_namespaces, search_namespaces, get_namespace, update_namespace, delete_namespace, failover_namespace, commit_failover_namespace, failback_namespace, discard_namespace, get_heldspace_deletion_dependencies, delete_heldspace
     automatic_replication: Optional[bool] = None,
     bandwidth_limit: Optional[int] = None,
@@ -1087,21 +1093,19 @@ async def replication_tool(
     # Route to appropriate API based on action
     if action == "search":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {"filter_expression": filter_expression} if filter_expression else {}
         conf = check_confirmation(
             "POST",
             "/replication-profiles/search",
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {"filter_expression": filter_expression} if filter_expression else {}
-        return await make_api_request(
+        return make_api_request(
             "POST", "/replication-profiles/search", params=params, json_body=body
         )
     elif action == "get":
@@ -1111,35 +1115,20 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "create":
         params = build_params(replication_mode=replication_mode)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "POST",
-            "/replication-profiles",
-            action,
-            "replication_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -1169,7 +1158,18 @@ async def replication_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "POST",
+            "/replication-profiles",
+            action,
+            "replication_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "POST",
             "/replication-profiles",
             params=params,
@@ -1182,19 +1182,6 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
-        conf = check_confirmation(
-            "PATCH",
-            endpoint,
-            action,
-            "replication_tool",
-            confirmed or False,
-            context=_ctx,
-        )
-        if conf:
-            return conf
         body = {
             k: v
             for k, v in {
@@ -1221,7 +1208,18 @@ async def replication_tool(
             }.items()
             if v is not None
         }
-        return await make_api_request(
+        conf = check_confirmation(
+            "PATCH",
+            endpoint,
+            action,
+            "replication_tool",
+            confirmed or False,
+            request_params=params,
+            request_body=body,
+        )
+        if conf:
+            return conf
+        return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete":
@@ -1231,20 +1229,18 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("DELETE", endpoint, params=params)
+        return make_api_request("DELETE", endpoint, params=params)
     elif action == "execute":
         if replication_profile_id is None:
             return {
@@ -1252,20 +1248,18 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}/execute"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "enable_tag_replication":
         if replication_profile_id is None:
             return {
@@ -1275,20 +1269,18 @@ async def replication_tool(
             f"/replication-profiles/{replication_profile_id}/enable-tag-replication"
         )
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "disable_tag_replication":
         if replication_profile_id is None:
             return {
@@ -1298,20 +1290,18 @@ async def replication_tool(
             f"/replication-profiles/{replication_profile_id}/disable-tag-replication"
         )
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "get_tags":
         if replication_profile_id is None:
             return {
@@ -1319,20 +1309,18 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}/tags"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "add_tags":
         if replication_profile_id is None:
             return {
@@ -1340,21 +1328,19 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}/tags"
         params = build_params(tags=tags)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {k: v for k, v in {"tags": tags}.items() if v is not None}
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_tags":
@@ -1364,8 +1350,10 @@ async def replication_tool(
             }
         endpoint = f"/replication-profiles/{replication_profile_id}/tags/delete"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        body = {
+            k: v
+            for k, v in {"key": key, "value": value, "tags": tags}.items()
+            if v is not None
         }
         conf = check_confirmation(
             "POST",
@@ -1373,51 +1361,43 @@ async def replication_tool(
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {
-            k: v
-            for k, v in {"key": key, "value": value, "tags": tags}.items()
-            if v is not None
-        }
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "list_namespaces":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             "/namespaces",
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", "/namespaces", params=params)
+        return make_api_request("GET", "/namespaces", params=params)
     elif action == "search_namespaces":
         params = build_params(limit=limit, cursor=cursor, sort=sort)
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
+        body = {"filter_expression": filter_expression} if filter_expression else {}
         conf = check_confirmation(
             "POST",
             "/namespaces/search",
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {"filter_expression": filter_expression} if filter_expression else {}
-        return await make_api_request(
+        return make_api_request(
             "POST", "/namespaces/search", params=params, json_body=body
         )
     elif action == "get_namespace":
@@ -1427,20 +1407,18 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "update_namespace":
         if namespace_id is None:
             return {
@@ -1448,8 +1426,10 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        body = {
+            k: v
+            for k, v in {"name": name, "description": description}.items()
+            if v is not None
         }
         conf = check_confirmation(
             "PATCH",
@@ -1457,16 +1437,12 @@ async def replication_tool(
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {
-            k: v
-            for k, v in {"name": name, "description": description}.items()
-            if v is not None
-        }
-        return await make_api_request(
+        return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
     elif action == "delete_namespace":
@@ -1476,20 +1452,18 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "DELETE",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("DELETE", endpoint, params=params)
+        return make_api_request("DELETE", endpoint, params=params)
     elif action == "failover_namespace":
         if namespace_id is None:
             return {
@@ -1497,8 +1471,10 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}/failover"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
+        body = {
+            k: v
+            for k, v in {"enable_failback": enable_failback}.items()
+            if v is not None
         }
         conf = check_confirmation(
             "POST",
@@ -1506,16 +1482,12 @@ async def replication_tool(
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=body,
         )
         if conf:
             return conf
-        body = {
-            k: v
-            for k, v in {"enable_failback": enable_failback}.items()
-            if v is not None
-        }
-        return await make_api_request(
+        return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
     elif action == "commit_failover_namespace":
@@ -1525,20 +1497,18 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}/commitFailover"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "failback_namespace":
         if namespace_id is None:
             return {
@@ -1546,20 +1516,18 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}/failback"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "discard_namespace":
         if namespace_id is None:
             return {
@@ -1567,20 +1535,18 @@ async def replication_tool(
             }
         endpoint = f"/namespace/{namespace_id}/discard"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     elif action == "get_heldspace_deletion_dependencies":
         if heldspace_id is None:
             return {
@@ -1588,20 +1554,18 @@ async def replication_tool(
             }
         endpoint = f"/heldspace/{heldspace_id}/deletion-dependencies"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "GET",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("GET", endpoint, params=params)
+        return make_api_request("GET", endpoint, params=params)
     elif action == "delete_heldspace":
         if heldspace_id is None:
             return {
@@ -1609,20 +1573,18 @@ async def replication_tool(
             }
         endpoint = f"/heldspace/{heldspace_id}/delete"
         params = build_params()
-        _ctx = {
-            k: v for k, v in locals().items() if v is not None and not k.startswith("_")
-        }
         conf = check_confirmation(
             "POST",
             endpoint,
             action,
             "replication_tool",
             confirmed or False,
-            context=_ctx,
+            request_params=params,
+            request_body=None,
         )
         if conf:
             return conf
-        return await make_api_request("POST", endpoint, params=params)
+        return make_api_request("POST", endpoint, params=params)
     else:
         return {
             "error": f"Unknown action: {action}. Valid actions: search, get, create, update, delete, execute, enable_tag_replication, disable_tag_replication, get_tags, add_tags, delete_tags, list_namespaces, search_namespaces, get_namespace, update_namespace, delete_namespace, failover_namespace, commit_failover_namespace, failback_namespace, discard_namespace, get_heldspace_deletion_dependencies, delete_heldspace"
