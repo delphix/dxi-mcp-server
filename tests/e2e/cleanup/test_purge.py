@@ -21,7 +21,9 @@ pytestmark = [pytest.mark.real_dct, pytest.mark.asyncio]
 async def test_purge_tagged_resources(real_mcp_client):
     run_tag = os.environ.get("E2E_RUN_TAG")
     if not run_tag or not run_tag.startswith("e2e-"):
-        pytest.skip(f"E2E_RUN_TAG not set by CLI runner — skipping cleanup (got {run_tag!r})")
+        pytest.skip(
+            f"E2E_RUN_TAG not set by CLI runner — skipping cleanup (got {run_tag!r})"
+        )
 
     # Bookmarks are fully manageable in self_service (create + delete), so they are
     # the resource the L4 mutation test creates — purge any named with this run tag.
