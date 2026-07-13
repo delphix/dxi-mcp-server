@@ -3,8 +3,10 @@ DCT API Client module
 """
 
 import asyncio
+import base64
 import contextlib
 import importlib.metadata
+import re as _re
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
@@ -15,6 +17,41 @@ from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _mask_secret(value: str) -> str:
+    """Return a masked version of a secret string safe for logging."""
+    if not value:
+        return "***"
+    if len(value) <= 6:
+        return "***"
+    return value[:3] + "***" + value[-3:]
+
+
+class SecretGuard:
+    """Prevents raw secrets from appearing in tool arguments."""
+
+    # Pattern 1: DCT API key prefix
+    _APK_PATTERN = _re.compile(r'^apk\s+', _re.IGNORECASE)
+    # Pattern 2: base64-like token longer than 32 chars
+    _B64_PATTERN = _re.compile(r'^[A-Za-z0-9+/=]{33,}$')
+
+    @staticmethod
+    def check(kwargs: dict) -> None:
+        """Raise DCTClientError if any kwarg value looks like a raw secret."""
+        for key, value in kwargs.items():
+            if not isinstance(value, str):
+                continue
+            if SecretGuard._APK_PATTERN.match(value):
+                raise DCTClientError(
+                    f"Tool argument '{key}' appears to contain a raw DCT API key "
+                    f"(matched 'apk ' prefix). Use a credential alias instead."
+                )
+            if SecretGuard._B64_PATTERN.match(value):
+                raise DCTClientError(
+                    f"Tool argument '{key}' appears to contain a raw secret token "
+                    f"(base64-like string > 32 chars). Use a credential alias instead."
+                )
 
 
 class DCTAPIClient:
@@ -56,6 +93,39 @@ class DCTAPIClient:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+
+    @classmethod
+    def for_identity(cls, account_id: str, api_key: Optional[str] = None) -> "DCTAPIClient":
+        """Create a DCTAPIClient instance for a specific embedded-mode identity.
+
+        The account_id is used as the X-CLIENT-ID internal trust header value.
+        The 'apk ' prefix is NOT prepended — account IDs are not API keys.
+        Never log the raw account_id.
+        """
+        from dct_mcp_server.config.config import get_dct_config
+        config = get_dct_config(require_key=False)
+        instance = cls.__new__(cls)
+        instance.config = config
+        instance.base_url = config["base_url"].rstrip("/")
+        instance.api_key = api_key  # may be None in embedded mode
+        instance.verify_ssl = config["verify_ssl"]
+        instance.timeout = config["timeout"]
+        instance.max_retries = config["max_retries"]
+        try:
+            import importlib.metadata
+            version = importlib.metadata.version("dct-mcp-server")
+        except Exception:
+            version = "2026.0.1.0-preview"
+        # Use X-CLIENT-ID header for embedded-mode identity; no Authorization header
+        instance.headers = {
+            "X-CLIENT-ID": account_id,  # Internal DCT trust header; not Authorization
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": f"dct-mcp-server/{version}",
+        }
+        instance._client = None
+        logger.debug("Created per-identity client for %s", _mask_secret(account_id))
+        return instance
 
     @contextlib.asynccontextmanager
     async def _session(self):
