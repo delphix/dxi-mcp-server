@@ -29,6 +29,12 @@ def register_all_tools(app, dct_client):
     Any module that defines a function:
         register_tools(app, dct_client)
     will be automatically imported and executed.
+
+    Args:
+        app: The FastMCP application instance.
+        dct_client: Either a DCTAPIClient singleton (standalone mode) or a
+                    ClientRegistry instance (embedded mode). Tool modules receive
+                    whichever type is passed here via their register_tools() call.
     """
     logger.info("Starting dynamic tool registration...")
 

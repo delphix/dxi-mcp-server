@@ -160,7 +160,7 @@ def load_api_endpoints_from_toolsets():
         return
 
     # Get the selected toolset from config
-    dct_config = get_dct_config()
+    dct_config = get_dct_config(require_key=False)
     selected_toolset = dct_config.get("toolset", "self_service")
 
     # "dynamic" mode does not use the persona-grouped generator output
@@ -262,7 +262,7 @@ def download_open_api_yaml(api_url: str, save_path: str):
         logger.info(f"Downloading OpenAPI spec from {api_url}...")
 
         # Get DCT configuration for proper authentication and SSL settings
-        dct_config = get_dct_config()
+        dct_config = get_dct_config(require_key=False)
         verify_ssl = dct_config.get("verify_ssl", False)
         api_key = dct_config.get("api_key")
 
@@ -448,6 +448,13 @@ def resolve_schema_properties(schema: dict, api_spec: dict) -> tuple:
     return obj.properties, obj.required, obj.key_properties
 
 
+def _should_use_bundled_spec(dct_config: dict) -> bool:
+    """Return True when the bundled OpenAPI spec should be used instead of downloading."""
+    auth_mode = dct_config.get("auth_mode", "standalone")
+    api_key = dct_config.get("api_key")
+    return auth_mode == "embedded" or not api_key
+
+
 def generate_tools_from_openapi():
     """
     Generates UNIFIED tool files from OpenAPI spec based on TOOLS_BY_NAME.
@@ -458,27 +465,51 @@ def generate_tools_from_openapi():
     load_api_endpoints_from_toolsets()
 
     # Get DCT base URL from config
-    dct_config = get_dct_config()
-    base_url = dct_config.get("base_url")
-    if not base_url:
-        logger.error(
-            "DCT_BASE_URL not configured. Cannot download OpenAPI specification."
-        )
-        raise ValueError("DCT_BASE_URL is required for tool generation")
+    dct_config = get_dct_config(require_key=False)
 
-    # Construct the OpenAPI spec URL
-    client_address = f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
-    logger.info(f"OpenAPI spec URL: {client_address}")
+    _use_bundled = _should_use_bundled_spec(dct_config)
+    API_FILE = None
 
-    # Use temp directory for package installations, project directory for local development
-    if "site-packages" in __file__:
-        API_FILE = os.path.join(tempfile.gettempdir(), "api.yaml")
-    else:
-        API_FILE = os.path.join(project_root, "src", "api.yaml")
+    if _use_bundled:
+        # Find the bundled spec
+        _bundled_candidates = [
+            os.path.join(project_root, "docs", "api-external.yaml"),
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "docs", "api-external.yaml"),
+        ]
+        _bundled_spec = None
+        for _candidate in _bundled_candidates:
+            if os.path.exists(_candidate):
+                _bundled_spec = os.path.abspath(_candidate)
+                break
+        if _bundled_spec:
+            logger.info("Using bundled spec (embedded mode or no API key): %s", _bundled_spec)
+            api_spec = read_open_api_yaml(_bundled_spec)
+        else:
+            logger.warning("Bundled spec not found; attempting live download anyway")
+            _use_bundled = False
 
-    download_open_api_yaml(client_address, API_FILE)
+    if not _use_bundled:
+        base_url = dct_config.get("base_url")
+        if not base_url:
+            logger.error(
+                "DCT_BASE_URL not configured. Cannot download OpenAPI specification."
+            )
+            raise ValueError("DCT_BASE_URL is required for tool generation")
 
-    api_spec = read_open_api_yaml(API_FILE)
+        # Construct the OpenAPI spec URL
+        client_address = f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
+        logger.info(f"OpenAPI spec URL: {client_address}")
+
+        # Use temp directory for package installations, project directory for local development
+        if "site-packages" in __file__:
+            API_FILE = os.path.join(tempfile.gettempdir(), "api.yaml")
+        else:
+            API_FILE = os.path.join(project_root, "src", "api.yaml")
+
+        download_open_api_yaml(client_address, API_FILE)
+
+        api_spec = read_open_api_yaml(API_FILE)
+
     logger.info(f"Unified tools to generate: {list(TOOLS_BY_NAME.keys())}")
 
     # Reset per-run skip tracker so the summary only reflects this generation.
@@ -537,8 +568,8 @@ def generate_tools_from_openapi():
 
         logger.info(f"Generated {TOOL_FILE} with {len(function_lists)} unified tools")
 
-    # Delete the api.yaml file after generating all tools
-    if os.path.exists(API_FILE):
+    # Delete the api.yaml file after generating all tools (only for live-download path)
+    if API_FILE and os.path.exists(API_FILE):
         os.remove(API_FILE)
 
     # Loud summary of any toolset entries skipped due to method/path mismatches.

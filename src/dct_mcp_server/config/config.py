@@ -6,7 +6,7 @@ import os
 from typing import Any, Dict
 
 
-def get_dct_config() -> Dict[str, Any]:
+def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
     """Get DCT configuration from environment variables"""
     import tempfile
 
@@ -29,10 +29,15 @@ def get_dct_config() -> Dict[str, Any]:
         # Dynamic mode (DCT_TOOLSET=dynamic) spec cache settings
         "spec_cache_path": os.getenv("DCT_SPEC_CACHE_PATH", _default_spec_cache_path),
         "spec_max_age_hours": int(os.getenv("DCT_SPEC_MAX_AGE_HOURS", "24")),
+        "transport": os.getenv("DCT_TRANSPORT", "stdio").lower().strip(),
+        "auth_mode": os.getenv("DCT_AUTH_MODE", "standalone").lower().strip(),
+        "http_host": os.getenv("DCT_HTTP_HOST", "127.0.0.1"),
+        "http_port": int(os.getenv("DCT_HTTP_PORT", "8765")),
+        "require_tls": os.getenv("DCT_REQUIRE_TLS", "true").lower() == "true",
     }
 
     # Validate required configuration
-    if not config["api_key"]:
+    if not config["api_key"] and config["auth_mode"] != "embedded" and require_key:
         raise ValueError(
             "DCT_API_KEY environment variable is required. "
             "Please set it to your Delphix DCT API key."
@@ -44,6 +49,20 @@ def get_dct_config() -> Dict[str, Any]:
         raise ValueError(
             f"Invalid log level: {config['log_level']}. "
             f"Must be one of: {', '.join(valid_log_levels)}"
+        )
+
+    # Validate transport
+    if config["transport"] not in ("stdio", "http"):
+        raise ValueError(
+            f"Invalid DCT_TRANSPORT: {config['transport']}. "
+            "Must be one of: stdio, http"
+        )
+
+    # Validate auth_mode
+    if config["auth_mode"] not in ("standalone", "embedded"):
+        raise ValueError(
+            f"Invalid DCT_AUTH_MODE: {config['auth_mode']}. "
+            "Must be one of: standalone, embedded"
         )
 
     return config
@@ -80,6 +99,26 @@ def print_config_help():
     print("                   - platform_admin: System administration tools")
     print("                   - reporting_insights: Read-only reporting and analytics")
     print()
+    print("Transport and auth optional variables:")
+    print(
+        "  DCT_TRANSPORT    Server transport mode (default: stdio, options: stdio, http)"
+    )
+    print(
+        "  DCT_AUTH_MODE    Authentication mode (default: standalone, options: standalone, embedded)"
+    )
+    print(
+        "                   In 'embedded' mode, DCT_API_KEY is not required (auth is handled externally)"
+    )
+    print(
+        "  DCT_HTTP_HOST    Host to bind when DCT_TRANSPORT=http (default: 127.0.0.1)"
+    )
+    print(
+        "  DCT_HTTP_PORT    Port to bind when DCT_TRANSPORT=http (default: 8765)"
+    )
+    print(
+        "  DCT_REQUIRE_TLS  Require TLS when DCT_TRANSPORT=http (default: true)"
+    )
+    print()
     print("Dynamic mode (DCT_TOOLSET=dynamic) optional variables:")
     print(
         "  DCT_SPEC_CACHE_PATH     Path to cache the downloaded OpenAPI spec "
@@ -95,4 +134,6 @@ def print_config_help():
     print("  export DCT_VERIFY_SSL=true")
     print("  export DCT_LOG_LEVEL=DEBUG")
     print("  export DCT_TOOLSET=self_service")
+    print("  export DCT_TRANSPORT=http")
+    print("  export DCT_AUTH_MODE=standalone")
     print()
