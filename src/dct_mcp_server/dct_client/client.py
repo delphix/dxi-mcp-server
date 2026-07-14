@@ -6,6 +6,7 @@ import asyncio
 import base64
 import contextlib
 import importlib.metadata
+import os
 import re as _re
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
@@ -153,7 +154,14 @@ class DCTAPIClient:
     ) -> Dict[str, Any]:
         """Make HTTP request to DCT API with retry logic"""
 
-        url = urljoin(f"{self.base_url}/dct/v3/", endpoint.lstrip("/"))
+        # The API path prefix is configurable so the client can target either the
+        # external proxy path ("dct/v3", the default) or an internal DCT gateway
+        # that serves "/v3" directly. Set DCT_API_PATH_PREFIX="v3" for the latter.
+        _prefix = os.getenv("DCT_API_PATH_PREFIX", "dct/v3").strip("/")
+        url = urljoin(
+            f"{self.base_url}/" + (f"{_prefix}/" if _prefix else ""),
+            endpoint.lstrip("/"),
+        )
 
         # Use json parameter if provided, otherwise use data
         json_data = json if json is not None else data

@@ -181,6 +181,10 @@ async def async_main():
         # In embedded mode we use the bundled spec (no API key needed).
         # In standalone mode the existing persona-toolset logic applies.
         if auth_mode == "embedded":
+            # Dynamic mode keeps its spec in spec_cache (read by the discovery and
+            # execute tools), which is separate from the generator's bundled spec.
+            if is_dynamic_mode():
+                await _load_dynamic_spec(app)
             # Embedded mode: use the bundled spec — no live download needed
             try:
                 await asyncio.to_thread(generate_tools_from_openapi)
