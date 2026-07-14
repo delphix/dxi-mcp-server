@@ -209,7 +209,11 @@ def _download_spec(
         logger.warning("DCT_BASE_URL not set — cannot download OpenAPI spec")
         return None
 
-    spec_url = f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
+    # DCT_SPEC_URL overrides the full spec URL — e.g. an internal DCT gateway that
+    # serves /static/api-external.yaml. Otherwise use the external proxy path.
+    spec_url = os.getenv("DCT_SPEC_URL") or (
+        f"{base_url.rstrip('/')}/dct/static/api-external.yaml"
+    )
     headers: dict[str, str] = {
         "Accept": "application/x-yaml, text/yaml, application/json",
         "User-Agent": "dct-mcp-server/dynamic-mode",

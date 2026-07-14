@@ -19,6 +19,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from dct_mcp_server.core.auth import resolve_auth
+from dct_mcp_server.core.client_registry import ClientRegistry
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
@@ -359,7 +361,15 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # Step 7 — Dispatch
         # ---------------------------------------------------------------- #
         try:
-            response = await dct_client.make_request(
+            # In embedded mode register_all_tools passes a ClientRegistry; resolve
+            # the per-caller DCTAPIClient (keyed by X-CLIENT-ID) before dispatching.
+            # In standalone mode dct_client is already a DCTAPIClient.
+            client = (
+                dct_client.get_client(resolve_auth())
+                if isinstance(dct_client, ClientRegistry)
+                else dct_client
+            )
+            response = await client.make_request(
                 method=method_upper,
                 endpoint=resolved_path,
                 params=query_params or None,
