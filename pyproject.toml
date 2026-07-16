@@ -58,6 +58,7 @@ source = ["src/dct_mcp_server"]
 omit = [
     "*/toolsgenerator/*",
     "*/tools/core/tool_factory.py",
+    "*/tools/*_endpoints_tool.py",
 ]
 
 [tool.ruff]
