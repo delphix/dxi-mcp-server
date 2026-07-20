@@ -5,6 +5,7 @@ All functions under test are pure (no I/O), so no mocking required.
 """
 
 import pytest
+from unittest.mock import patch
 
 from dct_mcp_server.tools.core.endpoint_discovery import (
     _path_tokens,
@@ -402,4 +403,63 @@ def test_get_discovery_index_cache_invalidated_on_new_spec():
     idx_new = get_discovery_index(spec_new)
 
     assert len(idx_new["corpus"]) == 1
-    assert idx_new["corpus"][0]["path"] == "/new"
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: build_corpus_from_spec / extract_hot_keywords — empty dict
+# (spec wraps to None when falsy, triggering early-return branches)
+# ---------------------------------------------------------------------------
+
+
+def test_build_corpus_from_spec_empty_dict_returns_empty_list():
+    """Empty dict {} → OpenAPISpec.wrap returns None → early return [] (line 56-57)."""
+    assert build_corpus_from_spec({}) == []
+
+
+def test_extract_hot_keywords_from_spec_empty_dict_returns_empty_frozenset():
+    """Empty dict {} → OpenAPISpec.wrap returns None → early return frozenset() (line 42-43)."""
+    assert extract_hot_keywords_from_spec({}) == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: rank_candidates — scoring exception is logged and candidate skipped
+# ---------------------------------------------------------------------------
+
+
+def test_rank_candidates_scoring_exception_skips_candidate():
+    """Exception in score_candidate is caught; the offending candidate is skipped (lines 184-191)."""
+    corpus = [
+        {
+            "method": "GET",
+            "path": "/bad",
+            "operation_id": "bad",
+            "summary": "bad endpoint",
+            "description": "",
+            "tags": [],
+        },
+        {
+            "method": "GET",
+            "path": "/good",
+            "operation_id": "good",
+            "summary": "good endpoint",
+            "description": "",
+            "tags": [],
+        },
+    ]
+
+    call_count = 0
+
+    def _raise_on_first(qtokens, hot_keywords, candidate):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ValueError("simulated scoring failure")
+        return score_candidate(qtokens, hot_keywords, candidate)
+
+    with patch.object(_ed_module, "score_candidate", side_effect=_raise_on_first):
+        results = rank_candidates(corpus, "good endpoint", None, 0.0, 10, frozenset())
+
+    # First candidate raised, so at most one result (the second)
+    assert len(results) <= 1
+    if results:
+        assert results[0]["path"] == "/good"

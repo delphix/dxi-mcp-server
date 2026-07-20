@@ -448,3 +448,61 @@ def test_register_all_tools_name_error_on_path(monkeypatch):
         register_all_tools(MagicMock(), MagicMock())
     finally:
         tools_pkg.__path__ = original_path
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: metadata returns None → if metadata: is False (line 62)
+# ---------------------------------------------------------------------------
+
+
+def test_register_all_tools_metadata_returns_none_skips_log(monkeypatch):
+    """load_toolset_metadata returning None takes the if metadata: False branch (line 62)."""
+    monkeypatch.setenv("DCT_TOOLSET", "self_service")
+    with patch("dct_mcp_server.tools.load_toolset_metadata", return_value=None):
+        with patch(
+            "pkgutil.iter_modules", side_effect=_pkg_iter("dataset_endpoints_tool")
+        ):
+            with patch(
+                "dct_mcp_server.tools.get_modules_for_toolset",
+                return_value=["dataset_endpoints_tool"],
+            ):
+                with patch(
+                    "dct_mcp_server.tools.importlib.import_module",
+                    return_value=_mod_with_register(),
+                ):
+                    # Should complete without raising
+                    register_all_tools(MagicMock(), MagicMock())
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: pre-built scan skips ispkg=True entries (lines 137-138)
+# ---------------------------------------------------------------------------
+
+
+def test_prebuilt_scan_skips_ispkg_true_entries(monkeypatch):
+    """ispkg=True entries in the pre-built directory scan are skipped (lines 137-138)."""
+    monkeypatch.setenv("DCT_TOOLSET", "self_service")
+    fake_mod = _mod_with_register()
+
+    def fake_iter(paths):
+        # Return a package (ispkg=True) followed by a real module
+        if paths and _TEMP_DIR in str(paths[0]):
+            return []
+        return [(None, "core", True), (None, "dataset_endpoints_tool", False)]
+
+    with patch("pkgutil.iter_modules", side_effect=fake_iter):
+        with patch(
+            "dct_mcp_server.tools.get_modules_for_toolset",
+            return_value=["core", "dataset_endpoints_tool"],
+        ):
+            with patch(
+                "dct_mcp_server.tools.importlib.import_module",
+                return_value=fake_mod,
+            ) as mock_imp:
+                register_all_tools(MagicMock(), MagicMock())
+
+    # "core" is a package (ispkg=True) — it must never have been imported
+    imported_names = [call.args[0].split(".")[-1] for call in mock_imp.call_args_list]
+    assert "core" not in imported_names
+    # The real module was imported
+    assert "dataset_endpoints_tool" in imported_names

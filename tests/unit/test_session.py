@@ -92,6 +92,25 @@ class TestSessionManager:
         # Should not raise
         mgr.end_session("nonexistent-session")
 
+    def test_end_session_non_current_does_not_clear_current_session_id(self, tmp_path):
+        """_end_session_internal: ending a session that is in _session_loggers but
+        is NOT _current_session_id leaves _current_session_id unchanged (line 132 else)."""
+        mgr = SessionManager()
+        with patch.object(mgr, "_get_project_root", return_value=tmp_path):
+            sid_a = mgr.start_session("session-alpha")
+
+        # Inject a second logger entry without it being the current session
+        mgr._session_loggers["session-beta"] = logging.getLogger("session.beta-test")
+
+        # End the injected session — it is in _session_loggers but not current
+        mgr._end_session_internal("session-beta")
+
+        # _current_session_id must still point to session-alpha
+        assert mgr.current_session_id == "session-alpha"
+        assert "session-beta" not in mgr._session_loggers
+
+        mgr.end_session(sid_a)
+
     def test_end_session_without_arg_uses_current(self, tmp_path):
         mgr = SessionManager()
         with patch.object(mgr, "_get_project_root", return_value=tmp_path):

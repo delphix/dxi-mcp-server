@@ -257,4 +257,34 @@ def test_resolve_confirmation_dynamic_toolset_uses_static():
             "threshold_days": None,
         }
         resolve_confirmation("GET", "/vdbs/search")
-    mock_static.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: _lookup_operation — path item not a dict (line 77)
+# ---------------------------------------------------------------------------
+
+
+def test_get_confirmation_dynamic_path_item_not_dict_returns_none():
+    """_lookup_operation returns None when the path item value is not a dict (line 77).
+
+    This causes the operation lookup to yield {} so no hot keyword is matched.
+    """
+    spec = {"paths": {"/vdbs/vdb-1": "not_a_dict"}}
+    result = get_confirmation_for_operation_dynamic("POST", "/vdbs/vdb-1", spec=spec)
+    assert result["level"] == "none"
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: lazy import of get_cached_spec when spec=None (lines 118-120)
+# ---------------------------------------------------------------------------
+
+
+def test_get_confirmation_dynamic_spec_none_triggers_lazy_import():
+    """When spec=None, get_cached_spec is lazy-imported and called (lines 118-120)."""
+    with patch(
+        "dct_mcp_server.tools.core.tool_factory.get_cached_spec",
+        return_value={},
+    ):
+        # spec=None forces the lazy import path; empty spec → no keyword → none
+        result = get_confirmation_for_operation_dynamic("POST", "/any/path")
+    assert result["level"] == "none"

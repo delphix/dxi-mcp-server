@@ -6,10 +6,14 @@ Covers what unit tests (which mock make_request) cannot see: URL building with t
 HTTP method handling, and JSON vs non-JSON response parsing.
 """
 
+import importlib.metadata
+from unittest.mock import patch
+
 import httpx
 import pytest
 import respx
 
+from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.dct_client.client import DCTAPIClient
 
 BASE = "https://dct.test/dct/v3"
@@ -148,3 +152,35 @@ async def test_non_json_response_wrapped(client):
     )
     result = await client.make_request("GET", "raw")
     assert result == {"response": "plain text"}
+
+
+# --- Branch coverage --------------------------------------------------------
+
+
+def test_init_version_fallback_on_package_not_found(monkeypatch):
+    """PackageNotFoundError during version lookup falls back to hardcoded version (lines 34-35)."""
+    monkeypatch.setenv("DCT_BASE_URL", "https://dct.test")
+    monkeypatch.setenv("DCT_API_KEY", "test-api-key")
+    with patch.object(
+        importlib.metadata,
+        "version",
+        side_effect=importlib.metadata.PackageNotFoundError,
+    ):
+        c = DCTAPIClient()
+    assert c.headers["User-Agent"] == "dct-mcp-server/2026.0.1.0-preview"
+
+
+@respx.mock
+async def test_connection_error_retries_then_raises_dct_client_error(
+    client, monkeypatch
+):
+    """except Exception path in make_request: non-HTTP error is retried then
+    raises DCTClientError after exhausting max_retries (lines 127-139)."""
+    monkeypatch.setattr(client, "max_retries", 2)
+    # Patch asyncio.sleep to avoid real delays
+    with patch("asyncio.sleep"):
+        respx.get(f"{BASE}/health").mock(
+            side_effect=httpx.ConnectError("connection refused")
+        )
+        with pytest.raises(DCTClientError):
+            await client.make_request("GET", "health")
