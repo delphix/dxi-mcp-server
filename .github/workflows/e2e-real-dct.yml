@@ -1,0 +1,68 @@
+name: e2e-real-dct
+
+# Layer 4 — runs the e2e smoke tests against a real DCT instance.
+#
+# NOT on the merge path. Failures here are advisory: they alert that the real
+# DCT has drifted from our expectations, but do not block PRs.
+#
+# Prerequisite:
+#   - DCT_BASE_URL and DCT_API_KEY must be set in repo Secrets.
+#   - The DCT instance must be reachable from GitHub-hosted runners (public
+#     internet). If it's only reachable from your local network, either:
+#       * Expose it via a tunnel (Cloudflare Tunnel, ngrok), or
+#       * Use a self-hosted GitHub runner inside the network.
+#
+# Local equivalent (no GitHub needed):
+#   set -a; source .env.local; set +a
+#   .venv-live/bin/dct-mcp-test --layer e2e
+# or via the Claude Code skill:
+#   /dct-mcp-test localhost --api-key <key>
+
+on:
+  workflow_dispatch:           # primary: run on demand from the GitHub UI
+  # Uncomment when you want passive nightly drift detection:
+  # schedule:
+  #   - cron: "0 6 * * *"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      DCT_BASE_URL: ${{ secrets.DCT_BASE_URL }}
+      DCT_API_KEY:  ${{ secrets.DCT_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # Non-editable install — generation writes to $TEMP (not src/)
+      - name: Install package + test extras (non-editable)
+        run: pip install ".[test]"
+
+      # Download the OpenAPI spec from the DCT under test so the functional
+      # layer and any in-process generation use the live spec.
+      - name: Download OpenAPI spec from DCT
+        run: |
+          python -c "
+          from tests.functional.conftest import _download_spec
+          spec = _download_spec()
+          if not spec:
+              raise SystemExit('Could not download api-external.yaml from DCT')
+          print(f'spec downloaded: {len(spec.get(\"paths\", {}))} paths')
+          "
+
+      - name: Run Layer 4 against real DCT
+        run: dct-mcp-test --layer e2e
+
+      # Cleanup is part of `dct-mcp-test --layer e2e` itself — no explicit step.
+      # It runs tests/e2e/cleanup/ inside the CLI with the same env.
+
+      - name: Mark failure as advisory
+        if: failure()
+        run: |
+          echo "::warning::Layer 4 (real DCT) failed — this is advisory and does NOT block PRs."
+          echo "Triage with: .venv-live/bin/dct-mcp-test --layer e2e -v"

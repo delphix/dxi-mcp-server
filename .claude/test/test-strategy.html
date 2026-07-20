@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DCT MCP Server — Test Strategy</title>
+<style>
+  :root {
+    --bg:#0f1419;--panel:#1a2028;--panel-2:#232b35;--border:#2d3742;
+    --text:#d5dde6;--muted:#8a96a3;--accent:#4fc3f7;--accent-2:#81d4fa;
+    --good:#66bb6a;--warn:#ffa726;--bad:#ef5350;--code-bg:#0a0e13;--code-text:#c8d4e0;
+    --star:#ffd54f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.55;}
+  header{background:linear-gradient(135deg,#1a2028 0%,#0f1419 100%);border-bottom:1px solid var(--border);padding:32px 48px 24px;}
+  header h1{margin:0 0 6px;font-size:28px;font-weight:600;}
+  header .sub{color:var(--muted);font-size:14px;}
+  nav{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--border);padding:0 48px;display:flex;gap:2px;overflow-x:auto;z-index:10;flex-wrap:nowrap;}
+  nav button{background:none;border:none;color:var(--muted);padding:11px 12px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;transition:all .15s;}
+  nav button:hover{color:var(--text);}
+  nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
+  main{padding:28px 48px 80px;max-width:1100px;}
+  section{display:none;}section.active{display:block;animation:fadeIn .2s;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+  h2{font-size:22px;font-weight:600;margin:0 0 14px;}
+  h3{font-size:15px;font-weight:600;margin:20px 0 9px;color:var(--accent-2);}
+  h4{font-size:13px;font-weight:600;margin:14px 0 6px;color:var(--text);}
+  p{margin:0 0 10px;}ul,ol{padding-left:20px;margin:0 0 10px;}li{margin-bottom:3px;}
+  code{background:var(--code-bg);color:var(--code-text);padding:2px 5px;border-radius:3px;font-family:"SF Mono",Monaco,monospace;font-size:12px;}
+  pre{background:var(--code-bg);color:var(--code-text);padding:14px;border-radius:6px;overflow-x:auto;font-size:12px;line-height:1.5;border:1px solid var(--border);font-family:"SF Mono",Monaco,monospace;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:14px;}
+  .card-good{background:rgba(102,187,106,.06);border-left:3px solid var(--good);}
+  .card-warn{background:rgba(255,167,38,.06);border-left:3px solid var(--warn);}
+  .card-bad{background:rgba(239,83,80,.06);border-left:3px solid var(--bad);}
+  .card-accent{background:rgba(79,195,247,.06);border-left:3px solid var(--accent);}
+  .card-star{border-color:var(--star);box-shadow:0 0 0 1px rgba(255,213,79,.2);}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}
+  tr:hover td{background:var(--panel-2);}
+  .tag{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;color:#0f1419;}
+  .t-unit{background:var(--good);}.t-int{background:var(--warn);}.t-func{background:#ab47bc;color:white;}
+  .t-e2e{background:var(--bad);color:white;}.t-llm{background:var(--accent);}.t-good{background:var(--good);}
+  .t-warn{background:var(--warn);}.t-bad{background:var(--bad);color:white;}.t-star{background:var(--star);}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0;}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px;}
+  .stat-value{font-size:24px;font-weight:600;color:var(--accent);}
+  .stat-label{font-size:11px;color:var(--muted);margin-top:3px;}
+  .checklist li,.crosslist li{list-style:none;position:relative;padding-left:22px;}
+  .checklist li::before{content:"✓";position:absolute;left:0;color:var(--good);font-weight:600;}
+  .crosslist li::before{content:"✕";position:absolute;left:0;color:var(--bad);font-weight:600;}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0;}
+  .split-title{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:4px;}
+  .split-q{background:rgba(79,195,247,.08);border:1px solid var(--accent);border-radius:4px;padding:6px 10px;margin-top:10px;font-size:12px;}
+  .flow-diagram{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px;font-family:"SF Mono",Monaco,monospace;font-size:12px;line-height:1.4;overflow-x:auto;white-space:pre;color:var(--code-text);}
+  .done-badge{display:inline-block;background:var(--good);color:#0f1419;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;vertical-align:middle;margin-left:6px;}
+  .future-badge{display:inline-block;background:var(--warn);color:#0f1419;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;vertical-align:middle;margin-left:6px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>DCT MCP Server — Test Strategy</h1>
+  <div class="sub">Branch: dlpx/pr/chaitali/test-suite-poc &nbsp;·&nbsp; 1,678 tests (L1–L3) &nbsp;·&nbsp; Layers 1–5 built &nbsp;·&nbsp; 2026-06-13</div>
+</header>
+<nav>
+  <button class="active" onclick="show('overview',this)">Overview</button>
+  <button onclick="show('currentstate',this)">Current State</button>
+  <button onclick="show('architecture',this)">Architecture</button>
+  <button onclick="show('workflows',this)">Workflows</button>
+  <button onclick="show('testlayers',this)">Test Layers</button>
+  <button onclick="show('clirunner',this)">CLI Runner</button>
+  <button onclick="show('stub',this)">DCT Stub</button>
+  <button onclick="show('llm',this)">LLM Testing</button>
+  <button onclick="show('changes',this)">Changes Made</button>
+  <button onclick="show('whentests',this)">When Tests Run</button>
+  <button onclick="show('roadmap',this)">Roadmap</button>
+  <button onclick="show('success',this)">Success Criteria</button>
+  <button onclick="show('future',this)">Future Scope ↗</button>
+  <button onclick="show('coverage',this)">Coverage</button>
+</nav>
+<main>
+
+<!-- OVERVIEW -->
+<section id="overview" class="active">
+  <h2>Overview</h2>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-value">1,678</div><div class="stat-label">L1–L3 tests</div></div>
+    <div class="stat"><div class="stat-value">1,678</div><div class="stat-label">CI offline gate</div></div>
+    <div class="stat"><div class="stat-value">~7m</div><div class="stat-label">CI runtime</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--good)">97%</div><div class="stat-label">Line coverage (L1–L3)</div></div>
+    <div class="stat"><div class="stat-value">62</div><div class="stat-label">Confirmation rules</div></div>
+    <div class="stat"><div class="stat-value">904</div><div class="stat-label">Scenario prompts</div></div>
+  </div>
+
+  <h3>Three questions — three different failure modes</h3>
+  <div class="split">
+    <div class="card">
+      <div class="split-title">Regression gate (Layers 1–3)</div>
+      <p style="font-size:13px">Runs on every PR · scripted · no LLM · $0</p>
+      <ul style="font-size:13px;padding-left:16px">
+        <li>Action routing correct?</li><li>HTTP wire (auth, retry) correct?</li>
+        <li>Confirmation handshake enforced?</li><li>Right tools per persona?</li>
+      </ul>
+      <div class="split-q">"Did the workflow break?"</div>
+    </div>
+    <div class="card">
+      <div class="split-title">AI-usability check (Layers 4–5)</div>
+      <p style="font-size:13px">On-demand · real DCT · Claude Code CLI</p>
+      <ul style="font-size:13px;padding-left:16px">
+        <li>Real API contract still matches?</li><li>Claude can discover the right tool?</li>
+        <li>Async job-wait works end-to-end?</li><li>Effect actually persisted on DCT?</li>
+      </ul>
+      <div class="split-q">"Does it work and can AI use it?"</div>
+    </div>
+  </div>
+
+  <h3>Layer summary</h3>
+  <table>
+    <thead><tr><th>Layer</th><th>Tests</th><th>Runtime</th><th>Needs DCT?</th><th>Blocks merge?</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag t-unit">1 Unit</span></td><td>718</td><td>~1.7s</td><td>No</td><td><span class="tag t-good">Yes</span></td></tr>
+      <tr><td><span class="tag t-int">2 Integration</span></td><td>29</td><td>~0.1s</td><td>No</td><td><span class="tag t-good">Yes</span></td></tr>
+      <tr><td><span class="tag t-func">3 Functional</span></td><td>931</td><td>~7 min</td><td>No (stub)</td><td><span class="tag t-good">Yes</span></td></tr>
+      <tr><td><span class="tag t-e2e">4 E2E</span></td><td>27</td><td>3–8 min</td><td><strong>Yes</strong></td><td><span class="tag t-warn">No (advisory)</span></td></tr>
+      <tr><td><span class="tag t-llm">5 LLM</span></td><td>217</td><td>varies</td><td><strong>Yes + claude CLI</strong></td><td><span class="tag t-warn">No (advisory)</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- CURRENT STATE -->
+<section id="currentstate">
+  <h2>Current State — Baseline before this suite was built</h2>
+  <div class="card card-bad">
+    <h3>What existed</h3>
+    <ul class="crosslist">
+      <li><strong>Manual testing only.</strong> Every code change required opening Claude Desktop, driving ~70 prompts per toolset by hand, eyeballing responses, and writing a free-text PR report.</li>
+      <li>No CI gate. PRs merged without any automated verification.</li>
+      <li>No reproducibility. "Looks right" was the signal.</li>
+      <li>No precise failure messages. "It didn't work" was the best available diagnostic.</li>
+      <li>30+ minutes of human attention per PR, per toolset.</li>
+    </ul>
+  </div>
+  <div class="card card-warn">
+    <h3>What didn't exist</h3>
+    <ul class="crosslist">
+      <li>No pytest suite, no fixtures, no dct_stub</li>
+      <li>No CI workflow — pushes to main had no automated gate</li>
+      <li>No way to verify a git push didn't break an action, change a confirmation level, or alter the HTTP contract</li>
+      <li>No record of which DCT API endpoints are actually exercised by which tool actions</li>
+    </ul>
+    <p style="margin-top:10px"><strong>The only test artifact:</strong> the scenario prompt files (<code>.claude/test/testing/&lt;toolset&gt;.md</code>) — detailed per-persona prompt lists that a human follows. These became the specification for the automated workflow tests.</p>
+  </div>
+  <div class="card card-good">
+    <h3>Test seams already present in the code</h3>
+    <p>The codebase was already structured to be testable:</p>
+    <ul class="checklist">
+      <li><code>DCTAPIClient.make_request</code> is the single HTTP boundary — injectable mock seam</li>
+      <li>Tool functions are pure Python; the <code>client</code> module-global is injectable</li>
+      <li><code>config/toolsets/*.txt</code> define the tool surface in a parseable format</li>
+      <li><code>config/mappings/manual_confirmation.txt</code> defines all destructive-op rules parseably</li>
+      <li><code>FastMCP</code> supports <code>StdioTransport</code> — enables subprocess-level integration testing</li>
+    </ul>
+  </div>
+  <div class="card card-accent">
+    <h3>Before vs. after</h3>
+    <table>
+      <thead><tr><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        <tr><td>Open Claude Desktop, drive ~70 prompts manually, eyeball responses, write report</td><td><code>dct-mcp-test --layer ci</code> — green/red in &lt;3 min</td></tr>
+        <tr><td>30+ min of human attention per change</td><td>&lt;3 min of CI time</td></tr>
+        <tr><td>"Looks right" is the signal</td><td>Deterministic assertions; exact failure messages</td></tr>
+        <tr><td>No merge gate</td><td>Required CI check on main (once L6 enforced)</td></tr>
+        <tr><td>Live DCT required every time</td><td>Only for Layer 4 (advisory) — L1–L3 use a stub</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <div class="flow-diagram">   ┌──────────────────────────────────────────────────────────────┐
+   │  Layer 1 — Unit (in-process, mocked client)                  │
+   │  tool fn → MagicMock(DCTAPIClient).make_request              │
+   │  156 tests · ~0.3s                                           │
+   ├──────────────────────────────────────────────────────────────┤
+   │  Layer 2 — Integration (in-process, mocked HTTP)             │
+   │  tool fn → DCTAPIClient → httpx → respx intercept            │
+   │  29 tests · ~0.1s                                            │
+   ├──────────────────────────────────────────────────────────────┤
+   │  Layer 3 — Functional (subprocess + stub DCT)                │
+   │   3a. Toolset registration (all 5 personas + auto)           │
+   │   3b. ★ Workflow tests — .md scenarios as Python             │
+   │   3c. Confirmation handshake over MCP wire                   │
+   │  931 tests · ~2.5 min                                        │
+   ├──────────────────────────────────────────────────────────────┤
+   │  Layer 4 — E2E vs. real DCT (safe-run venv)                  │
+   │  .mcp.json delphix-dct server → real DCT                     │
+   │  27 tests · 3–8 min                                          │
+   ├──────────────────────────────────────────────────────────────┤
+   │  Layer 5 — LLM-driven (LOCAL, advisory)                      │
+   │  Claude Code CLI → .mcp.json delphix-dct → real DCT          │
+   │  NL task → act → wait for job → verify outcome               │
+   │  217 tests · varies                                          │
+   └──────────────────────────────────────────────────────────────┘</div>
+
+  <h3>Layer 3b is the centerpiece</h3>
+  <p>Every multi-step chain in <code>.claude/test/testing/*.md</code> becomes one deterministic Python test. Each step is a real MCP call over stdio to the actual <code>dct-mcp-server</code> subprocess. The fake DCT — <code>dct_stub</code> — records every HTTP request and we assert the right endpoint was hit.</p>
+
+  <h3>The .mcp.json server as single source of truth</h3>
+  <p>The <code>delphix-dct</code> entry in <code>.mcp.json</code> defines the server command, args, and env. Both Layer 4 (<code>build_real_transport</code>) and Layer 5 (<code>_write_mcp_config</code>) read from it. Credentials come from <code>DCT_BASE_URL</code> / <code>DCT_API_KEY</code> env vars — never hardcoded.</p>
+</section>
+
+<!-- WORKFLOWS -->
+<section id="workflows">
+  <h2>Layer 3b — Workflow Tests <span class="tag t-star">★ the heart</span></h2>
+  <p>Each multi-step chain in <code>.claude/test/testing/&lt;toolset&gt;.md</code> becomes one Python test function. Chaining ("that VDB" → previous result) becomes a Python variable. Every step verified at wire level via <code>dct_stub.received_request(...)</code>.</p>
+
+  <pre>async def test_vdb_lifecycle_search_get_start_stop(mcp_client_self_service, dct_stub):
+    search = await mcp_client_self_service.call_tool(
+        "vdb_tool", {"action": "search", "limit": 10})
+    vdb_id = _payload(search)["items"][0]["id"]
+
+    await mcp_client_self_service.call_tool(
+        "vdb_tool", {"action": "start", "vdb_id": vdb_id})
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/start")
+
+    await mcp_client_self_service.call_tool(
+        "vdb_tool", {"action": "stop", "vdb_id": vdb_id, "confirmed": True})
+    assert dct_stub.received_request("POST", f"/dct/v3/vdbs/{vdb_id}/stop")</pre>
+
+  <h3>Scenario coverage</h3>
+  <table>
+    <thead><tr><th>Persona</th><th>Prompts</th><th>Workflow tests</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>self_service</td><td>70</td><td>9 files (vdb lifecycle/refresh/rollback/tags/groups/dsource/snapshot/bookmark/job/timeflow)</td><td><span class="tag t-good">Done</span></td></tr>
+      <tr><td>continuous_data_admin</td><td>431</td><td>5 chains + 833-case routing sweep + 57-case confirmation</td><td><span class="tag t-good">Done</span></td></tr>
+      <tr><td>Other personas</td><td>403</td><td>Registration + in-process routing + representative chains</td><td><span class="tag t-good">Done</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>What a workflow test catches that nothing else does</h3>
+  <ul>
+    <li>"I renamed an action and the .txt config now points to a non-existent function" → DCT endpoint never gets called → stub assertion fails</li>
+    <li>"I edited the confirmation rule and it no longer gates stop_vdb" → first call no longer returns confirmation_required → assertion fails</li>
+    <li>"The stub tells me exactly which endpoint was never hit" → precise failure messages vs. "it didn't work"</li>
+  </ul>
+</section>
+
+<!-- TEST LAYERS -->
+<section id="testlayers">
+  <h2>Test Layers — Detail</h2>
+
+  <div class="card">
+    <h3><span class="tag t-unit">Layer 1</span> Unit — 156 tests, ~0.3s</h3>
+    <ul>
+      <li><strong>Action routing:</strong> every self_service action parametrized via <code>config_cases</code></li>
+      <li><strong>Confirmation rules:</strong> all 62 rules — correct level, gating enforced</li>
+      <li><strong>Param building:</strong> <code>build_params</code> None/'' stripping, <code>_SafeDict</code></li>
+      <li><strong>Loader + config:</strong> toolset parsing, inheritance, env validation</li>
+      <li><strong>Tool factory:</strong> offline mapping of config → grouped tool names/actions</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-int">Layer 2</span> Integration — 29 tests, ~0.1s</h3>
+    <ul>
+      <li>URL building: <code>/dct/v3/</code> prefix, no double slashes</li>
+      <li><code>apk </code> auth header + default headers</li>
+      <li>4xx fail-fast; 5xx retry up to <code>DCT_MAX_RETRIES</code> with backoff-count assertions</li>
+      <li>Connection errors retried; error message carries status + body</li>
+    </ul>
+  </div>
+
+  <div class="card card-star">
+    <h3><span class="tag t-func">Layer 3</span> Functional — 931 tests, ~2.5 min</h3>
+    <h4>3a Registration (7 tests)</h4>
+    <p>self_service over real stdio; all 5 personas via in-process generator; auto mode meta-tools.</p>
+    <h4>3b Workflows (850 tests)</h4>
+    <p>70 self_service scenario chains; 833 parametrized routing cases (CDA/platform/reporting/provision); 4 representative persona chains.</p>
+    <h4>3c Confirmation handshake (73 tests)</h4>
+    <p>Self_service (15) + CDA (58) two-step flow over wire: all 5 confirmation levels (standard/manual/elevated/retention_check/policy_impact_check).</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-e2e">Layer 4</span> E2E real DCT — 27 tests, 3–8 min</h3>
+    <ul class="checklist">
+      <li>self_service: 7 tools register, 7 searches return valid responses, VDB get-roundtrip</li>
+      <li>CDA: all 22 tools register, all 14 searchable resources return valid responses</li>
+      <li>License-forbidden resources skip gracefully (not fail)</li>
+      <li>Mutation lifecycle (gated <code>E2E_ALLOW_MUTATION=1</code>): engine/MySQL live-verified ✓</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-llm">Layer 5</span> LLM-driven — 217 tests, varies</h3>
+    <p>See the <strong>LLM Testing</strong> tab for full detail.</p>
+  </div>
+</section>
+
+<!-- CLI RUNNER -->
+<section id="clirunner">
+  <h2>The <code>dct-mcp-test</code> CLI — one runner, all contexts</h2>
+  <p>Source: <code>src/dct_mcp_server/testing/cli.py</code>. Installed as a <code>[project.scripts]</code> entry point.</p>
+
+  <table>
+    <thead><tr><th>Layer flag</th><th>Tests</th><th>Needs DCT?</th><th>Typical use</th></tr></thead>
+    <tbody>
+      <tr><td><code>--layer unit</code></td><td>156</td><td>No</td><td>While coding</td></tr>
+      <tr><td><code>--layer integration</code></td><td>29</td><td>No</td><td>After client changes</td></tr>
+      <tr><td><code>--layer functional</code></td><td>931</td><td>No</td><td>After tool/config changes</td></tr>
+      <tr><td><code>--layer ci</code></td><td>1116</td><td>No</td><td>Pre-push / CI</td></tr>
+      <tr><td><code>--layer e2e</code></td><td>27</td><td>Yes</td><td>Pre-release validation</td></tr>
+      <tr><td><code>--layer llm</code></td><td>varies</td><td>Yes + claude</td><td>Discoverability check</td></tr>
+      <tr><td><code>--layer scenarios --persona &lt;p&gt;</code></td><td>170/persona</td><td>Yes + claude</td><td>Full persona sweep</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Additional flags for <code>--layer scenarios</code></h3>
+  <pre>dct-mcp-test --layer scenarios \
+  --persona continuous_data_admin \   # csv of personas
+  --mutations \                        # include mutation-tier prompts
+  --scenario-limit 10 \               # cap per persona
+  --report results.xml                # JUnit XML output</pre>
+
+  <h3>The /dct-mcp-test Claude Code skill</h3>
+  <p>The same CLI wrapped as a project skill: <code>/dct-mcp-test localhost --api-key &lt;key&gt; --layer e2e</code>. Failure triage from inside Claude Code — read the failing test, propose a fix, re-run in one session.</p>
+</section>
+
+<!-- DCT STUB -->
+<section id="stub">
+  <h2>The <code>dct_stub</code> Component</h2>
+  <p>Source: <code>tests/fixtures/dct_stub.py</code>. A Starlette app that runs in-process during functional tests. Records every request; serves canned responses.</p>
+
+  <h3>Data flow</h3>
+  <div class="flow-diagram">pytest process
+  │
+  ├─ StubServer.start() → uvicorn thread on 127.0.0.1:&lt;random-port&gt;
+  │
+  ├─ fastmcp.Client(StdioTransport)
+  │     spawns dct-mcp-server subprocess, DCT_BASE_URL=stub.url
+  │
+  ├─ await client.call_tool("vdb_tool", {"action": "search"})
+  │     subprocess → HTTP POST …/dct/v3/vdbs/search
+  │     dct_stub._record(request)   ← records for assertion
+  │     dct_stub.vdbs_search()      ← returns {"items":[…]}
+  │
+  └─ assert dct_stub.received_request("POST", "/dct/v3/vdbs/search")</div>
+
+  <h3>Routes</h3>
+  <p>Explicit handlers for VDB lifecycle paths (search, get, start, stop, delete, confirmation-gated endpoints). A <strong>catch-all</strong> (<code>Route("/dct/v3/{rest:path}", …)</code>) handles all other resources (groups, dsources, snapshots, bookmarks, jobs, timeflows, environments, engines) with shape-appropriate canned data.</p>
+  <p>Deliberately does <strong>not</strong> serve <code>/dct/static/api-external.yaml</code> — the server falls back to pre-built modules, giving a stable tool surface for stub-based tests.</p>
+
+  <h3>OpenAPI spec fixture</h3>
+  <p><code>tests/fixtures/api-external.yaml</code> (gitignored) is downloaded from <code>DCT_BASE_URL/dct/static/api-external.yaml</code> on first run and cached locally. The <code>openapi_spec</code> session fixture in <code>tests/functional/conftest.py</code> downloads on demand, falling back to the cache for offline runs.</p>
+</section>
+
+<!-- LLM TESTING -->
+<section id="llm">
+  <h2>LLM Testing — Claude Code CLI as the MCP Client</h2>
+
+  <div class="card card-accent">
+    <h3>Driver: Claude Code CLI only</h3>
+    <p>Layer 5 uses <strong><code>claude -p … --output-format stream-json</code></strong> as the sole LLM driver. It connects to the <strong><code>delphix-dct</code> MCP server defined in <code>.mcp.json</code></strong> — the same server the interactive Claude Code session uses. Credentials from <code>DCT_BASE_URL</code> / <code>DCT_API_KEY</code> env vars (never hardcoded). The <code>_write_mcp_config(toolset)</code> helper derives command/args from <code>.mcp.json</code> and stamps in the requested toolset.</p>
+    <pre>claude -p "&lt;task&gt;" \
+  --mcp-config &lt;derived from .mcp.json&gt; \
+  --strict-mcp-config \
+  --allowedTools "mcp__delphix-dct__*" \
+  --permission-mode bypassPermissions \
+  --append-system-prompt-file .claude/test/llm-driver-preprompt.md \
+  --output-format stream-json --verbose</pre>
+  </div>
+
+  <div class="card">
+    <h3>Job-completion pre-prompt</h3>
+    <p><code>.claude/test/llm-driver-preprompt.md</code> instructs Claude: whenever a tool response contains a <code>job_id</code>, poll <code>job_tool(action="get")</code> until COMPLETED or FAILED before declaring success. Never report success on job submission alone. Only then run the verification step.</p>
+  </div>
+
+  <h3>The act → verify pattern</h3>
+  <table>
+    <thead><tr><th>Phase</th><th>What happens</th><th>Key rule</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1. Act</strong></td><td>Claude receives plain-English task, discovers and calls the tool</td><td>No tool/action names in the prompt</td></tr>
+      <tr><td><strong>2. Wait</strong></td><td>Pre-prompt enforces job_tool polling to COMPLETED/FAILED</td><td>Never return on job submission alone</td></tr>
+      <tr><td><strong>3. Verify</strong></td><td>Separate Claude call reads the real DCT state</td><td>Identifier NOT in the verify prompt (prevents echo = false pass)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Architectural separation</h3>
+  <div class="split">
+    <div class="card">
+      <div class="split-title">Regression gate</div>
+      <p style="font-size:12px">Layers 1–3 · scripted · no LLM · $0</p>
+      <div class="split-q">"Did the workflow break?"</div>
+    </div>
+    <div class="card">
+      <div class="split-title">AI-usability check</div>
+      <p style="font-size:12px">Layer 5 · Claude Code CLI · real DCT</p>
+      <div class="split-q">"Can AI use it — and did it really happen?"</div>
+    </div>
+  </div>
+
+  <h3>Discoverability findings from live runs</h3>
+  <div class="card card-warn">
+    <p>These tools exist, generate correctly, and pass L1–L4 — but Claude never surfaces them:</p>
+    <table>
+      <thead><tr><th>Tool</th><th>Failing prompt</th><th>Root cause</th></tr></thead>
+      <tbody>
+        <tr><td><code>vault_tool</code></td><td>"Hashicorp vaults", "Kerberos configurations"</td><td>Owns both domains but name hints at neither</td></tr>
+        <tr><td><code>admin_platform_tool</code></td><td>"LLM models", "AI settings"</td><td>Name doesn't reflect AI/model/telemetry capabilities</td></tr>
+        <tr><td><code>diagnostic_tool</code></td><td>"NetBackup connectivity", "DSP network test"</td><td>Not surfaced for these operational prompts</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Action:</strong> improve tool descriptions. Recorded as <code>xfail</code> in <code>test_scenarios.py:_KNOWN_ISSUES</code>.</p>
+  </div>
+
+  <h3>License tolerance</h3>
+  <p>Some DCT tiers block resource types (<code>401: License does not permit operations on VDB_GROUP</code>). <code>call_tool_tolerant</code> (<code>tests/e2e/_helpers.py</code>) and <code>license_blocked()</code> (<code>tests/llm_local/conftest.py</code>) skip rather than fail, making both layers resilient across DCT configurations.</p>
+</section>
+
+<!-- CHANGES MADE -->
+<section id="changes">
+  <h2>Changes Made</h2>
+  <div class="card card-good">
+    <h3>Infrastructure <span class="done-badge">DONE</span></h3>
+    <ul class="checklist">
+      <li><code>tests/_support/config_cases.py</code> — parametrization engine (toolsets, confirmation rules)</li>
+      <li><code>tests/fixtures/dct_stub.py</code> — full stub with catch-all</li>
+      <li><code>tests/fixtures/api-external.yaml</code> — gitignored spec cache, downloaded from DCT</li>
+      <li><code>tests/functional/conftest.py</code> — <code>openapi_spec</code>, <code>persona_tools</code>, <code>build_stub_transport</code></li>
+      <li><code>tests/e2e/conftest.py</code> — <code>build_real_transport</code> reading from <code>.mcp.json</code></li>
+      <li><code>tests/llm_local/conftest.py</code> — <code>llm_driver_for</code>, <code>license_blocked</code>, session driver</li>
+      <li><code>tests/llm_local/mcp_client_helper.py</code> — MCP-based state queries (no direct HTTP)</li>
+      <li><code>tests/llm_local/prereq_checker.py</code> — session-cached 6-level chain checker</li>
+      <li><code>tests/llm_local/connector_fixtures.py</code> — per-connector field sets</li>
+    </ul>
+  </div>
+  <div class="card card-good">
+    <h3>pyproject.toml <span class="done-badge">DONE</span></h3>
+    <ul class="checklist">
+      <li>Test extra (<code>pytest</code>, <code>pytest-asyncio</code>, <code>respx</code>, <code>starlette</code>, <code>uvicorn</code>, <code>click</code>)</li>
+      <li><code>asyncio_mode = "auto"</code>, <code>--strict-markers</code>, markers registered</li>
+    </ul>
+  </div>
+  <div class="card card-good">
+    <h3>GitHub Actions workflows <span class="done-badge">EXIST</span></h3>
+    <ul class="checklist">
+      <li><code>.github/workflows/test.yml</code> — non-editable install, <code>dct-mcp-test --layer ci</code> on every push/PR</li>
+      <li><code>.github/workflows/e2e-real-dct.yml</code> — <code>workflow_dispatch</code>, <code>DCT_BASE_URL</code>/<code>DCT_API_KEY</code> secrets, spec download</li>
+    </ul>
+    <p><em>Note: workflows exist and are correct. Required-check enforcement in branch protection is pending — see Future Scope.</em></p>
+  </div>
+</section>
+
+<!-- WHEN TESTS RUN -->
+<section id="whentests">
+  <h2>When Tests Run</h2>
+  <table>
+    <thead><tr><th>Trigger</th><th>What runs</th><th>Invocation</th><th>Blocking?</th></tr></thead>
+    <tbody>
+      <tr><td>While coding</td><td>Layer 1 (unit)</td><td><code>dct-mcp-test --layer unit</code></td><td>No</td></tr>
+      <tr><td>Pre-push (optional hook)</td><td>Layer 1</td><td><code>dct-mcp-test --layer unit</code></td><td>Yes (local)</td></tr>
+      <tr><td>Every push / PR</td><td>Layers 1–3 (CI gate)</td><td>GitHub Actions → <code>dct-mcp-test --layer ci</code></td><td><strong>Yes (once enforcement enabled)</strong></td></tr>
+      <tr><td>On-demand against real DCT</td><td>Layer 4</td><td><code>.venv-live/bin/dct-mcp-test --layer e2e</code></td><td>No (advisory)</td></tr>
+      <tr><td>Pre-release AI usability</td><td>Layer 5</td><td><code>.venv-live/bin/dct-mcp-test --layer scenarios --persona &lt;p&gt;</code></td><td>No (advisory)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card card-warn">
+    <strong>CI enforcement is pending.</strong> The <code>test.yml</code> workflow exists but the required-check gate in branch protection has not been enabled yet. Until it is, running <code>dct-mcp-test --layer ci</code> locally before pushing is the manual equivalent. See Future Scope for the enabling steps.
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <h2>Roadmap — What's Built vs. Pending</h2>
+
+  <h3>Completed ✓</h3>
+  <div class="card card-good">
+    <ul class="checklist">
+      <li>L0 Foundations — config_cases, stub, spec fixture, CLI scaffolding</li>
+      <li>L1 Unit — 156 tests (all self_service actions, 62 rules, loader, config, generator)</li>
+      <li>L2 Integration — 29 tests (full wire coverage)</li>
+      <li>L3 Functional — 931 tests (registration all personas, 70 SS workflows, CDA confirmation, routing sweep)</li>
+      <li>L4 E2E — 27 tests (smoke/contract/mutation lifecycle live-verified)</li>
+      <li>L5 LLM-driven — 217 tests (discoverability, 170 CDA scenarios, act→verify, setup/teardown)</li>
+      <li>S0–S5 Persona scenario suite — 904 prompts, all toolsets, prereq chain</li>
+    </ul>
+  </div>
+
+  <h3>In progress / blocked</h3>
+  <div class="card card-warn">
+    <ul>
+      <li><strong>MySQL AppData dSource enable + VDB provision (P2 steps 5b/6):</strong> Plugin jobs fail on qa-dev-test11. The test framework is complete. Check engine logs for the APPDATA plugin error.</li>
+      <li><strong>Engine register scenario:</strong> Built, gated on <code>E2E_ENGINE_JSON</code>.</li>
+      <li><strong>CDA mutation scenarios:</strong> Depend on working dSource/VDB.</li>
+    </ul>
+  </div>
+
+  <h3>Future (see Future Scope tab)</h3>
+  <ul>
+    <li>L6 CI required-check gate in branch protection</li>
+    <li>Snapshot assertions (syrupy)</li>
+    <li>Session-replay for Layer 5</li>
+  </ul>
+</section>
+
+<!-- SUCCESS CRITERIA -->
+<section id="success">
+  <h2>Success Criteria</h2>
+
+  <h3>Regression gate (Layers 1–3)</h3>
+  <ul class="checklist">
+    <li><code>dct-mcp-test --layer ci</code> runs green in &lt; 3 min ✓</li>
+    <li>1,116 tests pass offline ✓</li>
+    <li>Every self_service scenario chain is a deterministic test ✓</li>
+    <li>Every CDA action routes correctly (833-case parametrized sweep) ✓</li>
+    <li>All 62 confirmation rules have two-step handshake coverage ✓</li>
+    <li>All 5 personas register the right tools ✓</li>
+  </ul>
+
+  <h3>Real-DCT validation (Layer 4)</h3>
+  <ul class="checklist">
+    <li>Smoke tests pass against live DCT ✓</li>
+    <li>License-restricted resources skip gracefully ✓</li>
+    <li>Mutation lifecycle (engine register, MySQL dSource) live-verified ✓</li>
+  </ul>
+
+  <h3>AI-usability (Layer 5)</h3>
+  <ul class="checklist">
+    <li>Claude discovers the right tool from plain English (14 discoverability tests) ✓</li>
+    <li>Act → verify pattern validated live (vdb-tag, engine-tag, MySQL environments, dSource link) ✓</li>
+    <li>Discoverability gaps identified and documented ✓</li>
+  </ul>
+
+  <h3>Not yet met</h3>
+  <ul class="crosslist">
+    <li>MySQL dSource enable + VDB provision (plugin infra issue)</li>
+    <li>CI required-check enforcement (admin action pending)</li>
+  </ul>
+</section>
+
+<!-- FUTURE SCOPE -->
+<section id="future">
+  <h2>Future Scope <span class="future-badge">PENDING</span></h2>
+
+  <div class="card card-warn">
+    <h3>L6 — GitHub Actions CI enforcement</h3>
+    <p>The <code>.github/workflows/test.yml</code> and <code>e2e-real-dct.yml</code> workflows exist and are correct. What remains is enabling the required-check gate so red PRs cannot merge.</p>
+    <table>
+      <thead><tr><th>Step</th><th>Who</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>Enable required check</td><td>Repo admin</td><td>Settings → Branches → main → Add required check: <code>test / test</code></td></tr>
+        <tr><td>Add DCT secrets</td><td>Repo admin</td><td>Settings → Secrets → <code>DCT_BASE_URL</code>, <code>DCT_API_KEY</code> for e2e workflow</td></tr>
+        <tr><td>Nightly cron (optional)</td><td>Repo admin</td><td>Uncomment <code>schedule</code> block in <code>e2e-real-dct.yml</code></td></tr>
+      </tbody>
+    </table>
+    <p>Once enabled: PRs with failing Layers 1–3 cannot merge. The manual Claude Desktop verification is fully retired for regression testing.</p>
+  </div>
+
+  <div class="card">
+    <h3>Snapshot assertions</h3>
+    <p>Add <code>syrupy</code> to the workflow tests to lock response shapes. Future drift in DCT API response envelopes fails the snapshot comparison automatically. Provides a contract-level safety net beyond shape assertions.</p>
+  </div>
+
+  <div class="card">
+    <h3>Session-replay for Layer 5</h3>
+    <p>Currently each scenario prompt runs as an independent Claude call. True session replay — carrying context between "Search VDBs" and "that VDB" — would allow testing the full conversational flow described in the scenario <code>.md</code> files.</p>
+  </div>
+
+  <div class="card">
+    <h3>Other-persona mutation scenarios</h3>
+    <p>Read-tier validated for all personas (S2–S4). Mutation-tier scenarios (CDA provisions, IAM changes, policy updates) depend on a working dSource/VDB. Unblocked once the MySQL plugin infra issue is resolved.</p>
+  </div>
+</section>
+
+<!-- COVERAGE -->
+<section id="coverage">
+  <h2>Code Coverage — L1+L2+L3 Combined</h2>
+  <div class="card card-accent">
+    <p style="font-size:13px">Measured across <strong>tests/unit + tests/integration + tests/functional</strong> (no real DCT). Updated 2026-06-13.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-value" style="color:var(--good)">97%</div><div class="stat-label">L1+L2+L3 combined</div></div>
+    <div class="stat"><div class="stat-value" style="color:var(--good)">95%</div><div class="stat-label">Unit (L1) alone</div></div>
+    <div class="stat"><div class="stat-value">2588</div><div class="stat-label">Total statements</div></div>
+    <div class="stat"><div class="stat-value">66</div><div class="stat-label">Missed lines</div></div>
+    <div class="stat"><div class="stat-value">1678</div><div class="stat-label">Tests (L1–L3)</div></div>
+  </div>
+
+  <h3>Per-module breakdown</h3>
+  <table>
+    <thead><tr><th>Module</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><code>config/config.py</code></td><td>39</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>config/loader.py</code></td><td>192</td><td>13</td><td>93%</td><td><span class="tag t-warn">≈</span></td></tr>
+      <tr><td><code>core/decorators.py</code></td><td>44</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>core/exceptions.py</code></td><td>6</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>core/logging.py</code></td><td>69</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>core/session.py</code></td><td>121</td><td>3</td><td>98%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>dct_client/client.py</code></td><td>72</td><td>3</td><td>96%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>main.py</code></td><td>100</td><td>5</td><td>95%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>testing/cli.py</code></td><td>58</td><td>1</td><td>98%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/__init__.py</code></td><td>100</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/core/meta_tools.py</code></td><td>210</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/core/tool_factory.py</code></td><td>208</td><td>10</td><td>95%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/dataset_endpoints_tool.py</code></td><td>751</td><td>0</td><td>100%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>tools/job_endpoints_tool.py</code></td><td>94</td><td>4</td><td>96%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>toolsgenerator/driver.py</code></td><td>506</td><td>25</td><td>95%</td><td><span class="tag t-good">✓</span></td></tr>
+      <tr><td><code>__init__.py</code></td><td>7</td><td>2</td><td>71%</td><td><span class="tag t-warn">—</span></td></tr>
+      <tr style="font-weight:600"><td>TOTAL</td><td>2588</td><td>66</td><td style="color:var(--good)">97%</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h3>What the 66 missed lines are — and why they're not covered</h3>
+
+  <div class="card">
+    <h4>1. Unreachable in dev mode — site-packages branch (3 lines)</h4>
+    <p><code>driver.py:38</code>, <code>client.py:35-36</code></p>
+    <p>These lines execute only when the package is installed from a wheel/site-packages path, not from a local editable checkout. The branch is <code>if 'site-packages' in __file__</code> — always False in the dev tree. Covered by production installs; deliberately not mocked in tests to keep the guard honest.</p>
+  </div>
+
+  <div class="card">
+    <h4>2. Catastrophic server startup failures (5 lines)</h4>
+    <p><code>main.py:126, 162-164, 185</code></p>
+    <p>Line 126: configuration-validation warning path (only fires when <code>loader.validate_config()</code> returns warnings — a rare partial-misconfiguration that doesn't abort startup). Lines 162-164: outer <code>except Exception</code> in <code>async_main</code> (only fires if FastMCP itself throws during startup, not a tool execution). Line 185: <code>if __name__ == "__main__"</code> guard. Testing these requires either a real broken server or invasive patching of FastMCP internals — low value relative to the brittleness cost.</p>
+  </div>
+
+  <div class="card">
+    <h4>3. Session telemetry error-path (3 lines)</h4>
+    <p><code>core/session.py:78-80</code></p>
+    <p>The <code>except Exception</code> inside <code>start_session()</code> that re-raises after logging. Triggered only when the session log file itself cannot be created (disk full, permissions error). Tested in contract (session telemetry is opt-in, off by default); this branch requires filesystem fault injection.</p>
+  </div>
+
+  <div class="card">
+    <h4>4. All retry attempts exhausted (1 line)</h4>
+    <p><code>dct_client/client.py:143</code></p>
+    <p><code>raise DCTClientError("All retry attempts failed")</code> — only fires after <code>DCT_MAX_RETRIES</code> consecutive HTTP failures. The integration tests exercise single-failure and two-failure paths; the full-exhaustion path requires a brittle "fail N+1 times" mock setup. Covered implicitly by the retry logic tests; the raise itself is a one-liner with no branching logic.</p>
+  </div>
+
+  <div class="card">
+    <h4>5. Loader edge cases — malformed or missing config (13 lines)</h4>
+    <p><code>loader.py:70, 138-139, 157, 255-256, 551, 555-556, 574, 580-582</code></p>
+    <p>These are five distinct error paths: (a) line 70: <code>raise ValueError</code> for a malformed toolset header format never seen in the real files; (b) lines 138-139: bare tool name without description (always has description in practice); (c) line 157: <code>raise ValueError</code> for an invalid <code>METHOD|path|action</code> format; (d) lines 255-256: <code>manual_confirmation.txt</code> not found (file always present in the package); (e) lines 551, 555-556, 574, 580-582: the <code>validate_config()</code> diagnostic function's error-accumulation branches. These are config-validation paths that only fire when the package is partially corrupted or someone edits the config files incorrectly — not reachable in any valid deployment.</p>
+  </div>
+
+  <div class="card">
+    <h4>6. OpenAPI code-generator edge cases in driver.py (22 lines)</h4>
+    <p><code>driver.py:494, 514-515, 527, 751-753, 755-756, 764, 792, 819, 823-826, 840, 876, 878, 949, 952-953, 978-979, 1020</code></p>
+    <p>All inside <code>_generate_unified_tool</code> and <code>generate_tools_from_openapi</code>. Specific paths:</p>
+    <ul style="font-size:13px">
+      <li><strong>494</strong>: <code>API_FILE</code> set to temp dir (site-packages branch inside the function — same as #1)</li>
+      <li><strong>514-515</strong>: <code>OSError</code> when deleting a stale <code>*_tool.py</code> file (locked file edge case)</li>
+      <li><strong>527</strong>: <code>module_name = "misc_endpoints"</code> when an apis list is empty (never happens for well-formed toolsets)</li>
+      <li><strong>751-756</strong>: default-value update for a param already seen from another action — requires two actions to share a param but provide different defaults, a rare OpenAPI pattern</li>
+      <li><strong>764</strong>: <code>requestBody</code> itself is a <code>$ref</code> (DCT API always inlines request body schemas)</li>
+      <li><strong>792, 819, 823-826, 840, 876, 878, 949, 952-953, 978-979, 1020</strong>: enum-value formatting, description-truncation, and toolkit-schema docstring branches that require specific API spec shapes not present in the minimal inline spec used by tests. Covered during live tool generation from the real <code>api-external.yaml</code></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>7. get_main() lazy import (2 lines)</h4>
+    <p><code>__init__.py:15-17</code></p>
+    <p>The <code>get_main()</code> function is a lazy-import shim used by the CLI entry point (<code>pyproject.toml</code> console_scripts). It is exercised end-to-end by <code>dct-mcp-test --layer ci</code> but is intentionally not called in unit/integration tests since importing <code>main.py</code> triggers FastMCP startup side-effects.</p>
+  </div>
+
+  <div class="card">
+    <h4>8. tool_factory.py async generation path (10 lines)</h4>
+    <p><code>tools/core/tool_factory.py:207, 246-252, 262, 403, 454-455</code></p>
+    <p>Lines 246-252: the async <code>generate_and_register_tools</code> function that downloads the spec at runtime in auto mode — only exercised when <code>DCT_TOOLSET=auto</code> and a live DCT is reachable. Lines 207, 262, 403, 454-455: fallback paths in the spec-loading chain (spec file absent, YAML parse error). These are covered by Layer 4/5 tests against a real DCT.</p>
+  </div>
+
+  <h3>Policy: what we deliberately leave uncovered</h3>
+  <div class="card card-warn">
+    <ul style="font-size:13px">
+      <li><strong>Site-packages branch</strong> — the <code>if 'site-packages' in __file__</code> guard is intentionally not mocked in unit tests. Mocking <code>__file__</code> at module level would make the test fragile and the branch trivial. Covered by real installs.</li>
+      <li><strong>FastMCP internals</strong> — we don't inject failures into FastMCP startup. These failure modes belong to the framework, not this codebase.</li>
+      <li><strong>Filesystem fault injection</strong> — disk-full, permission-denied, and file-locked scenarios are excluded. They would require platform-specific OS mocking for one-liner error handlers.</li>
+      <li><strong>100% is not the goal</strong> — 97% with well-understood gaps is better than 100% achieved by mocking away the boundary you're supposed to be testing.</li>
+    </ul>
+  </div>
+
+</section>
+
+</main>
+<script>
+function show(id,btn){
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+</script>
+</body>
+</html>

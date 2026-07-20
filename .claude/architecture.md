@@ -25,6 +25,7 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
     │       ├── config/toolsets/*.txt          ← Persona toolset definitions
     │       └── config/mappings/manual_confirmation.txt
     ├── dct_client/client.py         ← Async httpx client with retry/backoff
+    ├── testing/cli.py               ← dct-mcp-test CLI — test runner wrapping pytest with layer routing
     └── core/
             ├── logging.py           ← setup_logging(), get_logger(), rotating file handler
             ├── session.py           ← Telemetry session management
@@ -91,6 +92,52 @@ At startup, `main()` calls `generate_tools_from_openapi()` before registering to
 Generated modules take priority over pre-built `*_endpoints_tool.py` files. Failure is non-fatal.
 
 ---
+
+## MCP Configuration (`.mcp.json`)
+
+The `.mcp.json` file defines how Claude Code connects to the DCT MCP server and other supporting servers:
+
+```json
+{
+  "mcpServers": {
+    "delphix-dct": {
+      "command": "python",
+      "args": ["-m", "dct_mcp_server.main"],
+      "env": {
+        "DCT_API_KEY": "${DCT_API_KEY}",
+        "DCT_BASE_URL": "${DCT_BASE_URL}",
+        "DCT_TOOLSET": "${DCT_TOOLSET:-continuous_data_admin}",
+        ...
+      }
+    }
+  }
+}
+```
+
+Credentials are loaded from `.claude/settings.local.json` at runtime — the `${VAR}` syntax is resolved by Claude's MCP client config loader, not by the server itself.
+
+## Testing Infrastructure
+
+### `testing/cli.py` — dct-mcp-test CLI
+
+Entry point: `dct-mcp-test` (from `project.scripts` in `pyproject.toml`).
+
+Provides a unified test runner for multiple layers:
+- `--layer unit` — unit tests only
+- `--layer integration` — integration tests
+- `--layer functional` — functional tests
+- `--layer ci` — unit + integration + functional (merge-gate suite, no DCT credentials needed)
+- `--layer e2e` — end-to-end tests against a real DCT instance
+- `--layer llm` — Layer 5 LLM-driven tests via Claude Code CLI
+- `--layer scenarios` — subset of LLM tests for scenario execution
+- `--layer all` — all layers except `llm`
+
+Usage:
+```bash
+dct-mcp-test --layer ci                    # Run CI suite locally
+dct-mcp-test --layer e2e --api-key ABC     # Run E2E tests
+dct-mcp-test remote --layer llm            # Run Layer 5 tests against remote DCT
+```
 
 ## Key Platform Behaviors
 

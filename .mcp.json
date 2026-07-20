@@ -1,5 +1,18 @@
 {
   "mcpServers": {
+    "delphix-dct": {
+        "command": "python",
+        "args": ["-m", "dct_mcp_server.main"],
+        "env": {
+          "DCT_API_KEY": "${DCT_API_KEY}",
+          "DCT_BASE_URL": "${DCT_BASE_URL}",
+          "DCT_TOOLSET": "${DCT_TOOLSET:-continuous_data_admin}",
+          "DCT_VERIFY_SSL": "false",
+          "DCT_LOG_LEVEL": "ERROR",
+          "DCT_TIMEOUT": "30",
+          "DCT_MAX_RETRIES": "3"
+        }
+    },
     "atlassian": {
       "command": "npx",
       "args": [

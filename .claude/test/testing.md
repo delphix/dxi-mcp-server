@@ -22,6 +22,54 @@ Two complementary tracks, both driven by Claude:
 | Dynamic tool generation change | Generated module in `$TEMP/dct_mcp_tools/` takes priority over pre-built |
 | `dynamic` mode change | `discovery` + `execute` are the only tools exposed; `execute` invokes the resolved endpoint correctly |
 
+## Verification Is Mandatory — Act → Verify
+
+Every scenario, manual or automated, must confirm the **real effect** — not just a non-error
+response. A DCT tool returning `status=success` often means only that a **job was accepted**:
+provision, refresh, snapshot, enable/disable, and delete are all asynchronous. A test that stops
+at the tool response can "pass" while nothing actually happened.
+
+So each test is two phases:
+
+1. **Act** — call the tool (e.g. `vdb_tool(action="provision_*", ...)`).
+2. **Verify** — through an *independent* read, confirm the world changed. After a provision, call
+   `vdb_tool(action="search")` / list and assert a VDB with that name exists and is `RUNNING`;
+   after a delete, confirm it is gone.
+
+Do not trust the same call that performed the action — always query fresh state to verify.
+
+## Job-Completion Pre-Prompt
+
+Because DCT operations are asynchronous, the driver (Claude in this checkout, the `/dct-mcp-test`
+skill, or the Layer 5 CLI runner) must **wait for the job to complete before declaring success or
+failure**. This is enforced by a standard system pre-prompt. The Layer 5 Claude Code CLI runner
+passes it via `--append-system-prompt-file .claude/test/llm-driver-preprompt.md`; the canonical
+text is below (keep the file and this block in sync — the CLI reads the file, humans read this doc):
+
+```
+You are driving the Delphix DCT MCP server to execute and verify a test scenario.
+
+Rules you MUST follow:
+1. Many operations (provision, refresh, snapshot, enable/disable, delete) are ASYNCHRONOUS.
+   A tool response with status=success usually means only that a JOB WAS SUBMITTED.
+2. Whenever a tool response contains a job reference (job_id, job, or a {"job": {...}} object),
+   you MUST poll it: call job_tool(action="get", jobId=<id>) repeatedly, waiting briefly between
+   polls, until the job reaches a TERMINAL state:
+     - COMPLETED                      -> the operation succeeded
+     - FAILED / CANCELED / ABANDONED  -> the operation failed; report the job error
+3. NEVER report success on job submission alone. Success requires a COMPLETED job AND a passing
+   verification read.
+4. After the job completes, VERIFY the real effect through an INDEPENDENT read (e.g. search/list)
+   and confirm the expected object exists in the expected state.
+5. Report exactly one verdict per scenario: PASS (job COMPLETED + verification confirmed) or
+   FAIL (job not COMPLETED, or verification did not confirm the effect), with the evidence.
+```
+
+> Mechanism note: the wait/poll is driven by the LLM calling `job_tool` — the MCP server itself
+> returns on job submission. If we later want the server to block until completion, that is a
+> separate server-side change (a synchronous `wait_for_job` option); the pre-prompt is the
+> no-code-change way to get the same guarantee today.
+
 ## DCT Toolset Coverage
 
 When changing toolset configs or tool implementations, exercise at minimum:
