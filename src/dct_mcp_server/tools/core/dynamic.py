@@ -720,17 +720,29 @@ def _validate_required_params(
 def _secret_for_identity(identity_name: str) -> str | None:
     """Paired secret field name for an identity field, or None.
 
-    A password rarely stands alone: it accompanies an identity. ``username`` ->
-    ``password``, ``masking_username`` -> ``masking_password``, ``db_user`` ->
-    ``db_password``. Matches only names ending in ``username``/``user`` so
-    unrelated fields (``user_count``, ``hostname``) never pair.
+    A secret rarely stands alone: it accompanies a non-secret identity.
+    ``username`` -> ``password`` (and ``masking_username`` ->
+    ``masking_password``, ``source_username`` -> ``source_password``);
+    ``access_key`` -> ``secret_key`` for S3-style cloud storage, where the
+    access key id is an identifier and only the secret key is sensitive.
+    Matches only the identity suffixes below, so unrelated fields
+    (``user_count``, ``hostname``, ``ssh_key`` — itself a UUID reference, not
+    a secret) never pair.
     """
     low = identity_name.lower()
     if low.endswith("username"):
         return identity_name[: -len("username")] + "password"
     if low.endswith("user"):
         return identity_name[: -len("user")] + "password"
+    if low.endswith("access_key"):
+        return identity_name[: -len("access_key")] + "secret_key"
     return None
+
+
+# Credential references that stand in for a password (mutually exclusive with
+# it per the connector schema): when one is already supplied in a container,
+# no password is needed there (e.g. SFTP key auth uses ssh_key instead).
+_PASSWORD_ALTERNATIVES = ("ssh_key", "credential_path_id")
 
 
 def _collect_missing_secrets(obj: Any, out: list[str]) -> None:
@@ -740,15 +752,21 @@ def _collect_missing_secrets(obj: Any, out: list[str]) -> None:
     discriminated unions the spec flattener cannot enumerate (e.g.
     POST /environments), yet the nested ``host_parameters`` carries
     username/password. In every object container, an identity field whose paired
-    secret is absent from that same container marks the secret as needed.
+    secret is absent from that same container marks the secret as needed —
+    unless a mutually-exclusive credential alternative is already supplied.
     """
     if isinstance(obj, dict):
         for value in obj.values():
             _collect_missing_secrets(value, out)
         for key in obj:
             secret = _secret_for_identity(key)
-            if secret and secret not in obj and secret not in out:
-                out.append(secret)
+            if not secret or secret in obj or secret in out:
+                continue
+            if secret.endswith("password") and any(
+                obj.get(alt) for alt in _PASSWORD_ALTERNATIVES
+            ):
+                continue
+            out.append(secret)
     elif isinstance(obj, list):
         for item in obj:
             _collect_missing_secrets(item, out)
