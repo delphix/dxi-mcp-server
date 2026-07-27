@@ -311,6 +311,34 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             return validation_error
 
         # ---------------------------------------------------------------- #
+        # Step 3.5 — Sensitive-input gate
+        # ---------------------------------------------------------------- #
+        # Secret-shaped body fields (password/token/…) must never be supplied
+        # by the model in `body`. When a mutating operation needs such a field
+        # and it is absent, pause so the host can capture it out-of-band (masked
+        # input or a stored-credential alias) and re-call with it applied. Runs
+        # before the confirmation gate: capture the secret first, then confirm.
+        if method_upper in ("POST", "PUT", "PATCH"):
+            missing_secrets = _missing_sensitive_fields(body)
+            if missing_secrets:
+                return {
+                    "status": "sensitive_input_required",
+                    "required_sensitive_fields": missing_secrets,
+                    "message": (
+                        "This operation needs sensitive input: "
+                        + ", ".join(missing_secrets)
+                    ),
+                    "operation": {"path": resolved_path, "method": method_upper},
+                    "instructions": (
+                        "STOP. Do NOT ask for these secret value(s) in chat and do "
+                        "NOT put them in body. The host securely captures them from "
+                        "the user (masked input or a stored-credential alias) and "
+                        "re-calls execute with them applied automatically. Simply "
+                        "wait for the next turn."
+                    ),
+                }
+
+        # ---------------------------------------------------------------- #
         # Step 4 — Confirmation gate
         # ---------------------------------------------------------------- #
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
@@ -687,6 +715,55 @@ def _validate_required_params(
             "message": f"Required fields missing: {missing}",
         }
     return None
+
+
+def _secret_for_identity(identity_name: str) -> str | None:
+    """Paired secret field name for an identity field, or None.
+
+    A password rarely stands alone: it accompanies an identity. ``username`` ->
+    ``password``, ``masking_username`` -> ``masking_password``, ``db_user`` ->
+    ``db_password``. Matches only names ending in ``username``/``user`` so
+    unrelated fields (``user_count``, ``hostname``) never pair.
+    """
+    low = identity_name.lower()
+    if low.endswith("username"):
+        return identity_name[: -len("username")] + "password"
+    if low.endswith("user"):
+        return identity_name[: -len("user")] + "password"
+    return None
+
+
+def _collect_missing_secrets(obj: Any, out: list[str]) -> None:
+    """Recursively gather paired secret names absent from the body value.
+
+    Walks the actual request body (not the schema): DCT create bodies are often
+    discriminated unions the spec flattener cannot enumerate (e.g.
+    POST /environments), yet the nested ``host_parameters`` carries
+    username/password. In every object container, an identity field whose paired
+    secret is absent from that same container marks the secret as needed.
+    """
+    if isinstance(obj, dict):
+        for value in obj.values():
+            _collect_missing_secrets(value, out)
+        for key in obj:
+            secret = _secret_for_identity(key)
+            if secret and secret not in obj and secret not in out:
+                out.append(secret)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_missing_secrets(item, out)
+
+
+def _missing_sensitive_fields(body: dict[str, Any] | None) -> list[str]:
+    """Secret-shaped fields the body needs but omits, found by identity pairing.
+
+    Value-based (not schema-based) so nested and discriminated-union bodies are
+    handled uniformly. Returns the distinct leaf secret names in first-seen
+    order; the host captures them out-of-band and re-calls with them applied.
+    """
+    missing: list[str] = []
+    _collect_missing_secrets(body or {}, missing)
+    return missing
 
 
 def _classify_operation_type(method: str) -> str:
