@@ -594,19 +594,31 @@ class TestExecuteConfirmationRequired:
 
 
 class TestExecuteConfirmedDispatch:
-    """S15 — same call with confirmed=True dispatches the POST."""
+    """S15 — execute dispatches to DCT when the confirmation gate is satisfied."""
 
     def test_s15_confirmed_dispatches_and_returns_success(self):
-        """S15: confirmed=True → HTTP call made, status=success returned."""
+        """S15: When check_confirmation_with_fallback clears the gate, the HTTP call
+        is made and status=success is returned.
+
+        Updated for DLPXECO-14458: bare confirmed=True no longer bypasses the gate
+        (FR-001). Patch check_confirmation_with_fallback (the function now called by
+        execute) to return requires_confirmation=False, which models a caller that
+        has already satisfied confirmation and is re-calling with a grant.
+        """
         mock_client = MagicMock()
         mock_client.make_request = AsyncMock(return_value={"deleted": True})
         fn = _make_execute_fn(MINIMAL_SPEC, mock_client)
 
-        with patch("dct_mcp_server.tools.core.dynamic.check_confirmation") as mock_cc:
+        with patch(
+            "dct_mcp_server.tools.core.dynamic.check_confirmation_with_fallback"
+        ) as mock_cc:
             mock_cc.return_value = {
-                "requires_confirmation": True,
-                "confirmation_level": "manual",
+                "requires_confirmation": False,
+                "confirmation_level": None,
                 "message_template": None,
+                "required_fields": [],
+                "batch_triggered": False,
+                "velocity_count": None,
             }
             result = fn(
                 path="/vdbs/{vdbId}/delete",

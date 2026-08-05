@@ -1,0 +1,14 @@
+# Read-shaped POST paths that must NOT be gated by the keyword fallback resolver.
+# These are safe read operations even though their paths contain hot keywords
+# like "provision", "snapshot", etc.
+# Format: one path pattern per line (supports {param} placeholders and * suffix wildcards)
+# First-match wins; blank lines and lines starting with # are ignored.
+/vdbs/provision_by_snapshot/defaults
+/vdbs/provision_by_timestamp/defaults
+/vdbs/provision_by_location/defaults
+/vdbs/provision_from_bookmark/defaults
+/vdbs/empty_vdb/defaults
+/snapshots/search
+/paas-snapshots/search
+/environments/compatible_repositories_by_snapshot
+/file-mapping/validate-file-mapping-by-snapshot

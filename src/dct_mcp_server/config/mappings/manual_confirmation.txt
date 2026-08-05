@@ -105,3 +105,25 @@ POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from boo
 POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from database template '{name}'. Confirm?
 POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from hook template '{name}'. Confirm?
 POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeflow '{name}'. Confirm?
+
+# ============================================
+# RULE 9: Refresh Actions (ELEVATED)
+# Requires confirmed_resource_name
+# ============================================
+POST|/vdbs/{vdbId}/refresh_by_timestamp|elevated|Review: Refreshing VDB '{name}' by timestamp will pull latest source data. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_by_snapshot|elevated|Review: Refreshing VDB '{name}' by snapshot will pull data from the specified snapshot. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_from_bookmark|elevated|Review: Refreshing VDB '{name}' from bookmark will pull data from the specified bookmark. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_by_location|elevated|Review: Refreshing VDB '{name}' by location will pull source data at the specified location. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|elevated|Review: Refreshing VDB Group '{name}' by timestamp will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|elevated|Review: Refreshing VDB Group '{name}' by snapshot will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|elevated|Review: Refreshing VDB Group '{name}' from bookmark will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing VDB Group '{name}' by location will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+
+# ============================================
+# RULE 10: Create Actions (STANDARD)
+# ============================================
+POST|/vdbs/{vdbId}/snapshots|standard|Creating a snapshot of VDB '{name}'. Confirm?
+POST|/bookmarks|standard|Creating a new bookmark. Confirm?
+POST|/vdb-groups|standard|Creating a new VDB group. Confirm?
+POST|/database-templates|standard|Creating a new database template. Confirm?
+POST|/hook-templates|standard|Creating a new hook template. Confirm?

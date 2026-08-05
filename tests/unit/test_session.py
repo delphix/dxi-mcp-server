@@ -251,12 +251,17 @@ class TestSessionJsonFormatter:
 
 
 class TestPublicApi:
-    def test_get_current_session_id_returns_none_by_default(self):
-        # The global _session_manager may or may not have an active session;
-        # after end_session it should be None
+    def test_get_current_session_id_returns_process_identity_by_default(self):
+        # FR-006 (DLPXECO-14458): get_current_session_id() now falls back to
+        # PROCESS_IDENTITY when no telemetry session is active, so that velocity
+        # detection and audit events always have a stable caller identity.
+        from dct_mcp_server.core.session import PROCESS_IDENTITY
+
         end_session()
         sid = get_current_session_id()
-        assert sid is None
+        assert sid == PROCESS_IDENTITY, (
+            "get_current_session_id() must return PROCESS_IDENTITY when no session is active"
+        )
 
     def test_start_session_returns_string(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
@@ -294,13 +299,17 @@ class TestPublicApi:
 
     def test_end_session_no_arg(self, tmp_path):
         import dct_mcp_server.core.session as _sess_mod
+        from dct_mcp_server.core.session import PROCESS_IDENTITY
 
         with patch.object(
             _sess_mod._session_manager, "_get_project_root", return_value=tmp_path
         ):
             start_session("no-arg-end")
         end_session()
-        assert get_current_session_id() is None
+        # FR-006 (DLPXECO-14458): After ending a session, get_current_session_id()
+        # returns PROCESS_IDENTITY (not None) as the fallback caller identity.
+        assert get_current_session_id() == PROCESS_IDENTITY
+        assert get_current_session_id() != "no-arg-end"
 
     def test_log_tool_call_no_error(self):
         # No active session - should not raise, just warn

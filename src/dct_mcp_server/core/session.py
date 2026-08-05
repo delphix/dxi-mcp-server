@@ -18,6 +18,11 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Per-process identity UUID — minted unconditionally at startup, independent of telemetry.
+# Used as the caller identity for velocity detection and audit events when no
+# X-CLIENT-ID header is present (STDIO mode).
+PROCESS_IDENTITY: str = str(uuid.uuid4())
+
 
 class SessionConfig:
     """Configuration constants for session logging"""
@@ -236,9 +241,20 @@ def log_tool_call(tool_data: Dict[str, Any], session_id: Optional[str] = None) -
     _session_manager.log_tool_call(tool_data, session_id)
 
 
-def get_current_session_id() -> Optional[str]:
-    """Get current session ID"""
-    return _session_manager.current_session_id
+def get_current_session_id() -> str:
+    """Get current session ID, falling back to the process identity UUID when no session is active."""
+    return _session_manager.current_session_id or PROCESS_IDENTITY
+
+
+def get_process_identity() -> str:
+    """Return the per-process identity UUID minted at startup.
+
+    This UUID is stable within a process lifetime and is minted unconditionally —
+    it does not require IS_LOCAL_TELEMETRY_ENABLED=true. Used as the caller
+    identity for velocity detection (FR-006) and audit events (FR-008) in STDIO
+    mode when no X-CLIENT-ID header is present.
+    """
+    return PROCESS_IDENTITY
 
 
 def get_or_create_caller_session(caller_id: str) -> logging.Logger:

@@ -365,24 +365,30 @@ async def test_execute_destructive_without_confirmed_returns_confirmation_requir
 
 
 async def test_execute_with_valid_token_skips_confirmation_gate():
-    from dct_mcp_server.tools.core.confirmation_token import make_confirmation_token
+    # FR-001: A properly issued (stored) confirmation token satisfies a standard-level
+    # gate. Use issue_token() so the token is registered in the pending store; the
+    # gate should consume it and proceed to execution.
+    from dct_mcp_server.tools.core.confirmation_token import issue_token
 
     app = _make_app_mock()
     client = _make_client_mock(return_value={"deleted": True})
     fn = _make_execute_fn(app, client)
 
-    token = make_confirmation_token("DELETE", "/vdbs/vdb-123")
+    token = issue_token("DELETE", "/vdbs/vdb-123")
 
     with patch(
         "dct_mcp_server.tools.core.dynamic.get_cached_spec",
         return_value=_VALID_SPEC,
     ):
         with patch(
-            "dct_mcp_server.tools.core.dynamic.check_confirmation",
+            "dct_mcp_server.tools.core.dynamic.check_confirmation_with_fallback",
             return_value={
                 "requires_confirmation": True,
-                "confirmation_level": "manual",
+                "confirmation_level": "standard",
                 "message_template": "Confirm deletion",
+                "required_fields": ["confirmation_token"],
+                "batch_triggered": False,
+                "velocity_count": None,
             },
         ):
             result = await fn(
@@ -454,6 +460,9 @@ async def test_execute_successful_get_returns_success():
 
 
 async def test_execute_delete_operation_type_is_destructive():
+    # Verify that DELETE operations are classified as operation_type="destructive".
+    # Patch check_confirmation_with_fallback (the function actually called by execute)
+    # to bypass the confirmation gate and exercise the operation-type annotation.
     app = _make_app_mock()
     client = _make_client_mock(return_value={})
     fn = _make_execute_fn(app, client)
@@ -463,11 +472,14 @@ async def test_execute_delete_operation_type_is_destructive():
         return_value=_VALID_SPEC,
     ):
         with patch(
-            "dct_mcp_server.tools.core.dynamic.check_confirmation",
+            "dct_mcp_server.tools.core.dynamic.check_confirmation_with_fallback",
             return_value={
                 "requires_confirmation": False,
                 "confirmation_level": None,
                 "message_template": None,
+                "required_fields": [],
+                "batch_triggered": False,
+                "velocity_count": None,
             },
         ):
             result = await fn(
