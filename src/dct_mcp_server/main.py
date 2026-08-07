@@ -183,16 +183,23 @@ async def async_main():
         if auth_mode == "embedded":
             # Dynamic mode keeps its spec in spec_cache (read by the discovery and
             # execute tools), which is separate from the generator's bundled spec.
+            # The generator emits persona-toolset modules that dynamic mode never
+            # registers, so running it here is wasted work — and under stdio that
+            # waste is paid on *every session spawn* rather than once per
+            # container, because the host runs one process per caller.
             if is_dynamic_mode():
                 await _load_dynamic_spec(app)
-            # Embedded mode: use the bundled spec — no live download needed
-            try:
-                await asyncio.to_thread(generate_tools_from_openapi)
-                logger.info("Tool generation complete (embedded mode, bundled spec)")
-            except Exception as e:
-                logger.warning(
-                    f"Tool generation failed in embedded mode, will use pre-built tools: {e}"
-                )
+            else:
+                # Embedded mode: use the bundled spec — no live download needed
+                try:
+                    await asyncio.to_thread(generate_tools_from_openapi)
+                    logger.info(
+                        "Tool generation complete (embedded mode, bundled spec)"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Tool generation failed in embedded mode, will use pre-built tools: {e}"
+                    )
         else:
             # Standalone mode: try live spec download for persona toolsets.
             # Dynamic mode skips the generator and loads the spec via spec_cache instead.

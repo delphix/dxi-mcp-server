@@ -122,9 +122,20 @@ class ClientIDMiddleware:
 def resolve_auth() -> AuthContext:
     """Return an :class:`AuthContext` for the current request or process.
 
-    In ``embedded`` auth mode the caller identity comes from the
-    ``X-CLIENT-ID`` header stored in :data:`_CALLER_ID_VAR`.  The header is
-    mandatory in this mode; a missing value raises :class:`AuthError`.
+    In ``embedded`` auth mode the caller identity comes from one of two places,
+    depending on transport:
+
+    * **HTTP** — the ``X-CLIENT-ID`` header of the current request, stored in
+      :data:`_CALLER_ID_VAR` by :class:`ClientIDMiddleware`. One process serves
+      many callers, so identity is resolved per request.
+    * **stdio** — the ``DCT_CLIENT_ID`` environment variable, supplied by the
+      host when it spawned this process. A stdio pipe is 1:1 and carries no
+      headers, so the host runs one process per caller and the identity is
+      fixed for the life of the process.
+
+    The request-scoped value wins when both are present, so an HTTP deployment
+    is unaffected by a stray environment variable. A missing identity in either
+    case raises :class:`AuthError`.
 
     In ``standalone`` mode (the default) the identity is fixed as
     ``"standalone"`` and the API key is read from config.
@@ -138,9 +149,15 @@ def resolve_auth() -> AuthContext:
     auth_mode: str = config.get("auth_mode", "standalone")
 
     if auth_mode == "embedded":
-        caller_id = _CALLER_ID_VAR.get(None)
+        # Per-request header (HTTP) takes precedence over the per-process
+        # environment value (stdio); exactly one of them is set in practice.
+        caller_id = _CALLER_ID_VAR.get(None) or config.get("client_id")
         if not caller_id:
-            raise AuthError("X-CLIENT-ID is required in embedded auth mode")
+            raise AuthError(
+                "No caller identity in embedded auth mode. Supply the "
+                "X-CLIENT-ID header (HTTP) or the DCT_CLIENT_ID environment "
+                "variable (stdio)."
+            )
         logger.debug("Resolved embedded auth for caller %s", _mask(caller_id))
         return AuthContext(account_id=caller_id, api_key=None, auth_mode="embedded")
 
