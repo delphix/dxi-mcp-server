@@ -117,12 +117,16 @@ class DCTAPIClient:
             version = importlib.metadata.version("dct-mcp-server")
         except Exception:
             version = "2026.0.1.0-preview"
-        # Use X-CLIENT-ID header for embedded-mode identity; no Authorization header
+        # Use X-CLIENT-ID header for embedded-mode identity; no Authorization header.
+        # Embedded mode == the DCT AI Assistant driving the server, so tag every
+        # DCT API call for source attribution (PPM-1727). Standalone/local clients
+        # (DCTAPIClient.__init__) are deliberately left unattributed.
         instance.headers = {
             "X-CLIENT-ID": account_id,  # Internal DCT trust header; not Authorization
+            "X-Dct-Client-Name": "Delphix AI Assistant",  # PPM-1727 source attribution
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": f"dct-mcp-server/{version}",
+            "User-Agent": f"Delphix-AI-Assistant/{version}",
         }
         instance._client = None
         logger.debug("Created per-identity client for %s", _mask_secret(account_id))
