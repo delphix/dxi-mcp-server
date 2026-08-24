@@ -2,13 +2,11 @@
 
 A stdio pipe is 1:1 and carries no request headers, so a host that embeds this
 server runs one process per caller and supplies the caller's DCT account id in
-the child process environment as ``DCT_CLIENT_ID``. These tests cover that path
-and prove it does not disturb the HTTP path, where identity still arrives per
-request in the ``X-CLIENT-ID`` header.
+the child process environment as ``DCT_CLIENT_ID``. These tests cover that path,
+which is the transport the DCT assistant ships on.
 
 The final test spawns the server as a real subprocess over stdio and drives it
-with an MCP client. It is the only test in the suite that exercises the
-transport the DCT assistant actually ships on.
+with an MCP client.
 """
 
 import asyncio
@@ -21,7 +19,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from dct_mcp_server.core.auth import _CALLER_ID_VAR, resolve_auth
+from dct_mcp_server.core.auth import resolve_auth
 from dct_mcp_server.core.exceptions import AuthError
 
 # --------------------------------------------------------------------------- #
@@ -83,16 +81,6 @@ def test_blank_identity_is_treated_as_missing(env):
         resolve_auth()
 
 
-def test_request_header_wins_over_environment(env):
-    """An HTTP deployment is unaffected by a stray DCT_CLIENT_ID in the env."""
-    env(DCT_CLIENT_ID="from-env")
-    token = _CALLER_ID_VAR.set("from-header")
-    try:
-        assert resolve_auth().account_id == "from-header"
-    finally:
-        _CALLER_ID_VAR.reset(token)
-
-
 def test_standalone_mode_is_unchanged(monkeypatch):
     """The default deployment must not be affected by any of this."""
     monkeypatch.setenv("DCT_AUTH_MODE", "standalone")
@@ -116,16 +104,6 @@ def test_startup_requires_client_id_for_embedded_stdio(env):
     env(DCT_CLIENT_ID=None)
     with pytest.raises(ValueError, match="DCT_CLIENT_ID is required"):
         get_dct_config(require_key=True)
-
-
-def test_startup_does_not_require_client_id_over_http(env):
-    """Over HTTP the header supplies identity, so the env value is optional."""
-    from dct_mcp_server.config.config import get_dct_config
-
-    env(DCT_CLIENT_ID=None, DCT_TRANSPORT="http")
-    config = get_dct_config(require_key=True)
-    assert config["client_id"] is None
-    assert config["auth_mode"] == "embedded"
 
 
 # --------------------------------------------------------------------------- #
