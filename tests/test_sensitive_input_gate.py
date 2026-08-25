@@ -9,6 +9,7 @@ All functions in this module were AI-generated.
 """
 
 from dct_mcp_server.tools.core.dynamic import (
+    _annotated_credential_fields,
     _missing_sensitive_fields,
     _secret_for_identity,
 )
@@ -70,3 +71,70 @@ class TestMissingSensitiveFields:
     def test_empty_body_needs_nothing(self):  # AI-generated
         assert _missing_sensitive_fields(None) == []
         assert _missing_sensitive_fields({}) == []
+
+
+class TestAnnotatedCredentialFields:  # AI-generated
+    """x-dct-toolkit-credential-field is the authoritative secret list."""
+
+    _SPEC = {
+        "components": {
+            "schemas": {
+                "CreateEnv": {
+                    "properties": {
+                        "username": {"type": "string"},
+                        "password": {
+                            "type": "string",
+                            "x-dct-toolkit-credential-field": True,
+                        },
+                        "encryption_key": {
+                            "type": "string",
+                            "x-dct-toolkit-credential-field": True,
+                        },
+                        "hostname": {"type": "string"},
+                        "ssh_key": {
+                            "type": "string",
+                            "x-dct-toolkit-credential-field": True,
+                        },
+                    }
+                }
+            }
+        }
+    }
+
+    def test_extracts_annotated_names(self):  # AI-generated
+        fields = _annotated_credential_fields(self._SPEC)
+        assert "password" in fields
+        assert "encryption_key" in fields
+
+    def test_excludes_reference_alternatives(self):  # AI-generated
+        # ssh_key is a UUID reference, never captured as masked input.
+        assert "ssh_key" not in _annotated_credential_fields(self._SPEC)
+
+    def test_unannotated_fields_excluded(self):  # AI-generated
+        fields = _annotated_credential_fields(self._SPEC)
+        assert "username" not in fields
+        assert "hostname" not in fields
+
+    def test_empty_or_missing_spec(self):  # AI-generated
+        assert _annotated_credential_fields(None) == frozenset()
+        assert _annotated_credential_fields({}) == frozenset()
+
+    def test_standalone_annotated_secret_flagged_inline(self):  # AI-generated
+        # encryption_key has no identity to pair with, so only the annotation
+        # catches it when the model supplies it inline.
+        creds = _annotated_credential_fields(self._SPEC)
+        assert _missing_sensitive_fields({"encryption_key": "abc"}, creds) == [
+            "encryption_key"
+        ]
+
+    def test_annotation_and_pairing_combine(self):  # AI-generated
+        creds = _annotated_credential_fields(self._SPEC)
+        missing = _missing_sensitive_fields(
+            {"username": "u", "encryption_key": "k"}, creds
+        )
+        assert set(missing) == {"encryption_key", "password"}
+
+    def test_no_credential_set_preserves_pairing_only(self):  # AI-generated
+        # Default (empty) set → behaves exactly like the identity-pairing gate.
+        assert _missing_sensitive_fields({"encryption_key": "abc"}) == []
+        assert _missing_sensitive_fields({"username": "u"}) == ["password"]

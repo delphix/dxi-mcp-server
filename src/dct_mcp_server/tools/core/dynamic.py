@@ -319,7 +319,9 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # input or a stored-credential alias) and re-call with it applied. Runs
         # before the confirmation gate: capture the secret first, then confirm.
         if method_upper in ("POST", "PUT", "PATCH"):
-            missing_secrets = _missing_sensitive_fields(body)
+            missing_secrets = _missing_sensitive_fields(
+                body, _annotated_credential_fields(spec)
+            )
             if missing_secrets:
                 return {
                     "status": "sensitive_input_required",
@@ -741,23 +743,77 @@ def _secret_for_identity(identity_name: str) -> str | None:
 
 # Credential references that stand in for a password (mutually exclusive with
 # it per the connector schema): when one is already supplied in a container,
-# no password is needed there (e.g. SFTP key auth uses ssh_key instead).
+# no password is needed there (e.g. SFTP key auth uses ssh_key instead). These
+# are identifiers/references, not raw secrets, so they are never captured as
+# masked input even if a spec happened to annotate them.
 _PASSWORD_ALTERNATIVES = ("ssh_key", "credential_path_id")
 
+# DCT annotates every secret-bearing request field in the OpenAPI spec with
+# this extension. It is the authoritative list of credential field names;
+# identity pairing (above) only reaches secrets that accompany an identity, so
+# standalone annotated secrets (e.g. encryption_key, data_key) are caught by
+# name here instead of by a brittle substring heuristic.
+_CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
 
-def _collect_missing_secrets(obj: Any, out: list[str]) -> None:
-    """Recursively gather paired secret names absent from the body value.
+# Per-spec cache keyed by id(spec); the spec is loaded once at startup.
+_credential_field_cache: dict[int, frozenset[str]] = {}
+
+
+def _collect_annotated_credential_fields(node: Any, out: set[str]) -> None:
+    """Recursively collect property names annotated as credential fields."""
+    if isinstance(node, dict):
+        props = node.get("properties")
+        if isinstance(props, dict):
+            for prop_name, prop_schema in props.items():
+                if (
+                    isinstance(prop_schema, dict)
+                    and prop_schema.get(_CREDENTIAL_FIELD_ANNOTATION) is True
+                ):
+                    out.add(prop_name)
+        for value in node.values():
+            _collect_annotated_credential_fields(value, out)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_annotated_credential_fields(item, out)
+
+
+def _annotated_credential_fields(spec: dict[str, Any] | None) -> frozenset[str]:
+    """Names of every field the DCT spec annotates as a credential (cached)."""
+    if not spec:
+        return frozenset()
+    key = id(spec)
+    cached = _credential_field_cache.get(key)
+    if cached is None:
+        found: set[str] = set()
+        _collect_annotated_credential_fields(spec, found)
+        cached = frozenset(found) - frozenset(_PASSWORD_ALTERNATIVES)
+        _credential_field_cache[key] = cached
+    return cached
+
+
+def _collect_missing_secrets(
+    obj: Any, out: list[str], credential_fields: frozenset[str]
+) -> None:
+    """Recursively gather secret field names that must be captured out-of-band.
 
     Walks the actual request body (not the schema): DCT create bodies are often
     discriminated unions the spec flattener cannot enumerate (e.g.
     POST /environments), yet the nested ``host_parameters`` carries
-    username/password. In every object container, an identity field whose paired
-    secret is absent from that same container marks the secret as needed —
-    unless a mutually-exclusive credential alternative is already supplied.
+    username/password. Two sources feed the list:
+
+    1. Any field the spec annotates as a credential (``credential_fields``) that
+       appears in the body — the model must never supply it inline, so we flag
+       it whether present (strip + recapture) or paired-and-absent.
+    2. Identity pairing — an identity field (``username``) whose paired secret
+       (``password``) is absent from the same container, unless a
+       mutually-exclusive credential alternative (``ssh_key``) is supplied.
     """
     if isinstance(obj, dict):
         for value in obj.values():
-            _collect_missing_secrets(value, out)
+            _collect_missing_secrets(value, out, credential_fields)
+        for key in obj:
+            if key in credential_fields and key not in out:
+                out.append(key)
         for key in obj:
             secret = _secret_for_identity(key)
             if not secret or secret in obj or secret in out:
@@ -769,18 +825,20 @@ def _collect_missing_secrets(obj: Any, out: list[str]) -> None:
             out.append(secret)
     elif isinstance(obj, list):
         for item in obj:
-            _collect_missing_secrets(item, out)
+            _collect_missing_secrets(item, out, credential_fields)
 
 
-def _missing_sensitive_fields(body: dict[str, Any] | None) -> list[str]:
-    """Secret-shaped fields the body needs but omits, found by identity pairing.
+def _missing_sensitive_fields(
+    body: dict[str, Any] | None, credential_fields: frozenset[str] = frozenset()
+) -> list[str]:
+    """Secret-bearing fields the body must not carry inline, in first-seen order.
 
     Value-based (not schema-based) so nested and discriminated-union bodies are
-    handled uniformly. Returns the distinct leaf secret names in first-seen
-    order; the host captures them out-of-band and re-calls with them applied.
+    handled uniformly. Combines spec-annotated credential fields with identity
+    pairing; the host captures each out-of-band and re-calls with it applied.
     """
     missing: list[str] = []
-    _collect_missing_secrets(body or {}, missing)
+    _collect_missing_secrets(body or {}, missing, credential_fields)
     return missing
 
 
