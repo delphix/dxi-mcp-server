@@ -11,12 +11,9 @@ Toolset Configuration:
 """
 
 import asyncio
-import logging
 import signal
 import sys
 from contextlib import asynccontextmanager
-
-import uvicorn
 
 from dct_mcp_server.config import (
     get_dct_config,
@@ -26,7 +23,6 @@ from dct_mcp_server.config import (
     validate_all_configs,
 )
 from dct_mcp_server.core import end_session, start_session
-from dct_mcp_server.core.auth import ClientIDMiddleware
 from dct_mcp_server.core.client_registry import ClientRegistry
 from dct_mcp_server.core.exceptions import MCPError
 from dct_mcp_server.core.logging import get_logger, setup_logging
@@ -147,7 +143,6 @@ async def async_main():
     try:
         # Load config early — require_key=False so embedded mode works without DCT_API_KEY
         config = get_dct_config(require_key=False)
-        transport = config.get("transport", "stdio")
         auth_mode = config.get("auth_mode", "standalone")
 
         # In standalone mode, API key is still required
@@ -226,6 +221,18 @@ async def async_main():
                 "Embedded auth mode: ClientRegistry initialized (per-request client resolution)"
             )
             register_all_tools(app, client_registry)
+            # The old HTTP ClientIDMiddleware lazily created the per-caller
+            # telemetry session on the first request. Under stdio there is one
+            # process per caller, so create that session once here at startup.
+            if config.get("is_local_telemetry_enabled") and config.get("client_id"):
+                try:
+                    from dct_mcp_server.core.session import (
+                        get_or_create_caller_session,
+                    )
+
+                    get_or_create_caller_session(config["client_id"])
+                except Exception:
+                    pass
         else:
             # Standalone mode: single-user API key from env (existing behavior)
             dct_client = DCTAPIClient()
@@ -236,44 +243,17 @@ async def async_main():
 
         logger.info("All available tools have been registered.")
 
-        # Run the server
-        if transport == "http":
-            # HTTP transport with Starlette ASGI middleware
-            if not config.get("require_tls", True):
-                logger.warning(
-                    "DCT_REQUIRE_TLS is false — server is running over plain HTTP. "
-                    "Do NOT use this in production; all requests will be unencrypted."
-                )
-            http_host = config.get("http_host", "127.0.0.1")
-            http_port = config.get("http_port", 8765)
-            logger.info(
-                f"Starting MCP server with HTTP transport on {http_host}:{http_port}..."
-            )
-            # Get the Starlette ASGI app from FastMCP and wrap with middleware
-            starlette_app = app.streamable_http_app()
-            wrapped_app = ClientIDMiddleware(starlette_app)
-            uv_config = uvicorn.Config(
-                wrapped_app,
-                host=http_host,
-                port=http_port,
-                log_level="warning",
-            )
-            uv_server = uvicorn.Server(uv_config)
-            try:
-                await uv_server.serve()
-            except asyncio.CancelledError:
-                uv_server.should_exit = True
-                logger.info("HTTP server shutdown initiated.")
-        else:
-            # Default: stdio transport (existing behavior)
-            logger.info("Starting MCP server with stdio transport...")
-            try:
-                await app.run_stdio_async()
-            except asyncio.CancelledError:
-                logger.info("Server tasks cancelled for shutdown.")
-            finally:
-                # Cleanup is now handled by the lifespan manager
-                pass
+        # Run the server over stdio. The embedded deployment spawns one
+        # server process per caller over a stdio pipe; there is no HTTP
+        # transport.
+        logger.info("Starting MCP server with stdio transport...")
+        try:
+            await app.run_stdio_async()
+        except asyncio.CancelledError:
+            logger.info("Server tasks cancelled for shutdown.")
+        finally:
+            # Cleanup is now handled by the lifespan manager
+            pass
 
     except MCPError as e:
         logger.error(f"A client or tool error occurred: {e}")

@@ -12,9 +12,10 @@ from dct_mcp_server.core.session import log_tool_call
 
 def _get_caller_id() -> Optional[str]:
     try:
-        from dct_mcp_server.core.auth import _CALLER_ID_VAR
-        return _CALLER_ID_VAR.get(None)
-    except ImportError:
+        from dct_mcp_server.config.config import get_dct_config
+
+        return get_dct_config(require_key=False).get("client_id")
+    except Exception:
         return None
 
 
@@ -36,7 +37,9 @@ def log_tool_execution(func):
             }
             caller_id = _get_caller_id()
             if caller_id:
-                tool_data["caller_id"] = caller_id  # deliberately masked: not the raw value for now
+                tool_data["caller_id"] = (
+                    caller_id  # deliberately masked: not the raw value for now
+                )
             logger.info(f"Executing tool: {tool_name}")
             try:
                 result = await func(*args, **kwargs)
@@ -63,7 +66,9 @@ def log_tool_execution(func):
         }
         caller_id = _get_caller_id()
         if caller_id:
-            tool_data["caller_id"] = caller_id  # deliberately masked: not the raw value for now
+            tool_data["caller_id"] = (
+                caller_id  # deliberately masked: not the raw value for now
+            )
         logger.info(f"Executing tool: {tool_name}")
         try:
             result = func(*args, **kwargs)

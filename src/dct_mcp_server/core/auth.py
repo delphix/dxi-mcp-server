@@ -1,14 +1,16 @@
 """
-Authentication and per-request identity resolution for the DCT MCP Server.
+Authentication and per-process identity resolution for the DCT MCP Server.
+
+The server runs over stdio only. A stdio pipe is 1:1 and carries no request
+headers, so an embedded host spawns one server process per caller and supplies
+the caller's DCT account id in the child process environment as
+``DCT_CLIENT_ID``. Identity is therefore fixed for the life of the process.
 
 Provides:
-- _CALLER_ID_VAR: ContextVar that holds the X-CLIENT-ID value for the current request.
 - AuthContext: dataclass returned by resolve_auth() describing the caller's identity.
-- ClientIDMiddleware: raw ASGI middleware that extracts and validates X-CLIENT-ID.
 - resolve_auth(): returns an AuthContext appropriate for the configured auth_mode.
 """
 
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Optional
 
@@ -16,12 +18,6 @@ from dct_mcp_server.core.exceptions import AuthError
 from dct_mcp_server.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-# ---------------------------------------------------------------------------
-# ContextVar — holds the caller ID for the lifetime of each HTTP request
-# ---------------------------------------------------------------------------
-
-_CALLER_ID_VAR: ContextVar[Optional[str]] = ContextVar("_caller_id", default=None)
 
 
 # ---------------------------------------------------------------------------
@@ -49,93 +45,19 @@ class AuthContext:
 
 
 # ---------------------------------------------------------------------------
-# ClientIDMiddleware — raw ASGI middleware (no Starlette dependency)
-# ---------------------------------------------------------------------------
-
-
-class ClientIDMiddleware:
-    """ASGI middleware that extracts and validates the X-CLIENT-ID request header.
-
-    Non-HTTP scopes (e.g. lifespan, websocket) are passed through unchanged.
-    For HTTP requests the middleware:
-      1. Reads the ``x-client-id`` header.
-      2. Raises :class:`AuthError` if the header is absent or blank.
-      3. Stores the value in :data:`_CALLER_ID_VAR` for the duration of the
-         request, then resets it in a ``finally`` block.
-    """
-
-    def __init__(self, app) -> None:
-        self.app = app
-
-    async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        # headers is List[Tuple[bytes, bytes]] with lower-cased header names
-        caller_id: Optional[str] = None
-        for name, value in scope.get("headers", []):
-            if name == b"x-client-id":
-                decoded = value.decode("utf-8").strip()
-                if decoded:
-                    caller_id = decoded
-                break
-
-        if not caller_id:
-            logger.debug("Request rejected: X-CLIENT-ID header missing or empty")
-            await send({
-                "type": "http.response.start",
-                "status": 401,
-                "headers": [(b"content-type", b"application/json")],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b'{"error": "X-CLIENT-ID header is missing or empty"}',
-                "more_body": False,
-            })
-            return
-
-        logger.debug("Request received for caller %s", _mask(caller_id))
-
-        token = _CALLER_ID_VAR.set(caller_id)
-        # Lazily create the per-caller telemetry session when telemetry is enabled.
-        # This ensures log_tool_call() finds a session logger for this caller.
-        try:
-            from dct_mcp_server.config.config import get_dct_config  # noqa: PLC0415
-            _cfg = get_dct_config(require_key=False)
-            if _cfg.get("is_local_telemetry_enabled"):
-                from dct_mcp_server.core.session import get_or_create_caller_session
-                get_or_create_caller_session(caller_id)
-        except Exception:
-            pass  # Non-fatal — session creation failure must not block the request
-        try:
-            await self.app(scope, receive, send)
-        finally:
-            _CALLER_ID_VAR.reset(token)
-
-
-# ---------------------------------------------------------------------------
 # resolve_auth
 # ---------------------------------------------------------------------------
 
 
 def resolve_auth() -> AuthContext:
-    """Return an :class:`AuthContext` for the current request or process.
+    """Return an :class:`AuthContext` for the current process.
 
-    In ``embedded`` auth mode the caller identity comes from one of two places,
-    depending on transport:
-
-    * **HTTP** — the ``X-CLIENT-ID`` header of the current request, stored in
-      :data:`_CALLER_ID_VAR` by :class:`ClientIDMiddleware`. One process serves
-      many callers, so identity is resolved per request.
-    * **stdio** — the ``DCT_CLIENT_ID`` environment variable, supplied by the
-      host when it spawned this process. A stdio pipe is 1:1 and carries no
-      headers, so the host runs one process per caller and the identity is
-      fixed for the life of the process.
-
-    The request-scoped value wins when both are present, so an HTTP deployment
-    is unaffected by a stray environment variable. A missing identity in either
-    case raises :class:`AuthError`.
+    In ``embedded`` auth mode the caller identity comes from the
+    ``DCT_CLIENT_ID`` environment variable, supplied by the host when it
+    spawned this process. The server runs over stdio, whose pipe is 1:1 and
+    carries no headers, so the host runs one process per caller and the
+    identity is fixed for the life of the process. A missing identity raises
+    :class:`AuthError`.
 
     In ``standalone`` mode (the default) the identity is fixed as
     ``"standalone"`` and the API key is read from config.
@@ -149,14 +71,13 @@ def resolve_auth() -> AuthContext:
     auth_mode: str = config.get("auth_mode", "standalone")
 
     if auth_mode == "embedded":
-        # Per-request header (HTTP) takes precedence over the per-process
-        # environment value (stdio); exactly one of them is set in practice.
-        caller_id = _CALLER_ID_VAR.get(None) or config.get("client_id")
+        # Identity is the per-process value the host set at spawn time.
+        caller_id = config.get("client_id")
         if not caller_id:
             raise AuthError(
                 "No caller identity in embedded auth mode. Supply the "
-                "X-CLIENT-ID header (HTTP) or the DCT_CLIENT_ID environment "
-                "variable (stdio)."
+                "DCT_CLIENT_ID environment variable when spawning the "
+                "server process."
             )
         logger.debug("Resolved embedded auth for caller %s", _mask(caller_id))
         return AuthContext(account_id=caller_id, api_key=None, auth_mode="embedded")

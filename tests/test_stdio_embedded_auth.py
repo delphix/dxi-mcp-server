@@ -28,7 +28,6 @@ from dct_mcp_server.core.exceptions import AuthError
 
 EMBEDDED_STDIO = {
     "DCT_AUTH_MODE": "embedded",
-    "DCT_TRANSPORT": "stdio",
     "DCT_TOOLSET": "dynamic",
 }
 
@@ -69,8 +68,7 @@ def test_missing_identity_raises(env):
     env(DCT_CLIENT_ID=None)
     with pytest.raises(AuthError) as exc:
         resolve_auth()
-    # The message must name both mechanisms so the failure is self-diagnosing.
-    assert "X-CLIENT-ID" in str(exc.value)
+    # The message must name the env var so the failure is self-diagnosing.
     assert "DCT_CLIENT_ID" in str(exc.value)
 
 
@@ -204,9 +202,7 @@ def test_stdio_spawn_without_identity_fails(tmp_path):
 
     cache = _seed_spec(tmp_path)
     child_env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("DCT_API_KEY", "DCT_CLIENT_ID")
+        k: v for k, v in os.environ.items() if k not in ("DCT_API_KEY", "DCT_CLIENT_ID")
     }
     child_env.update(
         {
