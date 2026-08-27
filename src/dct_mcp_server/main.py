@@ -172,6 +172,38 @@ async def async_main():
         except Exception as e:
             logger.warning(f"Could not determine toolset configuration: {e}")
 
+        # Create the DCT client (standalone) or per-caller registry (embedded)
+        # BEFORE tool generation, so a bad configuration — e.g. missing or
+        # invalid credentials — surfaces before any network spec download.
+        from .tools import register_all_tools
+
+        global dct_client, client_registry
+
+        if auth_mode == "embedded":
+            # Embedded mode: per-request client registry; no global singleton
+            client_registry = ClientRegistry()
+            logger.info(
+                "Embedded auth mode: ClientRegistry initialized (per-request client resolution)"
+            )
+            # The old HTTP ClientIDMiddleware lazily created the per-caller
+            # telemetry session on the first request. Under stdio there is one
+            # process per caller, so create that session once here at startup.
+            if config.get("is_local_telemetry_enabled") and config.get("client_id"):
+                try:
+                    from dct_mcp_server.core.session import (
+                        get_or_create_caller_session,
+                    )
+
+                    get_or_create_caller_session(config["client_id"])
+                except Exception:
+                    pass
+        else:
+            # Standalone mode: single-user API key from env (existing behavior)
+            dct_client = DCTAPIClient()
+            logger.info(
+                f"DCT MCP Server initialized with base URL: {dct_client.base_url}"
+            )
+
         # Generate fresh tools from DCT API (non-blocking — runs in thread pool).
         # In embedded mode we use the bundled spec (no API key needed).
         # In standalone mode the existing persona-toolset logic applies.
@@ -209,37 +241,10 @@ async def async_main():
                         f"Tool generation failed, will use pre-built tools: {e}"
                     )
 
-        # Dynamically register all tools
-        from .tools import register_all_tools
-
-        global dct_client, client_registry
-
-        if auth_mode == "embedded":
-            # Embedded mode: per-request client registry; no global singleton
-            client_registry = ClientRegistry()
-            logger.info(
-                "Embedded auth mode: ClientRegistry initialized (per-request client resolution)"
-            )
-            register_all_tools(app, client_registry)
-            # The old HTTP ClientIDMiddleware lazily created the per-caller
-            # telemetry session on the first request. Under stdio there is one
-            # process per caller, so create that session once here at startup.
-            if config.get("is_local_telemetry_enabled") and config.get("client_id"):
-                try:
-                    from dct_mcp_server.core.session import (
-                        get_or_create_caller_session,
-                    )
-
-                    get_or_create_caller_session(config["client_id"])
-                except Exception:
-                    pass
-        else:
-            # Standalone mode: single-user API key from env (existing behavior)
-            dct_client = DCTAPIClient()
-            logger.info(
-                f"DCT MCP Server initialized with base URL: {dct_client.base_url}"
-            )
-            register_all_tools(app, dct_client)
+        # Register all tools with the client/registry created above.
+        register_all_tools(
+            app, client_registry if auth_mode == "embedded" else dct_client
+        )
 
         logger.info("All available tools have been registered.")
 
