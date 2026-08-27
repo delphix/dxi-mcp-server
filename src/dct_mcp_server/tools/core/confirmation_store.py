@@ -197,6 +197,90 @@ class GrantStore:
         return entry.remaining
 
 
+@dataclass
+class StandingEntry:
+    remaining: int
+    expiry: float  # wall-clock time.time() value
+
+
+class StandingApprovalStore:
+    """Auto-issued, count-bounded standing approvals for Tier-2 impactful ops.
+
+    Unlike :class:`GrantStore` (which enumerates explicit target bodies declared
+    up front via ``batch_intent``), this store is populated *automatically* when a
+    caller confirms an impactful, non-floor operation. That single confirmation
+    authorizes the next N executions of the SAME operation-type — keyed by
+    ``(caller_identity, method, path_template)`` — without re-prompting. When the
+    budget is exhausted or the TTL elapses, the next call re-prompts and a fresh
+    confirmation re-arms it.
+
+    Floor/manual operations (deletes) are never armed here — they confirm every
+    time. See tools/core/dynamic.py for the arm/consume call sites.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._grants: dict[tuple[str, str, str], StandingEntry] = {}
+
+    def grant(
+        self,
+        identity: str,
+        method: str,
+        path_template: str,
+        count: int,
+        ttl_seconds: int,
+    ) -> None:
+        """Arm a standing approval of *count* further executions for this op-type."""
+        key = (identity, method, path_template)
+        with self._lock:
+            self._grants[key] = StandingEntry(
+                remaining=max(0, count), expiry=time.time() + ttl_seconds
+            )
+            logger.debug(
+                "StandingApprovalStore: armed %s remaining=%d ttl=%s",
+                key,
+                max(0, count),
+                ttl_seconds,
+            )
+
+    def consume(self, identity: str, method: str, path_template: str) -> bool:
+        """Consume one execution from an active standing approval.
+
+        Returns True if this call is covered (budget was available and has been
+        decremented); False if there is no active approval, it has expired, or its
+        budget is exhausted (in which case the entry is dropped so the caller
+        re-prompts).
+        """
+        key = (identity, method, path_template)
+        with self._lock:
+            entry = self._grants.get(key)
+            if entry is None:
+                return False
+            if time.time() >= entry.expiry or entry.remaining <= 0:
+                del self._grants[key]
+                return False
+            entry.remaining -= 1
+            if entry.remaining <= 0:
+                # Budget spent by this call; drop so the next call re-prompts.
+                del self._grants[key]
+            return True
+
+    def get_remaining(
+        self, identity: str, method: str, path_template: str
+    ) -> int | None:
+        """Return remaining budget for this op-type, or None if none/expired."""
+        key = (identity, method, path_template)
+        with self._lock:
+            entry = self._grants.get(key)
+            if entry is None:
+                return None
+            if time.time() >= entry.expiry:
+                del self._grants[key]
+                return None
+            return entry.remaining
+
+
 # Module-level singletons — reset on server restart.
 _consumed_token_store = ConsumedTokenStore()
 _grant_store = GrantStore()
+_standing_store = StandingApprovalStore()

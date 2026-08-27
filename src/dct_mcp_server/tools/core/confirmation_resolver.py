@@ -172,6 +172,13 @@ def check_confirmation_with_fallback(
     level = base.get("confirmation_level")
     requires_confirmation = base["requires_confirmation"]
 
+    # Operation-type template (e.g. "/vdbs/{vdbId}/refresh_by_snapshot"). Velocity
+    # counters (FR-006) and Tier-2 standing grants are keyed on this template — not
+    # the resolved resource path — so a burst across many resources of the SAME
+    # operation is correctly correlated. Falls back to the resolved path.
+    raw = get_confirmation_for_operation(method, path)
+    path_template = raw.get("path_pattern", path)
+
     # Step 2: Default batch fields
     batch_triggered = False
     velocity_count = None
@@ -180,12 +187,13 @@ def check_confirmation_with_fallback(
 
     # Step 3: Handle batch_check level (FR-006)
     if level == "batch_check":
-        raw = get_confirmation_for_operation(method, path)
         N = raw.get("threshold_days") or 5
         T = raw.get("threshold_T") or 3600
         effective_identity = identity or "anonymous"
 
-        triggered, count = increment_and_check(effective_identity, method, path, N, T)
+        triggered, count = increment_and_check(
+            effective_identity, method, path_template, N, T
+        )
         batch_triggered = triggered
         velocity_count = count
         velocity_N = N
@@ -204,6 +212,7 @@ def check_confirmation_with_fallback(
         "velocity_count": velocity_count,
         "velocity_N": velocity_N,
         "velocity_T": velocity_T,
+        "path_template": path_template,
     }
 
 

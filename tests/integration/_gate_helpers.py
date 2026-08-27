@@ -33,6 +33,14 @@ GATE_SPEC = {
                 "tags": ["VDBs"],
             },
         },
+        # elevated rule — Tier-2 impactful op (confirm-once → run N).
+        "/vdbs/{vdbId}/refresh_by_snapshot": {
+            "post": {
+                "operationId": "refreshVdbBySnapshot",
+                "summary": "Refresh VDB by snapshot",
+                "tags": ["VDBs"],
+            },
+        },
     },
 }
 

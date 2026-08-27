@@ -81,6 +81,25 @@ async def test_threshold_hard_blocks_non_elicitation_client(spec_loaded, monkeyp
     assert "confirmation_token" not in result
 
 
+async def test_bulk_across_different_resources_trips(spec_loaded, monkeypatch):
+    """A burst across DIFFERENT VDBs of the same op trips — keyed by op-template.
+
+    Regression guard: the velocity counter keys on the path TEMPLATE
+    (/vdbs/{vdbId}/start), not the resolved resource, so 'start every VDB' is
+    correctly correlated as one bulk operation.
+    """
+    _set_identity(monkeypatch, "identity-A")
+    execute, _ = make_execute()
+
+    result = None
+    for i in range(1, THRESHOLD_N + 1):  # 10 DISTINCT vdbs
+        result = await execute(path=f"/vdbs/vdb-{i}/start", method="POST", body={})
+
+    assert result["status"] == "error"
+    assert result["code"] == "BULK_OPERATION_BLOCKED"
+    assert result["count"] == THRESHOLD_N
+
+
 async def test_counter_is_isolated_per_identity(spec_loaded, monkeypatch):
     """S34/S35: identity B's calls do not count toward identity A's threshold."""
     execute, client = make_execute()

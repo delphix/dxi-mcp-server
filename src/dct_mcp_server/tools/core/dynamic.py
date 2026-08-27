@@ -52,7 +52,7 @@ from dct_mcp_server.tools.core.confirmation_resolver import (
     check_confirmation,
     check_confirmation_with_fallback,
 )
-from dct_mcp_server.tools.core.confirmation_store import _grant_store
+from dct_mcp_server.tools.core.confirmation_store import _grant_store, _standing_store
 from dct_mcp_server.tools.core.confirmation_token import (
     canonical_json,
     issue_token,
@@ -465,6 +465,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # dispatch step can safely annotate grant-covered executions (FR-007).
         _grant_authorized = False
         _grant_remaining: int | None = None
+        _grant_kind: str | None = None  # "batch" (batch_intent) or "standing" (Tier-2)
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
             # Determine caller identity (FR-006)
             identity = get_process_identity()
@@ -475,10 +476,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 _token_ttl = _conf.get("confirmation_token_ttl", 3600)
                 _enforcement = _conf.get("confirmation_enforcement", "advisory")
                 _grant_ttl = _conf.get("grant_ttl", 900)
+                _batch_size = _conf.get("confirmation_batch_size", 10)
             except Exception:
                 _token_ttl = 3600
                 _enforcement = "advisory"
                 _grant_ttl = 900
+                _batch_size = 10
 
             # FR-004: Handle batch_intent (declare a batch grant)
             if batch_intent is not None:
@@ -587,6 +590,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                     # Proceed to execution — grant is valid; skip rest of gate
                     _grant_authorized = True
                     _grant_remaining = remaining
+                    _grant_kind = "batch"
                 elif consume_result in ("exhausted", "expired", "grant_missing"):
                     emit_gate_event(
                         "expired",
@@ -651,10 +655,39 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 conf = check_confirmation_with_fallback(
                     method_upper, resolved_path, body, identity
                 )
+                conf_level = conf.get("confirmation_level")
+                # Operation-type template (e.g. "/vdbs/{vdbId}/refresh_by_snapshot")
+                # so a standing grant covers the SAME op across different resources.
+                conf_template = conf.get("path_template") or resolved_path
 
-                if conf["requires_confirmation"]:
-                    conf_level = conf.get("confirmation_level")
+                # Tier-2 auto standing-grant (confirm-once → run N). An impactful
+                # but non-floor op (standard/elevated level — provision, refresh,
+                # rollback, snapshot, dSource-link) that was confirmed once earlier
+                # authorizes the next N executions of the SAME op-type without
+                # re-prompting. Deletes/manual are floor ops and are NEVER covered —
+                # they confirm every time. Velocity (batch_check) is not grantable.
+                _tier2_grantable = (
+                    conf["requires_confirmation"]
+                    and conf_level in ("standard", "elevated")
+                    and not is_floor_operation(method_upper, resolved_path)
+                )
+                if _tier2_grantable and _standing_store.consume(
+                    identity, method_upper, conf_template
+                ):
+                    emit_gate_event(
+                        "grant_covered",
+                        identity,
+                        method_upper,
+                        resolved_path,
+                        conf_level,
+                    )
+                    _grant_authorized = True
+                    _grant_remaining = _standing_store.get_remaining(
+                        identity, method_upper, conf_template
+                    )
+                    _grant_kind = "standing"
 
+                if conf["requires_confirmation"] and not _grant_authorized:
                     # Resolve client elicitation capability once — it decides
                     # whether an always-enforced trigger (a velocity/bulk hit)
                     # can be confirmed inline or must be refused outright.
@@ -979,6 +1012,18 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                             conf_level or "standard",
                         )
 
+                    # Tier-2: this confirmation authorizes the next N executions
+                    # of the same op-type. This call is #1, so arm N-1 more; the
+                    # (N+1)th call finds an empty budget and re-prompts.
+                    if _tier2_grantable:
+                        _standing_store.grant(
+                            identity,
+                            method_upper,
+                            conf_template,
+                            _batch_size - 1,
+                            _grant_ttl,
+                        )
+
         # ---------------------------------------------------------------- #
         # Step 5 — Annotate operation type
         # ---------------------------------------------------------------- #
@@ -1018,10 +1063,13 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 "operation_type": operation_type,
                 "response": response,
             }
-            # FR-007: annotate executions authorized by an active batch grant so
-            # the caller can see the grant is being consumed and how much remains.
+            # Annotate executions authorized by an active grant so the caller can
+            # see the grant being consumed and how much remains. "batch" grants
+            # (FR-007) carry the explicit grant_token; "standing" grants (Tier-2,
+            # confirm-once → run N) are auto-issued and keyed by op-type.
             if _grant_authorized:
                 result["authorization"] = {
+                    "kind": _grant_kind,
                     "grant_token": grant_token,
                     "remaining": _grant_remaining,
                 }

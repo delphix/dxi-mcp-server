@@ -401,6 +401,10 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
                 "conditional": conditional,
                 "threshold_days": threshold_N,
                 "threshold_T": threshold_T,
+                # The matched rule's path template (e.g. "/vdbs/{vdbId}/refresh_by_snapshot").
+                # Used to key velocity counters and standing grants per operation-type
+                # rather than per resolved resource.
+                "path_pattern": rule["path_pattern"],
             }
 
     # Safety net: a destructive delete must never run unconfirmed just because
@@ -416,6 +420,7 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
             "conditional": False,
             "threshold_days": None,
             "threshold_T": None,
+            "path_pattern": path,
         }
 
     # Keyword fallback — only when DCT_CONFIRMATION_FALLBACK=keyword and path is not a read exclusion
@@ -429,6 +434,8 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
 
             dynamic_result = get_confirmation_for_operation_dynamic(method, path)
             if dynamic_result.get("level", "none") != "none":
+                # Keyword fallback has no rule template; key on the resolved path.
+                dynamic_result.setdefault("path_pattern", path)
                 return dynamic_result
         except ImportError:
             pass
@@ -440,6 +447,7 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
         "conditional": False,
         "threshold_days": None,
         "threshold_T": None,
+        "path_pattern": path,
     }
 
 
