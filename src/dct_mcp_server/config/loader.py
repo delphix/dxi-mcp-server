@@ -455,7 +455,10 @@ def requires_confirmation(method: str, path: str) -> bool:
         True if confirmation is required
     """
     confirmation = get_confirmation_for_operation(method, path)
-    return confirmation["level"] != "none"
+    # batch_check is a dynamic-mode velocity level evaluated by the dynamic
+    # execute gate against a live per-identity counter; on its own (static path)
+    # it does not require per-call confirmation.
+    return confirmation["level"] not in ("none", "batch_check")
 
 
 # ============================================================================

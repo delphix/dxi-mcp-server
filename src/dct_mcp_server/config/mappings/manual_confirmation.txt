@@ -127,3 +127,27 @@ POST|/bookmarks|standard|Creating a new bookmark. Confirm?
 POST|/vdb-groups|standard|Creating a new VDB group. Confirm?
 POST|/database-templates|standard|Creating a new database template. Confirm?
 POST|/hook-templates|standard|Creating a new hook template. Confirm?
+
+# ============================================
+# RULE 11: Bulk-Velocity Detection (BATCH_CHECK)
+# Format: METHOD|path|batch_check:N:T|message
+#   N = call-count threshold, T = sliding-window in seconds, keyed per caller
+#   identity (X-CLIENT-ID header, else per-process UUID).
+#
+# Below the threshold the call proceeds transparently (no per-call friction);
+# at or above N calls within T seconds the gate fires. A velocity trigger is
+# "always-enforced" (FR-006 / FR-007): an elicitation-capable client is prompted
+# for a genuine human confirmation, and a client WITHOUT elicitation capability
+# is refused outright (BULK_OPERATION_BLOCKED) rather than handed an advisory
+# token — a runaway automation loop would simply echo an advisory token back and
+# keep going.
+#
+# Applied to otherwise-ungated lifecycle mutations (start/enable) where a rapid
+# burst by one caller signals an automation loop rather than deliberate intent.
+# NOT applied to operations that already carry a per-call rule above (delete =
+# floor/manual, refresh/provision = elevated) so those keep their stronger gate.
+# ============================================
+POST|/vdbs/{vdbId}/start|batch_check:10:60|A single caller has started {count} VDBs within 60 seconds. Confirm this appears to be a bulk operation before continuing.
+POST|/vdbs/{vdbId}/enable|batch_check:10:60|A single caller has enabled {count} VDBs within 60 seconds. Confirm this appears to be a bulk operation before continuing.
+POST|/dsources/{dsourceId}/enable|batch_check:10:60|A single caller has enabled {count} dSources within 60 seconds. Confirm this appears to be a bulk operation before continuing.
+POST|/environments/{environmentId}/enable|batch_check:10:60|A single caller has enabled {count} environments within 60 seconds. Confirm this appears to be a bulk operation before continuing.

@@ -461,6 +461,10 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # ---------------------------------------------------------------- #
         # Step 4 — Confirmation gate (FR-001 through FR-008)
         # ---------------------------------------------------------------- #
+        # Grant-authorization tracking — initialised for every method so the
+        # dispatch step can safely annotate grant-covered executions (FR-007).
+        _grant_authorized = False
+        _grant_remaining: int | None = None
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
             # Determine caller identity (FR-006)
             identity = get_process_identity()
@@ -582,6 +586,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                     )
                     # Proceed to execution — grant is valid; skip rest of gate
                     _grant_authorized = True
+                    _grant_remaining = remaining
                 elif consume_result in ("exhausted", "expired", "grant_missing"):
                     emit_gate_event(
                         "expired",
@@ -650,7 +655,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 if conf["requires_confirmation"]:
                     conf_level = conf.get("confirmation_level")
 
-                    # FR-006: Velocity detection (batch_check level)
+                    # Resolve client elicitation capability once — it decides
+                    # whether an always-enforced trigger (a velocity/bulk hit)
+                    # can be confirmed inline or must be refused outright.
+                    has_elicitation = _check_elicitation_capability(ctx)
+
+                    # FR-006/FR-007: Velocity (bulk) detection — always-enforced.
                     if conf.get("batch_triggered"):
                         emit_gate_event(
                             "batch_triggered",
@@ -664,25 +674,40 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                                 "count_at_trigger": conf.get("velocity_count"),
                             },
                         )
-                        new_token = issue_token(
-                            method_upper, resolved_path, body, _token_ttl
-                        )
-                        return {
-                            "status": "batch_confirmation_required",
-                            "message": (
-                                conf.get("message_template")
-                                or f"Velocity threshold exceeded for {method_upper} {resolved_path}."
-                            ),
-                            "confirmation_token": new_token,
-                            "required_fields": conf.get(
-                                "required_fields", ["confirmation_token"]
-                            ),
-                            "count": conf.get("velocity_count"),
-                            "ttl_seconds": _token_ttl,
-                        }
-
-                    # FR-005: Elicitation enforcement
-                    has_elicitation = _check_elicitation_capability(ctx)
+                        # (b) Targeted hard-block. An advisory confirmation token
+                        # is worthless against a runaway automation loop — the
+                        # loop would simply echo it back and keep going — so a
+                        # client WITHOUT elicitation capability is refused
+                        # outright regardless of DCT_CONFIRMATION_ENFORCEMENT.
+                        # An elicitation-capable client falls through to
+                        # Context.elicit() below for a genuine human decision.
+                        if not has_elicitation:
+                            emit_gate_event(
+                                "refused",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level or "batch_check",
+                            )
+                            return {
+                                "status": "error",
+                                "code": "BULK_OPERATION_BLOCKED",
+                                "message": (
+                                    (
+                                        conf.get("message_template")
+                                        or f"Velocity threshold exceeded for {method_upper} {resolved_path}."
+                                    )
+                                    + f" {conf.get('velocity_count')} call(s) within "
+                                    f"{conf.get('velocity_T')}s exceeded the limit of "
+                                    f"{conf.get('velocity_N')}. This bulk operation "
+                                    "requires human confirmation via an elicitation-capable "
+                                    "client and cannot be auto-approved with a token."
+                                ),
+                                "count": conf.get("velocity_count"),
+                                "threshold_N": conf.get("velocity_N"),
+                                "window_T": conf.get("velocity_T"),
+                            }
+                        # Elicitation-capable client: fall through to elicit().
 
                     # strict + no elicitation → refuse immediately (FR-005 AC-3)
                     if _enforcement == "strict" and not has_elicitation:
@@ -988,11 +1013,19 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 params=query_params or None,
                 json=body if body is not None else None,
             )
-            return {
+            result = {
                 "status": "success",
                 "operation_type": operation_type,
                 "response": response,
             }
+            # FR-007: annotate executions authorized by an active batch grant so
+            # the caller can see the grant is being consumed and how much remains.
+            if _grant_authorized:
+                result["authorization"] = {
+                    "grant_token": grant_token,
+                    "remaining": _grant_remaining,
+                }
+            return result
         except DCTClientError as exc:
             http_status = _extract_http_status(str(exc))
             return {

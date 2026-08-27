@@ -104,6 +104,19 @@ def check_confirmation(
                 "required_fields": build_required_fields("policy_impact_check"),
             }
 
+        if raw_level_str.startswith("batch_check:"):
+            # Velocity level (FR-006). The per-identity sliding-window decision
+            # is owned by check_confirmation_with_fallback(), which holds the
+            # counter. This stateless check cannot evaluate the window on its
+            # own, so it reports the level without requiring confirmation; the
+            # wrapper overrides requires_confirmation based on the live count.
+            return {
+                "requires_confirmation": False,
+                "confirmation_level": "batch_check",
+                "message_template": raw.get("message"),
+                "required_fields": build_required_fields("batch_check"),
+            }
+
         # Unknown conditional type — treat as requiring confirmation to be safe
         logger.warning("Unknown conditional confirmation level: %s", raw_level_str)
         return {
