@@ -3,7 +3,6 @@ DCT API Client module
 """
 
 import asyncio
-import base64
 import contextlib
 import importlib.metadata
 import os
@@ -33,9 +32,9 @@ class SecretGuard:
     """Prevents raw secrets from appearing in tool arguments."""
 
     # Pattern 1: DCT API key prefix
-    _APK_PATTERN = _re.compile(r'^apk\s+', _re.IGNORECASE)
+    _APK_PATTERN = _re.compile(r"^apk\s+", _re.IGNORECASE)
     # Pattern 2: base64-like token longer than 32 chars
-    _B64_PATTERN = _re.compile(r'^[A-Za-z0-9+/=]{33,}$')
+    _B64_PATTERN = _re.compile(r"^[A-Za-z0-9+/=]{33,}$")
 
     @staticmethod
     def check(kwargs: dict) -> None:
@@ -96,7 +95,9 @@ class DCTAPIClient:
             self._client = None
 
     @classmethod
-    def for_identity(cls, account_id: str, api_key: Optional[str] = None) -> "DCTAPIClient":
+    def for_identity(
+        cls, account_id: str, api_key: Optional[str] = None
+    ) -> "DCTAPIClient":
         """Create a DCTAPIClient instance for a specific embedded-mode identity.
 
         The account_id is used as the X-CLIENT-ID internal trust header value.
@@ -104,6 +105,7 @@ class DCTAPIClient:
         Never log the raw account_id.
         """
         from dct_mcp_server.config.config import get_dct_config
+
         config = get_dct_config(require_key=False)
         instance = cls.__new__(cls)
         instance.config = config
@@ -114,6 +116,7 @@ class DCTAPIClient:
         instance.max_retries = config["max_retries"]
         try:
             import importlib.metadata
+
             version = importlib.metadata.version("dct-mcp-server")
         except Exception:
             version = "2026.0.1.0-preview"

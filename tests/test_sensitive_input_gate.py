@@ -47,9 +47,12 @@ class TestMissingSensitiveFields:
         ) == ["password"]
 
     def test_password_already_present_needs_nothing(self):  # AI-generated
-        assert _missing_sensitive_fields(
-            {"host_parameters": {"username": "u", "password": "p"}}
-        ) == []
+        assert (
+            _missing_sensitive_fields(
+                {"host_parameters": {"username": "u", "password": "p"}}
+            )
+            == []
+        )
 
     def test_s3_access_key_needs_secret_key(self):  # AI-generated
         assert _missing_sensitive_fields({"access_key": "AKIA..."}) == ["secret_key"]
@@ -59,14 +62,18 @@ class TestMissingSensitiveFields:
 
     def test_ssh_key_reference_suppresses_password(self):  # AI-generated
         # ssh_key (a UUID reference) is mutually exclusive with password.
-        assert _missing_sensitive_fields(
-            {"username": "u", "connection_mode": "SFTP", "ssh_key": "uuid-123"}
-        ) == []
+        assert (
+            _missing_sensitive_fields(
+                {"username": "u", "connection_mode": "SFTP", "ssh_key": "uuid-123"}
+            )
+            == []
+        )
 
     def test_credential_path_id_suppresses_password(self):  # AI-generated
-        assert _missing_sensitive_fields(
-            {"username": "u", "credential_path_id": "cred-1"}
-        ) == []
+        assert (
+            _missing_sensitive_fields({"username": "u", "credential_path_id": "cred-1"})
+            == []
+        )
 
     def test_empty_body_needs_nothing(self):  # AI-generated
         assert _missing_sensitive_fields(None) == []

@@ -474,7 +474,9 @@ def generate_tools_from_openapi():
         # Find the bundled spec
         _bundled_candidates = [
             os.path.join(project_root, "docs", "api-external.yaml"),
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "docs", "api-external.yaml"),
+            os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "docs", "api-external.yaml"
+            ),
         ]
         _bundled_spec = None
         for _candidate in _bundled_candidates:
@@ -482,7 +484,9 @@ def generate_tools_from_openapi():
                 _bundled_spec = os.path.abspath(_candidate)
                 break
         if _bundled_spec:
-            logger.info("Using bundled spec (embedded mode or no API key): %s", _bundled_spec)
+            logger.info(
+                "Using bundled spec (embedded mode or no API key): %s", _bundled_spec
+            )
             api_spec = read_open_api_yaml(_bundled_spec)
         else:
             logger.warning("Bundled spec not found; attempting live download anyway")

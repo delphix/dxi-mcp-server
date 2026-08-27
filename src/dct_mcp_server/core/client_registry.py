@@ -5,12 +5,12 @@ Thread-safe LRU-bounded registry of DCTAPIClient instances keyed by identity has
 import hashlib
 import threading
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, List
 
 from dct_mcp_server.core.logging import get_logger
 
 if TYPE_CHECKING:
-    from dct_mcp_server.core.auth import AuthContext
+    from dct_mcp_server.dct_client.client import DCTAPIClient
 
 logger = get_logger(__name__)
 
@@ -20,7 +20,9 @@ class ClientRegistry:
 
     def __init__(self, max_size: int = 256) -> None:
         self._max_size = max_size
-        self._cache: OrderedDict = OrderedDict()  # key=identity_hash, value=DCTAPIClient
+        self._cache: OrderedDict = (
+            OrderedDict()
+        )  # key=identity_hash, value=DCTAPIClient
         self._lock = threading.Lock()
         self._evicted: List = []  # Clients evicted from LRU; closed in close_all()
 
@@ -39,6 +41,7 @@ class ClientRegistry:
                 return self._cache[key]
             # Create new client
             from dct_mcp_server.dct_client.client import DCTAPIClient
+
             client = DCTAPIClient.for_identity(auth_ctx.account_id, auth_ctx.api_key)
             self._cache[key] = client
             self._cache.move_to_end(key)
@@ -46,7 +49,9 @@ class ClientRegistry:
             if len(self._cache) > self._max_size:
                 _oldest_key, oldest_client = self._cache.popitem(last=False)
                 self._evicted.append(oldest_client)
-                logger.debug("ClientRegistry: evicted entry (LRU limit=%d)", self._max_size)
+                logger.debug(
+                    "ClientRegistry: evicted entry (LRU limit=%d)", self._max_size
+                )
             return client
 
     async def close_all(self) -> None:
