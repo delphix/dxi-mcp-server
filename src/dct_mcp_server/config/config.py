@@ -6,7 +6,7 @@ import os
 from typing import Any, Dict
 
 
-def get_dct_config() -> Dict[str, Any]:
+def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
     """Get DCT configuration from environment variables"""
     import tempfile
 
@@ -29,10 +29,15 @@ def get_dct_config() -> Dict[str, Any]:
         # Dynamic mode (DCT_TOOLSET=dynamic) spec cache settings
         "spec_cache_path": os.getenv("DCT_SPEC_CACHE_PATH", _default_spec_cache_path),
         "spec_max_age_hours": int(os.getenv("DCT_SPEC_MAX_AGE_HOURS", "24")),
+        "auth_mode": os.getenv("DCT_AUTH_MODE", "standalone").lower().strip(),
+        # Caller identity for embedded auth over stdio. A stdio pipe carries no
+        # request headers, so the host passes the caller's DCT account id in the
+        # child process environment at spawn — one process per caller.
+        "client_id": (os.getenv("DCT_CLIENT_ID") or "").strip() or None,
     }
 
     # Validate required configuration
-    if not config["api_key"]:
+    if not config["api_key"] and config["auth_mode"] != "embedded" and require_key:
         raise ValueError(
             "DCT_API_KEY environment variable is required. "
             "Please set it to your Delphix DCT API key."
@@ -44,6 +49,24 @@ def get_dct_config() -> Dict[str, Any]:
         raise ValueError(
             f"Invalid log level: {config['log_level']}. "
             f"Must be one of: {', '.join(valid_log_levels)}"
+        )
+
+    # Validate auth_mode
+    if config["auth_mode"] not in ("standalone", "embedded"):
+        raise ValueError(
+            f"Invalid DCT_AUTH_MODE: {config['auth_mode']}. "
+            "Must be one of: standalone, embedded"
+        )
+
+    # Embedded auth over stdio has no per-request channel to carry identity, so
+    # the caller id must be present in the environment at startup. Fail fast
+    # here rather than on the first tool call. Checked only when require_key is
+    # set (i.e. at startup); resolve_auth() raises AuthError at call time.
+    if require_key and config["auth_mode"] == "embedded" and not config["client_id"]:
+        raise ValueError(
+            "DCT_CLIENT_ID is required when DCT_AUTH_MODE=embedded. A stdio "
+            "pipe carries no request headers, so the caller's DCT account id "
+            "must be supplied in the environment when the process is spawned."
         )
 
     return config
@@ -80,6 +103,23 @@ def print_config_help():
     print("                   - platform_admin: System administration tools")
     print("                   - reporting_insights: Read-only reporting and analytics")
     print()
+    print("Auth optional variables:")
+    print(
+        "  DCT_AUTH_MODE    Authentication mode (default: standalone, options: standalone, embedded)"
+    )
+    print(
+        "                   In 'embedded' mode, DCT_API_KEY is not required (auth is handled externally)"
+    )
+    print(
+        "  DCT_CLIENT_ID    Caller's DCT account id. REQUIRED when DCT_AUTH_MODE=embedded."
+    )
+    print(
+        "                   The server runs over stdio, whose pipe carries no headers, so the"
+    )
+    print(
+        "                   host spawns one process per caller with the id in its environment."
+    )
+    print()
     print("Dynamic mode (DCT_TOOLSET=dynamic) optional variables:")
     print(
         "  DCT_SPEC_CACHE_PATH     Path to cache the downloaded OpenAPI spec "
@@ -95,4 +135,5 @@ def print_config_help():
     print("  export DCT_VERIFY_SSL=true")
     print("  export DCT_LOG_LEVEL=DEBUG")
     print("  export DCT_TOOLSET=self_service")
+    print("  export DCT_AUTH_MODE=standalone")
     print()

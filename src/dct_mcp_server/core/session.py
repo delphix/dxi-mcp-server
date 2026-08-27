@@ -132,6 +132,20 @@ class SessionManager:
             if session_id == self._current_session_id:
                 self._current_session_id = None
 
+    def get_or_create_caller_session(self, caller_id: str) -> logging.Logger:
+        """Get or create a per-caller telemetry session logger."""
+        with self._lock:
+            if caller_id in self._session_loggers:
+                return self._session_loggers[caller_id]
+            self._create_session_logger(caller_id)
+            return self._session_loggers[caller_id]
+
+    def end_caller_session(self, caller_id: str) -> None:
+        """End a specific caller's session and close its logger."""
+        with self._lock:
+            if caller_id in self._session_loggers:
+                self._end_session_internal(caller_id)
+
     def get_session_logger(
         self, session_id: Optional[str] = None
     ) -> Optional[logging.Logger]:
@@ -225,3 +239,13 @@ def log_tool_call(tool_data: Dict[str, Any], session_id: Optional[str] = None) -
 def get_current_session_id() -> Optional[str]:
     """Get current session ID"""
     return _session_manager.current_session_id
+
+
+def get_or_create_caller_session(caller_id: str) -> logging.Logger:
+    """Get or create a per-caller telemetry session logger."""
+    return _session_manager.get_or_create_caller_session(caller_id)
+
+
+def end_caller_session(caller_id: str) -> None:
+    """End a specific caller's session."""
+    _session_manager.end_caller_session(caller_id)

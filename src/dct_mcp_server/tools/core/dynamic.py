@@ -19,6 +19,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from dct_mcp_server.core.auth import resolve_auth
+from dct_mcp_server.core.client_registry import ClientRegistry
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
@@ -309,6 +311,36 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             return validation_error
 
         # ---------------------------------------------------------------- #
+        # Step 3.5 — Sensitive-input gate
+        # ---------------------------------------------------------------- #
+        # Secret-shaped body fields (password/token/…) must never be supplied
+        # by the model in `body`. When a mutating operation needs such a field
+        # and it is absent, pause so the host can capture it out-of-band (masked
+        # input or a stored-credential alias) and re-call with it applied. Runs
+        # before the confirmation gate: capture the secret first, then confirm.
+        if method_upper in ("POST", "PUT", "PATCH"):
+            missing_secrets = _missing_sensitive_fields(
+                body, _annotated_credential_fields(spec)
+            )
+            if missing_secrets:
+                return {
+                    "status": "sensitive_input_required",
+                    "required_sensitive_fields": missing_secrets,
+                    "message": (
+                        "This operation needs sensitive input: "
+                        + ", ".join(missing_secrets)
+                    ),
+                    "operation": {"path": resolved_path, "method": method_upper},
+                    "instructions": (
+                        "STOP. Do NOT ask for these secret value(s) in chat and do "
+                        "NOT put them in body. The host securely captures them from "
+                        "the user (masked input or a stored-credential alias) and "
+                        "re-calls execute with them applied automatically. Simply "
+                        "wait for the next turn."
+                    ),
+                }
+
+        # ---------------------------------------------------------------- #
         # Step 4 — Confirmation gate
         # ---------------------------------------------------------------- #
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
@@ -359,7 +391,15 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # Step 7 — Dispatch
         # ---------------------------------------------------------------- #
         try:
-            response = await dct_client.make_request(
+            # In embedded mode register_all_tools passes a ClientRegistry; resolve
+            # the per-caller DCTAPIClient (keyed by X-CLIENT-ID) before dispatching.
+            # In standalone mode dct_client is already a DCTAPIClient.
+            client = (
+                dct_client.get_client(resolve_auth())
+                if isinstance(dct_client, ClientRegistry)
+                else dct_client
+            )
+            response = await client.make_request(
                 method=method_upper,
                 endpoint=resolved_path,
                 params=query_params or None,
@@ -677,6 +717,129 @@ def _validate_required_params(
             "message": f"Required fields missing: {missing}",
         }
     return None
+
+
+def _secret_for_identity(identity_name: str) -> str | None:
+    """Paired secret field name for an identity field, or None.
+
+    A secret rarely stands alone: it accompanies a non-secret identity.
+    ``username`` -> ``password`` (and ``masking_username`` ->
+    ``masking_password``, ``source_username`` -> ``source_password``);
+    ``access_key`` -> ``secret_key`` for S3-style cloud storage, where the
+    access key id is an identifier and only the secret key is sensitive.
+    Matches only the identity suffixes below, so unrelated fields
+    (``user_count``, ``hostname``, ``ssh_key`` — itself a UUID reference, not
+    a secret) never pair.
+    """
+    low = identity_name.lower()
+    if low.endswith("username"):
+        return identity_name[: -len("username")] + "password"
+    if low.endswith("user"):
+        return identity_name[: -len("user")] + "password"
+    if low.endswith("access_key"):
+        return identity_name[: -len("access_key")] + "secret_key"
+    return None
+
+
+# Credential references that stand in for a password (mutually exclusive with
+# it per the connector schema): when one is already supplied in a container,
+# no password is needed there (e.g. SFTP key auth uses ssh_key instead). These
+# are identifiers/references, not raw secrets, so they are never captured as
+# masked input even if a spec happened to annotate them.
+_PASSWORD_ALTERNATIVES = ("ssh_key", "credential_path_id")
+
+# DCT annotates every secret-bearing request field in the OpenAPI spec with
+# this extension. It is the authoritative list of credential field names;
+# identity pairing (above) only reaches secrets that accompany an identity, so
+# standalone annotated secrets (e.g. encryption_key, data_key) are caught by
+# name here instead of by a brittle substring heuristic.
+_CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
+
+# Per-spec cache keyed by id(spec); the spec is loaded once at startup.
+_credential_field_cache: dict[int, frozenset[str]] = {}
+
+
+def _collect_annotated_credential_fields(node: Any, out: set[str]) -> None:
+    """Recursively collect property names annotated as credential fields."""
+    if isinstance(node, dict):
+        props = node.get("properties")
+        if isinstance(props, dict):
+            for prop_name, prop_schema in props.items():
+                if (
+                    isinstance(prop_schema, dict)
+                    and prop_schema.get(_CREDENTIAL_FIELD_ANNOTATION) is True
+                ):
+                    out.add(prop_name)
+        for value in node.values():
+            _collect_annotated_credential_fields(value, out)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_annotated_credential_fields(item, out)
+
+
+def _annotated_credential_fields(spec: dict[str, Any] | None) -> frozenset[str]:
+    """Names of every field the DCT spec annotates as a credential (cached)."""
+    if not spec:
+        return frozenset()
+    key = id(spec)
+    cached = _credential_field_cache.get(key)
+    if cached is None:
+        found: set[str] = set()
+        _collect_annotated_credential_fields(spec, found)
+        cached = frozenset(found) - frozenset(_PASSWORD_ALTERNATIVES)
+        _credential_field_cache[key] = cached
+    return cached
+
+
+def _collect_missing_secrets(
+    obj: Any, out: list[str], credential_fields: frozenset[str]
+) -> None:
+    """Recursively gather secret field names that must be captured out-of-band.
+
+    Walks the actual request body (not the schema): DCT create bodies are often
+    discriminated unions the spec flattener cannot enumerate (e.g.
+    POST /environments), yet the nested ``host_parameters`` carries
+    username/password. Two sources feed the list:
+
+    1. Any field the spec annotates as a credential (``credential_fields``) that
+       appears in the body — the model must never supply it inline, so we flag
+       it whether present (strip + recapture) or paired-and-absent.
+    2. Identity pairing — an identity field (``username``) whose paired secret
+       (``password``) is absent from the same container, unless a
+       mutually-exclusive credential alternative (``ssh_key``) is supplied.
+    """
+    if isinstance(obj, dict):
+        for value in obj.values():
+            _collect_missing_secrets(value, out, credential_fields)
+        for key in obj:
+            if key in credential_fields and key not in out:
+                out.append(key)
+        for key in obj:
+            secret = _secret_for_identity(key)
+            if not secret or secret in obj or secret in out:
+                continue
+            if secret.endswith("password") and any(
+                obj.get(alt) for alt in _PASSWORD_ALTERNATIVES
+            ):
+                continue
+            out.append(secret)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_missing_secrets(item, out, credential_fields)
+
+
+def _missing_sensitive_fields(
+    body: dict[str, Any] | None, credential_fields: frozenset[str] = frozenset()
+) -> list[str]:
+    """Secret-bearing fields the body must not carry inline, in first-seen order.
+
+    Value-based (not schema-based) so nested and discriminated-union bodies are
+    handled uniformly. Combines spec-annotated credential fields with identity
+    pairing; the host captures each out-of-band and re-calls with it applied.
+    """
+    missing: list[str] = []
+    _collect_missing_secrets(body or {}, missing, credential_fields)
+    return missing
 
 
 def _classify_operation_type(method: str) -> str:
