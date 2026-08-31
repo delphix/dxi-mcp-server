@@ -3,7 +3,9 @@
 ## Language and Runtime
 
 - Python 3.11+
-- Async-first: tool registration and DCT client are async; tool functions themselves are sync (wrapped by `@log_tool_execution`)
+- Async-first: tool registration and DCT client are async
+- Pre-built `*_endpoints_tool.py` tool functions are **sync** (wrapped by `@log_tool_execution`)
+- Dynamic mode `execute` tool (`tools/core/dynamic.py`) is **async** — it calls `ctx.elicit()` and awaits the DCT client; do not add `@log_tool_execution` to it or to `discovery`
 
 ## Exception Handling
 

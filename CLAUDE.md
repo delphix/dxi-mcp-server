@@ -40,6 +40,11 @@ Key optional env vars:
 - `DCT_TIMEOUT` — seconds, default `30`
 - `DCT_MAX_RETRIES` — default `3`
 - `IS_LOCAL_TELEMETRY_ENABLED` — default `false`
+- `DCT_CONFIRMATION_TOKEN_TTL` — seconds, default `3600`; TTL for single-use confirmation tokens
+- `DCT_CONFIRMATION_ENFORCEMENT` — `advisory` (default) or `strict`; in strict mode, non-elicitation clients are refused
+- `DCT_CONFIRMATION_FALLBACK` — `keyword` (default) or `off`; keyword resolver catches ungated mutating operations
+- `DCT_GRANT_TTL` — seconds, default `900`; TTL for scoped batch grants
+- `DCT_BATCH_COUNTER_PERSISTENCE` — `off` (default) or `file`; opt-in persistence for velocity counters
 
 ## Architecture
 
@@ -76,7 +81,18 @@ Confirmation rules are defined in `src/dct_mcp_server/config/mappings/manual_con
 METHOD|path_pattern|confirmation_level|message_template
 ```
 
-Confirmation levels: `standard`, `elevated`, `manual`, `retention_check:N`, `policy_impact_check:N`.
+Confirmation levels: `standard`, `elevated`, `manual`, `retention_check:N`, `policy_impact_check:N`, `batch_check:N:T` (velocity: trigger after N calls within T seconds).
+
+The confirmation system was hardened in DLPXECO-14458 to add:
+- **Single-use body-bound tokens** — HMAC includes `canonical_json(body)`; tokens are consumed on use and cannot be replayed
+- **Differentiated levels** — `elevated` requires confirmed resource name; `manual` adds impact acknowledgement
+- **Floor operations** — any HTTP DELETE or POST to `*/delete` cannot be bypassed by a grant; rules in `config/mappings/floor_operations.txt`
+- **Batch grants** — `GrantStore` allows one user approval to cover an enumerated set of N calls
+- **MCP elicitation** — `Context.elicit()` used when client declares elicitation capability; `DCT_CONFIRMATION_ENFORCEMENT=strict` refuses non-elicitation clients
+- **Per-identity velocity detection** — `batch_check:N:T` rules keyed on `(caller_identity, method, path_template)`
+- **Immutable audit events** — emitted for every gate decision regardless of telemetry opt-in (see `tools/core/audit.py`)
+
+Read-shaped POSTs (e.g. `/vdbs/provision_by_snapshot/defaults`, `/snapshots/search`) are excluded from the keyword fallback via `config/mappings/read_exclusions.txt`.
 
 ### Dynamic Tool Generation
 
@@ -91,10 +107,13 @@ src/dct_mcp_server/
 │   ├── config.py              # Env var loading/validation
 │   ├── loader.py              # Toolset + confirmation rule loading
 │   ├── toolsets/*.txt         # Persona toolset definitions
-│   └── mappings/manual_confirmation.txt
+│   └── mappings/
+│       ├── manual_confirmation.txt   # Per-operation confirmation rules
+│       ├── floor_operations.txt      # Non-bypassable floor operations
+│       └── read_exclusions.txt       # POSTs excluded from keyword fallback
 ├── core/
 │   ├── logging.py             # Global + session logging setup
-│   ├── session.py             # Session management, telemetry
+│   ├── session.py             # Session management, telemetry; PROCESS_IDENTITY
 │   ├── decorators.py          # @log_tool_execution decorator
 │   └── exceptions.py
 ├── dct_client/client.py       # Async HTTP client with retry/backoff
@@ -102,8 +121,16 @@ src/dct_mcp_server/
 │   ├── __init__.py            # Dynamic tool registration
 │   ├── *_endpoints_tool.py    # Pre-built grouped tools
 │   └── core/
-│       ├── meta_tools.py      # Retained spec helpers (find_endpoint, get_spec_chunk)
-│       └── tool_factory.py    # Dynamic tool generation
+│       ├── meta_tools.py           # Retained spec helpers (find_endpoint, get_spec_chunk)
+│       ├── tool_factory.py         # Dynamic tool generation
+│       ├── dynamic.py              # Dynamic mode: discovery + execute tools with FR-001–008 gate
+│       ├── confirmation_token.py   # Single-use body-bound HMAC tokens
+│       ├── confirmation_store.py   # ConsumedTokenStore + GrantStore (in-memory, TTL)
+│       ├── confirmation_levels.py  # validate_elevated(), validate_manual(), build_required_fields()
+│       ├── confirmation_resolver.py # check_confirmation_with_fallback(); velocity + grant routing
+│       ├── audit.py                # Immutable local gate-event emitter
+│       ├── floor_operations.py     # is_floor_operation() — always requires individual confirm
+│       └── velocity_counter.py     # Sliding-window per-identity batch-check counter
 └── toolsgenerator/driver.py   # OpenAPI spec processor
 ```
 

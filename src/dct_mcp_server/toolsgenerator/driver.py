@@ -331,7 +331,11 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
     \"\"\"Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed.\"\"\"
     confirmation = get_confirmation_for_operation(method, api_path)
 
-    if confirmation["level"] == "none":
+    # batch_check is a dynamic-mode velocity level, evaluated by the dynamic
+    # execute gate against a live per-identity counter. Pre-built (static) tools
+    # have no counter, so batch_check is non-gating here — below-threshold calls
+    # proceed transparently, exactly as they did before the rule existed.
+    if confirmation["level"] in ("none", "batch_check"):
         return None
 
     if confirmation.get("conditional"):

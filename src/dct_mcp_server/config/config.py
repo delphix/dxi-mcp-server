@@ -34,6 +34,21 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         # request headers, so the host passes the caller's DCT account id in the
         # child process environment at spawn — one process per caller.
         "client_id": (os.getenv("DCT_CLIENT_ID") or "").strip() or None,
+        # Confirmation system settings
+        "confirmation_token_ttl": int(os.getenv("DCT_CONFIRMATION_TOKEN_TTL", "3600")),
+        "confirmation_enforcement": os.getenv(
+            "DCT_CONFIRMATION_ENFORCEMENT", "advisory"
+        ).lower(),
+        "confirmation_fallback": os.getenv(
+            "DCT_CONFIRMATION_FALLBACK", "keyword"
+        ).lower(),
+        "grant_ttl": int(os.getenv("DCT_GRANT_TTL", "900")),
+        # Tier-2 auto standing grant: how many executions of an impactful op-type
+        # a single confirmation authorizes before re-prompting (confirm-once → run N).
+        "confirmation_batch_size": int(os.getenv("DCT_CONFIRMATION_BATCH_SIZE", "10")),
+        "batch_counter_persistence": os.getenv(
+            "DCT_BATCH_COUNTER_PERSISTENCE", "off"
+        ).lower(),
     }
 
     # Validate required configuration
@@ -127,6 +142,26 @@ def print_config_help():
     )
     print(
         "  DCT_SPEC_MAX_AGE_HOURS  Hours before re-downloading the spec (default: 24)"
+    )
+    print()
+    print("Confirmation system optional variables:")
+    print(
+        "  DCT_CONFIRMATION_TOKEN_TTL       TTL in seconds for confirmation tokens (default: 3600)"
+    )
+    print(
+        "  DCT_CONFIRMATION_ENFORCEMENT     Enforcement mode: strict or advisory (default: advisory)"
+    )
+    print(
+        "  DCT_CONFIRMATION_FALLBACK        Fallback mode when token absent: keyword or off (default: keyword)"
+    )
+    print(
+        "  DCT_GRANT_TTL                    TTL in seconds for batch grants (default: 900)"
+    )
+    print(
+        "  DCT_CONFIRMATION_BATCH_SIZE      Executions authorized per confirmation for impactful ops (default: 10)"
+    )
+    print(
+        "  DCT_BATCH_COUNTER_PERSISTENCE    Batch counter persistence: off or file (default: off)"
     )
     print()
     print("Example:")

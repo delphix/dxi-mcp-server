@@ -15,27 +15,116 @@ This module is independent of the existing tool_factory.py grouped-tool generati
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context
+from mcp.types import ClientCapabilities, ElicitationCapability, ToolAnnotations
 
+try:
+    from mcp.server.elicitation import (
+        AcceptedElicitation,
+        DeclinedElicitation,  # noqa: F401
+        CancelledElicitation,  # noqa: F401
+    )
+
+    _ELICITATION_AVAILABLE = True
+except ImportError:
+    _ELICITATION_AVAILABLE = False
+
+from pydantic import BaseModel
+
+from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.core.auth import resolve_auth
 from dct_mcp_server.core.client_registry import ClientRegistry
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
-from dct_mcp_server.tools.core.confirmation_resolver import check_confirmation
-from dct_mcp_server.tools.core.confirmation_token import (
-    make_confirmation_token,
-    verify_confirmation_token,
+from dct_mcp_server.core.session import get_process_identity
+from dct_mcp_server.tools.core.audit import emit_gate_event
+from dct_mcp_server.tools.core.confirmation_levels import (
+    build_required_fields,  # noqa: F401 — available for callers; used by validators
+    validate_elevated,
+    validate_manual,
 )
+from dct_mcp_server.tools.core.confirmation_resolver import (
+    check_confirmation,
+    check_confirmation_with_fallback,
+)
+from dct_mcp_server.tools.core.confirmation_store import _grant_store, _standing_store
+from dct_mcp_server.tools.core.confirmation_token import (
+    canonical_json,
+    issue_token,
+    verify_and_consume_token,
+)
+from dct_mcp_server.tools.core.floor_operations import is_floor_operation
 from dct_mcp_server.tools.core.spec_cache import get_cached_spec
 from dct_mcp_server.tools.core.spec_model import OpenAPISpec, RequestBody
+from dct_mcp_server.tools.core.velocity_counter import increment_and_check  # noqa: F401
 
 logger = get_logger(__name__)
 
 # Pagination hard cap
 _MAX_PAGE_SIZE = 50
+
+
+# =========================================================================== #
+# FR-005: Elicitation Pydantic schemas (primitive fields only per MCP spec)
+# =========================================================================== #
+
+
+class _StandardConfirmationSchema(BaseModel):
+    """Elicitation schema for standard confirmation level."""
+
+    confirm: bool
+
+
+class _ElevatedConfirmationSchema(BaseModel):
+    """Elicitation schema for elevated confirmation level."""
+
+    confirm: bool
+    confirmed_resource_name: str
+
+
+class _ManualConfirmationSchema(BaseModel):
+    """Elicitation schema for manual confirmation level."""
+
+    confirm: bool
+    confirmed_resource_name: str
+    acknowledged_impact: bool
+
+
+def _build_elicitation_schema(level: str | None) -> type[BaseModel]:
+    """Return the appropriate elicitation schema class for a confirmation level.
+
+    FR-005 AC-2: elevated requests confirmed_resource_name;
+                 manual additionally requests acknowledged_impact.
+    """
+    if level == "manual":
+        return _ManualConfirmationSchema
+    if level == "elevated":
+        return _ElevatedConfirmationSchema
+    return _StandardConfirmationSchema
+
+
+def _check_elicitation_capability(ctx: Context | None) -> bool:
+    """Return True if the connected client declares elicitation capability.
+
+    FR-005: On an elicitation-capable MCP client, the server must obtain
+    approval via Context.elicit() rather than returning advisory text.
+    """
+    if not _ELICITATION_AVAILABLE:
+        return False
+    if ctx is None:
+        return False
+    try:
+        session = ctx.request_context.session  # type: ignore[union-attr]
+        return session.check_client_capability(
+            ClientCapabilities(elicitation=ElicitationCapability())
+        )
+    except Exception:
+        return False
 
 
 # =========================================================================== #
@@ -59,11 +148,20 @@ def register_dynamic_tools(app: FastMCP, dct_client: Any) -> None:
     _discovery_fn = _make_discovery_fn(app)
     _execute_fn = _make_execute_fn(app, dct_client)
 
-    app.add_tool(_discovery_fn, name="discovery")
-    logger.info("  Registered: discovery")
+    # FR-005 AC-5: Register ToolAnnotations so clients can distinguish
+    # read-only (discovery) from destructive (execute).
+    _discovery_annotations = ToolAnnotations(readOnlyHint=True)
+    _execute_annotations = ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+    )
 
-    app.add_tool(_execute_fn, name="execute")
-    logger.info("  Registered: execute")
+    app.add_tool(_discovery_fn, name="discovery", annotations=_discovery_annotations)
+    logger.info("  Registered: discovery (readOnlyHint=True)")
+
+    app.add_tool(_execute_fn, name="execute", annotations=_execute_annotations)
+    logger.info("  Registered: execute (destructiveHint=True)")
 
     logger.info("Dynamic mode: 2 tools registered (discovery, execute).")
 
@@ -197,6 +295,11 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         body: dict[str, Any] | None = None,
         confirmed: bool = False,
         confirmation_token: str | None = None,
+        confirmed_resource_name: str | None = None,
+        acknowledged_impact: bool | None = None,
+        batch_intent: dict[str, Any] | None = None,
+        grant_token: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
         Validate, confirm, and dispatch a DCT API call.
@@ -205,10 +308,11 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
           1. Substitutes {paramName} placeholders in path using path_params
           2. Looks up the operation in the cached spec (OPERATION_NOT_FOUND if absent)
           3. Validates required parameters against the spec (VALIDATION_ERROR if missing)
-          4. Checks confirmation gates for destructive operations. A destructive
-             op returns confirmation_required (with a confirmation_token) until the
-             caller re-calls with that exact token — a bare confirmed=true cannot
-             bypass it.
+          4. Checks confirmation gates for destructive operations (FR-001 through FR-008).
+             A destructive op returns confirmation_required (with a confirmation_token)
+             until the caller re-calls with that exact token — a bare confirmed=true
+             cannot bypass it. Supports batch grants (batch_intent/grant_token) and
+             differentiated confirmation levels (standard/elevated/manual).
           5. Dispatches the call via DCTAPIClient
 
         Args:
@@ -224,9 +328,23 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             confirmation_token: Echo the token returned in a prior
                           confirmation_required response to proceed with a
                           destructive operation (only after explicit user approval).
+            confirmed_resource_name: For elevated/manual operations, the resource name
+                          or ID of the target as it appears in DCT (e.g. "vdb-123").
+                          Required for elevated and manual confirmation levels.
+            acknowledged_impact: For manual-level operations, must be set to True to
+                          explicitly acknowledge the destructive impact. Required for
+                          manual confirmation level.
+            batch_intent: Declare a batch grant for N calls. Dict with:
+                          - operation (str): "METHOD /path/template"
+                          - targets (list): list of canonical bodies or target IDs
+                          Returns confirmation_required with a batch_confirmation_token.
+            grant_token:  Token from a prior batch_intent confirmation. Pass this on
+                          subsequent calls to execute against the active batch grant
+                          without requiring individual confirmation for each call.
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
+            On batch grant issued: {"status": "confirmation_required", "batch_confirmation_token": str, ...}
             On success: {"status": "success", "operation_type": str, "response": dict}
             On validation error: {"status": "error", "code": "VALIDATION_ERROR", "missing_fields": [...]}
             On not found: {"status": "error", "code": "OPERATION_NOT_FOUND", ...}
@@ -341,35 +459,570 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 }
 
         # ---------------------------------------------------------------- #
-        # Step 4 — Confirmation gate
+        # Step 4 — Confirmation gate (FR-001 through FR-008)
         # ---------------------------------------------------------------- #
+        # Grant-authorization tracking — initialised for every method so the
+        # dispatch step can safely annotate grant-covered executions (FR-007).
+        _grant_authorized = False
+        _grant_remaining: int | None = None
+        _grant_kind: str | None = None  # "batch" (batch_intent) or "standing" (Tier-2)
         if method_upper in ("DELETE", "POST", "PUT", "PATCH"):
-            conf = check_confirmation(method_upper, resolved_path)
-            # A bare confirmed=true does NOT bypass the gate: the caller must echo
-            # the server-issued confirmation_token from the prior
-            # confirmation_required response, proving it saw the STOP instructions.
-            if conf["requires_confirmation"] and not verify_confirmation_token(
-                confirmation_token, method_upper, resolved_path
-            ):
+            # Determine caller identity (FR-006)
+            identity = get_process_identity()
+
+            # Load config once
+            try:
+                _conf = get_dct_config()
+                _token_ttl = _conf.get("confirmation_token_ttl", 3600)
+                _enforcement = _conf.get("confirmation_enforcement", "advisory")
+                _grant_ttl = _conf.get("grant_ttl", 900)
+                _batch_size = _conf.get("confirmation_batch_size", 10)
+            except Exception:
+                _token_ttl = 3600
+                _enforcement = "advisory"
+                _grant_ttl = 900
+                _batch_size = 10
+
+            # FR-004: Handle batch_intent (declare a batch grant)
+            if batch_intent is not None:
+                operation_str = batch_intent.get("operation", "")
+                targets = batch_intent.get("targets", [])
+
+                if not targets:
+                    return {
+                        "status": "error",
+                        "code": "INVALID_BATCH",
+                        "message": "batch must have at least one target (EC-6)",
+                    }
+
+                if len(targets) > 10000:
+                    return {
+                        "status": "error",
+                        "code": "BATCH_TOO_LARGE",
+                        "message": "batch_intent.targets exceeds maximum of 10,000 entries",
+                    }
+
+                # FR-007: Check floor operations before issuing any grant
+                floor_targets = []
+                for t in targets:
+                    if isinstance(t, dict):
+                        # Check if the operation itself is a floor op
+                        op_parts = operation_str.split(" ", 1)
+                        op_method = op_parts[0].upper() if op_parts else method_upper
+                        op_path = op_parts[1] if len(op_parts) > 1 else resolved_path
+                        if is_floor_operation(op_method, op_path):
+                            floor_targets.append(operation_str)
+                            break
+
+                # Also check the resolved path itself
+                if is_floor_operation(method_upper, resolved_path):
+                    return {
+                        "status": "error",
+                        "code": "FLOOR_OPERATION_IN_BATCH",
+                        "message": (
+                            f"Floor operations require individual confirmation and cannot "
+                            f"be included in a batch grant: {method_upper} {resolved_path}"
+                        ),
+                    }
+
+                if floor_targets:
+                    return {
+                        "status": "error",
+                        "code": "FLOOR_OPERATION_IN_BATCH",
+                        "message": (
+                            f"Floor operations require individual confirmation: {floor_targets}"
+                        ),
+                    }
+
+                # Issue batch grant
+                grant_id = str(uuid.uuid4())[:16]
+                canonical_targets = [
+                    canonical_json(t) if isinstance(t, dict) else str(t)
+                    for t in targets
+                ]
+                _grant_store.create_grant(
+                    grant_id, operation_str, canonical_targets, _grant_ttl
+                )
+
+                emit_gate_event(
+                    "required", identity, method_upper, resolved_path, "batch_grant"
+                )
+
+                targets_display = (
+                    canonical_targets[:50]
+                    if len(canonical_targets) > 50
+                    else canonical_targets
+                )
                 return {
                     "status": "confirmation_required",
-                    "confirmation_level": conf["confirmation_level"],
+                    "batch_confirmation_token": grant_id,
+                    "operation": operation_str,
+                    "count": len(targets),
+                    "targets_display": targets_display,
                     "message": (
-                        conf["message_template"]
-                        or f"This operation ({method_upper} {resolved_path}) requires confirmation."
-                    ),
-                    "confirmation_token": make_confirmation_token(
-                        method_upper, resolved_path
-                    ),
-                    "operation": {"path": resolved_path, "method": method_upper},
-                    "instructions": (
-                        "STOP. Display the message to the user and obtain their EXPLICIT "
-                        "approval before proceeding — do NOT approve on their behalf. Once "
-                        "the user approves, re-call execute with the IDENTICAL arguments "
-                        "plus confirmation_token set to the value above. A bare "
-                        "confirmed=true is ignored; the token is required."
+                        f"Batch grant requested for {len(targets)} calls to '{operation_str}'. "
+                        "Re-call with grant_token=<batch_confirmation_token> for each operation."
                     ),
                 }
+
+            # FR-004: Handle grant_token (execute under an active batch grant)
+            if grant_token is not None:
+                canonical_body = canonical_json(body)
+                consume_result = _grant_store.consume_target(
+                    grant_token, canonical_body
+                )
+
+                if consume_result == "ok":
+                    remaining = _grant_store.get_remaining(grant_token)
+                    logger.debug(
+                        "Grant %s: target consumed, remaining=%s",
+                        grant_token,
+                        remaining,
+                    )
+                    emit_gate_event(
+                        "grant_covered",
+                        identity,
+                        method_upper,
+                        resolved_path,
+                        "batch_grant",
+                        grant_id=grant_token,
+                    )
+                    # Proceed to execution — grant is valid; skip rest of gate
+                    _grant_authorized = True
+                    _grant_remaining = remaining
+                    _grant_kind = "batch"
+                elif consume_result in ("exhausted", "expired", "grant_missing"):
+                    emit_gate_event(
+                        "expired",
+                        identity,
+                        method_upper,
+                        resolved_path,
+                        "batch_grant",
+                        grant_id=grant_token,
+                    )
+                    new_token = issue_token(
+                        method_upper, resolved_path, body, _token_ttl
+                    )
+                    conf = check_confirmation_with_fallback(
+                        method_upper, resolved_path, body, identity
+                    )
+                    return {
+                        "status": "confirmation_required",
+                        "confirmation_level": conf.get("confirmation_level"),
+                        "message": (
+                            f"Batch grant '{grant_token}' is {consume_result}. "
+                            "Individual confirmation required."
+                        ),
+                        "confirmation_token": new_token,
+                        "required_fields": conf.get(
+                            "required_fields", ["confirmation_token"]
+                        ),
+                        "ttl_seconds": _token_ttl,
+                    }
+                else:  # "not_found" — body not in grant
+                    emit_gate_event(
+                        "required",
+                        identity,
+                        method_upper,
+                        resolved_path,
+                        "batch_grant",
+                        grant_id=grant_token,
+                    )
+                    new_token = issue_token(
+                        method_upper, resolved_path, body, _token_ttl
+                    )
+                    conf = check_confirmation_with_fallback(
+                        method_upper, resolved_path, body, identity
+                    )
+                    return {
+                        "status": "confirmation_required",
+                        "confirmation_level": conf.get("confirmation_level"),
+                        "message": (
+                            "This call's body is not in the enumerated batch grant. "
+                            "Individual confirmation required."
+                        ),
+                        "confirmation_token": new_token,
+                        "required_fields": conf.get(
+                            "required_fields", ["confirmation_token"]
+                        ),
+                        "ttl_seconds": _token_ttl,
+                    }
+            else:
+                _grant_authorized = False
+
+            if not _grant_authorized:
+                # Standard per-call confirmation path
+                conf = check_confirmation_with_fallback(
+                    method_upper, resolved_path, body, identity
+                )
+                conf_level = conf.get("confirmation_level")
+                # Operation-type template (e.g. "/vdbs/{vdbId}/refresh_by_snapshot")
+                # so a standing grant covers the SAME op across different resources.
+                conf_template = conf.get("path_template") or resolved_path
+
+                # Tier-2 auto standing-grant (confirm-once → run N). An impactful
+                # but non-floor op (standard/elevated level — provision, refresh,
+                # rollback, snapshot, dSource-link) that was confirmed once earlier
+                # authorizes the next N executions of the SAME op-type without
+                # re-prompting. Deletes/manual are floor ops and are NEVER covered —
+                # they confirm every time. Velocity (batch_check) is not grantable.
+                _tier2_grantable = (
+                    conf["requires_confirmation"]
+                    and conf_level in ("standard", "elevated")
+                    and not is_floor_operation(method_upper, resolved_path)
+                )
+                if _tier2_grantable and _standing_store.consume(
+                    identity, method_upper, conf_template
+                ):
+                    emit_gate_event(
+                        "grant_covered",
+                        identity,
+                        method_upper,
+                        resolved_path,
+                        conf_level,
+                    )
+                    _grant_authorized = True
+                    _grant_remaining = _standing_store.get_remaining(
+                        identity, method_upper, conf_template
+                    )
+                    _grant_kind = "standing"
+
+                if conf["requires_confirmation"] and not _grant_authorized:
+                    # Resolve client elicitation capability once — it decides
+                    # whether an always-enforced trigger (a velocity/bulk hit)
+                    # can be confirmed inline or must be refused outright.
+                    has_elicitation = _check_elicitation_capability(ctx)
+
+                    # FR-006/FR-007: Velocity (bulk) detection — always-enforced.
+                    if conf.get("batch_triggered"):
+                        emit_gate_event(
+                            "batch_triggered",
+                            identity,
+                            method_upper,
+                            resolved_path,
+                            conf_level or "batch_check",
+                            velocity_fields={
+                                "threshold_N": conf.get("velocity_N"),
+                                "window_T": conf.get("velocity_T"),
+                                "count_at_trigger": conf.get("velocity_count"),
+                            },
+                        )
+                        # (b) Targeted hard-block. An advisory confirmation token
+                        # is worthless against a runaway automation loop — the
+                        # loop would simply echo it back and keep going — so a
+                        # client WITHOUT elicitation capability is refused
+                        # outright regardless of DCT_CONFIRMATION_ENFORCEMENT.
+                        # An elicitation-capable client falls through to
+                        # Context.elicit() below for a genuine human decision.
+                        if not has_elicitation:
+                            emit_gate_event(
+                                "refused",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level or "batch_check",
+                            )
+                            return {
+                                "status": "error",
+                                "code": "BULK_OPERATION_BLOCKED",
+                                "message": (
+                                    (
+                                        conf.get("message_template")
+                                        or f"Velocity threshold exceeded for {method_upper} {resolved_path}."
+                                    )
+                                    + f" {conf.get('velocity_count')} call(s) within "
+                                    f"{conf.get('velocity_T')}s exceeded the limit of "
+                                    f"{conf.get('velocity_N')}. This bulk operation "
+                                    "requires human confirmation via an elicitation-capable "
+                                    "client and cannot be auto-approved with a token."
+                                ),
+                                "count": conf.get("velocity_count"),
+                                "threshold_N": conf.get("velocity_N"),
+                                "window_T": conf.get("velocity_T"),
+                            }
+                        # Elicitation-capable client: fall through to elicit().
+
+                    # strict + no elicitation → refuse immediately (FR-005 AC-3)
+                    if _enforcement == "strict" and not has_elicitation:
+                        emit_gate_event(
+                            "refused",
+                            identity,
+                            method_upper,
+                            resolved_path,
+                            conf_level or "standard",
+                        )
+                        return {
+                            "status": "error",
+                            "code": "ELICITATION_REQUIRED",
+                            "message": (
+                                "Elicitation capability required for destructive operations "
+                                f"({method_upper} {resolved_path}) when "
+                                "DCT_CONFIRMATION_ENFORCEMENT=strict. "
+                                "Client capability: none declared."
+                            ),
+                        }
+
+                    # Elicitation path (FR-005 AC-1, AC-2, AC-6)
+                    if has_elicitation and not confirmation_token:
+                        schema_cls = _build_elicitation_schema(conf_level)
+                        elicit_message = (
+                            conf.get("message_template")
+                            or f"This operation ({method_upper} {resolved_path}) requires confirmation."
+                        )
+                        try:
+                            elicit_result = await ctx.elicit(  # type: ignore[union-attr]
+                                message=elicit_message,
+                                schema=schema_cls,
+                            )
+                        except Exception as _elicit_err:
+                            # ERR-3: elicit raises → return advisory confirmation_required
+                            logger.warning(
+                                "Context.elicit() raised for %s %s: %s — "
+                                "falling back to advisory confirmation_required.",
+                                method_upper,
+                                resolved_path,
+                                _elicit_err,
+                            )
+                            emit_gate_event(
+                                "required",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level or "standard",
+                            )
+                            new_token = issue_token(
+                                method_upper, resolved_path, body, _token_ttl
+                            )
+                            return {
+                                "status": "confirmation_required",
+                                "confirmation_level": conf_level,
+                                "message": elicit_message,
+                                "confirmation_token": new_token,
+                                "required_fields": conf.get(
+                                    "required_fields", ["confirmation_token"]
+                                ),
+                                "ttl_seconds": _token_ttl,
+                            }
+
+                        # Process elicitation result
+                        if not _ELICITATION_AVAILABLE or not isinstance(
+                            elicit_result, AcceptedElicitation
+                        ):
+                            # Declined or cancelled (FR-005 AC-1)
+                            emit_gate_event(
+                                "refused",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level or "standard",
+                            )
+                            return {
+                                "status": "error",
+                                "code": "OPERATION_DECLINED",
+                                "message": (
+                                    f"Operation {method_upper} {resolved_path} was declined "
+                                    "by the user via elicitation."
+                                ),
+                            }
+
+                        # User accepted — extract fields from elicitation data (AC-6)
+                        _elicit_data = elicit_result.data
+                        if not getattr(_elicit_data, "confirm", True):
+                            emit_gate_event(
+                                "refused",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level or "standard",
+                            )
+                            return {
+                                "status": "error",
+                                "code": "OPERATION_DECLINED",
+                                "message": (
+                                    f"Operation {method_upper} {resolved_path} was declined "
+                                    "by the user (confirm=false)."
+                                ),
+                            }
+
+                        # Extract level-specific fields from elicitation response
+                        if hasattr(_elicit_data, "confirmed_resource_name"):
+                            confirmed_resource_name = (
+                                _elicit_data.confirmed_resource_name
+                            )
+                        if hasattr(_elicit_data, "acknowledged_impact"):
+                            acknowledged_impact = _elicit_data.acknowledged_impact
+
+                        # Skip token verification — elicitation approval satisfies the gate
+                        # Proceed directly to level-specific checks below.
+                        emit_gate_event(
+                            "approved",
+                            identity,
+                            method_upper,
+                            resolved_path,
+                            conf_level or "standard",
+                        )
+                        # Fall through to level checks
+
+                    elif not confirmation_token:
+                        # No token AND not using elicitation — issue one and return advisory
+                        emit_gate_event(
+                            "required",
+                            identity,
+                            method_upper,
+                            resolved_path,
+                            conf_level or "standard",
+                        )
+                        new_token = issue_token(
+                            method_upper, resolved_path, body, _token_ttl
+                        )
+                        return {
+                            "status": "confirmation_required",
+                            "confirmation_level": conf_level,
+                            "message": (
+                                conf.get("message_template")
+                                or f"This operation ({method_upper} {resolved_path}) requires confirmation."
+                            ),
+                            "confirmation_token": new_token,
+                            "required_fields": conf.get(
+                                "required_fields", ["confirmation_token"]
+                            ),
+                            "ttl_seconds": _token_ttl,
+                            "operation": {
+                                "path": resolved_path,
+                                "method": method_upper,
+                            },
+                            "instructions": (
+                                "STOP. Display the message to the user and obtain their EXPLICIT "
+                                "approval before proceeding — do NOT approve on their behalf. Once "
+                                "the user approves, re-call execute with the IDENTICAL arguments "
+                                "plus confirmation_token set to the value above. A bare "
+                                "confirmed=true is ignored; the token is required."
+                            ),
+                        }
+
+                    # Token provided — verify (FR-001: body-bound, single-use)
+                    # Skip token verification when elicitation was used (AC-6: token not returned to model)
+                    if confirmation_token and not (
+                        has_elicitation and not confirmation_token
+                    ):
+                        if not verify_and_consume_token(
+                            confirmation_token,
+                            method_upper,
+                            resolved_path,
+                            body,
+                            _token_ttl,
+                        ):
+                            emit_gate_event(
+                                "replay_rejected",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level or "standard",
+                            )
+                            new_token = issue_token(
+                                method_upper, resolved_path, body, _token_ttl
+                            )
+                            return {
+                                "status": "confirmation_required",
+                                "confirmation_level": conf_level,
+                                "message": (
+                                    "Confirmation token is invalid, expired, or already used. "
+                                    "A new token has been issued."
+                                ),
+                                "confirmation_token": new_token,
+                                "required_fields": conf.get(
+                                    "required_fields", ["confirmation_token"]
+                                ),
+                                "ttl_seconds": _token_ttl,
+                            }
+
+                    # Token verified (or elicitation-approved) — check level-specific requirements (FR-002)
+                    if conf_level == "elevated":
+                        level_result = validate_elevated(
+                            resolved_path, confirmed_resource_name
+                        )
+                        if not level_result["ok"]:
+                            emit_gate_event(
+                                "refused",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level,
+                            )
+                            # Re-issue token since we consumed it
+                            new_token = issue_token(
+                                method_upper, resolved_path, body, _token_ttl
+                            )
+                            return {
+                                "status": "confirmation_required",
+                                "confirmation_level": conf_level,
+                                "message": (
+                                    level_result.get("message")
+                                    or "confirmed_resource_name is required for elevated operations."
+                                ),
+                                "confirmation_token": new_token,
+                                "required_fields": level_result.get(
+                                    "required_fields",
+                                    ["confirmation_token", "confirmed_resource_name"],
+                                ),
+                                "ttl_seconds": _token_ttl,
+                            }
+
+                    elif conf_level == "manual":
+                        level_result = validate_manual(
+                            resolved_path, confirmed_resource_name, acknowledged_impact
+                        )
+                        if not level_result["ok"]:
+                            emit_gate_event(
+                                "refused",
+                                identity,
+                                method_upper,
+                                resolved_path,
+                                conf_level,
+                            )
+                            new_token = issue_token(
+                                method_upper, resolved_path, body, _token_ttl
+                            )
+                            return {
+                                "status": "confirmation_required",
+                                "confirmation_level": conf_level,
+                                "message": (
+                                    level_result.get("message")
+                                    or "confirmed_resource_name and acknowledged_impact=true are required for manual operations."
+                                ),
+                                "confirmation_token": new_token,
+                                "required_fields": level_result.get(
+                                    "required_fields",
+                                    [
+                                        "confirmation_token",
+                                        "confirmed_resource_name",
+                                        "acknowledged_impact",
+                                    ],
+                                ),
+                                "ttl_seconds": _token_ttl,
+                            }
+
+                    # All checks passed — emit approved event (only if not already emitted via elicitation)
+                    if not (has_elicitation and not confirmation_token):
+                        emit_gate_event(
+                            "approved",
+                            identity,
+                            method_upper,
+                            resolved_path,
+                            conf_level or "standard",
+                        )
+
+                    # Tier-2: this confirmation authorizes the next N executions
+                    # of the same op-type. This call is #1, so arm N-1 more; the
+                    # (N+1)th call finds an empty budget and re-prompts.
+                    if _tier2_grantable:
+                        _standing_store.grant(
+                            identity,
+                            method_upper,
+                            conf_template,
+                            _batch_size - 1,
+                            _grant_ttl,
+                        )
 
         # ---------------------------------------------------------------- #
         # Step 5 — Annotate operation type
@@ -405,11 +1058,22 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 params=query_params or None,
                 json=body if body is not None else None,
             )
-            return {
+            result = {
                 "status": "success",
                 "operation_type": operation_type,
                 "response": response,
             }
+            # Annotate executions authorized by an active grant so the caller can
+            # see the grant being consumed and how much remains. "batch" grants
+            # (FR-007) carry the explicit grant_token; "standing" grants (Tier-2,
+            # confirm-once → run N) are auto-issued and keyed by op-type.
+            if _grant_authorized:
+                result["authorization"] = {
+                    "kind": _grant_kind,
+                    "grant_token": grant_token,
+                    "remaining": _grant_remaining,
+                }
+            return result
         except DCTClientError as exc:
             http_status = _extract_http_status(str(exc))
             return {

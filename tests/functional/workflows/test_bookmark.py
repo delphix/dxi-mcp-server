@@ -5,7 +5,7 @@ Translates `.claude/test/testing/self_service.md` prompts 48-56:
 
     48. Search for all bookmarks
     49. Get the first bookmark's details
-    50. Create a new bookmark on the first VDB
+    50. Create a new bookmark on the first VDB       [standard conf]
     51. Update that bookmark's name                  [retention_check conf]
     52. Get the VDB groups associated with that bookmark
     53. Get the tags for that bookmark
@@ -43,9 +43,15 @@ async def test_bookmark_workflow(mcp_client_self_service, dct_stub):
     assert dct_stub.received_request("GET", f"/dct/v3/bookmarks/{bk_id}")
 
     # Prompt 50 — Create a new bookmark on the first VDB (v-1).
+    # (standard conf -> pre-confirm)
     res = await client.call_tool(
         "snapshot_bookmark_tool",
-        {"action": "create_bookmark", "name": "test-bookmark", "vdb_ids": ["v-1"]},
+        {
+            "action": "create_bookmark",
+            "name": "test-bookmark",
+            "vdb_ids": ["v-1"],
+            "confirmed": True,
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request("POST", "/dct/v3/bookmarks")

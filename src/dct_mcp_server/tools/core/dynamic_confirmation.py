@@ -1,21 +1,25 @@
 """
-Spec-derived confirmation resolver (retained utility).
+Spec-derived confirmation resolver — live utility called by ``confirmation_resolver.py``.
 
 Auto mode (DCT_TOOLSET=auto), which this module originally served, has been
 removed (DLPXECO-14257). ``resolve_confirmation()`` now delegates unconditionally
-to the static ``manual_confirmation.txt`` rules. The spec-derived
-``get_confirmation_for_operation_dynamic()`` below is kept as a standalone
-utility — available to wire into dynamic mode later — but is no longer dispatched
-automatically.
+to the static ``manual_confirmation.txt`` rules.
 
-The spec-derived logic derives the confirmation requirement straight from the
-OpenAPI spec:
+``get_confirmation_for_operation_dynamic()`` is an active utility called by
+``confirmation_resolver.py`` as the keyword-fallback path when no static rule
+matches an operation. It derives the confirmation requirement from the OpenAPI
+spec and applies the read-exclusions list so that safe read-shaped POSTs (e.g.
+``/snapshots/search``, ``/vdbs/provision_by_snapshot/defaults``) are never gated
+even if their path or summary contains a hot keyword.
+
+The spec-derived logic:
 
   * DELETE on any path                       -> confirm (manual)
   * POST/PUT/PATCH whose operation summary or
     description contains a "hot" keyword
     (Refresh, Provision, Delete, Rollback,
-     Source config, Snapshot)                -> confirm
+     Source config, Snapshot)                -> confirm, unless the path is in
+                                                ``config/mappings/read_exclusions.txt``
   * Everything else (incl. all GET reads)    -> pass
 
 GET/HEAD/OPTIONS are treated as non-destructive reads and always pass, even when
@@ -114,16 +118,29 @@ def get_confirmation_for_operation_dynamic(
 
     # Mutating non-delete methods: gate only when a hot keyword is present.
     if spec is None:
-        # Lazy import avoids a circular import with tool_factory.
-        from .tool_factory import get_cached_spec
+        try:
+            from dct_mcp_server.tools.core.spec_cache import get_cached_spec
 
-        spec = get_cached_spec()
+            spec = get_cached_spec()
+        except (ImportError, Exception):
+            spec = {}
 
     operation = _lookup_operation(spec, method_u, path) or {}
     text = f"{operation.get('summary', '')} {operation.get('description', '')}".strip()
     keyword = _matched_keyword(text)
     if keyword is None:
         return _none()
+
+    # Check read exclusions before returning a keyword match — paths in
+    # read_exclusions.txt are safe read-shaped operations even if their path or
+    # summary contains a hot keyword (e.g. /snapshots/search, /vdbs/provision_*/defaults).
+    try:
+        from dct_mcp_server.config.loader import _is_read_exclusion
+
+        if _is_read_exclusion(path):
+            return _none()
+    except ImportError:
+        pass
 
     level = "manual" if keyword in _MANUAL_KEYWORDS else "elevated"
     return _confirm(

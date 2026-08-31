@@ -290,7 +290,11 @@ def _create_tool_function(
 
     # Check confirmation requirements
     confirmation = resolve_confirmation(method, api_path)
-    needs_confirmation = confirmation["level"] != "none"
+    # batch_check is a dynamic-mode velocity level, decided by the dynamic
+    # execute gate against a live per-identity counter. The static generated-tool
+    # gate has no counter, so it treats batch_check as non-gating (below-threshold
+    # calls proceed transparently); it is never a per-call confirmation here.
+    needs_confirmation = confirmation["level"] not in ("none", "batch_check")
 
     # Create the actual function
     async def tool_function(**kwargs):
@@ -436,8 +440,9 @@ Returns:
         path = action_info["path"]
         confirmation = action_info["confirmation"]
 
-        # Check confirmation for destructive operations
-        needs_confirmation = confirmation["level"] != "none"
+        # Check confirmation for destructive operations. batch_check is a
+        # dynamic-mode velocity level and is non-gating in the static path.
+        needs_confirmation = confirmation["level"] not in ("none", "batch_check")
         if needs_confirmation and not kwargs.pop("confirmed", False):
             return {
                 "status": "confirmation_required",

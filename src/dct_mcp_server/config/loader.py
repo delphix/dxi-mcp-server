@@ -318,6 +318,52 @@ def _is_destructive_delete(method: str, path: str) -> bool:
     return False
 
 
+@lru_cache(maxsize=1)
+def _load_read_exclusions() -> frozenset:
+    """
+    Load read exclusion path patterns from read_exclusions.txt.
+
+    Returns:
+        frozenset of path patterns that are safe reads and should not be
+        gated by the keyword fallback confirmation resolver.
+    """
+    exclusions_file = MAPPINGS_DIR / "read_exclusions.txt"
+
+    if not exclusions_file.exists():
+        logger.warning(f"Read exclusions file not found: {exclusions_file}")
+        return frozenset()
+
+    patterns = []
+    with open(exclusions_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            patterns.append(line)
+
+    return frozenset(patterns)
+
+
+def _is_read_exclusion(path: str) -> bool:
+    """
+    Check if a path matches any read exclusion pattern.
+
+    Args:
+        path: API endpoint path to check
+
+    Returns:
+        True if path is a known safe read and should not be confirmation-gated
+    """
+    patterns = _load_read_exclusions()
+    for pattern in patterns:
+        if _path_matches(path, pattern):
+            return True
+        # Also check prefix match for patterns without trailing wildcards
+        if path.startswith(pattern):
+            return True
+    return False
+
+
 def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
     """
     Get confirmation requirements for an API operation.
@@ -340,12 +386,25 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
         if _path_matches(path, rule["path_pattern"]):
             level = rule["level"]
             conditional = ":" in level
+            level_parts = level.split(":") if conditional else [level]
+            level_name = level_parts[0]
+            threshold_N = (
+                int(level_parts[1]) if conditional and len(level_parts) > 1 else None
+            )
+            threshold_T = (
+                int(level_parts[2]) if conditional and len(level_parts) > 2 else None
+            )
 
             return {
-                "level": level.split(":")[0] if conditional else level,
+                "level": level_name,
                 "message": rule["message"],
                 "conditional": conditional,
-                "threshold_days": int(level.split(":")[1]) if conditional else None,
+                "threshold_days": threshold_N,
+                "threshold_T": threshold_T,
+                # The matched rule's path template (e.g. "/vdbs/{vdbId}/refresh_by_snapshot").
+                # Used to key velocity counters and standing grants per operation-type
+                # rather than per resolved resource.
+                "path_pattern": rule["path_pattern"],
             }
 
     # Safety net: a destructive delete must never run unconfirmed just because
@@ -360,7 +419,26 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
             ),
             "conditional": False,
             "threshold_days": None,
+            "threshold_T": None,
+            "path_pattern": path,
         }
+
+    # Keyword fallback — only when DCT_CONFIRMATION_FALLBACK=keyword and path is not a read exclusion
+    _fallback = os.environ.get("DCT_CONFIRMATION_FALLBACK", "keyword").lower()
+    if _fallback == "keyword" and not _is_read_exclusion(path):
+        # Import here to avoid circular imports (dynamic_confirmation imports from loader)
+        try:
+            from dct_mcp_server.tools.core.dynamic_confirmation import (
+                get_confirmation_for_operation_dynamic,
+            )
+
+            dynamic_result = get_confirmation_for_operation_dynamic(method, path)
+            if dynamic_result.get("level", "none") != "none":
+                # Keyword fallback has no rule template; key on the resolved path.
+                dynamic_result.setdefault("path_pattern", path)
+                return dynamic_result
+        except ImportError:
+            pass
 
     # No matching rule - no confirmation needed
     return {
@@ -368,6 +446,8 @@ def get_confirmation_for_operation(method: str, path: str) -> Dict[str, Any]:
         "message": None,
         "conditional": False,
         "threshold_days": None,
+        "threshold_T": None,
+        "path_pattern": path,
     }
 
 
@@ -383,7 +463,10 @@ def requires_confirmation(method: str, path: str) -> bool:
         True if confirmation is required
     """
     confirmation = get_confirmation_for_operation(method, path)
-    return confirmation["level"] != "none"
+    # batch_check is a dynamic-mode velocity level evaluated by the dynamic
+    # execute gate against a live per-identity counter; on its own (static path)
+    # it does not require per-call confirmation.
+    return confirmation["level"] not in ("none", "batch_check")
 
 
 # ============================================================================
@@ -560,6 +643,7 @@ def clear_cache():
     load_toolset_apis.cache_clear()
     load_toolset_grouped_apis.cache_clear()
     load_manual_confirmation_rules.cache_clear()
+    _load_read_exclusions.cache_clear()
     logger.info("Configuration cache cleared")
 
 

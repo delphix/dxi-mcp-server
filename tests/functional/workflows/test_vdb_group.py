@@ -6,9 +6,9 @@ Translates `.claude/test/testing/self_service.md` prompts 18-34:
     18. Search for all VDB groups
     19. Get the first VDB group's details
     20. Refresh that VDB group
-    21. List bookmarks, then refresh from the first bookmark
-    22. Refresh by snapshot
-    23. Refresh by timestamp (one hour ago)
+    21. List bookmarks, then refresh from the first bookmark  [elevated conf]
+    22. Refresh by snapshot                [elevated conf]
+    23. Refresh by timestamp (one hour ago) [elevated conf]
     24. Roll back that VDB group           [standard conf]
     25. Lock that VDB group
     26. Unlock that VDB group
@@ -64,12 +64,14 @@ async def test_vdb_group_workflow(mcp_client_self_service, dct_stub):
     assert dct_stub.received_request("GET", f"/dct/v3/vdb-groups/{vg_id}/bookmarks")
     bookmark_id = first_id(res)
 
+    # (elevated conf -> pre-confirm)
     res = await client.call_tool(
         "data_tool",
         {
             "action": "refresh_vdb_group_from_bookmark",
             "vdb_group_id": vg_id,
             "bookmark_id": bookmark_id,
+            "confirmed": True,
         },
     )
     assert not res.is_error
@@ -77,18 +79,28 @@ async def test_vdb_group_workflow(mcp_client_self_service, dct_stub):
         "POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_from_bookmark"
     )
 
-    # Prompt 22 — Refresh by snapshot.
+    # Prompt 22 — Refresh by snapshot (elevated conf -> pre-confirm).
     res = await client.call_tool(
-        "data_tool", {"action": "refresh_vdb_group_by_snapshot", "vdb_group_id": vg_id}
+        "data_tool",
+        {
+            "action": "refresh_vdb_group_by_snapshot",
+            "vdb_group_id": vg_id,
+            "confirmed": True,
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request(
         "POST", f"/dct/v3/vdb-groups/{vg_id}/refresh_by_snapshot"
     )
 
-    # Prompt 23 — Refresh by timestamp (one hour ago).
+    # Prompt 23 — Refresh by timestamp (one hour ago) (elevated conf -> pre-confirm).
     res = await client.call_tool(
-        "data_tool", {"action": "refresh_vdb_group_by_timestamp", "vdb_group_id": vg_id}
+        "data_tool",
+        {
+            "action": "refresh_vdb_group_by_timestamp",
+            "vdb_group_id": vg_id,
+            "confirmed": True,
+        },
     )
     assert not res.is_error
     assert dct_stub.received_request(
