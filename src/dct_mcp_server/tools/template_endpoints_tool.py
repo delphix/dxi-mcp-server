@@ -40,7 +40,7 @@ def check_confirmation(
 ) -> Optional[Dict[str, Any]]:
     """Check if operation requires confirmation. Returns confirmation response or None if confirmed/not needed."""
     confirmation = get_confirmation_for_operation(method, api_path)
-    if confirmation["level"] != "none" and not confirmed:
+    if confirmation["level"] not in ("none", "batch_check") and not confirmed:
         # Merge query params and body into a single review dict so the LLM can
         # render the exact payload that will be sent. None values are already
         # stripped upstream by build_params / body filter.

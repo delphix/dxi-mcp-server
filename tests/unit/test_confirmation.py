@@ -74,6 +74,7 @@ def test_every_confirmation_rule_is_reachable(rule):
         "manual",
         "retention_check",
         "policy_impact_check",
+        "batch_check",
     }
     # Conditional levels expose a threshold.
     if ":" in rule.level and first_match_base == expected_base:

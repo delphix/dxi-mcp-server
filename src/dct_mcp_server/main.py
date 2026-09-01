@@ -11,7 +11,6 @@ Toolset Configuration:
 """
 
 import asyncio
-import logging
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -24,6 +23,7 @@ from dct_mcp_server.config import (
     validate_all_configs,
 )
 from dct_mcp_server.core import end_session, start_session
+from dct_mcp_server.core.client_registry import ClientRegistry
 from dct_mcp_server.core.exceptions import MCPError
 from dct_mcp_server.core.logging import get_logger, setup_logging
 from dct_mcp_server.dct_client import DCTAPIClient
@@ -42,7 +42,7 @@ async def lifespan(app: FastMCP):
     A context manager to handle server startup and shutdown events,
     including session management and resource cleanup.
     """
-    config = get_dct_config()
+    config = get_dct_config(require_key=False)
     session_id = None
     if config.get("is_local_telemetry_enabled"):
         session_id = start_session()
@@ -53,8 +53,11 @@ async def lifespan(app: FastMCP):
     try:
         yield
     finally:
-        # Ensure client is closed when server exits
-        if dct_client:
+        # Ensure client(s) are closed when server exits
+        if client_registry:
+            logger.info("Closing all per-identity DCT API clients")
+            await client_registry.close_all()
+        elif dct_client:
             logger.info("Closing DCT API client")
             await dct_client.close()
         if session_id:
@@ -71,6 +74,9 @@ app = FastMCP(
 
 # Initialize DCT client - will be set in main()
 dct_client = None
+
+# Set in async_main() when DCT_AUTH_MODE=embedded; used by lifespan cleanup
+client_registry = None
 
 # Flag to track if shutdown is in progress
 _shutdown_in_progress = False
@@ -135,10 +141,17 @@ async def async_main():
     """Async main entry point"""
     # Signal handlers are now set up in main() before the loop runs
     try:
-        # Initialize DCT client (this will validate configuration)
-        global dct_client
-        dct_client = DCTAPIClient()
-        logger.info(f"DCT MCP Server initialized with base URL: {dct_client.base_url}")
+        # Load config early — require_key=False so embedded mode works without DCT_API_KEY
+        config = get_dct_config(require_key=False)
+        auth_mode = config.get("auth_mode", "standalone")
+
+        # In standalone mode, API key is still required
+        if auth_mode != "embedded" and not config.get("api_key"):
+            logger.error("DCT_API_KEY is required in standalone mode")
+            raise ValueError(
+                "DCT_API_KEY environment variable is required. "
+                "Please set it to your Delphix DCT API key."
+            )
 
         # Log toolset configuration
         toolset = "dynamic"
@@ -159,32 +172,87 @@ async def async_main():
         except Exception as e:
             logger.warning(f"Could not determine toolset configuration: {e}")
 
-        # Generate fresh tools from DCT API (non-blocking — runs in thread pool).
-        # This path is for the existing persona-based toolsets only and is
-        # skipped in dynamic mode, which registers only discovery/execute and
-        # sources its spec from spec_cache.load_and_cache_spec() instead —
-        # running the generator there would be wasted work (an extra spec
-        # download + filesystem churn that no registered tool consumes).
-        if is_dynamic_mode():
-            # Dynamic mode: load and cache the OpenAPI spec before tool registration
-            await _load_dynamic_spec(app)
-        else:
-            try:
-                await asyncio.to_thread(generate_tools_from_openapi)
-                logger.info("Successfully generated fresh tools from DCT API")
-            except Exception as e:
-                logger.warning(f"Tool generation failed, will use pre-built tools: {e}")
-
-        # Dynamically register all tools
+        # Create the DCT client (standalone) or per-caller registry (embedded)
+        # BEFORE tool generation, so a bad configuration — e.g. missing or
+        # invalid credentials — surfaces before any network spec download.
         from .tools import register_all_tools
 
-        register_all_tools(app, dct_client)
+        global dct_client, client_registry
+
+        if auth_mode == "embedded":
+            # Embedded mode: per-request client registry; no global singleton
+            client_registry = ClientRegistry()
+            logger.info(
+                "Embedded auth mode: ClientRegistry initialized (per-request client resolution)"
+            )
+            # The old HTTP ClientIDMiddleware lazily created the per-caller
+            # telemetry session on the first request. Under stdio there is one
+            # process per caller, so create that session once here at startup.
+            if config.get("is_local_telemetry_enabled") and config.get("client_id"):
+                try:
+                    from dct_mcp_server.core.session import (
+                        get_or_create_caller_session,
+                    )
+
+                    get_or_create_caller_session(config["client_id"])
+                except Exception:
+                    pass
+        else:
+            # Standalone mode: single-user API key from env (existing behavior)
+            dct_client = DCTAPIClient()
+            logger.info(
+                f"DCT MCP Server initialized with base URL: {dct_client.base_url}"
+            )
+
+        # Generate fresh tools from DCT API (non-blocking — runs in thread pool).
+        # In embedded mode we use the bundled spec (no API key needed).
+        # In standalone mode the existing persona-toolset logic applies.
+        if auth_mode == "embedded":
+            # Dynamic mode keeps its spec in spec_cache (read by the discovery and
+            # execute tools), which is separate from the generator's bundled spec.
+            # The generator emits persona-toolset modules that dynamic mode never
+            # registers, so running it here is wasted work — and under stdio that
+            # waste is paid on *every session spawn* rather than once per
+            # container, because the host runs one process per caller.
+            if is_dynamic_mode():
+                await _load_dynamic_spec(app)
+            else:
+                # Embedded mode: use the bundled spec — no live download needed
+                try:
+                    await asyncio.to_thread(generate_tools_from_openapi)
+                    logger.info(
+                        "Tool generation complete (embedded mode, bundled spec)"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Tool generation failed in embedded mode, will use pre-built tools: {e}"
+                    )
+        else:
+            # Standalone mode: try live spec download for persona toolsets.
+            # Dynamic mode skips the generator and loads the spec via spec_cache instead.
+            if is_dynamic_mode():
+                await _load_dynamic_spec(app)
+            else:
+                try:
+                    await asyncio.to_thread(generate_tools_from_openapi)
+                    logger.info("Successfully generated fresh tools from DCT API")
+                except Exception as e:
+                    logger.warning(
+                        f"Tool generation failed, will use pre-built tools: {e}"
+                    )
+
+        # Register all tools with the client/registry created above.
+        register_all_tools(
+            app, client_registry if auth_mode == "embedded" else dct_client
+        )
+
         logger.info("All available tools have been registered.")
 
-        # Run the server
+        # Run the server over stdio. The embedded deployment spawns one
+        # server process per caller over a stdio pipe; there is no HTTP
+        # transport.
+        logger.info("Starting MCP server with stdio transport...")
         try:
-            # Start the server using stdio transport
-            logger.info("Starting MCP server with stdio transport...")
             await app.run_stdio_async()
         except asyncio.CancelledError:
             logger.info("Server tasks cancelled for shutdown.")
@@ -208,7 +276,6 @@ async def async_main():
 def main():
     """Synchronous main entry point - wrapper for async_main"""
     setup_logging()
-    logger = logging.getLogger(__name__)
     try:
         # Run the async main function
         asyncio.run(async_main())
