@@ -1,0 +1,15 @@
+# Spec-Code Coverage: DLPXECO-14324
+
+<!-- Guidance: One row per FR from docs/DLPXECO-14324/DLPXECO-14324-functional.md (or, where vision was skipped, from the design doc Notes section).
+     Every PASS row requires a file:line citation from grep output. -->
+
+| FR-ID | Description | Status | Evidence (file:line or "none") |
+|-------|-------------|--------|-------------------------------|
+| FR-001 | HTTP transport — `DCT_TRANSPORT=stdio\|http`; selects FastMCP run method | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:56` (`with _set_env(DCT_TRANSPORT="stdio")` in `TestS1_StdioTransport.test_default_transport_is_stdio`); source: `src/dct_mcp_server/config/config.py:32` |
+| FR-002 | Embedded auth — read `X-CLIENT-ID` header per request via ASGI middleware | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:79` (`test_embedded_mode_does_not_require_api_key` in `TestS2_HttpTransportEmbeddedMode`); source: `src/dct_mcp_server/main.py:29` (`from dct_mcp_server.core.auth import ClientIDMiddleware`) |
+| FR-003 | Per-request client — `ClientRegistry` keyed by identity; no cross-user leakage | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:248` (`registry = ClientRegistry()` in `TestS4_CrossUserIsolation.test_client_registry_creates_separate_clients_per_identity`); source: `src/dct_mcp_server/main.py:30` (`from dct_mcp_server.core.client_registry import ClientRegistry`) |
+| FR-004 | Startup tool gen without user credential — bundled spec as primary source in embedded mode | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:420` (`test_toolsgenerator_uses_bundled_spec_in_embedded_mode` in `TestS7_EmbeddedModeToolGeneration`); source: `src/dct_mcp_server/main.py:49` (`config = get_dct_config(require_key=False)`) |
+| FR-005 | Per-caller session/telemetry scoping | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:469` (`test_get_or_create_caller_session_creates_session` in `TestS8_PerCallerTelemetry`); source: `src/dct_mcp_server/core/session.py:135` (`def get_or_create_caller_session`) |
+| FR-006 | Auth error on missing/invalid identity; no fallback | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:319` (`test_middleware_raises_auth_error_when_header_absent` in `TestS5_MissingClientId`); source: `src/dct_mcp_server/core/auth.py:15` (`from dct_mcp_server.core.exceptions import AuthError`) |
+| FR-007 | Credential-by-reference + inline-secret guard | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:563` (`test_secret_guard_rejects_apk_prefix` in `TestS10_SecretGuardRejectsRawKey`); source: `src/dct_mcp_server/dct_client/client.py` (SecretGuard class) |
+| FR-008 | Secret hygiene — no logging of keys/identities; TLS required on HTTP endpoint | PASS | `.claude/test/generated-test/test_DLPXECO-14324.py:641` (`test_mask_secret_hides_api_key` in `TestS12_SecretHygiene`); source: `src/dct_mcp_server/config/config.py:36` (`"require_tls": os.getenv("DCT_REQUIRE_TLS", "true")...`); `src/dct_mcp_server/main.py:231` (TLS warning log) |

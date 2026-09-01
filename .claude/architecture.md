@@ -17,18 +17,28 @@ A Model Context Protocol (MCP) server that exposes Delphix Data Control Tower (D
 main.py                              ← Entry point; FastMCP app, lifespan, startup/shutdown
     ├── toolsgenerator/driver.py     ← Generates tool modules from OpenAPI spec at startup
     ├── tools/__init__.py            ← Dynamic tool registration (priority: generated → pre-built)
-    │       ├── tools/core/meta_tools.py      ← Retained spec helpers (find_endpoint, get_spec_chunk)
-    │       ├── tools/core/tool_factory.py    ← Runtime tool generation from OpenAPI spec
-    │       └── tools/*_endpoints_tool.py     ← Pre-built grouped tools (fallback)
+    │       ├── tools/core/meta_tools.py          ← Retained spec helpers (find_endpoint, get_spec_chunk)
+    │       ├── tools/core/tool_factory.py         ← Runtime tool generation from OpenAPI spec
+    │       ├── tools/core/dynamic.py              ← Dynamic mode: discovery + execute + FR-001–008 gate
+    │       ├── tools/core/confirmation_token.py   ← Single-use body-bound HMAC tokens + ConsumedTokenStore
+    │       ├── tools/core/confirmation_store.py   ← ConsumedTokenStore + GrantStore (in-memory, TTL)
+    │       ├── tools/core/confirmation_levels.py  ← validate_elevated(), validate_manual(), build_required_fields()
+    │       ├── tools/core/confirmation_resolver.py← check_confirmation_with_fallback(); velocity + grant routing
+    │       ├── tools/core/audit.py                ← Immutable gate-event emitter (7 outcomes)
+    │       ├── tools/core/floor_operations.py     ← is_floor_operation(); non-bypassable operations
+    │       ├── tools/core/velocity_counter.py     ← Sliding-window per-identity batch-check counter
+    │       └── tools/*_endpoints_tool.py          ← Pre-built grouped tools (fallback)
     ├── config/config.py             ← Env var loading and validation
     ├── config/loader.py             ← Toolset + confirmation rule parsing (lru_cache'd)
-    │       ├── config/toolsets/*.txt          ← Persona toolset definitions
-    │       └── config/mappings/manual_confirmation.txt
+    │       ├── config/toolsets/*.txt              ← Persona toolset definitions
+    │       ├── config/mappings/manual_confirmation.txt
+    │       ├── config/mappings/floor_operations.txt  ← Patterns for non-bypassable operations
+    │       └── config/mappings/read_exclusions.txt   ← POSTs excluded from keyword fallback
     ├── dct_client/client.py         ← Async httpx client with retry/backoff
     ├── testing/cli.py               ← dct-mcp-test CLI — test runner wrapping pytest with layer routing
     └── core/
             ├── logging.py           ← setup_logging(), get_logger(), rotating file handler
-            ├── session.py           ← Telemetry session management
+            ├── session.py           ← Telemetry session management; mints PROCESS_IDENTITY at startup
             ├── decorators.py        ← @log_tool_execution (apply to all tool functions)
             └── exceptions.py        ← DCTClientError, MCPError
 ```
@@ -67,8 +77,8 @@ Action names are defined in `config/toolsets/*.txt`. The implementation and the 
 Destructive operations use a two-step call pattern:
 
 ```
-1. tool(action="delete", id="x")          → returns confirmation_required
-2. tool(action="delete", id="x", confirmed=True)  → executes
+1. tool(action="delete", id="x")                              → returns confirmation_required + token
+2. tool(action="delete", id="x", confirmation_token="<tok>")  → verifies token, executes
 ```
 
 Rules in `config/mappings/manual_confirmation.txt`:
@@ -76,7 +86,16 @@ Rules in `config/mappings/manual_confirmation.txt`:
 METHOD|path_pattern|confirmation_level|message_template
 ```
 
-Levels: `standard`, `elevated`, `manual`, `retention_check:N`, `policy_impact_check:N`
+Levels: `standard`, `elevated`, `manual`, `retention_check:N`, `policy_impact_check:N`, `batch_check:N:T`
+
+**Hardened in DLPXECO-14458** (confirmation-system strengthening):
+- **Single-use body-bound tokens** — HMAC includes `canonical_json(body)`; tokens consumed on use (no replay)
+- **Differentiated levels** — `elevated` requires `confirmed_resource_name`; `manual` adds `acknowledged_impact=True`
+- **Floor operations** — any DELETE or POST to `*/delete` cannot be bypassed by grants (`floor_operations.txt`)
+- **Batch grants** — `GrantStore` lets one user approval cover N enumerated calls; floor ops excluded
+- **MCP elicitation** — `Context.elicit()` used when client supports it; `DCT_CONFIRMATION_ENFORCEMENT=strict` refuses non-elicitation clients
+- **Per-identity velocity** — `batch_check:N:T` keyed on `(PROCESS_IDENTITY, method, path_template)`
+- **Audit events** — `audit.py` emits 7 outcomes (`required`, `approved`, `refused`, `expired`, `replay_rejected`, `grant_covered`, `batch_triggered`) always, regardless of telemetry opt-in
 
 ---
 

@@ -117,7 +117,11 @@ def _gated_self_service():
         conf = get_confirmation_for_operation(
             c.method, re.sub(r"\{[^}]+\}", DUMMY, c.path)
         )
-        if conf.get("level", "none") == "none":
+        # batch_check is a dynamic-mode velocity level, not a per-call static
+        # handshake gate — in the pre-built/static tool path it proceeds
+        # transparently below the sliding-window threshold, so it is not part of
+        # this two-step confirmation sweep.
+        if conf.get("level", "none") in ("none", "batch_check"):
             continue
         if (c.tool, c.action) in seen:
             continue

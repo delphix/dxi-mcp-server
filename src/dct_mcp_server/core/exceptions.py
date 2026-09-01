@@ -14,3 +14,9 @@ class ToolError(MCPError):
     """Raised for errors that occur within a tool."""
 
     pass
+
+
+class AuthError(MCPError):
+    """Raised by auth.py when X-CLIENT-ID header is missing or invalid."""
+
+    pass

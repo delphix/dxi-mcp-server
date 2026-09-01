@@ -1,0 +1,13 @@
+# Floor operation patterns — operations that require individual single-use
+# confirmation and cannot be authorized by batch grant, standing approval,
+# or any configuration value.
+#
+# Format: METHOD|path_pattern
+# Use DELETE|* to match all HTTP DELETE operations.
+# Use POST|*/delete to match POST to any path ending in /delete.
+# Blank lines and lines starting with # are ignored.
+DELETE|*
+POST|*/delete
+POST|/dsources/delete
+DELETE|/management/engines/{engineId}
+DELETE|/management/accounts/{id}
