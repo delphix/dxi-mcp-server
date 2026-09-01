@@ -502,7 +502,7 @@ dev = [
 requires-dist = [
     { name = "click", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "cryptography", specifier = ">=50.0.0" },
-    { name = "fastmcp", specifier = ">=2.13.2" },
+    { name = "fastmcp", specifier = ">=2.13.2,<4" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "mcp", specifier = ">=1.28.1,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
