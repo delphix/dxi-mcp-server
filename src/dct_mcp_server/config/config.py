@@ -49,6 +49,11 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         "batch_counter_persistence": os.getenv(
             "DCT_BATCH_COUNTER_PERSISTENCE", "off"
         ).lower(),
+        # Host-injection shared secret (optional). When non-empty, the embedding
+        # host can sign a host_injection_marker with this key to exempt injected
+        # credential fields from the sensitive-input gate's rule 1. Without this
+        # secret, the gate behaves exactly as before (no exemptions granted).
+        "host_shared_secret": os.getenv("DCT_HOST_SHARED_SECRET", ""),
     }
 
     # Validate required configuration
@@ -162,6 +167,10 @@ def print_config_help():
     )
     print(
         "  DCT_BATCH_COUNTER_PERSISTENCE    Batch counter persistence: off or file (default: off)"
+    )
+    print(
+        "  DCT_HOST_SHARED_SECRET           Shared HMAC secret for host-injection markers "
+        "(default: empty — gate always fires on retry)"
     )
     print()
     print("Example:")

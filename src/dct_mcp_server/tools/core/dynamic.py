@@ -14,6 +14,9 @@ This module is independent of the existing tool_factory.py grouped-tool generati
 
 from __future__ import annotations
 
+import hashlib
+import hmac as _hmac_mod
+import os
 import re
 import uuid
 from typing import Any
@@ -299,6 +302,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         acknowledged_impact: bool | None = None,
         batch_intent: dict[str, Any] | None = None,
         grant_token: str | None = None,
+        host_injection_marker: dict[str, Any] | None = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -341,6 +345,15 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             grant_token:  Token from a prior batch_intent confirmation. Pass this on
                           subsequent calls to execute against the active batch grant
                           without requiring individual confirmation for each call.
+            host_injection_marker: Optional HMAC-signed marker from the embedding
+                          host, used to exempt host-injected credential fields from
+                          the sensitive-input gate's rule 1. Format:
+                          {"fields": ["password", ...], "hmac": "<hex-digest>"}
+                          The HMAC must be computed with DCT_HOST_SHARED_SECRET over
+                          canonical_json({"body": canonical_json(body),
+                          "fields": sorted(fields)}). Without the shared secret,
+                          the marker is unverifiable and confers no exemption
+                          (AC-6: gate unchanged for non-embedded deployments).
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
@@ -436,9 +449,19 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # and it is absent, pause so the host can capture it out-of-band (masked
         # input or a stored-credential alias) and re-call with it applied. Runs
         # before the confirmation gate: capture the secret first, then confirm.
+        #
+        # DLPXECO-14609: on the retry leg the body already contains the injected
+        # secret, so the gate would loop forever. The embedding host breaks the
+        # cycle by passing a signed host_injection_marker that names the fields it
+        # injected. The marker is HMAC-verified against DCT_HOST_SHARED_SECRET so
+        # it cannot be forged by the model. Cleared fields skip rule 1 only; rule 2
+        # (identity pairing) is unaffected. Non-embedded deployments set no shared
+        # secret and therefore receive no exemption (AC-6: no regression).
         if method_upper in ("POST", "PUT", "PATCH"):
+            _host_secret = os.getenv("DCT_HOST_SHARED_SECRET", "")
+            _host_cleared = _verify_host_marker(host_injection_marker, body, _host_secret)
             missing_secrets = _missing_sensitive_fields(
-                body, _annotated_credential_fields(spec)
+                body, _annotated_credential_fields(spec), _host_cleared
             )
             if missing_secrets:
                 return {
@@ -1455,8 +1478,54 @@ def _annotated_credential_fields(spec: dict[str, Any] | None) -> frozenset[str]:
     return cached
 
 
+def _verify_host_marker(
+    marker: dict | None,
+    body: dict | None,
+    shared_secret: str,
+) -> frozenset[str]:
+    """Verify a host-injection marker and return the set of cleared field names.
+
+    When the embedding host captures a secret out-of-band and injects it into
+    the body, it also passes a signed marker so the gate can distinguish a
+    host-injected value from one the model supplied inline.
+
+    Returns frozenset() — no exemptions — if any of these hold:
+    - ``shared_secret`` is empty (AC-6: no regression for non-embedded deployments)
+    - ``marker`` is None or missing required keys
+    - HMAC verification fails (AC-3: marker is not model-forgeable)
+
+    The HMAC payload binds both the field list and the canonical request body so
+    a marker cannot be replayed against a different body or a different set of
+    fields (AC-4: multi-secret bodies work correctly).
+    """
+    if not shared_secret or not marker:
+        return frozenset()
+    try:
+        fields = marker.get("fields")
+        provided_hmac = marker.get("hmac")
+        if not fields or not isinstance(fields, list) or not provided_hmac:
+            return frozenset()
+        if not all(isinstance(f, str) for f in fields):
+            return frozenset()
+        # Bind HMAC to sorted field list + canonical body to prevent replay.
+        payload = canonical_json(
+            {"body": canonical_json(body), "fields": sorted(fields)}
+        )
+        expected = _hmac_mod.new(
+            shared_secret.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not _hmac_mod.compare_digest(expected, str(provided_hmac)):
+            return frozenset()
+        return frozenset(fields)
+    except Exception:
+        return frozenset()
+
+
 def _collect_missing_secrets(
-    obj: Any, out: list[str], credential_fields: frozenset[str]
+    obj: Any, out: list[str], credential_fields: frozenset[str],
+    host_cleared_fields: frozenset[str] = frozenset(),
 ) -> None:
     """Recursively gather secret field names that must be captured out-of-band.
 
@@ -1468,17 +1537,28 @@ def _collect_missing_secrets(
     1. Any field the spec annotates as a credential (``credential_fields``) that
        appears in the body — the model must never supply it inline, so we flag
        it whether present (strip + recapture) or paired-and-absent.
+       **Exception**: if the field is in ``host_cleared_fields``, the trusted
+       embedding host already captured it out-of-band and injected it, so rule 1
+       is suppressed for that field (DLPXECO-14609).
     2. Identity pairing — an identity field (``username``) whose paired secret
        (``password``) is absent from the same container, unless a
        mutually-exclusive credential alternative (``ssh_key``) is supplied.
+       Identity pairing is unaffected by ``host_cleared_fields``.
     """
     if isinstance(obj, dict):
         for value in obj.values():
-            _collect_missing_secrets(value, out, credential_fields)
+            _collect_missing_secrets(value, out, credential_fields, host_cleared_fields)
         for key in obj:
-            if key in credential_fields and key not in out:
+            # Rule 1: annotated credential present in body → flag for recapture,
+            # UNLESS the trusted host declared it as already injected.
+            if (
+                key in credential_fields
+                and key not in host_cleared_fields
+                and key not in out
+            ):
                 out.append(key)
         for key in obj:
+            # Rule 2: identity pairing — unchanged; host_cleared_fields has no effect here.
             secret = _secret_for_identity(key)
             if not secret or secret in obj or secret in out:
                 continue
@@ -1489,20 +1569,28 @@ def _collect_missing_secrets(
             out.append(secret)
     elif isinstance(obj, list):
         for item in obj:
-            _collect_missing_secrets(item, out, credential_fields)
+            _collect_missing_secrets(item, out, credential_fields, host_cleared_fields)
 
 
 def _missing_sensitive_fields(
-    body: dict[str, Any] | None, credential_fields: frozenset[str] = frozenset()
+    body: dict[str, Any] | None,
+    credential_fields: frozenset[str] = frozenset(),
+    host_cleared_fields: frozenset[str] = frozenset(),
 ) -> list[str]:
     """Secret-bearing fields the body must not carry inline, in first-seen order.
 
     Value-based (not schema-based) so nested and discriminated-union bodies are
     handled uniformly. Combines spec-annotated credential fields with identity
     pairing; the host captures each out-of-band and re-calls with it applied.
+
+    ``host_cleared_fields`` names fields the embedding host has already injected;
+    those fields are exempt from rule 1 (the "strip + recapture" check) but not
+    from rule 2 (identity pairing).  Pass ``frozenset()`` (the default) for
+    non-embedded deployments or when no valid host marker is present — this
+    preserves the pre-DLPXECO-14609 behavior exactly.
     """
     missing: list[str] = []
-    _collect_missing_secrets(body or {}, missing, credential_fields)
+    _collect_missing_secrets(body or {}, missing, credential_fields, host_cleared_fields)
     return missing
 
 
