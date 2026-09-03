@@ -47,6 +47,7 @@ from dct_mcp_server.core.session import get_process_identity
 from dct_mcp_server.tools.core.audit import emit_gate_event
 from dct_mcp_server.tools.core.confirmation_levels import (
     build_required_fields,  # noqa: F401 — available for callers; used by validators
+    host_approval_configured,
     validate_elevated,
     validate_manual,
 )
@@ -497,6 +498,9 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 _enforcement = "advisory"
                 _grant_ttl = 900
                 _batch_size = 10
+            # Single source of truth, shared with build_required_fields, so
+            # what is advertised in required_fields is always what is enforced.
+            _host_approval = host_approval_configured()
 
             # FR-004: Handle batch_intent (declare a batch grant)
             if batch_intent is not None:
@@ -952,7 +956,13 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                             }
 
                     # Token verified (or elicitation-approved) — check level-specific requirements (FR-002)
-                    if conf_level == "elevated":
+                    # Skipped when the embedding host supplied its own trusted
+                    # human approval: confirmed_resource_name would be echoed by
+                    # the model, not typed by a person, so it proves nothing the
+                    # host's button has not already proven (DLPXECO-14611). The
+                    # token gate above still applies, and conf_level is left
+                    # intact so audit events keep saying elevated/manual.
+                    if conf_level == "elevated" and not _host_approval:
                         level_result = validate_elevated(
                             resolved_path, confirmed_resource_name
                         )
@@ -983,7 +993,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                                 "ttl_seconds": _token_ttl,
                             }
 
-                    elif conf_level == "manual":
+                    elif conf_level == "manual" and not _host_approval:
                         level_result = validate_manual(
                             resolved_path, confirmed_resource_name, acknowledged_impact
                         )
