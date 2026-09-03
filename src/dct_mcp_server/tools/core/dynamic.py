@@ -303,6 +303,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         batch_intent: dict[str, Any] | None = None,
         grant_token: str | None = None,
         sensitive_applied: dict[str, Any] | None = None,
+        human_approved: dict[str, Any] | None = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -349,6 +350,11 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                           name the secret fields it captured from the user and
                           injected into body. Authenticated with a nonce only
                           the host holds, so setting it gains a caller nothing.
+            human_approved: Reserved for the embedding host, which uses it to
+                          attest that a human approved this exact operation in
+                          its own trusted UI. Authenticated with the same nonce,
+                          so setting it gains a caller nothing; the confirmation
+                          gate below still applies to everyone else.
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
@@ -501,6 +507,9 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             # Single source of truth, shared with build_required_fields, so
             # what is advertised in required_fields is always what is enforced.
             _host_approval = host_approval_configured()
+            # The host already put this operation in front of a human and got
+            # an individual approval; see _host_approved.
+            _host_attested = _host_approved(human_approved)
 
             # FR-004: Handle batch_intent (declare a batch grant)
             if batch_intent is not None:
@@ -706,7 +715,25 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                     )
                     _grant_kind = "standing"
 
-                if conf["requires_confirmation"] and not _grant_authorized:
+                if conf["requires_confirmation"] and _host_attested:
+                    # Satisfied, not skipped: a human approved this very call
+                    # moments ago in the host's trusted UI, which is the
+                    # individual single-use confirmation the gate exists to
+                    # obtain. Recorded under its own outcome so the audit trail
+                    # shows how approval was got (DLPXECO-14613).
+                    emit_gate_event(
+                        "host_attested",
+                        identity,
+                        method_upper,
+                        resolved_path,
+                        conf_level or "standard",
+                    )
+
+                if (
+                    conf["requires_confirmation"]
+                    and not _grant_authorized
+                    and not _host_attested
+                ):
                     # Resolve client elicitation capability once — it decides
                     # whether an always-enforced trigger (a velocity/bulk hit)
                     # can be confirmed inline or must be refused outright.
@@ -1455,6 +1482,37 @@ _credential_field_cache: dict[int, frozenset[str]] = {}
 _SENSITIVE_NONCE_ENV = "DCT_MCP_SENSITIVE_NONCE"
 
 
+def _host_nonce_ok(marker: Any) -> bool:
+    """True when a marker carries the spawning host's shared secret.
+
+    The one trust check behind every host-only argument: the nonce is passed in
+    this server's environment at spawn and never appears in a tool result, a
+    prompt or the conversation, so only the embedding host can present it.
+    Unset (non-embedded deployments) => no marker is ever honoured.
+    """
+    expected = os.environ.get(_SENSITIVE_NONCE_ENV) or ""
+    if not expected or not isinstance(marker, dict):
+        return False
+    return hmac.compare_digest(str(marker.get("nonce") or ""), expected)
+
+
+def _host_approved(human_approved: Any) -> bool:
+    """True when the host attests a human approved *this* call, just now.
+
+    The embedding host gates every mutating call behind its own trusted
+    approval UI. When the user approves an individual operation there, the host
+    replays the call with this marker, and the confirmation requirement is
+    already met: asking again would put the same question to the same person a
+    second time (DLPXECO-14613).
+
+    The host's side of the contract is that it attests only for an individual,
+    per-operation human decision -- never for a session-wide grant. That is
+    what keeps floor operations (see floor_operations.py) requiring individual
+    single-use confirmation, which no grant may satisfy.
+    """
+    return _host_nonce_ok(human_approved)
+
+
 def _host_applied_fields(sensitive_applied: Any) -> frozenset[str]:
     """Field names the host injected out-of-band, if the marker authenticates.
 
@@ -1462,10 +1520,7 @@ def _host_applied_fields(sensitive_applied: Any) -> frozenset[str]:
     or wrong nonce yields nothing, so a model that discovers this argument
     cannot use it to smuggle an inline secret past the gate.
     """
-    expected = os.environ.get(_SENSITIVE_NONCE_ENV) or ""
-    if not expected or not isinstance(sensitive_applied, dict):
-        return frozenset()
-    if not hmac.compare_digest(str(sensitive_applied.get("nonce") or ""), expected):
+    if not _host_nonce_ok(sensitive_applied):
         return frozenset()
     fields = sensitive_applied.get("fields")
     if not isinstance(fields, list):
