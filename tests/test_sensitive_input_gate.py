@@ -4,12 +4,15 @@ Unit tests for the execute() sensitive-input gate (DLPXECO-14406).
 Coverage targets:
 - _secret_for_identity: username/access_key pairings, prefix handling, non-pairs
 - _missing_sensitive_fields: top-level, nested, S3, mutual-exclusion suppression
+- _host_applied_fields + the second leg of the capture handshake (DLPXECO-14603)
 
 All functions in this module were AI-generated.
 """
 
 from dct_mcp_server.tools.core.dynamic import (
+    _SENSITIVE_NONCE_ENV,
     _annotated_credential_fields,
+    _host_applied_fields,
     _missing_sensitive_fields,
     _secret_for_identity,
 )
@@ -145,3 +148,140 @@ class TestAnnotatedCredentialFields:  # AI-generated
         # Default (empty) set → behaves exactly like the identity-pairing gate.
         assert _missing_sensitive_fields({"encryption_key": "abc"}) == []
         assert _missing_sensitive_fields({"username": "u"}) == ["password"]
+
+
+class TestHostAppliedFields:
+    """Authentication of the host's out-of-band injection marker."""
+
+    _NONCE = "nonce-abc-123"
+
+    def test_DLPXECO14603_valid_marker_returns_fields(
+        self, monkeypatch
+    ):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+        assert _host_applied_fields(
+            {"nonce": self._NONCE, "fields": ["password", "secret_key"]}
+        ) == frozenset({"password", "secret_key"})
+
+    def test_DLPXECO14603_wrong_nonce_is_ignored(self, monkeypatch):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+        assert (
+            _host_applied_fields({"nonce": "guessed", "fields": ["password"]})
+            == frozenset()
+        )
+
+    def test_DLPXECO14603_missing_nonce_is_ignored(self, monkeypatch):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+        assert _host_applied_fields({"fields": ["password"]}) == frozenset()
+
+    def test_DLPXECO14603_unset_env_honours_no_marker(
+        self, monkeypatch
+    ):  # AI-generated
+        # Non-embedded deployments have no shared secret, so no caller can
+        # ever exempt a field.
+        monkeypatch.delenv(_SENSITIVE_NONCE_ENV, raising=False)
+        assert (
+            _host_applied_fields({"nonce": "", "fields": ["password"]}) == frozenset()
+        )
+
+    def test_DLPXECO14603_malformed_marker_is_ignored(
+        self, monkeypatch
+    ):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+        assert _host_applied_fields(None) == frozenset()
+        assert _host_applied_fields("password") == frozenset()
+        assert (
+            _host_applied_fields({"nonce": self._NONCE, "fields": "password"})
+            == frozenset()
+        )
+        assert (
+            _host_applied_fields({"nonce": self._NONCE, "fields": [None, ""]})
+            == frozenset()
+        )
+
+
+# The host's authenticated marker reaches the gate as a narrowed credential
+# set (see the execute() call site), so the tests below narrow it the same way.
+_APPLIED = frozenset({"password"})
+
+
+class TestSensitiveGateSecondLeg:
+    """Regression tests for DLPXECO-14603 — the gate must *clear* once the
+    host has captured the secret and injected it, or the capture prompt is
+    re-issued after every submission and the operation never runs.
+
+    The existing coverage above only asserts the gate fires (first leg).
+    """
+
+    _CREDS = frozenset({"password"})
+
+    def test_DLPXECO14603_gate_clears_after_host_injection(self):  # AI-generated
+        """Regression test for DLPXECO-14603: password prompt loops forever.
+
+        The exact reproduction from the ticket — identical body before and
+        after capture; only the host's marker distinguishes them.
+        """
+        before = {
+            "name": "r92t",
+            "username": "dlpxqa",
+            "hostname": "r92-tgt.dlpxdc.co",
+            "toolkit_path": "/tmp",
+        }
+        after = {**before, "password": "<captured>"}
+
+        # First leg: the secret is absent, so the host is asked to capture it.
+        assert _missing_sensitive_fields(before, self._CREDS) == ["password"]
+
+        # Second leg: the host injected it and says so — the gate must clear.
+        assert _missing_sensitive_fields(after, self._CREDS - _APPLIED) == []
+
+    def test_DLPXECO14603_inline_secret_without_marker_still_flagged(
+        self,
+    ):  # AI-generated
+        # A model-supplied inline secret carries no marker, so rule 1 must
+        # still fire: the fix must not become "present ⇒ satisfied".
+        body = {"username": "dlpxqa", "password": "model-typed-this"}
+        assert _missing_sensitive_fields(body, self._CREDS) == ["password"]
+
+    def test_DLPXECO14603_marker_only_exempts_named_fields(self):  # AI-generated
+        creds = frozenset({"password", "encryption_key"})
+        body = {
+            "username": "u",
+            "password": "<captured>",
+            "encryption_key": "model-typed-this",
+        }
+        # Only password was captured out-of-band; the inline encryption_key
+        # is still flagged.
+        assert _missing_sensitive_fields(body, creds - _APPLIED) == ["encryption_key"]
+
+    def test_DLPXECO14603_multi_secret_body_clears(self):  # AI-generated
+        creds = frozenset({"password", "secret_key"})
+        body = {
+            "username": "u",
+            "password": "<captured>",
+            "access_key": "AKIA...",
+            "secret_key": "<captured>",
+        }
+        applied = frozenset({"password", "secret_key"})
+        assert _missing_sensitive_fields(body, creds - applied) == []
+
+    def test_DLPXECO14603_nested_container_clears(self):  # AI-generated
+        # POST /environments carries the credential pair inside
+        # host_parameters; the secret lands beside its own identity field.
+        body = {
+            "name": "r92t",
+            "host_parameters": {
+                "username": "dlpxqa",
+                "password": "<captured>",
+            },
+        }
+        assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == []
+
+    def test_DLPXECO14603_marker_for_absent_field_still_requests_it(
+        self,
+    ):  # AI-generated
+        # The host claims it injected the password but the body has none
+        # (injection missed the container). Identity pairing must still ask,
+        # rather than dispatching a credential-less call.
+        body = {"username": "dlpxqa"}
+        assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == ["password"]
