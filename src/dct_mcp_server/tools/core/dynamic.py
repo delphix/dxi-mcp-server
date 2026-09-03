@@ -44,6 +44,7 @@ from dct_mcp_server.core.logging import get_logger
 from dct_mcp_server.core.session import get_process_identity
 from dct_mcp_server.tools.core.audit import emit_gate_event
 from dct_mcp_server.tools.core.confirmation_levels import (
+    _host_approval_configured,
     build_required_fields,  # noqa: F401 — available for callers; used by validators
     validate_elevated,
     validate_manual,
@@ -936,8 +937,13 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                                 "ttl_seconds": _token_ttl,
                             }
 
-                    # Token verified (or elicitation-approved) — check level-specific requirements (FR-002)
-                    if conf_level == "elevated":
+                    # Token verified (or elicitation-approved) — check level-specific
+                    # requirements (FR-002). When DCT_CONFIRMATION_HOST_APPROVAL is set
+                    # the host already gates mutating calls behind its own human-approval
+                    # UI, so confirmed_resource_name / acknowledged_impact add no safety
+                    # value here. Skip the field checks but keep the token gate and the
+                    # audit level unchanged (conf_level is NOT downgraded).
+                    if conf_level == "elevated" and not _host_approval_configured():
                         level_result = validate_elevated(
                             resolved_path, confirmed_resource_name
                         )
@@ -968,7 +974,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                                 "ttl_seconds": _token_ttl,
                             }
 
-                    elif conf_level == "manual":
+                    elif conf_level == "manual" and not _host_approval_configured():
                         level_result = validate_manual(
                             resolved_path, confirmed_resource_name, acknowledged_impact
                         )

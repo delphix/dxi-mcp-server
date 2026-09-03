@@ -49,6 +49,14 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         "batch_counter_persistence": os.getenv(
             "DCT_BATCH_COUNTER_PERSISTENCE", "off"
         ).lower(),
+        # Host-approval waiver: when set, the embedding host presents its own
+        # trusted human-approval UI, so confirmed_resource_name /
+        # acknowledged_impact checks are skipped at the call site. The
+        # per-call confirmation_token gate and audit level are unchanged.
+        "confirmation_host_approval": os.getenv(
+            "DCT_CONFIRMATION_HOST_APPROVAL", "false"
+        ).lower()
+        == "true",
     }
 
     # Validate required configuration
@@ -162,6 +170,12 @@ def print_config_help():
     )
     print(
         "  DCT_BATCH_COUNTER_PERSISTENCE    Batch counter persistence: off or file (default: off)"
+    )
+    print(
+        "  DCT_CONFIRMATION_HOST_APPROVAL   When true, the host presents its own trusted "
+        "human-approval UI (default: false). Skips confirmed_resource_name / "
+        "acknowledged_impact field checks; the per-call confirmation_token gate and "
+        "audit level remain unchanged."
     )
     print()
     print("Example:")

@@ -1,9 +1,12 @@
 """
-Unit tests for the execute() sensitive-input gate (DLPXECO-14406).
+Unit tests for the execute() sensitive-input gate (DLPXECO-14406) and the
+DCT_CONFIRMATION_HOST_APPROVAL flag (DLPXECO-14611).
 
 Coverage targets:
 - _secret_for_identity: username/access_key pairings, prefix handling, non-pairs
 - _missing_sensitive_fields: top-level, nested, S3, mutual-exclusion suppression
+- DCT_CONFIRMATION_HOST_APPROVAL: flag default/parsing, build_required_fields both ways,
+  validators unchanged, no {name} anywhere in mappings
 
 All functions in this module were AI-generated.
 """
@@ -145,3 +148,90 @@ class TestAnnotatedCredentialFields:  # AI-generated
         # Default (empty) set → behaves exactly like the identity-pairing gate.
         assert _missing_sensitive_fields({"encryption_key": "abc"}) == []
         assert _missing_sensitive_fields({"username": "u"}) == ["password"]
+
+
+class TestHostApprovalFlag:
+    """DCT_CONFIRMATION_HOST_APPROVAL flag tests (DLPXECO-14611)."""
+
+    def test_flag_defaults_to_false(self, monkeypatch):  # AI-generated
+        monkeypatch.delenv("DCT_CONFIRMATION_HOST_APPROVAL", raising=False)
+        from dct_mcp_server.tools.core import confirmation_levels
+
+        assert confirmation_levels._host_approval_configured() is False
+
+    def test_flag_true_when_set(self, monkeypatch):  # AI-generated
+        monkeypatch.setenv("DCT_CONFIRMATION_HOST_APPROVAL", "true")
+        from dct_mcp_server.tools.core import confirmation_levels
+
+        assert confirmation_levels._host_approval_configured() is True
+
+    def test_flag_case_insensitive(self, monkeypatch):  # AI-generated
+        monkeypatch.setenv("DCT_CONFIRMATION_HOST_APPROVAL", "TRUE")
+        from dct_mcp_server.tools.core import confirmation_levels
+
+        assert confirmation_levels._host_approval_configured() is True
+
+    def test_build_required_fields_with_flag_returns_token_only(
+        self, monkeypatch
+    ):  # AI-generated
+        monkeypatch.setenv("DCT_CONFIRMATION_HOST_APPROVAL", "true")
+        from dct_mcp_server.tools.core import confirmation_levels
+
+        assert confirmation_levels.build_required_fields("elevated") == [
+            "confirmation_token"
+        ]
+        assert confirmation_levels.build_required_fields("manual") == [
+            "confirmation_token"
+        ]
+        assert confirmation_levels.build_required_fields("standard") == [
+            "confirmation_token"
+        ]
+
+    def test_build_required_fields_without_flag_is_unchanged(
+        self, monkeypatch
+    ):  # AI-generated
+        monkeypatch.delenv("DCT_CONFIRMATION_HOST_APPROVAL", raising=False)
+        from dct_mcp_server.tools.core import confirmation_levels
+
+        assert confirmation_levels.build_required_fields("elevated") == [
+            "confirmation_token",
+            "confirmed_resource_name",
+        ]
+        assert confirmation_levels.build_required_fields("manual") == [
+            "confirmation_token",
+            "confirmed_resource_name",
+            "acknowledged_impact",
+        ]
+
+    def test_validators_are_not_modified(self):  # AI-generated
+        # validate_elevated and validate_manual must remain callable and
+        # must NOT consult the host-approval flag — only call sites are skipped.
+        from dct_mcp_server.tools.core.confirmation_levels import (
+            validate_elevated,
+            validate_manual,
+        )
+
+        result = validate_elevated("/vdbs/vdb-123/delete", None)
+        assert result["ok"] is False  # missing confirmed_resource_name
+
+        result = validate_manual("/vdbs/vdb-123/delete", "vdb-123", None)
+        assert result["ok"] is False  # acknowledged_impact not True
+
+    def test_no_name_placeholder_in_mappings(self):  # AI-generated
+        # Ensures the dead {name} placeholder is gone from manual_confirmation.txt.
+        import pathlib
+
+        mappings_path = (
+            pathlib.Path(__file__).parent.parent
+            / "src"
+            / "dct_mcp_server"
+            / "config"
+            / "mappings"
+            / "manual_confirmation.txt"
+        )
+        content = mappings_path.read_text()
+        assert "{name}" not in content, (
+            "Found literal '{name}' placeholder in manual_confirmation.txt — "
+            "it was never substituted and steers the model toward supply a display "
+            "name instead of a resource id."
+        )

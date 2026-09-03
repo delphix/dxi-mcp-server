@@ -30,6 +30,7 @@ case-folding (str.casefold) so that e.g. ``vdb-RÉSUMÉ-001`` and
 
 from __future__ import annotations
 
+import os
 import unicodedata
 from typing import Any
 
@@ -84,18 +85,39 @@ _ACTION_WORDS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
+def _host_approval_configured() -> bool:
+    """Return True if DCT_CONFIRMATION_HOST_APPROVAL is set and the host
+    presents its own trusted human-approval UI.
+
+    Fails closed (returns False) on any config-read error so a misconfigured
+    server never silently waives confirmation requirements.
+    """
+    try:
+        return os.getenv("DCT_CONFIRMATION_HOST_APPROVAL", "false").lower() == "true"
+    except Exception:
+        return False
+
+
 def build_required_fields(level: str) -> list[str]:
     """Return the list of extra fields required by a confirmation level.
 
     Used to populate ``required_fields`` in every ``confirmation_required``
     response so clients don't need to parse message text (FR-002 AC-6).
 
+    When DCT_CONFIRMATION_HOST_APPROVAL is set, only the per-call token gate
+    is enforced — the host already presents its own human-approval UI, so
+    ``confirmed_resource_name`` / ``acknowledged_impact`` add no safety value
+    and are not advertised as required fields.
+
     Returns:
         standard : ["confirmation_token"]
         elevated : ["confirmation_token", "confirmed_resource_name"]
         manual   : ["confirmation_token", "confirmed_resource_name", "acknowledged_impact"]
         other    : ["confirmation_token"]
+        (all levels return ["confirmation_token"] when host_approval is configured)
     """
+    if _host_approval_configured():
+        return ["confirmation_token"]
     if level == "elevated":
         return ["confirmation_token", "confirmed_resource_name"]
     if level == "manual":

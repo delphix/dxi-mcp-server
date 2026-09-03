@@ -12,38 +12,38 @@
 # ============================================
 # RULE 1: All Delete Operations (MANUAL)
 # ============================================
-POST|/vdbs/{vdbId}/delete|manual|Are you sure you want to permanently delete VDB '{name}'? This action cannot be undone.
-DELETE|/bookmarks/{bookmarkId}|manual|Are you sure you want to permanently delete bookmark '{name}'? This action cannot be undone.
-POST|/snapshots/{snapshotId}/delete|manual|Are you sure you want to permanently delete snapshot '{name}'? This action cannot be undone.
-POST|/dsources/delete|manual|Are you sure you want to permanently delete dSource '{name}'? Dependent VDBs will lose their source.
-DELETE|/vdb-groups/{vdbGroupId}|manual|Are you sure you want to permanently delete VDB Group '{name}'?
-DELETE|/environments/{environmentId}|manual|Are you sure you want to permanently delete environment '{name}'?
-DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister engine '{name}'?
-DELETE|/database-templates/{databaseTemplateId}|manual|Are you sure you want to delete database template '{name}'?
-DELETE|/hook-templates/{hookTemplateId}|manual|Are you sure you want to delete hook template '{name}'?
-DELETE|/virtualization-policies/{policyId}|manual|Are you sure you want to delete virtualization policy '{name}'?
-DELETE|/management/accounts/{id}|manual|Are you sure you want to delete user account '{name}'?
-DELETE|/roles/{roleId}|manual|Are you sure you want to delete role '{name}'?
-DELETE|/management/tags/{tagId}|manual|Are you sure you want to delete tag '{name}'?
-DELETE|/replication-profiles/{replicationProfileId}|manual|Are you sure you want to delete replication profile '{name}'?
-DELETE|/access-groups/{accessGroupId}|manual|Are you sure you want to delete access group '{name}'?
-DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete toolkit '{name}'?
-DELETE|/groups/{groupId}|manual|Are you sure you want to delete group '{name}'?
-POST|/cdbs/{cdbId}/delete|manual|Are you sure you want to delete CDB '{name}'?
-POST|/vcdbs/{vcdbId}/delete|manual|Are you sure you want to delete vCDB '{name}'?
-POST|/staging-cdbs/{stagingCdbId}/delete|manual|Are you sure you want to delete staging CDB '{name}'?
-DELETE|/timeflows/{timeflowId}|manual|Are you sure you want to delete timeflow '{name}'?
-DELETE|/management/vaults/hashicorp/{vaultId}|manual|Are you sure you want to delete HashiCorp vault '{name}'?
-DELETE|/password_vaults/{passwordVaultId}|manual|Are you sure you want to delete password vault '{name}'?
-DELETE|/kerberos-configs/{kerberosConfigId}|manual|Are you sure you want to delete Kerberos config '{name}'?
+POST|/vdbs/{vdbId}/delete|manual|Are you sure you want to permanently delete this VDB? This action cannot be undone.
+DELETE|/bookmarks/{bookmarkId}|manual|Are you sure you want to permanently delete this bookmark? This action cannot be undone.
+POST|/snapshots/{snapshotId}/delete|manual|Are you sure you want to permanently delete this snapshot? This action cannot be undone.
+POST|/dsources/delete|manual|Are you sure you want to permanently delete this dSource? Dependent VDBs will lose their source.
+DELETE|/vdb-groups/{vdbGroupId}|manual|Are you sure you want to permanently delete this VDB Group?
+DELETE|/environments/{environmentId}|manual|Are you sure you want to permanently delete this environment?
+DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister this engine?
+DELETE|/database-templates/{databaseTemplateId}|manual|Are you sure you want to delete this database template?
+DELETE|/hook-templates/{hookTemplateId}|manual|Are you sure you want to delete this hook template?
+DELETE|/virtualization-policies/{policyId}|manual|Are you sure you want to delete this virtualization policy?
+DELETE|/management/accounts/{id}|manual|Are you sure you want to delete this user account?
+DELETE|/roles/{roleId}|manual|Are you sure you want to delete this role?
+DELETE|/management/tags/{tagId}|manual|Are you sure you want to delete this tag?
+DELETE|/replication-profiles/{replicationProfileId}|manual|Are you sure you want to delete this replication profile?
+DELETE|/access-groups/{accessGroupId}|manual|Are you sure you want to delete this access group?
+DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete this toolkit?
+DELETE|/groups/{groupId}|manual|Are you sure you want to delete this group?
+POST|/cdbs/{cdbId}/delete|manual|Are you sure you want to delete this CDB?
+POST|/vcdbs/{vcdbId}/delete|manual|Are you sure you want to delete this vCDB?
+POST|/staging-cdbs/{stagingCdbId}/delete|manual|Are you sure you want to delete this staging CDB?
+DELETE|/timeflows/{timeflowId}|manual|Are you sure you want to delete this timeflow?
+DELETE|/management/vaults/hashicorp/{vaultId}|manual|Are you sure you want to delete this HashiCorp vault?
+DELETE|/password_vaults/{passwordVaultId}|manual|Are you sure you want to delete this password vault?
+DELETE|/kerberos-configs/{kerberosConfigId}|manual|Are you sure you want to delete this Kerberos config?
 
 # ============================================
 # RULE 2: Retention Date Updates (CONDITIONAL)
 # Triggers MANUAL if deletion within 7 days
 # ============================================
-PATCH|/bookmarks/{bookmarkId}|retention_check:7|Warning: Updating retention date will cause bookmark '{name}' to be deleted in {days} day(s). Proceed?
-PATCH|/snapshots/{snapshotId}|retention_check:7|Warning: Updating retention date will cause snapshot '{name}' to be deleted in {days} day(s). Proceed?
-POST|/snapshots/{snapshotId}/unset_expiration|retention_check:7|Warning: Unsetting expiration may affect snapshot '{name}' retention. Proceed?
+PATCH|/bookmarks/{bookmarkId}|retention_check:7|Warning: Updating retention date will cause this bookmark to be deleted in {days} day(s). Proceed?
+PATCH|/snapshots/{snapshotId}|retention_check:7|Warning: Updating retention date will cause this snapshot to be deleted in {days} day(s). Proceed?
+POST|/snapshots/{snapshotId}/unset_expiration|retention_check:7|Warning: Unsetting expiration may affect this snapshot's retention. Proceed?
 
 # ============================================
 # RULE 3: Policy Updates (CONDITIONAL)
@@ -97,32 +97,32 @@ POST|/dsources/{dsourceId}/snapshots|standard|Review parameters below. Proceed w
 # ============================================
 # RULE 8: Tag Deletion Operations (STANDARD)
 # ============================================
-POST|/vdbs/{vdbId}/tags/delete|standard|This will remove tags from VDB '{name}'. Confirm?
-POST|/vdb-groups/{vdbGroupId}/tags/delete|standard|This will remove tags from VDB Group '{name}'. Confirm?
-POST|/dsources/{dsourceId}/tags/delete|standard|This will remove tags from dSource '{name}'. Confirm?
-POST|/snapshots/{snapshotId}/tags/delete|standard|This will remove tags from snapshot '{name}'. Confirm?
-POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from bookmark '{name}'. Confirm?
-POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from database template '{name}'. Confirm?
-POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from hook template '{name}'. Confirm?
-POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeflow '{name}'. Confirm?
+POST|/vdbs/{vdbId}/tags/delete|standard|This will remove tags from this VDB. Confirm?
+POST|/vdb-groups/{vdbGroupId}/tags/delete|standard|This will remove tags from this VDB Group. Confirm?
+POST|/dsources/{dsourceId}/tags/delete|standard|This will remove tags from this dSource. Confirm?
+POST|/snapshots/{snapshotId}/tags/delete|standard|This will remove tags from this snapshot. Confirm?
+POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from this bookmark. Confirm?
+POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from this database template. Confirm?
+POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from this hook template. Confirm?
+POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from this timeflow. Confirm?
 
 # ============================================
 # RULE 9: Refresh Actions (ELEVATED)
 # Requires confirmed_resource_name
 # ============================================
-POST|/vdbs/{vdbId}/refresh_by_timestamp|elevated|Review: Refreshing VDB '{name}' by timestamp will pull latest source data. Provide confirmed_resource_name to proceed.
-POST|/vdbs/{vdbId}/refresh_by_snapshot|elevated|Review: Refreshing VDB '{name}' by snapshot will pull data from the specified snapshot. Provide confirmed_resource_name to proceed.
-POST|/vdbs/{vdbId}/refresh_from_bookmark|elevated|Review: Refreshing VDB '{name}' from bookmark will pull data from the specified bookmark. Provide confirmed_resource_name to proceed.
-POST|/vdbs/{vdbId}/refresh_by_location|elevated|Review: Refreshing VDB '{name}' by location will pull source data at the specified location. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|elevated|Review: Refreshing VDB Group '{name}' by timestamp will refresh all member VDBs. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|elevated|Review: Refreshing VDB Group '{name}' by snapshot will refresh all member VDBs. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|elevated|Review: Refreshing VDB Group '{name}' from bookmark will refresh all member VDBs. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing VDB Group '{name}' by location will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_by_timestamp|elevated|Review: Refreshing this VDB by timestamp will pull latest source data. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_by_snapshot|elevated|Review: Refreshing this VDB by snapshot will pull data from the specified snapshot. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_from_bookmark|elevated|Review: Refreshing this VDB from bookmark will pull data from the specified bookmark. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_by_location|elevated|Review: Refreshing this VDB by location will pull source data at the specified location. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|elevated|Review: Refreshing this VDB Group by timestamp will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|elevated|Review: Refreshing this VDB Group by snapshot will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|elevated|Review: Refreshing this VDB Group from bookmark will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing this VDB Group by location will refresh all member VDBs. Provide confirmed_resource_name to proceed.
 
 # ============================================
 # RULE 10: Create Actions (STANDARD)
 # ============================================
-POST|/vdbs/{vdbId}/snapshots|standard|Creating a snapshot of VDB '{name}'. Confirm?
+POST|/vdbs/{vdbId}/snapshots|standard|Creating a snapshot of this VDB. Confirm?
 POST|/bookmarks|standard|Creating a new bookmark. Confirm?
 POST|/vdb-groups|standard|Creating a new VDB group. Confirm?
 POST|/database-templates|standard|Creating a new database template. Confirm?
