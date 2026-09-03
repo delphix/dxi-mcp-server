@@ -84,6 +84,24 @@ _ACTION_WORDS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
+def host_approval_configured() -> bool:
+    """True when the embedding host presents its own trusted approval UI.
+
+    Read defensively: a config problem must never make a destructive operation
+    look *less* gated than it is, so any failure falls back to False.
+    """
+    try:
+        from dct_mcp_server.config.config import get_dct_config
+
+        # require_key=False: this reads one boolean and must not depend on
+        # auth config being valid, or the flag silently disables itself
+        # wherever DCT_API_KEY is absent.
+        conf = get_dct_config(require_key=False)
+        return bool(conf.get("confirmation_host_approval", False))
+    except Exception:
+        return False
+
+
 def build_required_fields(level: str) -> list[str]:
     """Return the list of extra fields required by a confirmation level.
 
@@ -95,7 +113,14 @@ def build_required_fields(level: str) -> list[str]:
         elevated : ["confirmation_token", "confirmed_resource_name"]
         manual   : ["confirmation_token", "confirmed_resource_name", "acknowledged_impact"]
         other    : ["confirmation_token"]
+
+    When the host presents its own trusted approval UI, the extra fields are
+    not enforced (see validate_elevated / validate_manual call sites), so they
+    are not advertised either -- a client must never be asked for a value that
+    will be ignored (DLPXECO-14611).
     """
+    if host_approval_configured():
+        return ["confirmation_token"]
     if level == "elevated":
         return ["confirmation_token", "confirmed_resource_name"]
     if level == "manual":

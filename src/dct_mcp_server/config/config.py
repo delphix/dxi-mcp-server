@@ -42,6 +42,19 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         "confirmation_fallback": os.getenv(
             "DCT_CONFIRMATION_FALLBACK", "keyword"
         ).lower(),
+        # Set by an embedding host that presents its own trusted human-approval
+        # UI (the DCT AI Assistant's Allow once / Allow always buttons). Such a
+        # host already has out-of-band evidence of human intent, so the elevated
+        # and manual levels' typed-resource-name checks add nothing: on that
+        # path the *model* supplies confirmed_resource_name, not a person, which
+        # makes it a string echo rather than an authorization step. Off by
+        # default so a generic MCP client -- which has no trusted approval
+        # surface -- keeps the full friction. The confirmation_token gate is
+        # unaffected either way (DLPXECO-14611).
+        "confirmation_host_approval": os.getenv(
+            "DCT_CONFIRMATION_HOST_APPROVAL", "false"
+        ).lower()
+        == "true",
         "grant_ttl": int(os.getenv("DCT_GRANT_TTL", "900")),
         # Tier-2 auto standing grant: how many executions of an impactful op-type
         # a single confirmation authorizes before re-prompting (confirm-once → run N).
@@ -153,6 +166,12 @@ def print_config_help():
     )
     print(
         "  DCT_CONFIRMATION_FALLBACK        Fallback mode when token absent: keyword or off (default: keyword)"
+    )
+    print(
+        "  DCT_CONFIRMATION_HOST_APPROVAL   Host presents its own trusted approval UI, so elevated/manual"
+    )
+    print(
+        "                                   skip the typed-resource-name checks (default: false)"
     )
     print(
         "  DCT_GRANT_TTL                    TTL in seconds for batch grants (default: 900)"

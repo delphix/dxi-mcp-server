@@ -110,14 +110,14 @@ POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from tim
 # RULE 9: Refresh Actions (ELEVATED)
 # Requires confirmed_resource_name
 # ============================================
-POST|/vdbs/{vdbId}/refresh_by_timestamp|elevated|Review: Refreshing VDB '{name}' by timestamp will pull latest source data. Provide confirmed_resource_name to proceed.
-POST|/vdbs/{vdbId}/refresh_by_snapshot|elevated|Review: Refreshing VDB '{name}' by snapshot will pull data from the specified snapshot. Provide confirmed_resource_name to proceed.
-POST|/vdbs/{vdbId}/refresh_from_bookmark|elevated|Review: Refreshing VDB '{name}' from bookmark will pull data from the specified bookmark. Provide confirmed_resource_name to proceed.
-POST|/vdbs/{vdbId}/refresh_by_location|elevated|Review: Refreshing VDB '{name}' by location will pull source data at the specified location. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|elevated|Review: Refreshing VDB Group '{name}' by timestamp will refresh all member VDBs. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|elevated|Review: Refreshing VDB Group '{name}' by snapshot will refresh all member VDBs. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|elevated|Review: Refreshing VDB Group '{name}' from bookmark will refresh all member VDBs. Provide confirmed_resource_name to proceed.
-POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing VDB Group '{name}' by location will refresh all member VDBs. Provide confirmed_resource_name to proceed.
+POST|/vdbs/{vdbId}/refresh_by_timestamp|elevated|Review: Refreshing VDB '{name}' by timestamp will pull latest source data.
+POST|/vdbs/{vdbId}/refresh_by_snapshot|elevated|Review: Refreshing VDB '{name}' by snapshot will pull data from the specified snapshot.
+POST|/vdbs/{vdbId}/refresh_from_bookmark|elevated|Review: Refreshing VDB '{name}' from bookmark will pull data from the specified bookmark.
+POST|/vdbs/{vdbId}/refresh_by_location|elevated|Review: Refreshing VDB '{name}' by location will pull source data at the specified location.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_timestamp|elevated|Review: Refreshing VDB Group '{name}' by timestamp will refresh all member VDBs.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_snapshot|elevated|Review: Refreshing VDB Group '{name}' by snapshot will refresh all member VDBs.
+POST|/vdb-groups/{vdbGroupId}/refresh_from_bookmark|elevated|Review: Refreshing VDB Group '{name}' from bookmark will refresh all member VDBs.
+POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing VDB Group '{name}' by location will refresh all member VDBs.
 
 # ============================================
 # RULE 10: Create Actions (STANDARD)
