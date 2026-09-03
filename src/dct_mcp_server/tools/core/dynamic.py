@@ -14,6 +14,8 @@ This module is independent of the existing tool_factory.py grouped-tool generati
 
 from __future__ import annotations
 
+import hmac
+import os
 import re
 import uuid
 from typing import Any
@@ -299,6 +301,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         acknowledged_impact: bool | None = None,
         batch_intent: dict[str, Any] | None = None,
         grant_token: str | None = None,
+        sensitive_applied: dict[str, Any] | None = None,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
@@ -341,6 +344,10 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             grant_token:  Token from a prior batch_intent confirmation. Pass this on
                           subsequent calls to execute against the active batch grant
                           without requiring individual confirmation for each call.
+            sensitive_applied: Reserved for the embedding host, which uses it to
+                          name the secret fields it captured from the user and
+                          injected into body. Authenticated with a nonce only
+                          the host holds, so setting it gains a caller nothing.
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
@@ -437,8 +444,16 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # input or a stored-credential alias) and re-call with it applied. Runs
         # before the confirmation gate: capture the secret first, then confirm.
         if method_upper in ("POST", "PUT", "PATCH"):
+            # Fields the host captured out-of-band are dropped from the
+            # credential set: they are in the body because *we* put them there,
+            # and re-flagging them re-prompts for the secret the user just
+            # entered, forever (DLPXECO-14603). Identity pairing is unaffected
+            # -- it never consults this set -- so a secret the host claims but
+            # did not actually inject is still requested.
             missing_secrets = _missing_sensitive_fields(
-                body, _annotated_credential_fields(spec)
+                body,
+                _annotated_credential_fields(spec)
+                - _host_applied_fields(sensitive_applied),
             )
             if missing_secrets:
                 return {
@@ -1421,6 +1436,31 @@ _CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
 
 # Per-spec cache keyed by id(spec); the spec is loaded once at startup.
 _credential_field_cache: dict[int, frozenset[str]] = {}
+
+# Shared secret proving a `sensitive_applied` marker came from the embedding
+# host and not from the model. The host generates it and passes it in this
+# server's environment when it spawns the process (stdio embedded mode), so it
+# never appears in a tool result, a prompt or the conversation. Unset
+# (non-embedded deployments) => no marker is honoured and nothing changes.
+_SENSITIVE_NONCE_ENV = "DCT_MCP_SENSITIVE_NONCE"
+
+
+def _host_applied_fields(sensitive_applied: Any) -> frozenset[str]:
+    """Field names the host injected out-of-band, if the marker authenticates.
+
+    Expects ``{"nonce": <shared secret>, "fields": [<name>, ...]}``. A missing
+    or wrong nonce yields nothing, so a model that discovers this argument
+    cannot use it to smuggle an inline secret past the gate.
+    """
+    expected = os.environ.get(_SENSITIVE_NONCE_ENV) or ""
+    if not expected or not isinstance(sensitive_applied, dict):
+        return frozenset()
+    if not hmac.compare_digest(str(sensitive_applied.get("nonce") or ""), expected):
+        return frozenset()
+    fields = sensitive_applied.get("fields")
+    if not isinstance(fields, list):
+        return frozenset()
+    return frozenset(f for f in fields if isinstance(f, str) and f)
 
 
 def _collect_annotated_credential_fields(node: Any, out: set[str]) -> None:
