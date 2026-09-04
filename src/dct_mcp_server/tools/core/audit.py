@@ -38,6 +38,7 @@ _VALID_OUTCOMES = frozenset(
         "replay_rejected",
         "grant_covered",
         "batch_triggered",
+        "host_attested",
     }
 )
 
@@ -59,7 +60,7 @@ def emit_gate_event(
 
     Args:
         outcome: One of: required, approved, refused, expired, replay_rejected,
-                 grant_covered, batch_triggered
+                 grant_covered, batch_triggered, host_attested
         identity: Caller identity (process UUID or X-CLIENT-ID header value)
         method: HTTP method (POST, DELETE, etc.)
         path_template: URL path template (e.g. "/vdbs/{vdbId}/delete")
