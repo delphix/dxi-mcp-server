@@ -715,31 +715,19 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                     )
                     _grant_kind = "standing"
 
-                if conf["requires_confirmation"] and _host_attested:
-                    # Satisfied, not skipped: a human approved this very call
-                    # moments ago in the host's trusted UI, which is the
-                    # individual single-use confirmation the gate exists to
-                    # obtain. Recorded under its own outcome so the audit trail
-                    # shows how approval was got (DLPXECO-14613).
-                    emit_gate_event(
-                        "host_attested",
-                        identity,
-                        method_upper,
-                        resolved_path,
-                        conf_level or "standard",
-                    )
-
-                if (
-                    conf["requires_confirmation"]
-                    and not _grant_authorized
-                    and not _host_attested
-                ):
+                if conf["requires_confirmation"] and not _grant_authorized:
                     # Resolve client elicitation capability once — it decides
                     # whether an always-enforced trigger (a velocity/bulk hit)
                     # can be confirmed inline or must be refused outright.
                     has_elicitation = _check_elicitation_capability(ctx)
 
                     # FR-006/FR-007: Velocity (bulk) detection — always-enforced.
+                    # Runs for host-attested calls as well: one approval in the
+                    # host UI can cover several pending tool calls at once, and
+                    # an attestation is exactly the "echo it back and keep
+                    # going" pattern the hard-block below exists to stop. This
+                    # ceiling is the only thing bounding a runaway loop, so an
+                    # attestation must never lift it (DLPXECO-14613 review #2).
                     if conf.get("batch_triggered"):
                         emit_gate_event(
                             "batch_triggered",
@@ -788,8 +776,15 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                             }
                         # Elicitation-capable client: fall through to elicit().
 
-                    # strict + no elicitation → refuse immediately (FR-005 AC-3)
-                    if _enforcement == "strict" and not has_elicitation:
+                    # strict + no elicitation → refuse immediately (FR-005 AC-3).
+                    # An attested call already carries a human decision, which is
+                    # what strict mode is protecting; the velocity hard-block
+                    # above still applies to it either way.
+                    if (
+                        _enforcement == "strict"
+                        and not has_elicitation
+                        and not _host_attested
+                    ):
                         emit_gate_event(
                             "refused",
                             identity,
@@ -808,8 +803,24 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                             ),
                         }
 
+                    if _host_attested:
+                        # Satisfied, not skipped: a human approved this very call
+                        # moments ago in the host's trusted UI, which is the
+                        # individual single-use confirmation this step exists to
+                        # obtain -- so it stands in for the token/elicitation
+                        # handshake and nothing else. Velocity above and the
+                        # level checks below still run. Recorded under its own
+                        # outcome so the audit trail shows how approval was got.
+                        emit_gate_event(
+                            "host_attested",
+                            identity,
+                            method_upper,
+                            resolved_path,
+                            conf_level or "standard",
+                        )
+
                     # Elicitation path (FR-005 AC-1, AC-2, AC-6)
-                    if has_elicitation and not confirmation_token:
+                    elif has_elicitation and not confirmation_token:
                         schema_cls = _build_elicitation_schema(conf_level)
                         elicit_message = (
                             conf.get("message_template")

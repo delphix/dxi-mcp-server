@@ -57,7 +57,12 @@ def _reset_gate_state(monkeypatch):
         store.clear()
     cs._consumed_token_store._pending.clear()
     vc._velocity_counter._counters.clear()
+    # The host sets both of these together in _mcp_child_env: the nonce lets it
+    # attest, the flag waives the typed-resource-name fields (DLPXECO-14611).
+    # An attestation covers the token step only, so a manual-level call still
+    # needs the flag -- tests below override either one to prove that.
     monkeypatch.setenv(_SENSITIVE_NONCE_ENV, NONCE)
+    monkeypatch.setenv("DCT_CONFIRMATION_HOST_APPROVAL", "true")
     yield
     for store in (cs._grant_store._grants, cs._standing_store._grants):
         store.clear()
@@ -216,3 +221,75 @@ async def test_DLPXECO14613_attestation_satisfies_a_floor_operation(
     )
     assert approved["status"] == "success"
     client.make_request.assert_awaited_once()
+
+
+# --------------------------------------------------------------------------- #
+# Review findings on PR #124 — an attestation stands in for the token step and
+# nothing else. Both of these failed when one blanket condition skipped the
+# whole confirmation block.
+# --------------------------------------------------------------------------- #
+
+_START_PATH = "/vdbs/vdb-1/start"  # batch_check:10:60 in manual_confirmation.txt
+_THRESHOLD_N = 10
+
+
+@pytest.fixture
+def velocity_spec(monkeypatch):
+    from tests.integration._gate_helpers import GATE_SPEC
+
+    monkeypatch.setattr(dynamic, "get_cached_spec", lambda: GATE_SPEC)
+    monkeypatch.setattr(dynamic, "get_process_identity", lambda: "identity-attest-v")
+
+
+async def test_DLPXECO14613_velocity_still_blocks_an_attested_loop(
+    velocity_spec,
+):  # AI-generated
+    """Review #2: the bulk hard-block is always-enforced and an attestation
+    must not lift it.
+
+    One approval in the host UI can cover several pending tool calls at once,
+    so a runaway loop can carry a valid marker on every call -- exactly the
+    "echo it back and keep going" pattern the block exists to stop. This
+    ceiling is the only thing bounding it.
+    """
+    execute, client = make_execute()
+
+    for i in range(1, _THRESHOLD_N):
+        result = await execute(
+            path=_START_PATH,
+            method="POST",
+            body={"n": i},
+            human_approved=_attestation(),
+        )
+        assert result["status"] == "success", f"call {i} should pass"
+
+    blocked = await execute(
+        path=_START_PATH,
+        method="POST",
+        body={"n": _THRESHOLD_N},
+        human_approved=_attestation(),
+    )
+    assert blocked["status"] == "error", blocked
+    assert blocked["code"] == "BULK_OPERATION_BLOCKED"
+    assert client.make_request.await_count == _THRESHOLD_N - 1
+
+
+async def test_DLPXECO14613_level_validation_still_runs_when_attested(
+    spec_loaded, monkeypatch
+):  # AI-generated
+    """Review #3: elevated/manual field checks are waived only by
+    DCT_CONFIRMATION_HOST_APPROVAL (DLPXECO-14611), never by an attestation.
+
+    Two independent paths to the same waiver drift apart; if the flag is turned
+    off the checks must come back.
+    """
+    monkeypatch.delenv("DCT_CONFIRMATION_HOST_APPROVAL", raising=False)
+    execute, client = make_execute()
+
+    result = await execute(
+        path=_ENV_PATH, method="DELETE", human_approved=_attestation()
+    )
+
+    assert result["status"] == "confirmation_required"
+    assert "confirmed_resource_name" in result["required_fields"]
+    client.make_request.assert_not_awaited()
