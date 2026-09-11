@@ -2,8 +2,9 @@
 Unit tests for the execute() sensitive-input gate (DLPXECO-14406).
 
 Coverage targets:
-- _secret_for_identity: username/access_key pairings, prefix handling, non-pairs
-- _missing_sensitive_fields: top-level, nested, S3, mutual-exclusion suppression
+- _missing_sensitive_fields: annotation-driven detection, top-level and nested
+- name-based inference is gone -- nothing is a secret unless annotated
+  (DLPXECO-14641)
 - _host_applied_fields + the second leg of the capture handshake (DLPXECO-14603)
 
 All functions in this module were AI-generated.
@@ -14,73 +15,7 @@ from dct_mcp_server.tools.core.dynamic import (
     _annotated_credential_fields,
     _host_applied_fields,
     _missing_sensitive_fields,
-    _secret_for_identity,
 )
-
-
-class TestSecretForIdentity:
-    def test_username_pairs_with_password(self):  # AI-generated
-        assert _secret_for_identity("username") == "password"
-
-    def test_prefixed_username_keeps_prefix(self):  # AI-generated
-        assert _secret_for_identity("masking_username") == "masking_password"
-        assert _secret_for_identity("source_username") == "source_password"
-
-    def test_user_suffix_pairs_with_password(self):  # AI-generated
-        assert _secret_for_identity("db_user") == "db_password"
-
-    def test_access_key_pairs_with_secret_key(self):  # AI-generated
-        assert _secret_for_identity("access_key") == "secret_key"
-
-    def test_non_identity_fields_do_not_pair(self):  # AI-generated
-        for name in ("hostname", "user_count", "password", "secret_key", "ssh_key"):
-            assert _secret_for_identity(name) is None
-
-
-class TestMissingSensitiveFields:
-    def test_top_level_username_needs_password(self):  # AI-generated
-        assert _missing_sensitive_fields(
-            {"name": "e", "hostname": "h", "username": "admin"}
-        ) == ["password"]
-
-    def test_nested_username_needs_password(self):  # AI-generated
-        # POST /environments: username nested under host_parameters.
-        assert _missing_sensitive_fields(
-            {"host_parameters": {"host": "h", "username": "dlpxqa"}}
-        ) == ["password"]
-
-    def test_password_already_present_needs_nothing(self):  # AI-generated
-        assert (
-            _missing_sensitive_fields(
-                {"host_parameters": {"username": "u", "password": "p"}}
-            )
-            == []
-        )
-
-    def test_s3_access_key_needs_secret_key(self):  # AI-generated
-        assert _missing_sensitive_fields({"access_key": "AKIA..."}) == ["secret_key"]
-
-    def test_no_identity_needs_nothing(self):  # AI-generated
-        assert _missing_sensitive_fields({"name": "x", "hostname": "h"}) == []
-
-    def test_ssh_key_reference_suppresses_password(self):  # AI-generated
-        # ssh_key (a UUID reference) is mutually exclusive with password.
-        assert (
-            _missing_sensitive_fields(
-                {"username": "u", "connection_mode": "SFTP", "ssh_key": "uuid-123"}
-            )
-            == []
-        )
-
-    def test_credential_path_id_suppresses_password(self):  # AI-generated
-        assert (
-            _missing_sensitive_fields({"username": "u", "credential_path_id": "cred-1"})
-            == []
-        )
-
-    def test_empty_body_needs_nothing(self):  # AI-generated
-        assert _missing_sensitive_fields(None) == []
-        assert _missing_sensitive_fields({}) == []
 
 
 class TestAnnotatedCredentialFields:  # AI-generated
@@ -137,17 +72,18 @@ class TestAnnotatedCredentialFields:  # AI-generated
             "encryption_key"
         ]
 
-    def test_annotation_and_pairing_combine(self):  # AI-generated
+    def test_only_annotated_fields_present_are_flagged(self):  # AI-generated
         creds = _annotated_credential_fields(self._SPEC)
         missing = _missing_sensitive_fields(
-            {"username": "u", "encryption_key": "k"}, creds
+            {"username": "u", "encryption_key": "k", "password": "p"}, creds
         )
         assert set(missing) == {"encryption_key", "password"}
 
-    def test_no_credential_set_preserves_pairing_only(self):  # AI-generated
-        # Default (empty) set → behaves exactly like the identity-pairing gate.
+    def test_no_credential_set_flags_nothing(self):  # AI-generated
+        # Without the annotated set there is no other signal, so nothing is
+        # flagged -- names alone never make a field a secret.
         assert _missing_sensitive_fields({"encryption_key": "abc"}) == []
-        assert _missing_sensitive_fields({"username": "u"}) == ["password"]
+        assert _missing_sensitive_fields({"username": "u", "password": "p"}) == []
 
 
 class TestHostAppliedFields:
@@ -226,10 +162,12 @@ class TestSensitiveGateSecondLeg:
             "username": "dlpxqa",
             "hostname": "r92-tgt.dlpxdc.co",
             "toolkit_path": "/tmp",
+            "password": "model-typed-this",
         }
         after = {**before, "password": "<captured>"}
 
-        # First leg: the secret is absent, so the host is asked to capture it.
+        # First leg: an annotated secret is in the body, so it is stripped and
+        # the host is asked to capture it.
         assert _missing_sensitive_fields(before, self._CREDS) == ["password"]
 
         # Second leg: the host injected it and says so — the gate must clear.
@@ -277,11 +215,92 @@ class TestSensitiveGateSecondLeg:
         }
         assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == []
 
-    def test_DLPXECO14603_marker_for_absent_field_still_requests_it(
+    def test_DLPXECO14603_absent_credential_is_not_requested(self):  # AI-generated
+        # A body with no annotated credential in it has nothing to strip, so
+        # the gate stays silent and the API's own validation decides whether
+        # the call is complete. Detecting an *absent* secret required guessing
+        # one from `username`, which is exactly the inference DLPXECO-14641
+        # removed.
+        body = {"username": "dlpxqa"}
+        assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == []
+        assert _missing_sensitive_fields(body, self._CREDS) == []
+
+
+# Identity-shaped fields in the live DCT spec whose suffix-derived "partner"
+# does not exist anywhere in the API. The deleted heuristic invented one for
+# each of these; all 19 are listed so the regression is pinned by name.
+_REFERENCE_IDENTITIES = (
+    "environment_user",
+    "staging_environment_user",
+    "install_user",
+    "cluster_user",
+    "primary_user",
+    "create_user",
+    "privileged_os_user",
+    "source_host_user",
+    "staging_host_user",
+    "ppt_host_user",
+    "backup_host_user",
+    "oracle_fallback_user",
+    "vault_username",
+    "db_vault_username",
+    "ase_db_vault_username",
+    "fallback_vault_username",
+    "non_sys_vault_username",
+    "mssql_user_domain_vault_username",
+    "s3_access_key",
+)
+
+
+class TestNoNameBasedInference:
+    """Regression tests for DLPXECO-14641 — only the spec's annotation makes a
+    field a secret.
+
+    The gate used to derive a partner secret from an identity field's suffix,
+    which cannot tell a credential pair from an object reference because DCT
+    names both the same way. `environment_user` holds an id (`HOST_USER-18`),
+    and the invented `environment_password` exists nowhere in the API, so every
+    dSource link and VDB provision stopped for a secret nothing could accept.
+    """
+
+    _CREDS = frozenset({"password", "db_password", "secret_key"})
+
+    def test_DLPXECO14641_link_dsource_body_needs_no_secret(self):  # AI-generated
+        """The exact reproduction from the ticket."""
+        body = {
+            "source_id": "2-APPDATA_STAGED_SOURCE_CONFIG-3",
+            "name": "R95D115A",
+            "link_type": "AppDataStaged",
+            "environment_user": "HOST_USER-18",
+            "parameters": {"dbName": "R95D115A", "backupPath": "/db2backup/11_5"},
+            "sync_parameters": {"resync": True},
+        }
+        assert _missing_sensitive_fields(body, self._CREDS) == []
+
+    def test_DLPXECO14641_no_reference_identity_invents_a_secret(self):  # AI-generated
+        for name in _REFERENCE_IDENTITIES:
+            assert _missing_sensitive_fields({name: "REF-1"}, self._CREDS) == [], name
+
+    def test_DLPXECO14641_identity_alone_never_flags(self):  # AI-generated
+        # Even a genuine identity field is just a name: with no annotated
+        # credential in the body there is nothing to strip.
+        for name in ("username", "db_user", "access_key", "masking_username"):
+            assert _missing_sensitive_fields({name: "u"}, self._CREDS) == [], name
+
+    def test_DLPXECO14641_annotated_secret_still_flagged(self):  # AI-generated
+        # The narrowing must not disable the rule that remains.
+        body = {"environment_user": "HOST_USER-18", "db_password": "inline"}
+        assert _missing_sensitive_fields(body, self._CREDS) == ["db_password"]
+
+    def test_DLPXECO14641_nested_annotated_secret_still_flagged(self):  # AI-generated
+        body = {"name": "x", "host_parameters": {"password": "inline"}}
+        assert _missing_sensitive_fields(body, self._CREDS) == ["password"]
+
+    def test_DLPXECO14641_password_alternatives_no_longer_suppress(
         self,
     ):  # AI-generated
-        # The host claims it injected the password but the body has none
-        # (injection missed the container). Identity pairing must still ask,
-        # rather than dispatching a credential-less call.
-        body = {"username": "dlpxqa"}
-        assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == ["password"]
+        # ssh_key/credential_path_id existed to suppress an *invented* password.
+        # With nothing invented they suppress nothing, and an annotated secret
+        # sitting beside them is still flagged.
+        body = {"username": "u", "ssh_key": "uuid-123", "password": "inline"}
+        assert _missing_sensitive_fields(body, self._CREDS) == ["password"]

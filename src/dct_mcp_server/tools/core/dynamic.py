@@ -454,9 +454,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             # Fields the host captured out-of-band are dropped from the
             # credential set: they are in the body because *we* put them there,
             # and re-flagging them re-prompts for the secret the user just
-            # entered, forever (DLPXECO-14603). Identity pairing is unaffected
-            # -- it never consults this set -- so a secret the host claims but
-            # did not actually inject is still requested.
+            # entered, forever (DLPXECO-14603).
             missing_secrets = _missing_sensitive_fields(
                 body,
                 _annotated_credential_fields(spec)
@@ -1446,40 +1444,28 @@ def _validate_required_params(
     return None
 
 
-def _secret_for_identity(identity_name: str) -> str | None:
-    """Paired secret field name for an identity field, or None.
-
-    A secret rarely stands alone: it accompanies a non-secret identity.
-    ``username`` -> ``password`` (and ``masking_username`` ->
-    ``masking_password``, ``source_username`` -> ``source_password``);
-    ``access_key`` -> ``secret_key`` for S3-style cloud storage, where the
-    access key id is an identifier and only the secret key is sensitive.
-    Matches only the identity suffixes below, so unrelated fields
-    (``user_count``, ``hostname``, ``ssh_key`` — itself a UUID reference, not
-    a secret) never pair.
-    """
-    low = identity_name.lower()
-    if low.endswith("username"):
-        return identity_name[: -len("username")] + "password"
-    if low.endswith("user"):
-        return identity_name[: -len("user")] + "password"
-    if low.endswith("access_key"):
-        return identity_name[: -len("access_key")] + "secret_key"
-    return None
-
-
-# Credential references that stand in for a password (mutually exclusive with
-# it per the connector schema): when one is already supplied in a container,
-# no password is needed there (e.g. SFTP key auth uses ssh_key instead). These
-# are identifiers/references, not raw secrets, so they are never captured as
-# masked input even if a spec happened to annotate them.
+# Credential references that are identifiers, not raw secrets, and so are
+# never captured as masked input even though the spec annotates them (an
+# ``ssh_key`` here is a UUID pointing at a stored key, not the key itself).
 _PASSWORD_ALTERNATIVES = ("ssh_key", "credential_path_id")
 
 # DCT annotates every secret-bearing request field in the OpenAPI spec with
-# this extension. It is the authoritative list of credential field names;
-# identity pairing (above) only reaches secrets that accompany an identity, so
-# standalone annotated secrets (e.g. encryption_key, data_key) are caught by
-# name here instead of by a brittle substring heuristic.
+# this extension, and it is the *only* thing that makes a field a secret here.
+#
+# Field names are not evidence. This gate used to infer a partner secret from
+# an identity field's suffix -- `username` -> `password`, `db_user` ->
+# `db_password` -- which cannot tell a credential pair from an object
+# reference, because DCT names both the same way. `environment_user` holds an
+# id (`HOST_USER-18`) whose credential lives on the engine, so the heuristic
+# demanded an `environment_password` that exists nowhere in the API and
+# blocked every dSource link and VDB provision. Nineteen of the spec's
+# forty-three identity-shaped fields invented such a phantom (DLPXECO-14641).
+#
+# The annotation is authoritative and needs no help: it already covers
+# standalone secrets with no identity to pair with (encryption_key, data_key)
+# as well as conventional ones. A field the spec does not annotate is not
+# treated as a secret -- if one turns out to need protection, annotate it in
+# the spec rather than re-introducing name matching here.
 _CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
 
 # Per-spec cache keyed by id(spec); the spec is loaded once at startup.
@@ -1578,15 +1564,13 @@ def _collect_missing_secrets(
 
     Walks the actual request body (not the schema): DCT create bodies are often
     discriminated unions the spec flattener cannot enumerate (e.g.
-    POST /environments), yet the nested ``host_parameters`` carries
-    username/password. Two sources feed the list:
+    POST /environments), yet the nested ``host_parameters`` carries the
+    credential. A field is flagged on one condition only — the spec annotates
+    it (``credential_fields``) and it appears in the body, so the model must
+    never have supplied it inline and it is stripped and recaptured.
 
-    1. Any field the spec annotates as a credential (``credential_fields``) that
-       appears in the body — the model must never supply it inline, so we flag
-       it whether present (strip + recapture) or paired-and-absent.
-    2. Identity pairing — an identity field (``username``) whose paired secret
-       (``password``) is absent from the same container, unless a
-       mutually-exclusive credential alternative (``ssh_key``) is supplied.
+    Nothing is inferred from a field's name; see
+    ``_CREDENTIAL_FIELD_ANNOTATION`` for why.
     """
     if isinstance(obj, dict):
         for value in obj.values():
@@ -1594,15 +1578,6 @@ def _collect_missing_secrets(
         for key in obj:
             if key in credential_fields and key not in out:
                 out.append(key)
-        for key in obj:
-            secret = _secret_for_identity(key)
-            if not secret or secret in obj or secret in out:
-                continue
-            if secret.endswith("password") and any(
-                obj.get(alt) for alt in _PASSWORD_ALTERNATIVES
-            ):
-                continue
-            out.append(secret)
     elif isinstance(obj, list):
         for item in obj:
             _collect_missing_secrets(item, out, credential_fields)
@@ -1614,8 +1589,8 @@ def _missing_sensitive_fields(
     """Secret-bearing fields the body must not carry inline, in first-seen order.
 
     Value-based (not schema-based) so nested and discriminated-union bodies are
-    handled uniformly. Combines spec-annotated credential fields with identity
-    pairing; the host captures each out-of-band and re-calls with it applied.
+    handled uniformly. Driven solely by the spec's credential annotation; the
+    host captures each out-of-band and re-calls with it applied.
     """
     missing: list[str] = []
     _collect_missing_secrets(body or {}, missing, credential_fields)
