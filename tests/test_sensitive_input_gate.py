@@ -10,11 +10,13 @@ Coverage targets:
 All functions in this module were AI-generated.
 """
 
+import dct_mcp_server.tools.core.dynamic as dynamic
 from dct_mcp_server.tools.core.dynamic import (
     _SENSITIVE_NONCE_ENV,
     _annotated_credential_fields,
     _host_applied_fields,
     _missing_sensitive_fields,
+    _secure_capture_host,
 )
 
 
@@ -304,3 +306,77 @@ class TestNoNameBasedInference:
         # sitting beside them is still flagged.
         body = {"username": "u", "ssh_key": "uuid-123", "password": "inline"}
         assert _missing_sensitive_fields(body, self._CREDS) == ["password"]
+
+
+class TestSecureCaptureHost:
+    """Regression tests for DLPXECO-14642 — the gate must only be raised where
+    something can actually answer it.
+
+    Only the DCT AI Assistant captures secrets out-of-band. In Claude Desktop,
+    Claude Code and third-party clients nothing can, so raising the gate
+    deadlocks the operation: the model relays the request into chat, the value
+    lands in `body`, rule 1 re-flags it, and the call never dispatches.
+    """
+
+    _NONCE = "host-nonce-14642"
+
+    def _embedded(self, monkeypatch, auth_mode="embedded"):
+        monkeypatch.setattr(
+            dynamic, "get_dct_config", lambda **_: {"auth_mode": auth_mode}
+        )
+
+    def test_DLPXECO14642_embedded_with_nonce_is_capture_capable(
+        self, monkeypatch
+    ):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+        self._embedded(monkeypatch)
+        assert _secure_capture_host() is True
+
+    def test_DLPXECO14642_standalone_client_is_not(self, monkeypatch):  # AI-generated
+        # The reproduction: no nonce, no embedded auth mode.
+        monkeypatch.delenv(_SENSITIVE_NONCE_ENV, raising=False)
+        self._embedded(monkeypatch, auth_mode="standalone")
+        assert _secure_capture_host() is False
+
+    def test_DLPXECO14642_nonce_alone_is_not_enough(self, monkeypatch):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+        self._embedded(monkeypatch, auth_mode="standalone")
+        assert _secure_capture_host() is False
+
+    def test_DLPXECO14642_embedded_alone_is_not_enough(
+        self, monkeypatch
+    ):  # AI-generated
+        monkeypatch.delenv(_SENSITIVE_NONCE_ENV, raising=False)
+        self._embedded(monkeypatch)
+        assert _secure_capture_host() is False
+
+    def test_DLPXECO14642_empty_nonce_is_not_enough(self, monkeypatch):  # AI-generated
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, "")
+        self._embedded(monkeypatch)
+        assert _secure_capture_host() is False
+
+    def test_DLPXECO14642_config_failure_with_nonce_keeps_gate_on(
+        self, monkeypatch
+    ):  # AI-generated
+        # A host set the nonce, so one is present; a config read failure must
+        # cost a blocked operation, not a secret travelling inline.
+        monkeypatch.setenv(_SENSITIVE_NONCE_ENV, self._NONCE)
+
+        def _boom(**_):
+            raise RuntimeError("config unreadable")
+
+        monkeypatch.setattr(dynamic, "get_dct_config", _boom)
+        assert _secure_capture_host() is True
+
+    def test_DLPXECO14642_config_failure_without_nonce_stays_off(
+        self, monkeypatch
+    ):  # AI-generated
+        # No nonce means no host regardless of config, so the nonce is checked
+        # first and config is never consulted.
+        monkeypatch.delenv(_SENSITIVE_NONCE_ENV, raising=False)
+
+        def _boom(**_):
+            raise AssertionError("config must not be read without a nonce")
+
+        monkeypatch.setattr(dynamic, "get_dct_config", _boom)
+        assert _secure_capture_host() is False

@@ -450,7 +450,15 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         # and it is absent, pause so the host can capture it out-of-band (masked
         # input or a stored-credential alias) and re-call with it applied. Runs
         # before the confirmation gate: capture the secret first, then confirm.
-        if method_upper in ("POST", "PUT", "PATCH"):
+        #
+        # Only a capture-capable host can answer this, so the gate is scoped to
+        # one (DLPXECO-14642). Elsewhere -- Claude Desktop, Claude Code, any
+        # third-party MCP client -- nothing can supply the value out-of-band,
+        # and raising the gate only deadlocks the operation. Those clients pass
+        # the credential inline instead: a deliberate trade, since such a value
+        # has already been typed into the conversation by the time it reaches
+        # us and refusing here would not un-type it.
+        if method_upper in ("POST", "PUT", "PATCH") and _secure_capture_host():
             # Fields the host captured out-of-band are dropped from the
             # credential set: they are in the body because *we* put them there,
             # and re-flagging them re-prompts for the secret the user just
@@ -1508,6 +1516,39 @@ def _host_approved(human_approved: Any) -> bool:
     single-use confirmation, which no grant may satisfy.
     """
     return _host_nonce_ok(human_approved)
+
+
+def _secure_capture_host() -> bool:
+    """True when a host able to capture secrets out-of-band spawned us.
+
+    The sensitive-input gate only works if something on the other side can
+    show a masked field and re-call with the value applied. The DCT AI
+    Assistant does; Claude Desktop, Claude Code and other MCP clients do not.
+    In those clients the gate cannot be satisfied by anyone: it returns
+    ``sensitive_input_required``, the model relays the request into chat, the
+    value lands in ``body``, rule 1 flags it again, and the call never
+    dispatches (DLPXECO-14642).
+
+    Both markers must be present, so a half-configured deployment is never
+    mistaken for a capture-capable host:
+
+    * ``DCT_AUTH_MODE=embedded`` — the documented embedded-mode flag
+    * ``DCT_MCP_SENSITIVE_NONCE`` — the spawn-time shared secret, which only a
+      host implementing the capture handshake can set
+
+    The nonce is checked first and decides the skip: without it no host will
+    ever inject a secret. If the nonce is present but config cannot be read,
+    assume a host *is* there and keep the gate on — the failure then costs a
+    blocked operation rather than a secret travelling inline.
+    """
+    if not (os.environ.get(_SENSITIVE_NONCE_ENV) or ""):
+        return False
+    try:
+        # require_key=False: this reads one flag and must not depend on auth
+        # config being valid, mirroring host_approval_configured().
+        return get_dct_config(require_key=False).get("auth_mode") == "embedded"
+    except Exception:
+        return True
 
 
 def _host_applied_fields(sensitive_applied: Any) -> frozenset[str]:
