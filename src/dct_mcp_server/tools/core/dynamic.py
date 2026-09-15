@@ -1458,22 +1458,31 @@ def _validate_required_params(
 _PASSWORD_ALTERNATIVES = ("ssh_key", "credential_path_id")
 
 # DCT annotates every secret-bearing request field in the OpenAPI spec with
-# this extension, and it is the *only* thing that makes a field a secret here.
+# this extension. It is the sole source of truth for *which* fields are
+# secrets: identity-suffix matching (see _secret_for_identity) may only ever
+# suggest a *name*, and a suggestion counts as a secret only once it is
+# checked against this annotation.
 #
-# Field names are not evidence. This gate used to infer a partner secret from
-# an identity field's suffix -- `username` -> `password`, `db_user` ->
-# `db_password` -- which cannot tell a credential pair from an object
-# reference, because DCT names both the same way. `environment_user` holds an
-# id (`HOST_USER-18`) whose credential lives on the engine, so the heuristic
-# demanded an `environment_password` that exists nowhere in the API and
-# blocked every dSource link and VDB provision. Nineteen of the spec's
-# forty-three identity-shaped fields invented such a phantom (DLPXECO-14641).
+# Field names alone are not evidence. This gate used to infer a partner secret
+# from an identity field's suffix -- `username` -> `password`, `db_user` ->
+# `db_password` -- and trust that guess unconditionally, which cannot tell a
+# credential pair from an object reference, because DCT names both the same
+# way. `environment_user` holds an id (`HOST_USER-18`) whose credential lives
+# on the engine, so the heuristic demanded an `environment_password` that
+# exists nowhere in the API and blocked every dSource link and VDB
+# provision -- nineteen of the spec's forty-three identity-shaped fields
+# invented such a phantom (DLPXECO-14641).
 #
-# The annotation is authoritative and needs no help: it already covers
-# standalone secrets with no identity to pair with (encryption_key, data_key)
-# as well as conventional ones. A field the spec does not annotate is not
-# treated as a secret -- if one turns out to need protection, annotate it in
-# the spec rather than re-introducing name matching here.
+# Removing the heuristic outright over-corrected: it was also the only thing
+# that ever flagged a secret *absent* from the body (as opposed to one wrongly
+# inlined), so a model that correctly omits a password, per instructions,
+# stopped ever being asked for it -- the out-of-band capture the DCT AI
+# Assistant depends on for every non-required credential field silently never
+# fired (DLPXECO-14650). The fix keeps the suffix guess but only honours it
+# when the guessed name is itself annotated here -- `environment_password`
+# is never annotated anywhere in the spec, so it can never be invented into
+# existence, while `password` and `masking_password` are, so a present
+# `username`/`masking_username` with no paired secret is still caught.
 _CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
 
 # Per-spec cache keyed by id(spec); the spec is loaded once at startup.
@@ -1598,6 +1607,24 @@ def _annotated_credential_fields(spec: dict[str, Any] | None) -> frozenset[str]:
     return cached
 
 
+def _secret_for_identity(identity_name: str) -> str | None:
+    """Suffix-derived guess at the secret paired with an identity field.
+
+    A guess only -- the caller must still confirm the returned name is one of
+    the spec's actually-annotated credential fields before treating it as a
+    real secret. See ``_CREDENTIAL_FIELD_ANNOTATION`` for why an unvalidated
+    version of this once invented fields the API does not have (DLPXECO-14641).
+    """
+    low = identity_name.lower()
+    if low.endswith("username"):
+        return identity_name[: -len("username")] + "password"
+    if low.endswith("user"):
+        return identity_name[: -len("user")] + "password"
+    if low.endswith("access_key"):
+        return identity_name[: -len("access_key")] + "secret_key"
+    return None
+
+
 def _collect_missing_secrets(
     obj: Any, out: list[str], credential_fields: frozenset[str]
 ) -> None:
@@ -1606,12 +1633,20 @@ def _collect_missing_secrets(
     Walks the actual request body (not the schema): DCT create bodies are often
     discriminated unions the spec flattener cannot enumerate (e.g.
     POST /environments), yet the nested ``host_parameters`` carries the
-    credential. A field is flagged on one condition only — the spec annotates
-    it (``credential_fields``) and it appears in the body, so the model must
-    never have supplied it inline and it is stripped and recaptured.
+    credential. Two sources feed the list, both gated on ``credential_fields``
+    (the spec's actual annotations) so neither can invent a field the API does
+    not have:
 
-    Nothing is inferred from a field's name; see
-    ``_CREDENTIAL_FIELD_ANNOTATION`` for why.
+    1. Present-and-annotated: the field appears in the body and the spec
+       annotates it, so the model must never have supplied it inline --
+       flagged for strip-and-recapture.
+    2. Identity pairing, spec-validated: an identity field (``username``) is
+       present with its paired secret absent. The pairing is a name-suffix
+       guess (``_secret_for_identity``), but the guessed name only counts if
+       it is itself one of ``credential_fields`` -- a guess like
+       ``environment_password`` that the spec never annotates anywhere is
+       never flagged, while ``password``/``masking_password`` are, since both
+       are real annotated fields.
     """
     if isinstance(obj, dict):
         for value in obj.values():
@@ -1619,6 +1654,20 @@ def _collect_missing_secrets(
         for key in obj:
             if key in credential_fields and key not in out:
                 out.append(key)
+        for key in obj:
+            secret = _secret_for_identity(key)
+            if (
+                not secret
+                or secret not in credential_fields
+                or secret in obj
+                or secret in out
+            ):
+                continue
+            if secret.endswith("password") and any(
+                obj.get(alt) for alt in _PASSWORD_ALTERNATIVES
+            ):
+                continue
+            out.append(secret)
     elif isinstance(obj, list):
         for item in obj:
             _collect_missing_secrets(item, out, credential_fields)
