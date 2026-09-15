@@ -302,9 +302,7 @@ class TestNoNameBasedInference:
             ("db_user", "db_password"),
             ("access_key", "secret_key"),
         ):
-            assert _missing_sensitive_fields({name: "u"}, self._CREDS) == [
-                secret
-            ], name
+            assert _missing_sensitive_fields({name: "u"}, self._CREDS) == [secret], name
 
     def test_DLPXECO14641_identity_with_unannotated_pair_never_flags(self):
         # ...but `masking_username` derives `masking_password`, which is not
