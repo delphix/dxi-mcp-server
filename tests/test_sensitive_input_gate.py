@@ -217,14 +217,23 @@ class TestSensitiveGateSecondLeg:
         }
         assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == []
 
-    def test_DLPXECO14603_absent_credential_is_not_requested(self):  # AI-generated
-        # A body with no annotated credential in it has nothing to strip, so
-        # the gate stays silent and the API's own validation decides whether
-        # the call is complete. Detecting an *absent* secret required guessing
-        # one from `username`, which is exactly the inference DLPXECO-14641
-        # removed.
+    def test_DLPXECO14650_absent_paired_credential_is_requested(self):
+        # A genuine identity field (`username`) present with its real,
+        # spec-annotated secret (`password`) absent must still be requested --
+        # this is the out-of-band capture the DCT AI Assistant depends on for
+        # every non-required credential field (DLPXECO-14650). Removing
+        # DLPXECO-14641's unvalidated name inference must not also remove
+        # detection of a secret that genuinely is missing.
         body = {"username": "dlpxqa"}
-        assert _missing_sensitive_fields(body, self._CREDS - _APPLIED) == []
+        assert _missing_sensitive_fields(body, self._CREDS) == ["password"]
+
+    def test_DLPXECO14650_absent_credential_with_no_identity_is_not_requested(
+        self,
+    ):
+        # Nothing in the body suggests a secret is expected, so the gate stays
+        # silent and the API's own validation decides whether the call is
+        # complete.
+        body = {"hostname": "r92-tgt.dlpxdc.co"}
         assert _missing_sensitive_fields(body, self._CREDS) == []
 
 
@@ -283,11 +292,23 @@ class TestNoNameBasedInference:
         for name in _REFERENCE_IDENTITIES:
             assert _missing_sensitive_fields({name: "REF-1"}, self._CREDS) == [], name
 
-    def test_DLPXECO14641_identity_alone_never_flags(self):  # AI-generated
-        # Even a genuine identity field is just a name: with no annotated
-        # credential in the body there is nothing to strip.
-        for name in ("username", "db_user", "access_key", "masking_username"):
-            assert _missing_sensitive_fields({name: "u"}, self._CREDS) == [], name
+    def test_DLPXECO14650_identity_alone_flags_only_a_real_annotated_pair(self):
+        # A genuine identity field's suffix-derived pair is honoured only when
+        # that exact name is itself annotated in the spec (DLPXECO-14650) --
+        # `username`/`db_user`/`access_key` all pair with names in `_CREDS`
+        # here, so each is flagged...
+        for name, secret in (
+            ("username", "password"),
+            ("db_user", "db_password"),
+            ("access_key", "secret_key"),
+        ):
+            assert _missing_sensitive_fields({name: "u"}, self._CREDS) == [secret], name
+
+    def test_DLPXECO14641_identity_with_unannotated_pair_never_flags(self):
+        # ...but `masking_username` derives `masking_password`, which is not
+        # in this credential set (not annotated for this operation), so
+        # nothing is invented for it -- unchanged from DLPXECO-14641.
+        assert _missing_sensitive_fields({"masking_username": "u"}, self._CREDS) == []
 
     def test_DLPXECO14641_annotated_secret_still_flagged(self):  # AI-generated
         # The narrowing must not disable the rule that remains.
