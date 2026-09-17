@@ -12,7 +12,11 @@ dependencies = [
     "httpx>=0.24.0",
     "pyyaml",
     "requests",
-    "urllib3>=2.7.0"
+    "urllib3>=2.7.0",
+    # CVE-2026-7246: click<=8.3.2 has a command-injection flaw in click.edit().
+    # click is pulled in transitively via mcp -> uvicorn. Pin here to guarantee
+    # the patched version (>=8.3.3) is installed regardless of what uvicorn resolves.
+    "click>=8.3.3",
 ]
 
 [project.scripts]
@@ -28,7 +32,7 @@ dev = [
     "pytest-json-report>=1.5.0",
     "starlette>=0.30",
     "uvicorn>=0.27",
-    "click>=8.0",
+    "click>=8.3.3",
 ]
 
 [dependency-groups]
