@@ -24,7 +24,7 @@ python-dotenv>=1.2.2
 pydantic>=2.0.0
 
 # Async utilities (required by fastmcp)
-anyio>=3.6.0
+anyio>=4.14.2
 
 # Additional utilities that might be needed
 typing-extensions>=4.0.0
