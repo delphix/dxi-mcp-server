@@ -849,7 +849,7 @@ def data_tool(
 
         ACTION: switch_vdb_timeline
         ----------------------------------------
-        Summary: Switches the current timeflow of a VDB.
+        Summary: Switches the current timeline of a VDB.
         Method: POST
         Endpoint: /vdbs/{vdbId}/switch_timeflow
         Required Parameters: vdb_id
@@ -1098,7 +1098,7 @@ def data_tool(
 
         ACTION: export_vdb_by_location
         ----------------------------------------
-        Summary: Export a vdb using timeflow location to a physical file system
+        Summary: Export a VDB using timeline location to a physical file system
         Method: POST
         Endpoint: /vdbs/{vdbId}/export-by-location
         Required Parameters: vdb_id, location
@@ -1858,7 +1858,7 @@ def data_tool(
 
         ACTION: dsource_link_connector
         ----------------------------------------
-        Summary: Link an AppData database as dSource.
+        Summary: Link a connector database as dSource.
         Method: POST
         Endpoint: /dsources/appdata
         Key Parameters (provide as applicable): environment_user, link_type, staging_mount_base, staging_environment, staging_environment_user, excludes, follow_symlinks, parameters, sync_parameters
@@ -1871,7 +1871,7 @@ def data_tool(
 
         ACTION: dsource_link_connector_defaults
         ----------------------------------------
-        Summary: Get defaults for an AppData dSource linking.
+        Summary: Get defaults for a connector dSource linking.
         Method: POST
         Endpoint: /dsources/appdata/defaults
         Required Parameters: source_id
@@ -1884,7 +1884,7 @@ def data_tool(
 
         ACTION: update_connector_dsource
         ----------------------------------------
-        Summary: Update values of an AppData dSource
+        Summary: Update values of a connector dSource
         Method: PATCH
         Endpoint: /dsources/appdata/{dsourceId}
         Required Parameters: dsource_id
@@ -2003,7 +2003,7 @@ def data_tool(
 
         ACTION: export_dsource_by_location
         ----------------------------------------
-        Summary: Export a dSource using timeflow location to a physical file system.
+        Summary: Export a dSource using timeline location to a physical file system.
         Method: POST
         Endpoint: /dsources/{dsourceId}/export-by-location
         Required Parameters: location, dsource_id
@@ -7287,7 +7287,7 @@ def snapshot_bookmark_tool(
 
     ACTION: get_snapshot_timeline_range
     ----------------------------------------
-    Summary: Return the provisionable timeflow range based on a specific snapshot.
+    Summary: Return the provisionable timeline range based on a specific snapshot.
     Method: GET
     Endpoint: /snapshots/{snapshotId}/timeflow_range
     Required Parameters: snapshot_id
@@ -8347,7 +8347,7 @@ def timeline_tool(
 
     ACTION: get
     ----------------------------------------
-    Summary: Get a Timeflow by ID.
+    Summary: Get a Timeline by ID.
     Method: GET
     Endpoint: /timeflows/{timeflowId}
     Required Parameters: timeflow_id
@@ -8357,7 +8357,7 @@ def timeline_tool(
 
     ACTION: update
     ----------------------------------------
-    Summary: Update values of a timeflow.
+    Summary: Update values of a timeline.
     Method: PATCH
     Endpoint: /timeflows/{timeflowId}
     Required Parameters: timeflow_id
@@ -8368,7 +8368,7 @@ def timeline_tool(
 
     ACTION: delete
     ----------------------------------------
-    Summary: Delete a timeflow.
+    Summary: Delete a timeline.
     Method: DELETE
     Endpoint: /timeflows/{timeflowId}
     Required Parameters: timeflow_id
@@ -8378,7 +8378,7 @@ def timeline_tool(
 
     ACTION: get_snapshot_day_range
     ----------------------------------------
-    Summary: Returns the count of TimeFlow snapshots of the Timeflow aggregated by day.
+    Summary: Returns the count of Timeline snapshots of the Timeline aggregated by day.
     Method: GET
     Endpoint: /timeflows/{timeflowId}/timeflowSnapshotDayRange
     Required Parameters: timeflow_id
@@ -8388,7 +8388,7 @@ def timeline_tool(
 
     ACTION: repair
     ----------------------------------------
-    Summary: Repair a Timeflow.
+    Summary: Repair a Timeline.
     Method: POST
     Endpoint: /timeflows/{timeflowId}/repair
     Required Parameters: timeflow_id, host, username, directory, start_location, end_location
@@ -8399,7 +8399,7 @@ def timeline_tool(
 
     ACTION: get_tags
     ----------------------------------------
-    Summary: Get tags for a Timeflow.
+    Summary: Get tags for a Timeline.
     Method: GET
     Endpoint: /timeflows/{timeflowId}/tags
     Required Parameters: timeflow_id
@@ -8409,7 +8409,7 @@ def timeline_tool(
 
     ACTION: add_tags
     ----------------------------------------
-    Summary: Create tags for a Timeflow.
+    Summary: Create tags for a Timeline.
     Method: POST
     Endpoint: /timeflows/{timeflowId}/tags
     Required Parameters: timeflow_id, tags
@@ -8419,7 +8419,7 @@ def timeline_tool(
 
     ACTION: delete_tags
     ----------------------------------------
-    Summary: Delete tags for a Timeflow.
+    Summary: Delete tags for a Timeline.
     Method: POST
     Endpoint: /timeflows/{timeflowId}/tags/delete
     Required Parameters: timeflow_id

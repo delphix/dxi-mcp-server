@@ -4,8 +4,9 @@ This module contains decorators for use across the MCP server.
 
 import functools
 import inspect
-from typing import Optional
+from typing import Any, Optional
 
+from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
 from dct_mcp_server.core.session import log_tool_call
 
@@ -17,6 +18,33 @@ def _get_caller_id() -> Optional[str]:
         return get_dct_config(require_key=False).get("client_id")
     except Exception:
         return None
+
+
+def _dct_client_error_response(exc: DCTClientError) -> dict[str, Any]:
+    """
+    Build the error payload for a DCTClientError raised by a pre-built tool.
+
+    Mirrors ``tools/core/dynamic.py``'s ``_error_response``: ``message`` carries
+    the upstream text verbatim, and ``message_for_user`` is added only when
+    translating it into canonical vocabulary (PPM-1129) actually changes the
+    text. The raw text is never replaced, matching the additive convention used
+    for the dynamic ``execute`` tool.
+
+    Imports ``vocabulary`` lazily: ``tools.core`` imports ``log_tool_execution``
+    at package-init time, so a module-level import here would be circular.
+    """
+    from dct_mcp_server.tools.core.vocabulary import differs, to_canonical
+
+    raw_message = str(exc)
+    response: dict[str, Any] = {
+        "status": "error",
+        "code": "DCT_API_ERROR",
+        "message": raw_message,
+    }
+    translated = to_canonical(raw_message)
+    if differs(raw_message, translated):
+        response["message_for_user"] = translated
+    return response
 
 
 def log_tool_execution(func):
@@ -47,6 +75,12 @@ def log_tool_execution(func):
                 tool_data["status"] = "success"
                 log_tool_call(tool_data, session_id=_get_caller_id())
                 return result
+            except DCTClientError as e:
+                logger.error(f"Error executing tool '{tool_name}': {e}", exc_info=True)
+                tool_data["status"] = "failure"
+                tool_data["error"] = str(e)
+                log_tool_call(tool_data, session_id=_get_caller_id())
+                return _dct_client_error_response(e)
             except Exception as e:
                 logger.error(f"Error executing tool '{tool_name}': {e}", exc_info=True)
                 tool_data["status"] = "failure"
@@ -76,6 +110,12 @@ def log_tool_execution(func):
             tool_data["status"] = "success"
             log_tool_call(tool_data, session_id=_get_caller_id())
             return result
+        except DCTClientError as e:
+            logger.error(f"Error executing tool '{tool_name}': {e}", exc_info=True)
+            tool_data["status"] = "failure"
+            tool_data["error"] = str(e)
+            log_tool_call(tool_data, session_id=_get_caller_id())
+            return _dct_client_error_response(e)
         except Exception as e:
             logger.error(f"Error executing tool '{tool_name}': {e}", exc_info=True)
             tool_data["status"] = "failure"

@@ -748,7 +748,7 @@ def environment_source_tool(
 
     ACTION: create_connector_source
     ----------------------------------------
-    Summary: Create an AppData source.
+    Summary: Create a connector-based source.
     Method: POST
     Endpoint: /sources/appdata
     Required Parameters: name, type, repository_id
@@ -759,7 +759,7 @@ def environment_source_tool(
 
     ACTION: update_connector_source
     ----------------------------------------
-    Summary: Update a AppData source by ID.
+    Summary: Update a connector-based source by ID.
     Method: PATCH
     Endpoint: /sources/appdata/{sourceId}
     Required Parameters: source_id
@@ -2256,7 +2256,7 @@ def connector_schema_tool(
 
     ACTION: get
     ----------------------------------------
-    Summary: Get Toolkit by ID.
+    Summary: Get Connector schema by ID.
     Method: GET
     Endpoint: /toolkits/{toolkitId}
     Required Parameters: toolkit_id
@@ -2266,7 +2266,7 @@ def connector_schema_tool(
 
     ACTION: upload_connector_schema
     ----------------------------------------
-    Summary: Upload toolkit to engines.
+    Summary: Upload connector schema to engines.
     Method: POST
     Endpoint: /toolkits/upload
 
@@ -2275,7 +2275,7 @@ def connector_schema_tool(
 
     ACTION: delete_connector_schema
     ----------------------------------------
-    Summary: Delete a Toolkit by ID.
+    Summary: Delete a Connector schema by ID.
     Method: DELETE
     Endpoint: /toolkits/{toolkitId}
     Required Parameters: toolkit_id
@@ -2285,7 +2285,7 @@ def connector_schema_tool(
 
     ACTION: get_tags
     ----------------------------------------
-    Summary: Get tags for a Toolkit.
+    Summary: Get tags for a Connector schema.
     Method: GET
     Endpoint: /toolkits/{toolkitId}/tags
     Required Parameters: toolkit_id
@@ -2295,7 +2295,7 @@ def connector_schema_tool(
 
     ACTION: add_tags
     ----------------------------------------
-    Summary: Create tags for a toolkit.
+    Summary: Create tags for a connector schema.
     Method: POST
     Endpoint: /toolkits/{toolkitId}/tags
     Required Parameters: toolkit_id, tags
@@ -2305,7 +2305,7 @@ def connector_schema_tool(
 
     ACTION: delete_tags
     ----------------------------------------
-    Summary: Delete tags for a Toolkit.
+    Summary: Delete tags for a Connector schema.
     Method: POST
     Endpoint: /toolkits/{toolkitId}/tags/delete
     Required Parameters: toolkit_id

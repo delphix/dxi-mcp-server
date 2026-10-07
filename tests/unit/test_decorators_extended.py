@@ -170,3 +170,69 @@ def test_sync_function_multiple_calls():
     assert counter() == 1
     assert counter() == 2
     assert counter() == 3
+
+
+# ---------------------------------------------------------------------------
+# DCTClientError -- additive vocabulary translation (PPM-1129)
+#
+# Mirrors tools/core/dynamic.py's _error_response convention: a DCTClientError
+# raised by a pre-built tool is now returned as a structured error dict
+# instead of propagating, with message_for_user added only when to_canonical()
+# changes the raw text.
+# ---------------------------------------------------------------------------
+
+
+def test_sync_dct_client_error_translates_internal_terminology():
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    @log_tool_execution
+    def failing_tool():
+        raise DCTClientError("404: timeflow 'tf-1' not found for appdata source")
+
+    result = failing_tool()
+
+    assert result["status"] == "error"
+    assert result["code"] == "DCT_API_ERROR"
+    assert "timeflow" in result["message"]
+    assert "message_for_user" in result
+    assert "timeline" in result["message_for_user"].lower()
+    assert "connector" in result["message_for_user"].lower()
+
+
+def test_sync_dct_client_error_without_internal_terms_omits_translation():
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    @log_tool_execution
+    def failing_tool():
+        raise DCTClientError("404: VDB 'vdb-1' not found")
+
+    result = failing_tool()
+
+    assert result["status"] == "error"
+    assert result["message"] == "404: VDB 'vdb-1' not found"
+    assert "message_for_user" not in result
+
+
+@pytest.mark.asyncio
+async def test_async_dct_client_error_translates_internal_terminology():
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    @log_tool_execution
+    async def failing_tool():
+        raise DCTClientError("500: container 'cg-1' has no active timeflow")
+
+    result = await failing_tool()
+
+    assert result["status"] == "error"
+    assert "message_for_user" in result
+    assert "vdb group" in result["message_for_user"].lower()
+    assert "timeline" in result["message_for_user"].lower()
+
+
+def test_sync_other_exceptions_still_propagate_unchanged():
+    @log_tool_execution
+    def failing_tool():
+        raise ValueError("not a DCT error")
+
+    with pytest.raises(ValueError, match="not a DCT error"):
+        failing_tool()

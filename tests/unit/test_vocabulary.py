@@ -77,6 +77,10 @@ def test_vocabulary_map_is_ordered_longest_first():
             "Continuous Data engine is unreachable",
         ),
         ("Masking Engine returned an error", "Continuous Compliance engine returned an error"),
+        (
+            "Container cg-1 has no active VDBs",
+            "VDB Group cg-1 has no active VDBs",
+        ),
     ],
 )
 def test_to_canonical_translates_and_preserves_case(raw, expected):

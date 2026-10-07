@@ -27,9 +27,11 @@ plugins|connectors
 toolkit|connector
 toolkits|connectors
 
-# --- Grouping: "container" is ambiguous with Kubernetes (glossary #19) ---
+# --- Grouping: "container" is retired Self-Service/Jetstream terminology and
+# now means Kubernetes/Docker exclusively -- never echo it back (glossary #19) ---
 vdb group|VDB Group
 vdbgroup|VDB Group
+container|VDB Group
 
 # --- Retired/forbidden product-and-engine terms (glossary #8, #10, #28) ---
 # "virtualization engine" and "masking engine" are unambiguous despite being
