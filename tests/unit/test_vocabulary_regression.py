@@ -18,7 +18,18 @@ from dct_mcp_server.config.loader import (
 
 # Terms that must never appear in a message shown to a user. "engine" is
 # checked separately, since it is only wrong when unqualified.
-_BANNED = ["timeflow", "appdata", "toolkit", "plugin", "mssql"]
+_BANNED = [
+    "timeflow",
+    "appdata",
+    "toolkit",
+    "plugin",
+    "mssql",
+    "inventory",
+    "cloud engine",
+    "delphix masking",
+    "virtualization engine",
+    "masking engine",
+]
 
 
 def _rule_messages():
@@ -35,9 +46,9 @@ def test_engine_is_always_qualified_in_confirmation_messages():
     for message in _rule_messages():
         for match in re.finditer(r"\bengine\b", message, re.IGNORECASE):
             preceding = message[: match.start()].rstrip().lower()
-            assert preceding.endswith("continuous data"), (
-                f'unqualified "engine" in: {message}'
-            )
+            assert preceding.endswith("continuous data") or preceding.endswith(
+                "continuous compliance"
+            ), f'unqualified "engine" in: {message}'
 
 
 def test_vdb_group_casing_is_canonical():

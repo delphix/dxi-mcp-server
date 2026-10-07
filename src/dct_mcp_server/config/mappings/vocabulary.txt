@@ -9,14 +9,16 @@
 # Matching is case-insensitive and whole-word; the replacement preserves the
 # capitalisation style of the match (lower, Title or UPPER).
 #
-# PROVISIONAL: reconcile against Glossary v1.2 before GA. See
-# config/server_instructions.md for the full domain model.
+# Reconciled against the real DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx
+# (28 canonical terms, 172 synonym rows). See config/server_instructions.md
+# for the full domain model and for rules this flat term map cannot express
+# (see "Known limitation" below).
 
-# --- Timeline ---
+# --- Timeline (glossary #17) ---
 timeflow|timeline
 timeflows|timelines
 
-# --- Connectors: never expose the AppData vs native split ---
+# --- Connectors: never expose the AppData vs native split (glossary #3a) ---
 appdata plugin|connector
 appdata plugins|connectors
 appdata|connector
@@ -25,12 +27,34 @@ plugins|connectors
 toolkit|connector
 toolkits|connectors
 
-# --- Grouping: "container" is ambiguous with Kubernetes ---
+# --- Grouping: "container" is ambiguous with Kubernetes (glossary #19) ---
 vdb group|VDB Group
 vdbgroup|VDB Group
 
-# --- Product boundary: never leave "engine" unqualified ---
-delphix engine|Continuous Data engine
+# --- Retired/forbidden product-and-engine terms (glossary #8, #10, #28) ---
+# "virtualization engine" and "masking engine" are unambiguous despite being
+# forbidden -- each names exactly one of the two engine products, so a flat
+# replacement is safe here (unlike bare "engine"/"Delphix engine" below).
+virtualization engine|Continuous Data engine
+masking engine|Continuous Compliance engine
+delphix masking|Delphix Continuous Compliance
+cloud engine|Elastic Data
+
+# --- Known limitation: bare "engine" / "Delphix engine" (glossary #8) ---
+# The glossary requires this to disambiguate to WHICHEVER of the Continuous
+# Data engine or Continuous Compliance engine is contextually correct, and
+# explicitly forbids defaulting to one. to_canonical() is a context-free,
+# single-replacement term map (tools/core/vocabulary.py) and cannot make that
+# judgment -- silently picking "Continuous Data engine" here would reproduce
+# exactly the wrong-default bug the glossary warns against. We flag the
+# ambiguity in the replacement text itself instead of silently guessing; the
+# model must still resolve it from conversation context per
+# config/server_instructions.md's terminology rules. Do not "fix" this by
+# re-introducing a single-product default.
+delphix engine|Continuous Data/Compliance engine (clarify which)
+
+# --- Retired Continuous Compliance terminology (glossary #26, #27) ---
+inventory|Rule Set
 
 # --- Product naming ---
 mssql|SQL Server

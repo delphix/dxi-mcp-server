@@ -66,10 +66,30 @@ def test_vocabulary_map_is_ordered_longest_first():
         ("TIMEFLOW REF INVALID", "TIMELINE REF INVALID"),
         ("Install the appdata plugin", "Install the connector"),
         ("MSSql link failed", "SQL Server link failed"),
+        ("The inventory is locked", "The Rule Set is locked"),
+        ("Cloud Engine capacity exceeded", "Elastic Data capacity exceeded"),
+        (
+            "Delphix Masking job failed to start",
+            "Delphix Continuous Compliance job failed to start",
+        ),
+        (
+            "Virtualization Engine is unreachable",
+            "Continuous Data engine is unreachable",
+        ),
+        ("Masking Engine returned an error", "Continuous Compliance engine returned an error"),
     ],
 )
 def test_to_canonical_translates_and_preserves_case(raw, expected):
     assert to_canonical(raw) == expected
+
+
+def test_to_canonical_flags_ambiguous_bare_engine_rather_than_defaulting():
+    # Glossary v1.2 #8: "Delphix engine" is ambiguous between the Continuous
+    # Data and Continuous Compliance engines. The flat term map must not
+    # silently default to one -- it should flag the ambiguity instead.
+    result = to_canonical("Delphix engine is offline")
+    assert "Continuous Data/Compliance engine" in result
+    assert result != "Continuous Data engine is offline"
 
 
 def test_to_canonical_leaves_clean_text_alone():
