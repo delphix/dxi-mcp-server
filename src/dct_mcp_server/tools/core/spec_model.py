@@ -388,11 +388,36 @@ class RequestBody:
 
     @property
     def required(self) -> bool:
-        return bool(self.raw.get("required", False))
+        return bool(self._resolved().get("required", False))
 
     @property
     def content(self) -> dict[str, Any]:
-        return self.raw.get("content", {}) or {}
+        return self._resolved().get("content", {}) or {}
+
+    def _resolved(self) -> dict[str, Any]:
+        """The request body with a body-level ``$ref`` followed.
+
+        An operation may point at ``components/requestBodies/X`` rather than
+        inlining ``content``. Without following that pointer first there is no
+        ``content`` to read, so every such operation exposed zero body fields
+        to the model — 238 operations in DCT 2026.x, including all 140
+        ``/search`` endpoints and therefore ``filter_expression``.
+        """
+        raw = self.raw
+        for _ in range(5):  # bounded: guards against a self-referential $ref
+            ref = raw.get("$ref") if isinstance(raw, dict) else None
+            if not ref:
+                break
+            target = (
+                self.spec.resolve_ref(ref)
+                if hasattr(self.spec, "resolve_ref")
+                else None
+            )
+            if target is None:
+                resolved, _ = self.spec.resolve_refs(raw)
+                return resolved if isinstance(resolved, dict) else {}
+            raw = target
+        return raw if isinstance(raw, dict) else {}
 
     def _primary_schema_dict(self) -> dict[str, Any]:
         """Raw schema of the first media type (DCT bodies are application/json)."""

@@ -1,0 +1,36 @@
+# Vocabulary translation map (PPM-1129)
+#
+# Applied to text that originates upstream -- raw DCT/engine error bodies and
+# OpenAPI summaries -- before it is shown to a user. Internal terminology on the
+# left, the canonical customer-facing term on the right.
+#
+# Format: internal_term|canonical_term
+#
+# Matching is case-insensitive and whole-word; the replacement preserves the
+# capitalisation style of the match (lower, Title or UPPER).
+#
+# PROVISIONAL: reconcile against Glossary v1.2 before GA. See
+# config/server_instructions.md for the full domain model.
+
+# --- Timeline ---
+timeflow|timeline
+timeflows|timelines
+
+# --- Connectors: never expose the AppData vs native split ---
+appdata plugin|connector
+appdata plugins|connectors
+appdata|connector
+plugin|connector
+plugins|connectors
+toolkit|connector
+toolkits|connectors
+
+# --- Grouping: "container" is ambiguous with Kubernetes ---
+vdb group|VDB Group
+vdbgroup|VDB Group
+
+# --- Product boundary: never leave "engine" unqualified ---
+delphix engine|Continuous Data engine
+
+# --- Product naming ---
+mssql|SQL Server

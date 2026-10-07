@@ -18,7 +18,7 @@ POST|/snapshots/{snapshotId}/delete|manual|Are you sure you want to permanently 
 POST|/dsources/delete|manual|Are you sure you want to permanently delete dSource '{name}'? Dependent VDBs will lose their source.
 DELETE|/vdb-groups/{vdbGroupId}|manual|Are you sure you want to permanently delete VDB Group '{name}'?
 DELETE|/environments/{environmentId}|manual|Are you sure you want to permanently delete environment '{name}'?
-DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister engine '{name}'?
+DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister Continuous Data engine '{name}'?
 DELETE|/database-templates/{databaseTemplateId}|manual|Are you sure you want to delete database template '{name}'?
 DELETE|/hook-templates/{hookTemplateId}|manual|Are you sure you want to delete hook template '{name}'?
 DELETE|/virtualization-policies/{policyId}|manual|Are you sure you want to delete virtualization policy '{name}'?
@@ -27,12 +27,12 @@ DELETE|/roles/{roleId}|manual|Are you sure you want to delete role '{name}'?
 DELETE|/management/tags/{tagId}|manual|Are you sure you want to delete tag '{name}'?
 DELETE|/replication-profiles/{replicationProfileId}|manual|Are you sure you want to delete replication profile '{name}'?
 DELETE|/access-groups/{accessGroupId}|manual|Are you sure you want to delete access group '{name}'?
-DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete toolkit '{name}'?
-DELETE|/groups/{groupId}|manual|Are you sure you want to delete group '{name}'?
+DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete connector '{name}'?
+DELETE|/groups/{groupId}|manual|Are you sure you want to delete dataset group '{name}'?
 POST|/cdbs/{cdbId}/delete|manual|Are you sure you want to delete CDB '{name}'?
 POST|/vcdbs/{vcdbId}/delete|manual|Are you sure you want to delete vCDB '{name}'?
 POST|/staging-cdbs/{stagingCdbId}/delete|manual|Are you sure you want to delete staging CDB '{name}'?
-DELETE|/timeflows/{timeflowId}|manual|Are you sure you want to delete timeflow '{name}'?
+DELETE|/timeflows/{timeflowId}|manual|Are you sure you want to delete timeline '{name}'? This action cannot be undone.
 DELETE|/management/vaults/hashicorp/{vaultId}|manual|Are you sure you want to delete HashiCorp vault '{name}'?
 DELETE|/password_vaults/{passwordVaultId}|manual|Are you sure you want to delete password vault '{name}'?
 DELETE|/kerberos-configs/{kerberosConfigId}|manual|Are you sure you want to delete Kerberos config '{name}'?
@@ -77,17 +77,17 @@ POST|/vdbs/provision_by_snapshot|elevated|Review parameters below. Proceed with 
 POST|/vdbs/provision_from_bookmark|elevated|Review parameters below. Proceed with provisioning VDB from bookmark?
 POST|/vdbs/provision_by_location|elevated|Review parameters below. Proceed with provisioning VDB by location?
 POST|/vdbs/empty_vdb|elevated|Review parameters below. Proceed with provisioning an empty VDB?
-POST|/vdb-groups/provision_from_bookmark|elevated|Review parameters below. Proceed with provisioning VDB group from bookmark?
+POST|/vdb-groups/provision_from_bookmark|elevated|Review parameters below. Proceed with provisioning VDB Group from bookmark?
 
 # ============================================
 # RULE 6: dSource Linking Workflows (REVIEW & SUBMIT)
 # ============================================
 POST|/dsources/oracle|elevated|Review parameters below. Proceed with linking Oracle dSource?
 POST|/dsources/oracle/staging-push|elevated|Review parameters below. Proceed with linking Oracle staging-push dSource?
-POST|/dsources/mssql|elevated|Review parameters below. Proceed with linking MSSql dSource?
-POST|/dsources/mssql/staging-push|elevated|Review parameters below. Proceed with linking MSSql staging-push dSource?
+POST|/dsources/mssql|elevated|Review parameters below. Proceed with linking SQL Server dSource?
+POST|/dsources/mssql/staging-push|elevated|Review parameters below. Proceed with linking SQL Server staging-push dSource?
 POST|/dsources/ase|elevated|Review parameters below. Proceed with linking ASE/Sybase dSource?
-POST|/dsources/appdata|elevated|Review parameters below. Proceed with linking AppData dSource?
+POST|/dsources/appdata|elevated|Review parameters below. Proceed with linking dSource?
 
 # ============================================
 # RULE 7: dSource Snapshot Creation (STANDARD)
@@ -104,7 +104,7 @@ POST|/snapshots/{snapshotId}/tags/delete|standard|This will remove tags from sna
 POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from bookmark '{name}'. Confirm?
 POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from database template '{name}'. Confirm?
 POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from hook template '{name}'. Confirm?
-POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeflow '{name}'. Confirm?
+POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeline '{name}'. Confirm?
 
 # ============================================
 # RULE 9: Refresh Actions (ELEVATED)
@@ -124,7 +124,7 @@ POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing VD
 # ============================================
 POST|/vdbs/{vdbId}/snapshots|standard|Creating a snapshot of VDB '{name}'. Confirm?
 POST|/bookmarks|standard|Creating a new bookmark. Confirm?
-POST|/vdb-groups|standard|Creating a new VDB group. Confirm?
+POST|/vdb-groups|standard|Creating a new VDB Group. Confirm?
 POST|/database-templates|standard|Creating a new database template. Confirm?
 POST|/hook-templates|standard|Creating a new hook template. Confirm?
 

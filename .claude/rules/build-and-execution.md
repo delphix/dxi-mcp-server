@@ -49,6 +49,7 @@ This allows server restarts without reconfiguring the client.
 | `DCT_CONFIRMATION_FALLBACK` | No | `keyword` | `keyword` or `off`; keyword resolver catches ungated mutating ops |
 | `DCT_GRANT_TTL` | No | `900` | Seconds; TTL for scoped batch grants |
 | `DCT_BATCH_COUNTER_PERSISTENCE` | No | `off` | `off` or `file`; opt-in persistence for velocity counters |
+| `DCT_SERVER_INSTRUCTIONS` | No | packaged file | Path to a vocabulary/domain-model instructions file |
 
 ## Logs
 

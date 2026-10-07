@@ -388,3 +388,22 @@ def test_main_handles_exception():
     with patch("asyncio.run", side_effect=Exception("unexpected")):
         with pytest.raises(SystemExit):
             main_mod.main()
+
+
+# --------------------------------------------------------------------------- #
+# PPM-1129: vocabulary guidance is advertised to the client
+# --------------------------------------------------------------------------- #
+
+
+def test_app_is_constructed_with_vocabulary_instructions():
+    """The MCP `instructions` must carry the canonical vocabulary.
+
+    FastMCP.instructions is read-only and captured into the initialize
+    response at construction, so a regression here is silent at runtime.
+    """
+    import dct_mcp_server.main as main_mod
+
+    instructions = main_mod.app.instructions
+    assert instructions, "server should advertise vocabulary instructions"
+    assert "VDB" in instructions
+    assert "timeline" in instructions

@@ -23,6 +23,7 @@ _OPTIONAL_VARS = [
     "DCT_LOG_LEVEL",
     "DCT_TOOLSET",
     "IS_LOCAL_TELEMETRY_ENABLED",
+    "DCT_SERVER_INSTRUCTIONS",
 ]
 
 
@@ -40,6 +41,12 @@ def test_print_config_help_no_exception(monkeypatch, capsys):
     print_config_help()
     captured = capsys.readouterr()
     assert "DCT_API_KEY" in captured.out
+
+
+def test_print_config_help_lists_vocabulary_var(monkeypatch, capsys):
+    """DCT_SERVER_INSTRUCTIONS must be discoverable from --help (PPM-1129)."""
+    print_config_help()
+    assert "DCT_SERVER_INSTRUCTIONS" in capsys.readouterr().out
 
 
 def test_print_config_help_lists_toolsets(monkeypatch, capsys):

@@ -9,11 +9,15 @@ Supports standard levels (standard, elevated, manual) and conditional levels:
   policy_impact_check:N — triggers when context["affected_object_count"] > N
 """
 
+import re
 from typing import Any
 
 from dct_mcp_server.config.loader import get_confirmation_for_operation
 from dct_mcp_server.core.logging import get_logger
-from dct_mcp_server.tools.core.confirmation_levels import build_required_fields
+from dct_mcp_server.tools.core.confirmation_levels import (
+    _extract_resource_id,
+    build_required_fields,
+)
 from dct_mcp_server.tools.core.velocity_counter import increment_and_check
 
 logger = get_logger(__name__)
@@ -135,6 +139,78 @@ def check_confirmation(
     }
 
 
+# Placeholders a rule message may carry. Each is resolved from the live request
+# before the message is shown to a user; an unresolvable placeholder has its
+# surrounding clause dropped rather than being printed raw (PPM-1129).
+_PLACEHOLDER_RE = re.compile(r"\s*'?\{(name|days|count)\}'?")
+
+
+def render_message_template(
+    template: str | None,
+    path: str,
+    body: dict | None = None,
+    context: dict[str, Any] | None = None,
+) -> str | None:
+    """
+    Substitute the placeholders in a confirmation message template.
+
+    Rules in manual_confirmation.txt are written with ``{name}``, ``{days}`` and
+    ``{count}`` placeholders. Without this pass those braces reach the user
+    verbatim ("permanently delete VDB '{name}'?"), so an approval prompt cannot
+    name the resource it is asking about.
+
+    Resolution order for ``{name}``:
+      1. ``body["name"]`` — present on most create/update payloads
+      2. :func:`_extract_resource_id` on the resolved path, e.g.
+         "/vdbs/vdb-123/delete" -> "vdb-123"
+      3. unresolvable — the placeholder and its quotes are removed, leaving
+         grammatical prose ("permanently delete VDB?")
+
+    ``{days}`` and ``{count}`` resolve from *context* keys ``retention_days``
+    and ``affected_object_count``.
+
+    Args:
+        template: Raw message from the rule file, or None.
+        path:     Fully-resolved API path.
+        body:     Request body, if any.
+        context:  Conditional-rule context.
+
+    Returns:
+        The rendered message, or None if *template* was None.
+    """
+    if not template:
+        return template
+
+    ctx = context or {}
+    values = {
+        "name": _resolve_resource_name(path, body),
+        "days": ctx.get("retention_days"),
+        "count": ctx.get("affected_object_count"),
+    }
+
+    def _sub(match: re.Match) -> str:
+        value = values.get(match.group(1))
+        if value is None or value == "":
+            # Drop the clause entirely — never show a raw brace to a user.
+            return ""
+        return f" '{value}'" if match.group(0).strip().startswith("'") else f" {value}"
+
+    rendered = _PLACEHOLDER_RE.sub(_sub, template)
+    # Collapse any double spacing left behind by a dropped placeholder.
+    return (
+        re.sub(r"\s{2,}", " ", rendered).replace(" ?", "?").replace(" .", ".").strip()
+    )
+
+
+def _resolve_resource_name(path: str, body: dict | None) -> str | None:
+    """Best-effort human-meaningful name for the operation's target."""
+    if isinstance(body, dict):
+        name = body.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return _extract_resource_id(path)
+
+
 def check_confirmation_with_fallback(
     method: str,
     path: str,
@@ -204,7 +280,9 @@ def check_confirmation_with_fallback(
     return {
         "requires_confirmation": requires_confirmation,
         "confirmation_level": level,
-        "message_template": base.get("message_template"),
+        "message_template": render_message_template(
+            base.get("message_template"), path, body, context
+        ),
         "required_fields": base.get(
             "required_fields", build_required_fields(level or "none")
         ),

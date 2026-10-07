@@ -344,6 +344,74 @@ def _load_read_exclusions() -> frozenset:
     return frozenset(patterns)
 
 
+@lru_cache(maxsize=1)
+def load_server_instructions() -> str:
+    """
+    Load the cross-cutting vocabulary and domain-model guidance passed to the
+    MCP client as the server's ``instructions`` (PPM-1129).
+
+    Source is ``config/server_instructions.md`` unless the
+    ``DCT_SERVER_INSTRUCTIONS`` environment variable names another file.
+
+    Returns:
+        The instructions text, or an empty string if no file is available.
+        A missing or unreadable file is never fatal: the server starts
+        without vocabulary guidance rather than failing.
+    """
+    override = (os.getenv("DCT_SERVER_INSTRUCTIONS") or "").strip() or None
+    instructions_file = (
+        Path(override) if override else CONFIG_DIR / "server_instructions.md"
+    )
+
+    if not instructions_file.exists():
+        logger.warning(f"Server instructions file not found: {instructions_file}")
+        return ""
+
+    try:
+        with open(instructions_file, "r") as f:
+            return f.read().strip()
+    except OSError as e:
+        logger.warning(f"Could not read server instructions {instructions_file}: {e}")
+        return ""
+
+
+@lru_cache(maxsize=1)
+def load_vocabulary_map() -> Tuple[Tuple[str, str], ...]:
+    """
+    Load the internal-to-canonical term map from mappings/vocabulary.txt.
+
+    Used to translate upstream text (raw DCT error bodies, OpenAPI summaries)
+    into customer-facing terminology before it is shown to a user (PPM-1129).
+
+    Returns:
+        Tuple of (internal_term, canonical_term) pairs, ordered longest-first
+        so that multi-word terms match before their constituent words.
+        Empty if the file is absent.
+    """
+    vocab_file = MAPPINGS_DIR / "vocabulary.txt"
+
+    if not vocab_file.exists():
+        logger.warning(f"Vocabulary file not found: {vocab_file}")
+        return ()
+
+    pairs = []
+    with open(vocab_file, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("|")
+            if len(parts) < 2:
+                continue
+            internal, canonical = parts[0].strip(), parts[1].strip()
+            if internal and canonical:
+                pairs.append((internal, canonical))
+
+    # Longest first: "delphix engine" must win over a bare "engine" entry.
+    pairs.sort(key=lambda pair: len(pair[0]), reverse=True)
+    return tuple(pairs)
+
+
 def _is_read_exclusion(path: str) -> bool:
     """
     Check if a path matches any read exclusion pattern.
@@ -644,6 +712,8 @@ def clear_cache():
     load_toolset_grouped_apis.cache_clear()
     load_manual_confirmation_rules.cache_clear()
     _load_read_exclusions.cache_clear()
+    load_server_instructions.cache_clear()
+    load_vocabulary_map.cache_clear()
     logger.info("Configuration cache cleared")
 
 

@@ -34,6 +34,11 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         # request headers, so the host passes the caller's DCT account id in the
         # child process environment at spawn — one process per caller.
         "client_id": (os.getenv("DCT_CLIENT_ID") or "").strip() or None,
+        # Optional override for the vocabulary/domain-model guidance passed to
+        # the client as the server's MCP `instructions` (PPM-1129). Defaults to
+        # the packaged config/server_instructions.md when unset.
+        "server_instructions_path": (os.getenv("DCT_SERVER_INSTRUCTIONS") or "").strip()
+        or None,
         # Confirmation system settings
         "confirmation_token_ttl": int(os.getenv("DCT_CONFIRMATION_TOKEN_TTL", "3600")),
         "confirmation_enforcement": os.getenv(
@@ -181,6 +186,14 @@ def print_config_help():
     )
     print(
         "  DCT_BATCH_COUNTER_PERSISTENCE    Batch counter persistence: off or file (default: off)"
+    )
+    print()
+    print("Vocabulary optional variables:")
+    print(
+        "  DCT_SERVER_INSTRUCTIONS          Path to a vocabulary/domain-model instructions file"
+    )
+    print(
+        "                                   (default: packaged config/server_instructions.md)"
     )
     print()
     print("Example:")

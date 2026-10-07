@@ -45,6 +45,7 @@ Key optional env vars:
 - `DCT_CONFIRMATION_FALLBACK` — `keyword` (default) or `off`; keyword resolver catches ungated mutating operations
 - `DCT_GRANT_TTL` — seconds, default `900`; TTL for scoped batch grants
 - `DCT_BATCH_COUNTER_PERSISTENCE` — `off` (default) or `file`; opt-in persistence for velocity counters
+- `DCT_SERVER_INSTRUCTIONS` — path to a vocabulary/domain-model instructions file; defaults to the packaged `config/server_instructions.md`
 
 ## Architecture
 
@@ -94,6 +95,30 @@ The confirmation system was hardened in DLPXECO-14458 to add:
 
 Read-shaped POSTs (e.g. `/vdbs/provision_by_snapshot/defaults`, `/snapshots/search`) are excluded from the keyword fallback via `config/mappings/read_exclusions.txt`.
 
+### Vocabulary Layer
+
+PPM-1129. The server is treated as a product voice channel: internal terminology must not reach
+users. Three surfaces, all config-driven:
+
+- `config/server_instructions.md` — cross-cutting vocabulary and domain-model rules, loaded by
+  `load_server_instructions()` and passed as `instructions=` to `FastMCP(...)` in `main.py`.
+  `FastMCP.instructions` is read-only, so it must be supplied at construction.
+- `config/mappings/vocabulary.txt` — `internal|canonical` term map applied by
+  `tools/core/vocabulary.py:to_canonical()` to text that originates upstream (raw DCT error
+  bodies, OpenAPI summaries). Translation is always **additive**: `message` keeps the raw text
+  and `message_for_user` carries the rendering.
+- `config/mappings/manual_confirmation.txt` — message templates. Placeholders (`{name}`,
+  `{days}`, `{count}`) are resolved by `render_message_template()` in
+  `tools/core/confirmation_resolver.py`; an unresolvable placeholder has its clause dropped
+  rather than printing a raw brace.
+
+Canonical terms: VDB, dSource, environment, snapshot, **timeline** (not timeflow), **VDB Group**
+(not container), **connector** (never expose the AppData vs. native split), and DCT vs.
+*Continuous Data engine* (never bare "engine"). Regression guards live in
+`tests/unit/test_vocabulary_regression.py`.
+
+The term set is provisional pending reconciliation against Glossary v1.2.
+
 ### Dynamic Tool Generation
 
 Tools can be generated at runtime from an OpenAPI spec via `src/dct_mcp_server/tools/core/tool_factory.py` and `src/dct_mcp_server/toolsgenerator/driver.py`. The server checks `$TEMP/dct_mcp_tools/` first, then falls back to the bundled spec. Pre-built tools in `tools/*_endpoints_tool.py` serve as a fallback if generation fails.
@@ -106,11 +131,13 @@ src/dct_mcp_server/
 ├── config/
 │   ├── config.py              # Env var loading/validation
 │   ├── loader.py              # Toolset + confirmation rule loading
+│   ├── server_instructions.md # Vocabulary + domain model sent as MCP `instructions`
 │   ├── toolsets/*.txt         # Persona toolset definitions
 │   └── mappings/
 │       ├── manual_confirmation.txt   # Per-operation confirmation rules
 │       ├── floor_operations.txt      # Non-bypassable floor operations
-│       └── read_exclusions.txt       # POSTs excluded from keyword fallback
+│       ├── read_exclusions.txt       # POSTs excluded from keyword fallback
+│       └── vocabulary.txt            # Internal→canonical term map for upstream text
 ├── core/
 │   ├── logging.py             # Global + session logging setup
 │   ├── session.py             # Session management, telemetry; PROCESS_IDENTITY

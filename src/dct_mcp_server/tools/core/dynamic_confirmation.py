@@ -34,6 +34,7 @@ from typing import Any, Dict, Optional
 
 from dct_mcp_server.config.loader import get_confirmation_for_operation
 from dct_mcp_server.core.logging import get_logger
+from dct_mcp_server.tools.core.vocabulary import to_canonical
 
 logger = get_logger(__name__)
 
@@ -143,10 +144,13 @@ def get_confirmation_for_operation_dynamic(
         pass
 
     level = "manual" if keyword in _MANUAL_KEYWORDS else "elevated"
+    # The summary comes straight from the DCT OpenAPI spec, so it can carry
+    # internal terminology; render it into canonical terms first (PPM-1129).
+    what = to_canonical(operation.get("summary")) or path
     return _confirm(
         level,
         f"This operation may be impactful (matched '{keyword}'): "
-        f"{operation.get('summary') or path}. Please review and confirm before proceeding.",
+        f"{what}. Please review and confirm before proceeding.",
     )
 
 
