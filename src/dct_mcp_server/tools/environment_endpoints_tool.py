@@ -135,7 +135,7 @@ def build_params(**kwargs):
 
 @log_tool_execution
 def environment_source_tool(
-    action: str,  # One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+    action: str,  # One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_connector_source, update_connector_source
     allow_provisioning: Optional[bool] = None,
     ase_db_azure_vault_name: Optional[str] = None,
     ase_db_azure_vault_secret_key: Optional[str] = None,
@@ -252,7 +252,7 @@ def environment_source_tool(
     """
     Unified tool for ENVIRONMENT SOURCE operations.
 
-    This tool supports 41 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+    This tool supports 41 actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_connector_source, update_connector_source
 
     ======================================================================
     ACTION REFERENCE
@@ -746,7 +746,7 @@ def environment_source_tool(
     Example:
         >>> environment_source_tool(action='update_ase_source', environment_id='example-environment-123', repository_id='example-repository-123', database_username=..., database_password=..., source_id='example-source-123', database_name=..., linking_enabled=..., environment_user=...)
 
-    ACTION: create_appdata_source
+    ACTION: create_connector_source
     ----------------------------------------
     Summary: Create an AppData source.
     Method: POST
@@ -755,9 +755,9 @@ def environment_source_tool(
     Key Parameters (provide as applicable): environment_id, engine_id, linking_enabled, environment_user, parameters, path
 
     Example:
-        >>> environment_source_tool(action='create_appdata_source', environment_id='example-environment-123', name=..., engine_id='example-engine-123', type=..., repository_id='example-repository-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
+        >>> environment_source_tool(action='create_connector_source', environment_id='example-environment-123', name=..., engine_id='example-engine-123', type=..., repository_id='example-repository-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
 
-    ACTION: update_appdata_source
+    ACTION: update_connector_source
     ----------------------------------------
     Summary: Update a AppData source by ID.
     Method: PATCH
@@ -766,14 +766,14 @@ def environment_source_tool(
     Key Parameters (provide as applicable): environment_id, name, repository_id, linking_enabled, environment_user, parameters, path
 
     Example:
-        >>> environment_source_tool(action='update_appdata_source', environment_id='example-environment-123', name=..., repository_id='example-repository-123', source_id='example-source-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
+        >>> environment_source_tool(action='update_connector_source', environment_id='example-environment-123', name=..., repository_id='example-repository-123', source_id='example-source-123', linking_enabled=..., environment_user=..., parameters=..., path=...)
 
     ======================================================================
     PARAMETERS
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source
+        action (str): The operation to perform. One of: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_connector_source, update_connector_source
 
       -- General parameters (all database types) --
         allow_provisioning (bool): Flag indicating whether the repository should be used for provisioning.
@@ -907,7 +907,7 @@ def environment_source_tool(
         make_current_account_owner (bool): Whether the account creating this environment must be configured as owner of ...
             [Optional for all actions]
         name (str): The name of the environment.
-            [Required for: create_postgres_source, create_appdata_source]
+            [Required for: create_postgres_source, create_connector_source]
         nfs_addresses (list): array of ip address or hostnames (Pass as JSON array)
             [Optional for all actions]
         oracle_base (str): The Oracle base where database binaries are located.
@@ -947,7 +947,7 @@ def environment_source_tool(
         remote_listener (str): Request body parameter
             [Optional for all actions]
         repository_id (str): The unique identifier for the repository.
-            [Required for: update_environment_repository, delete_environment_repository, create_oracle_source, create_ase_source, create_appdata_source]
+            [Required for: update_environment_repository, delete_environment_repository, create_oracle_source, create_ase_source, create_connector_source]
         scan (str): Request body parameter
             [Optional for all actions]
         service_principal_name (str): The Kerberos Service Principal Name (SPN) of the database.
@@ -959,7 +959,7 @@ def environment_source_tool(
         source_data_id (str): The ID of the source object (dSource or VDB) to get the compatible repos. All...
             [Optional for all actions]
         source_id (str): The unique identifier for the source.
-            [Required for: get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, update_oracle_source, update_postgres_source, update_ase_source, update_appdata_source]
+            [Required for: get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, update_oracle_source, update_postgres_source, update_ase_source, update_connector_source]
         ssh_port (int): ssh port of the host. (Default: 22)
             [Optional for all actions]
         ssh_verification_strategy (str): Mechanism to use for ssh host verification.
@@ -975,7 +975,7 @@ def environment_source_tool(
         toolkit_path (str): The path for the toolkit that resides on the host.
             [Optional for all actions]
         type (str): The type of source to create. Default is DIRECT. Valid values: DIRECT, STAGED...
-            [Required for: list_environment_listeners, create_appdata_source]
+            [Required for: list_environment_listeners, create_connector_source]
         unique_name (str): The unique name of this database.
             [Optional for all actions]
         use_custom_key_pair (bool): Whether to use custom private and public key pair for authentication.
@@ -2115,7 +2115,7 @@ def environment_source_tool(
         return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
-    elif action == "create_appdata_source":
+    elif action == "create_connector_source":
         params = build_params(name=name, type=type)
         body = {
             k: v
@@ -2146,10 +2146,10 @@ def environment_source_tool(
         return make_api_request(
             "POST", "/sources/appdata", params=params, json_body=body if body else None
         )
-    elif action == "update_appdata_source":
+    elif action == "update_connector_source":
         if source_id is None:
             return {
-                "error": "Missing required parameter: source_id for action update_appdata_source"
+                "error": "Missing required parameter: source_id for action update_connector_source"
             }
         endpoint = f"/sources/appdata/{source_id}"
         params = build_params()
@@ -2182,13 +2182,13 @@ def environment_source_tool(
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_appdata_source, update_appdata_source"
+            "error": f"Unknown action: {action}. Valid actions: search_environments, get_environment, create_environment, add_environment_users, set_environment_primary_user, update_environment_users, delete_environment_users, update_environment, delete_environment, enable_environment, disable_environment, refresh_environment, list_environment_hosts, update_environment_host, delete_environment_host, list_environment_listeners, get_environment_tags, add_environment_tags, delete_environment_tags, get_environment_compatible_repositories_by_snapshot, get_environment_compatible_repositories_by_timestamp, get_environment_compatible_repositories_by_location, update_environment_repository, delete_environment_repository, search_sources, list_sources, get_source, delete_source, verify_source_jdbc_connection, get_source_compatible_repositories, get_source_tags, add_source_tags, delete_source_tags, create_oracle_source, update_oracle_source, create_postgres_source, update_postgres_source, create_ase_source, update_ase_source, create_connector_source, update_connector_source"
         }
 
 
 @log_tool_execution
-def toolkit_tool(
-    action: str,  # One of: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags
+def connector_schema_tool(
+    action: str,  # One of: search, get, upload_connector_schema, delete_connector_schema, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     filter_expression: Optional[str] = None,
     key: Optional[str] = None,
@@ -2202,7 +2202,7 @@ def toolkit_tool(
     """
     Unified tool for TOOLKIT operations.
 
-    This tool supports 7 actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags
+    This tool supports 7 actions: search, get, upload_connector_schema, delete_connector_schema, get_tags, add_tags, delete_tags
 
     ======================================================================
     ACTION REFERENCE
@@ -2252,7 +2252,7 @@ def toolkit_tool(
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
 
     Example:
-        >>> toolkit_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
+        >>> connector_schema_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
 
     ACTION: get
     ----------------------------------------
@@ -2262,18 +2262,18 @@ def toolkit_tool(
     Required Parameters: toolkit_id
 
     Example:
-        >>> toolkit_tool(action='get', toolkit_id='example-toolkit-123')
+        >>> connector_schema_tool(action='get', toolkit_id='example-toolkit-123')
 
-    ACTION: upload_toolkit
+    ACTION: upload_connector_schema
     ----------------------------------------
     Summary: Upload toolkit to engines.
     Method: POST
     Endpoint: /toolkits/upload
 
     Example:
-        >>> toolkit_tool(action='upload_toolkit')
+        >>> connector_schema_tool(action='upload_connector_schema')
 
-    ACTION: delete_toolkit
+    ACTION: delete_connector_schema
     ----------------------------------------
     Summary: Delete a Toolkit by ID.
     Method: DELETE
@@ -2281,7 +2281,7 @@ def toolkit_tool(
     Required Parameters: toolkit_id
 
     Example:
-        >>> toolkit_tool(action='delete_toolkit', toolkit_id='example-toolkit-123')
+        >>> connector_schema_tool(action='delete_connector_schema', toolkit_id='example-toolkit-123')
 
     ACTION: get_tags
     ----------------------------------------
@@ -2291,7 +2291,7 @@ def toolkit_tool(
     Required Parameters: toolkit_id
 
     Example:
-        >>> toolkit_tool(action='get_tags', toolkit_id='example-toolkit-123')
+        >>> connector_schema_tool(action='get_tags', toolkit_id='example-toolkit-123')
 
     ACTION: add_tags
     ----------------------------------------
@@ -2301,7 +2301,7 @@ def toolkit_tool(
     Required Parameters: toolkit_id, tags
 
     Example:
-        >>> toolkit_tool(action='add_tags', toolkit_id='example-toolkit-123', tags=...)
+        >>> connector_schema_tool(action='add_tags', toolkit_id='example-toolkit-123', tags=...)
 
     ACTION: delete_tags
     ----------------------------------------
@@ -2312,14 +2312,14 @@ def toolkit_tool(
     Key Parameters (provide as applicable): tags, key, value
 
     Example:
-        >>> toolkit_tool(action='delete_tags', toolkit_id='example-toolkit-123', tags=..., key=..., value=...)
+        >>> connector_schema_tool(action='delete_tags', toolkit_id='example-toolkit-123', tags=..., key=..., value=...)
 
     ======================================================================
     PARAMETERS
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags
+        action (str): The operation to perform. One of: search, get, upload_connector_schema, delete_connector_schema, get_tags, add_tags, delete_tags
 
       -- General parameters (all database types) --
         cursor (str): Cursor to fetch the next or previous page of results. The value of this prope...
@@ -2335,7 +2335,7 @@ def toolkit_tool(
         tags (list): Array of tags with key value pairs (Pass as JSON array)
             [Required for: add_tags]
         toolkit_id (str): The unique identifier for the toolkit.
-            [Required for: get, delete_toolkit, get_tags, add_tags, delete_tags]
+            [Required for: get, delete_connector_schema, get_tags, add_tags, delete_tags]
         value (str): Value of the tag
             [Optional for all actions]
 
@@ -2353,7 +2353,7 @@ def toolkit_tool(
             "POST",
             "/toolkits/search",
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -2372,7 +2372,7 @@ def toolkit_tool(
             "GET",
             endpoint,
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -2380,13 +2380,13 @@ def toolkit_tool(
         if conf:
             return conf
         return make_api_request("GET", endpoint, params=params)
-    elif action == "upload_toolkit":
+    elif action == "upload_connector_schema":
         params = build_params()
         conf = check_confirmation(
             "POST",
             "/toolkits/upload",
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -2394,10 +2394,10 @@ def toolkit_tool(
         if conf:
             return conf
         return make_api_request("POST", "/toolkits/upload", params=params)
-    elif action == "delete_toolkit":
+    elif action == "delete_connector_schema":
         if toolkit_id is None:
             return {
-                "error": "Missing required parameter: toolkit_id for action delete_toolkit"
+                "error": "Missing required parameter: toolkit_id for action delete_connector_schema"
             }
         endpoint = f"/toolkits/{toolkit_id}"
         params = build_params()
@@ -2405,7 +2405,7 @@ def toolkit_tool(
             "DELETE",
             endpoint,
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -2424,7 +2424,7 @@ def toolkit_tool(
             "GET",
             endpoint,
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -2444,7 +2444,7 @@ def toolkit_tool(
             "POST",
             endpoint,
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -2470,7 +2470,7 @@ def toolkit_tool(
             "POST",
             endpoint,
             action,
-            "toolkit_tool",
+            "connector_schema_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -2482,7 +2482,7 @@ def toolkit_tool(
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: search, get, upload_toolkit, delete_toolkit, get_tags, add_tags, delete_tags"
+            "error": f"Unknown action: {action}. Valid actions: search, get, upload_connector_schema, delete_connector_schema, get_tags, add_tags, delete_tags"
         }
 
 
@@ -2493,8 +2493,8 @@ def register_tools(app, dct_client):
     try:
         logger.info("  Registering tool function: environment_source_tool")
         app.add_tool(environment_source_tool, name="environment_source_tool")
-        logger.info("  Registering tool function: toolkit_tool")
-        app.add_tool(toolkit_tool, name="toolkit_tool")
+        logger.info("  Registering tool function: connector_schema_tool")
+        app.add_tool(connector_schema_tool, name="connector_schema_tool")
     except Exception as e:
         logger.error(f"Error registering tools for environment_endpoints: {e}")
     logger.info("Tools registration finished for environment_endpoints.")

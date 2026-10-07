@@ -201,12 +201,12 @@ GET|/management/tags/{tagId}/usages|get_usages
 POST|/management/tags/{tagId}/usages/search|search_usages
 
 # ----------------------------------------------------------------------------
-# TOOL 10: toolkit_tool - Toolkits (AppData plugin schemas)
+# TOOL 10: connector_schema_tool - Connectors (schema definitions)
 # ----------------------------------------------------------------------------
 POST|/toolkits/search|search
 GET|/toolkits/{toolkitId}|get
-POST|/toolkits/upload|upload_toolkit
-DELETE|/toolkits/{toolkitId}|delete_toolkit
+POST|/toolkits/upload|upload_connector_schema
+DELETE|/toolkits/{toolkitId}|delete_connector_schema
 GET|/toolkits/{toolkitId}/tags|get_tags
 POST|/toolkits/{toolkitId}/tags|add_tags
 POST|/toolkits/{toolkitId}/tags/delete|delete_tags
@@ -263,7 +263,7 @@ GET|/kerberos-configs/{kerberosConfigId}|get_kerberos_config
 # ----------------------------------------------------------------------------
 # Connectivity Checks
 POST|/connectivity/check|check_engine_connectivity
-POST|/database/connectivity/check|check_database_connectivity
+POST|/database/connectivity/check|check_connectivity
 POST|/netbackup/connectivity/check|check_netbackup_connectivity
 POST|/commvault/connectivity/check|check_commvault_connectivity
 # Network Performance Tests

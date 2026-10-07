@@ -135,7 +135,7 @@ def build_params(**kwargs):
 
 @log_tool_execution
 def data_tool(
-    action: str,  # One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
+    action: str,  # One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_connector, dsource_link_connector_defaults, update_connector_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
     abort: Optional[bool] = None,
     account_id: Optional[int] = None,
     additional_mount_points: Optional[list] = None,
@@ -453,10 +453,10 @@ def data_tool(
     """
         Unified tool for DATA operations.
 
-        This tool supports 122 actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
+        This tool supports 122 actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_connector, dsource_link_connector_defaults, update_connector_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
 
         IMPORTANT — Delphix domain terminology:
-      • "dSource" is often used as a VERB meaning "create/link a dSource" (i.e. ingest a source database). When a user says "dSource database X", they want to LINK a new dSource for database X, NOT look up an existing dSource named X. Use the appropriate dsource_link_* action (dsource_link_oracle, dsource_link_mssql, dsource_link_ase, dsource_link_appdata) depending on the database type.
+      • "dSource" is often used as a VERB meaning "create/link a dSource" (i.e. ingest a source database). When a user says "dSource database X", they want to LINK a new dSource for database X, NOT look up an existing dSource named X. Use the appropriate dsource_link_* action (dsource_link_oracle, dsource_link_mssql, dsource_link_ase, dsource_link_connector) depending on the database type.
       • "provision" or "spin up" a VDB or "create a golden image of a VDB" means creating a virtual database from a dSource or bookmark  — use provision_by_timestamp, provision_by_snapshot, etc.
       • "refresh" a VDB means updating it with newer data from its parent — use refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, etc.
 
@@ -615,7 +615,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_by_timestamp', timestamp=..., timestamp_in_database_timezone=..., timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=...)
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
 
         ACTION: provision_by_timestamp_defaults
         ----------------------------------------
@@ -638,7 +638,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_by_snapshot', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., snapshot_id='example-snapshot-123')
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
 
         ACTION: provision_by_snapshot_defaults
         ----------------------------------------
@@ -661,7 +661,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_from_bookmark', make_current_account_owner=..., bookmark_id='example-bookmark-123')
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
 
         ACTION: provision_from_bookmark_defaults
         ----------------------------------------
@@ -683,7 +683,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_by_location', timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., location=...)
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
 
         ACTION: provision_by_location_defaults
         ----------------------------------------
@@ -705,7 +705,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_empty_vdb', repository_id='example-repository-123', engine_id='example-engine-123')
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call toolkit_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
 
         ACTION: delete_vdb
         ----------------------------------------
@@ -847,7 +847,7 @@ def data_tool(
         Example:
             >>> data_tool(action='rollback_vdb_from_bookmark', vdb_id='example-vdb-123', bookmark_id='example-bookmark-123')
 
-        ACTION: switch_vdb_timeflow
+        ACTION: switch_vdb_timeline
         ----------------------------------------
         Summary: Switches the current timeflow of a VDB.
         Method: POST
@@ -856,7 +856,7 @@ def data_tool(
         Key Parameters (provide as applicable): timeflow_id
 
         Example:
-            >>> data_tool(action='switch_vdb_timeflow', vdb_id='example-vdb-123', timeflow_id='example-timeflow-123')
+            >>> data_tool(action='switch_vdb_timeline', vdb_id='example-vdb-123', timeflow_id='example-timeflow-123')
 
         ACTION: lock_vdb
         ----------------------------------------
@@ -1856,7 +1856,7 @@ def data_tool(
         Example:
             >>> data_tool(action='update_ase_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123')
 
-        ACTION: dsource_link_appdata
+        ACTION: dsource_link_connector
         ----------------------------------------
         Summary: Link an AppData database as dSource.
         Method: POST
@@ -1864,12 +1864,12 @@ def data_tool(
         Key Parameters (provide as applicable): environment_user, link_type, staging_mount_base, staging_environment, staging_environment_user, excludes, follow_symlinks, parameters, sync_parameters
 
         Example:
-            >>> data_tool(action='dsource_link_appdata', environment_user=..., link_type=..., staging_mount_base=..., staging_environment=..., staging_environment_user=..., excludes=..., follow_symlinks=..., parameters=..., sync_parameters=...)
+            >>> data_tool(action='dsource_link_connector', environment_user=..., link_type=..., staging_mount_base=..., staging_environment=..., staging_environment_user=..., excludes=..., follow_symlinks=..., parameters=..., sync_parameters=...)
 
-            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
+            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call connector_schema_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
         Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
 
-        ACTION: dsource_link_appdata_defaults
+        ACTION: dsource_link_connector_defaults
         ----------------------------------------
         Summary: Get defaults for an AppData dSource linking.
         Method: POST
@@ -1877,12 +1877,12 @@ def data_tool(
         Required Parameters: source_id
 
         Example:
-            >>> data_tool(action='dsource_link_appdata_defaults', source_id='example-source-123')
+            >>> data_tool(action='dsource_link_connector_defaults', source_id='example-source-123')
 
-            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
+            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call connector_schema_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
         Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
 
-        ACTION: update_appdata_dsource
+        ACTION: update_connector_dsource
         ----------------------------------------
         Summary: Update values of an AppData dSource
         Method: PATCH
@@ -1891,9 +1891,9 @@ def data_tool(
         Key Parameters (provide as applicable): name, description, hooks, retention_policy_id, sync_policy_id, ops_pre_sync, ops_post_sync, environment_user, staging_environment, staging_environment_user, parameters
 
         Example:
-            >>> data_tool(action='update_appdata_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., parameters=...)
+            >>> data_tool(action='update_connector_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., parameters=...)
 
-            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call toolkit_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
+            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call connector_schema_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
         Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
 
         ACTION: dsource_link_mssql
@@ -2072,7 +2072,7 @@ def data_tool(
         ======================================================================
 
         Args:
-            action (str): The operation to perform. One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
+            action (str): The operation to perform. One of: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_connector, dsource_link_connector_defaults, update_connector_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
 
           -- General parameters (all database types) --
             abort (bool): Whether to issue 'shutdown abort' to shutdown Oracle Virtual DB instances. (D...
@@ -2218,7 +2218,7 @@ def data_tool(
             drop_and_recreate_devices (bool): If this parameter is set to true, it will drop the older devices and create n...
                 [Optional for all actions]
             dsource_id (str): The unique identifier for the dsource.
-                [Required for: get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, update_ase_dsource, update_appdata_dsource, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark]
+                [Required for: get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, update_ase_dsource, update_connector_dsource, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark]
             dump_credentials (str): The password credential for the source DB user.
                 [Optional for all actions]
             dump_history_file_enabled (bool): Specifies if Dump History File is enabled for backup history detection. (Defa...
@@ -2555,7 +2555,7 @@ def data_tool(
             source_host_user (str): ID or user reference of the host OS user to use for linking.
                 [Optional for all actions]
             source_id (str): Id of the source to link.
-                [Required for: dsource_link_oracle_defaults, attach_oracle_dsource, dsource_link_ase_defaults, dsource_link_appdata_defaults, dsource_link_mssql_defaults, attach_mssql_dsource]
+                [Required for: dsource_link_oracle_defaults, attach_oracle_dsource, dsource_link_ase_defaults, dsource_link_connector_defaults, dsource_link_mssql_defaults, attach_mssql_dsource]
             staging_container_database_reference (str): Reference of the CDB source config.
                 [Optional for all actions]
             staging_database_config_params (dict): Oracle database configuration parameter overrides. If both staging_database_t...
@@ -2635,7 +2635,7 @@ def data_tool(
             vdb_group_id (str): The unique identifier for the vdbGroup.
                 [Required for: get_vdb_group, update_vdb_group, delete_vdb_group, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags]
             vdb_id (str): The unique identifier for the vdb.
-                [Required for: get_vdb, update_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize]
+                [Required for: get_vdb, update_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize]
             vdb_ids (list): Request body parameter (Pass as JSON array)
                 [Optional for all actions]
             vdb_restart (bool): Indicates whether the Engine should automatically restart this virtual source...
@@ -3817,10 +3817,10 @@ def data_tool(
         return make_api_request(
             "POST", endpoint, params=params, json_body=body if body else None
         )
-    elif action == "switch_vdb_timeflow":
+    elif action == "switch_vdb_timeline":
         if vdb_id is None:
             return {
-                "error": "Missing required parameter: vdb_id for action switch_vdb_timeflow"
+                "error": "Missing required parameter: vdb_id for action switch_vdb_timeline"
             }
         endpoint = f"/vdbs/{vdb_id}/switch_timeflow"
         params = build_params()
@@ -6172,7 +6172,7 @@ def data_tool(
         return make_api_request(
             "PATCH", endpoint, params=params, json_body=body if body else None
         )
-    elif action == "dsource_link_appdata":
+    elif action == "dsource_link_connector":
         params = build_params()
         body = {
             k: v
@@ -6214,7 +6214,7 @@ def data_tool(
         return make_api_request(
             "POST", "/dsources/appdata", params=params, json_body=body if body else None
         )
-    elif action == "dsource_link_appdata_defaults":
+    elif action == "dsource_link_connector_defaults":
         params = build_params()
         body = {k: v for k, v in {"source_id": source_id}.items() if v is not None}
         conf = check_confirmation(
@@ -6234,10 +6234,10 @@ def data_tool(
             params=params,
             json_body=body if body else None,
         )
-    elif action == "update_appdata_dsource":
+    elif action == "update_connector_dsource":
         if dsource_id is None:
             return {
-                "error": "Missing required parameter: dsource_id for action update_appdata_dsource"
+                "error": "Missing required parameter: dsource_id for action update_connector_dsource"
             }
         endpoint = f"/dsources/appdata/{dsource_id}"
         params = build_params()
@@ -7143,13 +7143,13 @@ def data_tool(
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeflow, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_appdata, dsource_link_appdata_defaults, update_appdata_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark"
+            "error": f"Unknown action: {action}. Valid actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_connector, dsource_link_connector_defaults, update_connector_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark"
         }
 
 
 @log_tool_execution
 def snapshot_bookmark_tool(
-    action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+    action: str,  # One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeline_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
     bookmark_id: Optional[str] = None,
     bookmark_type: Optional[str] = None,
     cursor: Optional[str] = None,
@@ -7183,7 +7183,7 @@ def snapshot_bookmark_tool(
     """
     Unified tool for SNAPSHOT BOOKMARK operations.
 
-    This tool supports 19 actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+    This tool supports 19 actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeline_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
 
     ======================================================================
     ACTION REFERENCE
@@ -7285,7 +7285,7 @@ def snapshot_bookmark_tool(
     Example:
         >>> snapshot_bookmark_tool(action='unset_snapshot_expiration', snapshot_id='example-snapshot-123')
 
-    ACTION: get_snapshot_timeflow_range
+    ACTION: get_snapshot_timeline_range
     ----------------------------------------
     Summary: Return the provisionable timeflow range based on a specific snapshot.
     Method: GET
@@ -7293,7 +7293,7 @@ def snapshot_bookmark_tool(
     Required Parameters: snapshot_id
 
     Example:
-        >>> snapshot_bookmark_tool(action='get_snapshot_timeflow_range', snapshot_id='example-snapshot-123')
+        >>> snapshot_bookmark_tool(action='get_snapshot_timeline_range', snapshot_id='example-snapshot-123')
 
     ACTION: get_runtime
     ----------------------------------------
@@ -7475,7 +7475,7 @@ def snapshot_bookmark_tool(
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
+        action (str): The operation to perform. One of: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeline_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags
 
       -- General parameters (all database types) --
         bookmark_id (str): The unique identifier for the bookmark.
@@ -7515,7 +7515,7 @@ def snapshot_bookmark_tool(
         retention (int): The retention policy for this bookmark, in days. A value of -1 indicates the ...
             [Optional for all actions]
         snapshot_id (str): The unique identifier for the snapshot.
-            [Required for: get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags]
+            [Required for: get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeline_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags]
         snapshot_ids (list): The IDs of the snapshots that will be part of the Bookmark. This parameter is...
             [Optional for all actions]
         sort (str): The field to sort results by. A property name with a prepended '-' signifies ...
@@ -7652,10 +7652,10 @@ def snapshot_bookmark_tool(
         if conf:
             return conf
         return make_api_request("POST", endpoint, params=params)
-    elif action == "get_snapshot_timeflow_range":
+    elif action == "get_snapshot_timeline_range":
         if snapshot_id is None:
             return {
-                "error": "Missing required parameter: snapshot_id for action get_snapshot_timeflow_range"
+                "error": "Missing required parameter: snapshot_id for action get_snapshot_timeline_range"
             }
         endpoint = f"/snapshots/{snapshot_id}/timeflow_range"
         params = build_params()
@@ -7972,7 +7972,7 @@ def snapshot_bookmark_tool(
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeflow_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags"
+            "error": f"Unknown action: {action}. Valid actions: search_snapshots, get_snapshot, update_snapshot, delete_snapshot, unset_snapshot_expiration, get_snapshot_timeline_range, get_runtime, get_snapshot_tags, add_snapshot_tags, delete_snapshot_tags, search_bookmarks, get_bookmark, create_bookmark, update_bookmark, delete_bookmark, get_bookmark_vdb_groups, get_bookmark_tags, add_bookmark_tags, delete_bookmark_tags"
         }
 
 
@@ -8248,7 +8248,7 @@ def data_connection_tool(
 
 
 @log_tool_execution
-def timeflow_tool(
+def timeline_tool(
     action: str,  # One of: list, search, get, update, delete, get_snapshot_day_range, repair, get_tags, add_tags, delete_tags
     azure_vault_name: Optional[str] = None,
     azure_vault_secret_key: Optional[str] = None,
@@ -8299,7 +8299,7 @@ def timeflow_tool(
     Required Parameters: limit, cursor, sort
 
     Example:
-        >>> timeflow_tool(action='list', limit=..., cursor=..., sort=...)
+        >>> timeline_tool(action='list', limit=..., cursor=..., sort=...)
 
     ACTION: search
     ----------------------------------------
@@ -8343,7 +8343,7 @@ def timeflow_tool(
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
 
     Example:
-        >>> timeflow_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
+        >>> timeline_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
 
     ACTION: get
     ----------------------------------------
@@ -8353,7 +8353,7 @@ def timeflow_tool(
     Required Parameters: timeflow_id
 
     Example:
-        >>> timeflow_tool(action='get', timeflow_id='example-timeflow-123')
+        >>> timeline_tool(action='get', timeflow_id='example-timeflow-123')
 
     ACTION: update
     ----------------------------------------
@@ -8364,7 +8364,7 @@ def timeflow_tool(
     Key Parameters (provide as applicable): name
 
     Example:
-        >>> timeflow_tool(action='update', timeflow_id='example-timeflow-123', name=...)
+        >>> timeline_tool(action='update', timeflow_id='example-timeflow-123', name=...)
 
     ACTION: delete
     ----------------------------------------
@@ -8374,7 +8374,7 @@ def timeflow_tool(
     Required Parameters: timeflow_id
 
     Example:
-        >>> timeflow_tool(action='delete', timeflow_id='example-timeflow-123')
+        >>> timeline_tool(action='delete', timeflow_id='example-timeflow-123')
 
     ACTION: get_snapshot_day_range
     ----------------------------------------
@@ -8384,7 +8384,7 @@ def timeflow_tool(
     Required Parameters: timeflow_id
 
     Example:
-        >>> timeflow_tool(action='get_snapshot_day_range', timeflow_id='example-timeflow-123')
+        >>> timeline_tool(action='get_snapshot_day_range', timeflow_id='example-timeflow-123')
 
     ACTION: repair
     ----------------------------------------
@@ -8395,7 +8395,7 @@ def timeflow_tool(
     Key Parameters (provide as applicable): port, use_engine_public_key, password, key_pair_private_key, key_pair_public_key, vault_id, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, cyberark_vault_query_string, use_kerberos_authentication, ssh_verification_strategy
 
     Example:
-        >>> timeflow_tool(action='repair', timeflow_id='example-timeflow-123', host=..., port=..., username=..., directory=..., start_location=..., end_location=..., use_engine_public_key=..., password=..., key_pair_private_key=..., key_pair_public_key=..., vault_id='example-vault-123', hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., use_kerberos_authentication=..., ssh_verification_strategy=...)
+        >>> timeline_tool(action='repair', timeflow_id='example-timeflow-123', host=..., port=..., username=..., directory=..., start_location=..., end_location=..., use_engine_public_key=..., password=..., key_pair_private_key=..., key_pair_public_key=..., vault_id='example-vault-123', hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., use_kerberos_authentication=..., ssh_verification_strategy=...)
 
     ACTION: get_tags
     ----------------------------------------
@@ -8405,7 +8405,7 @@ def timeflow_tool(
     Required Parameters: timeflow_id
 
     Example:
-        >>> timeflow_tool(action='get_tags', timeflow_id='example-timeflow-123')
+        >>> timeline_tool(action='get_tags', timeflow_id='example-timeflow-123')
 
     ACTION: add_tags
     ----------------------------------------
@@ -8415,7 +8415,7 @@ def timeflow_tool(
     Required Parameters: timeflow_id, tags
 
     Example:
-        >>> timeflow_tool(action='add_tags', timeflow_id='example-timeflow-123', tags=...)
+        >>> timeline_tool(action='add_tags', timeflow_id='example-timeflow-123', tags=...)
 
     ACTION: delete_tags
     ----------------------------------------
@@ -8426,7 +8426,7 @@ def timeflow_tool(
     Key Parameters (provide as applicable): tags, key, value
 
     Example:
-        >>> timeflow_tool(action='delete_tags', timeflow_id='example-timeflow-123', tags=..., key=..., value=...)
+        >>> timeline_tool(action='delete_tags', timeflow_id='example-timeflow-123', tags=..., key=..., value=...)
 
     ======================================================================
     PARAMETERS
@@ -8510,7 +8510,7 @@ def timeflow_tool(
             "GET",
             "/timeflows",
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -8525,7 +8525,7 @@ def timeflow_tool(
             "POST",
             "/timeflows/search",
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -8544,7 +8544,7 @@ def timeflow_tool(
             "GET",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -8564,7 +8564,7 @@ def timeflow_tool(
             "PATCH",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -8585,7 +8585,7 @@ def timeflow_tool(
             "DELETE",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -8604,7 +8604,7 @@ def timeflow_tool(
             "GET",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -8656,7 +8656,7 @@ def timeflow_tool(
             "POST",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -8677,7 +8677,7 @@ def timeflow_tool(
             "GET",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -8697,7 +8697,7 @@ def timeflow_tool(
             "POST",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -8723,7 +8723,7 @@ def timeflow_tool(
             "POST",
             endpoint,
             action,
-            "timeflow_tool",
+            "timeline_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -8750,8 +8750,8 @@ def register_tools(app, dct_client):
         app.add_tool(snapshot_bookmark_tool, name="snapshot_bookmark_tool")
         logger.info("  Registering tool function: data_connection_tool")
         app.add_tool(data_connection_tool, name="data_connection_tool")
-        logger.info("  Registering tool function: timeflow_tool")
-        app.add_tool(timeflow_tool, name="timeflow_tool")
+        logger.info("  Registering tool function: timeline_tool")
+        app.add_tool(timeline_tool, name="timeline_tool")
     except Exception as e:
         logger.error(f"Error registering tools for dataset_endpoints: {e}")
     logger.info("Tools registration finished for dataset_endpoints.")

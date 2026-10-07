@@ -3047,7 +3047,7 @@ def vault_tool(
 
 @log_tool_execution
 def diagnostic_tool(
-    action: str,  # One of: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
+    action: str,  # One of: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
     azure_vault_name: Optional[str] = None,
     azure_vault_secret_key: Optional[str] = None,
     azure_vault_username_key: Optional[str] = None,
@@ -3107,7 +3107,7 @@ def diagnostic_tool(
     """
     Unified tool for DIAGNOSTIC operations.
 
-    This tool supports 14 actions: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
+    This tool supports 14 actions: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
 
     ======================================================================
     ACTION REFERENCE
@@ -3124,7 +3124,7 @@ def diagnostic_tool(
     Example:
         >>> diagnostic_tool(action='check_engine_connectivity', engine_id='example-engine-123', use_engine_public_key=..., os_name=..., staging_environment=..., host=..., port=..., username=..., password=..., vault_id='example-vault-123', hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., use_kerberos_authentication=...)
 
-    ACTION: check_database_connectivity
+    ACTION: check_connectivity
     ----------------------------------------
     Summary: Tests the validity of the supplied database credentials, returning an error if unable to connect to the database.
     Method: POST
@@ -3133,7 +3133,7 @@ def diagnostic_tool(
     Key Parameters (provide as applicable): username, password, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, cyberark_vault_query_string, vault, environment_id, environment_user
 
     Example:
-        >>> diagnostic_tool(action='check_database_connectivity', username=..., password=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., credentials_type=..., source_id='example-source-123', vault=..., environment_id='example-environment-123', environment_user=...)
+        >>> diagnostic_tool(action='check_connectivity', username=..., password=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., credentials_type=..., source_id='example-source-123', vault=..., environment_id='example-environment-123', environment_user=...)
 
     ACTION: check_netbackup_connectivity
     ----------------------------------------
@@ -3267,7 +3267,7 @@ def diagnostic_tool(
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
+        action (str): The operation to perform. One of: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
 
       -- General parameters (all database types) --
         azure_vault_name (str): Azure key vault name (ORACLE, ASE and MSSQL_DOMAIN_USER only).
@@ -3285,7 +3285,7 @@ def diagnostic_tool(
         compression (bool): Whether or not compression is used for the test. (Default: False)
             [Optional for all actions]
         credentials_type (str): The type of credentials. Valid values: MSSQL_ENVIRONMENT_USER, MSSQL_DOMAIN_U...
-            [Required for: check_database_connectivity]
+            [Required for: check_connectivity]
         cyberark_vault_query_string (str): Query to find a credential in the CyberArk vault.
             [Optional for all actions]
         destination_type (str): Whether the test is testing connectivity to a Delphix Engine or remote host. ...
@@ -3351,7 +3351,7 @@ def diagnostic_tool(
         source_data_id (str): The ID of the source object (dSource or VDB) to provision from.
             [Required for: validate_file_mapping_by_location, validate_file_mapping_by_timestamp]
         source_id (str): Source database config Id.
-            [Required for: check_database_connectivity]
+            [Required for: check_connectivity]
         staging_client_name (str): The name of the Staging Client in CommServe.
             [Required for: check_commvault_connectivity]
         staging_environment (str): Id of the connector environment which is used to connect to this source envir...
@@ -3429,7 +3429,7 @@ def diagnostic_tool(
             params=params,
             json_body=body if body else None,
         )
-    elif action == "check_database_connectivity":
+    elif action == "check_connectivity":
         params = build_params(credentials_type=credentials_type)
         body = {
             k: v
@@ -3819,7 +3819,7 @@ def diagnostic_tool(
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark"
+            "error": f"Unknown action: {action}. Valid actions: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark"
         }
 
 

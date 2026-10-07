@@ -638,7 +638,7 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
     # Mapping from logical tool names to implementation modules
     # Based on which module implements APIs for which path patterns
     TOOL_TO_MODULE = {
-        # Dataset operations (vdb, dsource, snapshot, bookmark, vdb-group, timeflow, source)
+        # Dataset operations (vdb, dsource, snapshot, bookmark, vdb-group, timeline, source)
         "vdb_tool": "dataset_endpoints_tool",
         "vdb_group_tool": "dataset_endpoints_tool",
         "dsource_tool": "dataset_endpoints_tool",
@@ -648,14 +648,14 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         "data_connection_tool": "dataset_endpoints_tool",
         "data_tool": "dataset_endpoints_tool",  # Merged tool
         "snapshot_bookmark_tool": "dataset_endpoints_tool",  # Merged tool
-        "timeflow_tool": "dataset_endpoints_tool",
+        "timeline_tool": "dataset_endpoints_tool",
         # Job operations
         "job_tool": "job_endpoints_tool",
         # Environment operations
         "environment_tool": "environment_endpoints_tool",
         "environment_source_tool": "environment_endpoints_tool",  # Merged tool
-        # Toolkit operations (AppData plugin schemas)
-        "toolkit_tool": "environment_endpoints_tool",
+        # Connector schema operations
+        "connector_schema_tool": "environment_endpoints_tool",
         # Engine operations
         "engine_tool": "engine_endpoints_tool",
         # Compliance operations
@@ -668,7 +668,7 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
         "iam_tool": "iam_endpoints_tool",
         "tag_tool": "iam_endpoints_tool",
         # Template operations (if we have the module)
-        "database_template_tool": "template_endpoints_tool",
+        "vdb_template_tool": "template_endpoints_tool",
         "hook_template_tool": "template_endpoints_tool",
         # Policy operations (if we have the module)
         "virtualization_policy_tool": "policy_endpoints_tool",

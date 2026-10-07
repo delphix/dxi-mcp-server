@@ -29,7 +29,7 @@ GET|/dsources/{dsourceId}/tags|get_dsource_tags
 POST|/snapshots/search|search_snapshots
 GET|/snapshots/{snapshotId}|get_snapshot
 POST|/snapshots/capacity|get_snapshot_capacity
-GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
+GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeline_range
 GET|/snapshots/{snapshotId}/tags|get_snapshot_tags
 # Bookmark Operations (read only)
 POST|/bookmarks/search|search_bookmarks
@@ -48,7 +48,7 @@ GET|/vcdbs/{vcdbId}|get_vcdb
 GET|/vcdbs/{vcdbId}/tags|get_vcdb_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 4: database_template_tool - VDB Templates (read only)
+# TOOL 4: vdb_template_tool - VDB Templates (read only)
 # ----------------------------------------------------------------------------
 POST|/database-templates/search|search
 GET|/database-templates/{databaseTemplateId}|get
