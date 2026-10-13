@@ -2,7 +2,7 @@
 
 <!--
 PPM-1129. Reconciled against the canonical Glossary v1.2
-(DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx, 28 canonical terms / 172 synonym
+(DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx, 32 canonical-term rows / 169 synonym
 rows), attached to the PPM-1129 Jira ticket. dSource deprecation direction is
 resolved: Product has decided to keep dSource as canonical for this PPM
 (deprecation deferred to a future initiative) -- no change needed here, this
@@ -197,6 +197,10 @@ Additional rules:
 - Identify a valid snapshot before attempting to provision or refresh from one.
 - Many operations are asynchronous and return a job. Poll the job rather than
   assuming the work finished when the call returned.
-- Destructive operations are gated: the server will ask for confirmation and return a
-  token. Show the user the message, get their explicit approval, and only then re-call
-  with the token. Never approve on the user's behalf.
+- Destructive operations are gated: the first call returns `confirmation_required`
+  with a message instead of running. Show the user the message, get their explicit
+  approval, and only then re-call the same operation with the same parameters plus what
+  the response asks for -- the `confirmation_token` (and any other `required_fields`,
+  such as `confirmed_resource_name`) when one is returned, or `confirmed=True` when the
+  tool takes a `confirmed` flag and no token is issued. Never approve on the user's
+  behalf.
