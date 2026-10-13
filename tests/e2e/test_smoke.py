@@ -27,7 +27,7 @@ SEARCH_TOOLS = [
     "snapshot_tool",
     "bookmark_tool",
     "job_tool",
-    "timeflow_tool",
+    "timeline_tool",
 ]
 
 
