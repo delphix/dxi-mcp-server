@@ -30,18 +30,28 @@ is caught by a checklist and a test, not by another reconciliation pass.
    `Cloud Engine`, `AppData`, `plugin`, `toolkit`, `Virtualization Engine`,
    `Masking Engine`, `Delphix Masking`) must never appear in anything the model reads or
    can echo back.
-4. **If a term is genuinely ambiguous and context-dependent** (the way bare "engine" is
+   A retired word that has an unrelated everyday meaning is not retired in that meaning:
+   Oracle's "container database" (CDB) and DCT's "VDB inventory report" are legitimate.
+   Kubernetes/Docker "container" is what the word *now* means. Never "translate" those.
+4. **If a term is genuinely ambiguous and context-dependent** (the way "Delphix engine" is
    ambiguous between Continuous Data and Continuous Compliance), do not add a flat
    replacement to `config/mappings/vocabulary.txt` that silently picks one meaning.
-   Flag the ambiguity in the replacement text instead, and document why in a comment
-   next to the mapping (see the `delphix engine` entry in `vocabulary.txt` for the
-   pattern). A silent wrong default is a correctness bug, not a convenience.
+   Resolve it from the text with `only_if_text_mentions=` lines, and make the final
+   fallback line say plainly what is known (see the `delphix engine` entries). A silent
+   wrong default is a correctness bug, not a convenience.
+5. **Translated text is customer-facing.** `message_for_user` is shown to end users, so
+   the canonical column of `vocabulary.txt` must never contain an instruction to the
+   model ("clarify which"). Conversational behaviour belongs in `server_instructions.md`.
+6. **Words with a second meaning need a guard.** If a term you add to `vocabulary.txt`
+   also has an unrelated meaning, add `skip_if_preceded_by=` / `skip_if_followed_by=` /
+   `only_if_text_mentions=` guards and a negative test case. Paths, URLs, hyphen/dot IDs
+   and `{placeholders}` are already never translated.
 
 ## Where a vocabulary rule belongs
 
 | Situation | Where it goes |
 |---|---|
-| A raw string from an upstream API/error body needs translating | `config/mappings/vocabulary.txt` (`internal_term\|canonical_term`) |
+| A raw string from an upstream API/error body needs translating | `config/mappings/vocabulary.txt` (`internal_term\|canonical_term[\|guard=words]`) |
 | A cross-cutting rule the model needs to apply in conversation (e.g. "never say X", "retrain gently", "ask instead of guessing") | `config/server_instructions.md` — add to the terminology table and/or the numbered "Additional rules" |
 | A confirmation/error message template | `config/mappings/manual_confirmation.txt` — use canonical terms only |
 | A tool or action name | Rename in the relevant `config/toolsets/*.txt` file and the corresponding `tools/*_endpoints_tool.py` handler |
@@ -49,10 +59,13 @@ is caught by a checklist and a test, not by another reconciliation pass.
 ## After making the change
 
 1. **Add a regression test.** `tests/unit/test_vocabulary_regression.py` keeps a `_BANNED`
-   list of terms that must never appear in a shipped confirmation message. If you retired
-   a new term, add it to that list. If you added a new raw-text translation, add a
-   before/after case to `tests/unit/test_vocabulary.py`'s `test_to_canonical_translates_and_preserves_case`
-   parametrize list.
+   list of retired terms and checks it against confirmation messages, every tool/action
+   name in `config/toolsets/*.txt` and the pre-built modules, and every pre-built tool
+   docstring. If you retired a new term, add it to that list. A legitimate exception (a
+   different meaning of the same word) goes in `_NAME_EXCEPTIONS` / `_PROSE_EXCEPTIONS`
+   with a comment saying why. If you added a new raw-text translation, add a before/after
+   case to `tests/unit/test_vocabulary.py` -- and, if the word has another meaning, a case
+   proving that meaning is left alone.
 2. **Run the full suite**, not just the vocabulary tests — tool/action renames touch
    dynamic-mode registration and toolset loading, which have their own tests.
 3. **Update `docs/PPM-1129/PPM-1129-agent-ready-api-surface-proposal.md` and the
