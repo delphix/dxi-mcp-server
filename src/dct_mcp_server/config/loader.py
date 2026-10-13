@@ -375,18 +375,36 @@ def load_server_instructions() -> str:
         return ""
 
 
+# Optional guard directives a vocabulary.txt line may carry after the term
+# pair. Each value is a comma-separated, case-insensitive word list.
+_VOCABULARY_GUARD_KEYS = (
+    "skip_if_preceded_by",
+    "skip_if_followed_by",
+    "only_if_text_mentions",
+)
+
+
 @lru_cache(maxsize=1)
-def load_vocabulary_map() -> Tuple[Tuple[str, str], ...]:
+def load_vocabulary_rules() -> Tuple[Dict[str, Any], ...]:
     """
-    Load the internal-to-canonical term map from mappings/vocabulary.txt.
+    Load the internal-to-canonical term rules from mappings/vocabulary.txt.
 
     Used to translate upstream text (raw DCT error bodies, OpenAPI summaries)
     into customer-facing terminology before it is shown to a user (PPM-1129).
 
+    Line format::
+
+        internal|canonical[|guard=word,word...]...
+
+    where ``guard`` is one of ``skip_if_preceded_by``, ``skip_if_followed_by``
+    or ``only_if_text_mentions``. Several lines may share an internal term;
+    the first one whose ``only_if_text_mentions`` condition holds wins.
+
     Returns:
-        Tuple of (internal_term, canonical_term) pairs, ordered longest-first
-        so that multi-word terms match before their constituent words.
-        Empty if the file is absent.
+        Tuple of rule dicts with keys ``internal``, ``canonical`` and one
+        frozenset per guard key, ordered longest-internal-first (stable, so
+        file order is kept between lines for the same term). Empty if the
+        file is absent.
     """
     vocab_file = MAPPINGS_DIR / "vocabulary.txt"
 
@@ -394,7 +412,7 @@ def load_vocabulary_map() -> Tuple[Tuple[str, str], ...]:
         logger.warning(f"Vocabulary file not found: {vocab_file}")
         return ()
 
-    pairs = []
+    rules: List[Dict[str, Any]] = []
     with open(vocab_file, "r") as f:
         for line in f:
             line = line.strip()
@@ -404,12 +422,41 @@ def load_vocabulary_map() -> Tuple[Tuple[str, str], ...]:
             if len(parts) < 2:
                 continue
             internal, canonical = parts[0].strip(), parts[1].strip()
-            if internal and canonical:
-                pairs.append((internal, canonical))
+            if not (internal and canonical):
+                continue
+            rule: Dict[str, Any] = {
+                "internal": internal,
+                "canonical": canonical,
+                **{key: frozenset() for key in _VOCABULARY_GUARD_KEYS},
+            }
+            for directive in parts[2:]:
+                key, _, words = directive.partition("=")
+                key = key.strip()
+                if key not in _VOCABULARY_GUARD_KEYS:
+                    logger.warning(
+                        f"Unknown vocabulary guard {key!r} for term {internal!r}"
+                    )
+                    continue
+                rule[key] = frozenset(
+                    w.strip().lower() for w in words.split(",") if w.strip()
+                )
+            rules.append(rule)
 
     # Longest first: "delphix engine" must win over a bare "engine" entry.
-    pairs.sort(key=lambda pair: len(pair[0]), reverse=True)
-    return tuple(pairs)
+    rules.sort(key=lambda rule: len(rule["internal"]), reverse=True)
+    return tuple(rules)
+
+
+@lru_cache(maxsize=1)
+def load_vocabulary_map() -> Tuple[Tuple[str, str], ...]:
+    """
+    The vocabulary rules as plain (internal_term, canonical_term) pairs.
+
+    Guard directives are dropped; see :func:`load_vocabulary_rules` for the
+    full rules that :func:`~dct_mcp_server.tools.core.vocabulary.to_canonical`
+    applies.
+    """
+    return tuple((r["internal"], r["canonical"]) for r in load_vocabulary_rules())
 
 
 def _is_read_exclusion(path: str) -> bool:
@@ -714,6 +761,7 @@ def clear_cache():
     _load_read_exclusions.cache_clear()
     load_server_instructions.cache_clear()
     load_vocabulary_map.cache_clear()
+    load_vocabulary_rules.cache_clear()
     logger.info("Configuration cache cleared")
 
 

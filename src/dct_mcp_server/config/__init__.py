@@ -7,6 +7,7 @@ from .loader import (
     load_manual_confirmation_rules,
     load_server_instructions,
     load_vocabulary_map,
+    load_vocabulary_rules,
     get_confirmation_for_operation,
     requires_confirmation,
     get_available_toolsets,

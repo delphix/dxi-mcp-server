@@ -103,10 +103,13 @@ users. Three surfaces, all config-driven:
 - `config/server_instructions.md` — cross-cutting vocabulary and domain-model rules, loaded by
   `load_server_instructions()` and passed as `instructions=` to `FastMCP(...)` in `main.py`.
   `FastMCP.instructions` is read-only, so it must be supplied at construction.
-- `config/mappings/vocabulary.txt` — `internal|canonical` term map applied by
+- `config/mappings/vocabulary.txt` — `internal|canonical[|guard=words]` term map applied by
   `tools/core/vocabulary.py:to_canonical()` to text that originates upstream (raw DCT error
-  bodies, OpenAPI summaries). Translation is always **additive**: `message` keeps the raw text
-  and `message_for_user` carries the rendering.
+  bodies, OpenAPI summaries). Only prose is rewritten: URLs, paths, hyphen/dot-joined IDs and
+  `{placeholders}` are never touched, and optional guards (`skip_if_preceded_by`,
+  `skip_if_followed_by`, `only_if_text_mentions`) keep words with an unrelated meaning
+  ("Oracle container database", "VDB inventory report") intact. Error translation is always
+  **additive**: `message` keeps the raw text and `message_for_user` carries the rendering.
 - `config/mappings/manual_confirmation.txt` — message templates. Placeholders (`{name}`,
   `{days}`, `{count}`) are resolved by `render_message_template()` in
   `tools/core/confirmation_resolver.py`; an unresolvable placeholder has its clause dropped

@@ -1,18 +1,38 @@
 # Vocabulary translation map (PPM-1129)
 #
-# Applied to text that originates upstream -- raw DCT/engine error bodies and
-# OpenAPI summaries -- before it is shown to a user. Internal terminology on the
-# left, the canonical customer-facing term on the right.
+# Applied by tools/core/vocabulary.py:to_canonical() to text that originates
+# upstream and is shown to a user -- raw DCT/engine error bodies (pre-built
+# tools and the dynamic execute tool, surfaced additively as
+# message_for_user), and OpenAPI operation summaries surfaced by the dynamic
+# discovery tool and the keyword-fallback confirmation prompt. Internal
+# terminology on the left, the canonical customer-facing term on the right.
 #
-# Format: internal_term|canonical_term
+# Format: internal_term|canonical_term[|guard=word,word...]...
 #
-# Matching is case-insensitive and whole-word; the replacement preserves the
-# capitalisation style of the match (lower, Title or UPPER).
+# Matching is case-insensitive and whole-word. The canonical term keeps its
+# authored casing mid-sentence, is capitalised at a sentence start and
+# upper-cased when the match was all caps.
+#
+# Never translated, whatever the term: URLs, anything containing "/" (API and
+# file paths), hyphen/dot-joined identifiers (tf-1, delphix-postgres-plugin)
+# and {placeholders}. Those are machine identifiers, not prose.
+#
+# Optional guards, for words that also have an unrelated everyday meaning:
+#   skip_if_preceded_by=w1,w2   leave the match alone after one of these words
+#   skip_if_followed_by=w1,w2   leave the match alone before one of these words
+#   only_if_text_mentions=w1,w2 apply this line only if the whole text mentions
+#                               one of these (prefix match: "profil" matches
+#                               "profiling"); otherwise fall through to the
+#                               next line for the same term, if any
+# Several lines may share an internal term; the first applicable one wins.
+#
+# Output must be text a customer can read as-is. Never put an instruction to
+# the model ("clarify which") in the canonical column -- conversational rules
+# belong in config/server_instructions.md.
 #
 # Reconciled against the real DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx
 # (28 canonical terms, 172 synonym rows). See config/server_instructions.md
-# for the full domain model and for rules this flat term map cannot express
-# (see "Known limitation" below).
+# for the full domain model.
 
 # --- Timeline (glossary #17) ---
 timeflow|timeline
@@ -22,16 +42,24 @@ timeflows|timelines
 appdata plugin|connector
 appdata plugins|connectors
 appdata|connector
-plugin|connector
-plugins|connectors
+plugin|connector|skip_if_preceded_by=jenkins,terraform,helm,kubectl,csi,ansible,gradle,maven,vault,browser,pytest
+plugins|connectors|skip_if_preceded_by=jenkins,terraform,helm,kubectl,csi,ansible,gradle,maven,vault,browser,pytest
 toolkit|connector
 toolkits|connectors
 
 # --- Grouping: "container" is retired Self-Service/Jetstream terminology and
-# now means Kubernetes/Docker exclusively -- never echo it back (glossary #19) ---
+# now means Kubernetes/Docker exclusively -- never echo it back (glossary #19).
+# Because "container" now *means* Kubernetes/Docker, translating that sense
+# would be backwards, and an Oracle "container database" (CDB) is an unrelated
+# Oracle term: the guards leave those alone. ---
 vdb group|VDB Group
 vdbgroup|VDB Group
-container|VDB Group
+self-service container|VDB Group
+jetstream container|VDB Group
+data container|VDB Group
+data containers|VDB Groups
+container|VDB Group|skip_if_preceded_by=oracle,cdb,docker,kubernetes,k8s,pod,podman,oci,lxc,image,init,sidecar,runtime,application,app,linux,windows|skip_if_followed_by=database,databases,db,image,images,runtime,registry,engine,orchestration,platform,exited,restarted,crashed,killed,oomkilled,port
+containers|VDB Groups|skip_if_preceded_by=oracle,cdb,docker,kubernetes,k8s,pod,podman,oci,lxc,image,init,sidecar,runtime,application,app,linux,windows|skip_if_followed_by=database,databases,db,image,images,runtime,registry,engine,orchestration,platform
 
 # --- Retired/forbidden product-and-engine terms (glossary #8, #10, #28) ---
 # "virtualization engine" and "masking engine" are unambiguous despite being
@@ -40,20 +68,24 @@ container|VDB Group
 virtualization engine|Continuous Data engine
 masking engine|Continuous Compliance engine
 delphix masking|Delphix Continuous Compliance
-cloud engine|Elastic Data
+# Elastic Data is an add-on to the Continuous Data engine, not an engine of its
+# own (glossary #28: "frame as an add-on -- 'the Continuous Data engine with
+# Elastic Data'"), so the replacement keeps the engine as the subject.
+cloud engine|Continuous Data engine with Elastic Data
+cloud engines|Continuous Data engines with Elastic Data
 
-# --- Known limitation: bare "engine" / "Delphix engine" (glossary #8) ---
-# The glossary requires this to disambiguate to WHICHEVER of the Continuous
-# Data engine or Continuous Compliance engine is contextually correct, and
-# explicitly forbids defaulting to one. to_canonical() is a context-free,
-# single-replacement term map (tools/core/vocabulary.py) and cannot make that
-# judgment -- silently picking "Continuous Data engine" here would reproduce
-# exactly the wrong-default bug the glossary warns against. We flag the
-# ambiguity in the replacement text itself instead of silently guessing; the
-# model must still resolve it from conversation context per
-# config/server_instructions.md's terminology rules. Do not "fix" this by
-# re-introducing a single-product default.
-delphix engine|Continuous Data/Compliance engine (clarify which)
+# --- "Delphix engine" (glossary #8) ---
+# Forbidden, and ambiguous between the two engine products; the glossary
+# forbids defaulting to one. Resolve from the text itself where it says which
+# kind of work is involved (masking vs. virtualization); when it names both or
+# neither, say exactly what is known -- one of the two -- in plain customer
+# language. The model is told in server_instructions.md rule 2 to pin it down
+# from conversation context or ask. Do not re-introduce a single-product
+# default, and do not put a model instruction ("clarify which") in the output.
+delphix engine|Continuous Compliance engine|only_if_text_mentions=mask,compliance,rule set,ruleset,inventory,profil,algorithm,sensitive data
+delphix engine|Continuous Data engine|only_if_text_mentions=vdb,dsource,snapshot,timeflow,timeline,virtualization,virtual database,provision,bookmark,replication,staging
+delphix engine|Continuous Data or Continuous Compliance engine
+delphix engines|Continuous Data or Continuous Compliance engines
 
 # --- Retired Continuous Data operation terminology (glossary #7b) ---
 # "rewind" is retired; the raw-text swap below only standardizes the word
@@ -62,8 +94,17 @@ delphix engine|Continuous Data/Compliance engine (clarify which)
 # flat map cannot add a sentence, only replace a term.
 rewind|refresh from self
 
-# --- Retired Continuous Compliance terminology (glossary #26, #27) ---
-inventory|Rule Set
+# --- Retired Continuous Compliance terminology (glossary #27) ---
+# "inventory" is retired only as the name of the Continuous Compliance object
+# now called a rule set. The everyday word is still live elsewhere in
+# upstream text -- DCT's "VDB inventory report" (a Continuous Data report
+# listing VDBs, /reporting/vdb-inventory-report) and an Oracle "central
+# inventory" (oraInventory) during environment discovery -- so translate only
+# when the text is about masking/compliance, and never in those phrases.
+# "domain" (glossary #26) is deliberately not mapped: the glossary says to keep
+# it until the Continuous Compliance UI migrates.
+inventory|rule set|only_if_text_mentions=mask,compliance,rule set,ruleset,profil,algorithm,sensitive data|skip_if_preceded_by=vdb,central,oracle,global,local|skip_if_followed_by=report,reports,location,path,pointer,file,directory,dir
+inventories|rule sets|only_if_text_mentions=mask,compliance,rule set,ruleset,profil,algorithm,sensitive data|skip_if_preceded_by=vdb,central,oracle,global,local|skip_if_followed_by=report,reports,location,path,pointer,file,directory,dir
 
 # --- Product naming ---
 mssql|SQL Server

@@ -122,7 +122,9 @@ Additional rules:
    registered appliance -- and resolve *which* engine from conversation context (what
    the user is doing: virtualization/VDB work implies Continuous Data, masking/rule-set
    work implies Continuous Compliance). If the context genuinely does not make it
-   clear, ask rather than guess. Never echo "Virtualization Engine" or "Masking
+   clear, ask rather than guess. A tool result that says "Continuous Data or
+   Continuous Compliance engine" means the upstream message did not say which;
+   resolve it the same way before repeating it. Never echo "Virtualization Engine" or "Masking
    Engine" back -- these are retired names; translate silently to "Continuous Data
    engine" / "Continuous Compliance engine" respectively. Users frequently conflate
    DCT with either engine; do not repeat that conflation back to them.

@@ -66,8 +66,14 @@ def test_vocabulary_map_is_ordered_longest_first():
         ("TIMEFLOW REF INVALID", "TIMELINE REF INVALID"),
         ("Install the appdata plugin", "Install the connector"),
         ("MSSql link failed", "SQL Server link failed"),
-        ("The inventory is locked", "The Rule Set is locked"),
-        ("Cloud Engine capacity exceeded", "Elastic Data capacity exceeded"),
+        (
+            "Masking job failed: the inventory is locked",
+            "Masking job failed: the rule set is locked",
+        ),
+        (
+            "Cloud Engine capacity exceeded",
+            "Continuous Data engine with Elastic Data capacity exceeded",
+        ),
         (
             "Delphix Masking job failed to start",
             "Delphix Continuous Compliance job failed to start",
@@ -91,13 +97,146 @@ def test_to_canonical_translates_and_preserves_case(raw, expected):
     assert to_canonical(raw) == expected
 
 
-def test_to_canonical_flags_ambiguous_bare_engine_rather_than_defaulting():
+def test_to_canonical_never_defaults_ambiguous_delphix_engine_to_one_product():
     # Glossary v1.2 #8: "Delphix engine" is ambiguous between the Continuous
-    # Data and Continuous Compliance engines. The flat term map must not
-    # silently default to one -- it should flag the ambiguity instead.
-    result = to_canonical("Delphix engine is offline")
-    assert "Continuous Data/Compliance engine" in result
-    assert result != "Continuous Data engine is offline"
+    # Data and Continuous Compliance engines. With no context in the text, the
+    # translation must name both rather than silently default to one.
+    assert (
+        to_canonical("Delphix engine is offline")
+        == "Continuous Data or Continuous Compliance engine is offline"
+    )
+
+
+def test_to_canonical_output_never_carries_a_model_instruction():
+    # message_for_user is customer-facing: no "(clarify which)" style notes.
+    for raw in ("Delphix engine is offline", "the delphix engines are busy"):
+        out = to_canonical(raw)
+        assert "clarify" not in out.lower()
+        assert "(" not in out
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (
+            "Delphix engine failed to mask column SSN",
+            "Continuous Compliance engine failed to mask column SSN",
+        ),
+        (
+            "Delphix engine could not provision VDB sales-01",
+            "Continuous Data engine could not provision VDB sales-01",
+        ),
+    ],
+)
+def test_to_canonical_resolves_delphix_engine_from_the_text(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+def test_elastic_data_is_framed_as_an_add_on_not_an_engine():
+    # Glossary #28: never imply Elastic Data is an engine of its own.
+    assert (
+        to_canonical("the Cloud Engine is down")
+        == "the Continuous Data engine with Elastic Data is down"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Structure: identifiers are never rewritten
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "/dct/v3/timeflows/tf-1",
+        "https://dct.example.com/dct/v3/timeflows/tf-1",
+        "delphix-postgres-plugin",
+        "com.delphix.toolkit",
+        "/var/lib/appdata/plugins",
+        "{timeflowId}",
+        "timeflow_id",
+        "tf-1",
+    ],
+)
+def test_identifiers_and_paths_are_left_intact(raw):
+    assert to_canonical(raw) == raw
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # The prose around an identifier is still translated...
+        (
+            "GET /dct/v3/timeflows/tf-1 failed: timeflow not found",
+            "GET /dct/v3/timeflows/tf-1 failed: timeline not found",
+        ),
+        (
+            "Plugin delphix-postgres-plugin failed to load",
+            "Connector delphix-postgres-plugin failed to load",
+        ),
+        (
+            "toolkit 'delphix-mongo-toolkit' is not installed",
+            "Connector 'delphix-mongo-toolkit' is not installed",
+        ),
+        # ...including a term whose own spelling is hyphenated.
+        ("Self-Service container cg-1 is locked", "VDB Group cg-1 is locked"),
+    ],
+)
+def test_prose_around_identifiers_is_still_translated(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+# --------------------------------------------------------------------------- #
+# Words with an unrelated everyday meaning
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # Oracle's own "container database" (CDB) is not a Delphix container.
+        "Oracle container database CDB1 is not open",
+        "Failed to open container databases on host db01",
+        # "container" now means Kubernetes/Docker -- translating it is backwards.
+        "Docker container exited with code 137",
+        "Kubernetes container restarted",
+        "the container image could not be pulled",
+        "container exited unexpectedly",
+        # DCT's VDB inventory report is a Continuous Data report, not a rule set.
+        "VDB inventory report is empty",
+        "Failed to search the vdb inventory report",
+        # Oracle installation inventory, seen during environment discovery.
+        "Oracle central inventory not found on host db01",
+        "The inventory location /u01/app/oraInventory is not readable",
+        # Inventory with no Continuous Compliance context at all.
+        "The inventory is locked",
+        # Third-party plugins are not Delphix connectors.
+        "Jenkins plugin returned an error",
+        "Terraform plugin crashed",
+    ],
+)
+def test_unrelated_meanings_are_not_translated(raw):
+    assert to_canonical(raw) == raw
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("Container cg-1 has no active VDBs", "VDB Group cg-1 has no active VDBs"),
+        ("Data container dc-7 is locked", "VDB Group dc-7 is locked"),
+        (
+            "Masking job 12 failed: inventory has no columns",
+            "Masking job 12 failed: rule set has no columns",
+        ),
+        (
+            "Profiling job failed because the inventory is empty",
+            "Profiling job failed because the rule set is empty",
+        ),
+        ("Delphix plugin upload failed", "Delphix connector upload failed"),
+    ],
+)
+def test_retired_meanings_are_still_translated(raw, expected):
+    assert to_canonical(raw) == expected
 
 
 def test_to_canonical_leaves_clean_text_alone():
