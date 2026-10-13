@@ -98,17 +98,17 @@ introduce a new one, and would feed PPM-1127 (Tool Annotations) directly.
 
 The other half of the merged scope. Where agent-readiness asks whether an operation says anything
 useful, this decides the words it uses. Source is PPM-1129's problem statement, to be reconciled
-against Glossary v1.2 (30 canonical terms, ~168 synonym rows).
+against Glossary v1.2 (28 canonical terms, 172 synonym rows).
 
 | Concern | Canonical | Accept as input | Avoid in output | Why it matters |
 |------------|----------|--------------------|-------------|----------------------------------------|
 | Core data object | VDB | database, virtual database, clone, copy | — | Customers use all five interchangeably; the model cannot know they are one thing unless told |
-| Source object | dSource | Delphix source, data source, source DB | — | Retained as canonical in v1.2; Design System Glossary recommends deprecating it — resolved, Product has decided to keep dSource as-is for this PPM |
+| Source object | dSource | Delphix source, source DB, linked source | — | "Data source" is *not* an alias: v1.2 defines it as the upstream system a dSource ingests from (#3). Retained as canonical in v1.2; Design System Glossary recommends deprecating it — resolved, Product has decided to keep dSource as-is for this PPM |
 | Infrastructure | environment | host, infrastructure, machine, VM | — | Four common aliases, none currently mapped |
 | Timeline | timeline | timeflow | timeflow | Legacy Continuous Data engine term; the model echoes it back wherever tool definitions use it |
 | Grouping | VDB Group | container | container | "Container" reads as Kubernetes in today's context; legacy Self-Service / Jetstream users mean VDB Group |
 | Connector split | connector | AppData, plugin, native connector | AppData, plugin | Oracle/SQL Server/ASE/V-files are native; PostgreSQL/MongoDB/SAP HANA/Db2 are AppData plugins. An implementation split customers should never see |
-| Product boundary | DCT, or *Continuous Data engine* | engine (unqualified) | bare "engine" | Unqualified "engine" is repeatedly conflated with DCT itself |
+| Product boundary | DCT, or *Continuous Data engine* / *Continuous Compliance engine* (whichever the context shows) | engine (unqualified), Delphix engine | bare "engine", "Delphix engine" | Unqualified "engine" is repeatedly conflated with DCT itself, and is ambiguous between the two engine products (v1.2 #8) |
 
 **Where each lands.** These are not all the same kind of edit, which is part of why the two-epic
 split works:
@@ -148,8 +148,17 @@ from that spec.
 |--------------------|------------------------|-------------------------------------------------------------|
 | 1. Tool/action renames across 5 toolsets (~1.5 wk) | Rename actions containing `database`, `plugin`, `appdata`, `timeflow` | **Largely inert.** Dynamic mode has no action names to rename. The five `.txt` toolsets do carry the terminology (183 `dsource`, 377 `vdb`, 73 `timeflow`, 14 `appdata` hits) but are opt-in legacy. |
 | 2. Docstrings and descriptions (~1 wk) | Rewrite every tool- and action-level description | **Shrinks to two docstrings** (`discovery`, `execute`) plus the spec — which this repo does not own. This is the lever that becomes the spec work. |
-| 3. Server instructions (~3 d) | Author `server_instructions.txt` loaded at FastMCP init | **Highest leverage, cheapest, currently 0% done.** `main.py:69` is `FastMCP(name=..., lifespan=...)` with no `instructions=`. `fastmcp>=2.13.2` is already pinned and supports it — **the "FastMCP version bump may be a prerequisite" open question is resolved: no bump needed.** |
+| 3. Server instructions (~3 d) | Author `server_instructions.txt` loaded at FastMCP init | **Highest leverage, cheapest.** *(At time of writing 0% done; now done — see status below.)* `main.py:69` is `FastMCP(name=..., lifespan=...)` with no `instructions=`. `fastmcp>=2.13.2` is already pinned and supports it — **the "FastMCP version bump may be a prerequisite" open question is resolved: no bump needed.** |
 | 4. Errors and confirmation prompts (~2 d) | Audit `manual_confirmation.txt` | **Real and correctly sized.** 79 hand-authored rules in this repo reaching every user regardless of toolset; message templates contain 87 `VDB`, 31 `dSource`, 12 `environment`, 9 `database`, 6 `timeflow` occurrences. |
+
+**Status (current).** Lever 3 is done: `config/server_instructions.md` is loaded by
+`load_server_instructions()` and passed as `instructions=` to `FastMCP(...)` in `main.py`.
+Levers 1, 2 and 4 have also been applied in this repo for the toolsets and pre-built tools:
+tool/action renames (`timeline_tool`, `connector_schema_tool`, `vdb_template_tool`, ...),
+canonical pre-built docstrings with per-tool customer-alias lines, canonical confirmation
+templates with `{name}` placeholders rendered in every toolset, and `to_canonical()` applied to
+raw error bodies and to OpenAPI summaries shown by `discovery`. The spec-side work (DCT epic)
+is unchanged by this.
 
 The net effect: the original "~3 weeks, mostly editorial, in the MCP repo" estimate is inverted.
 Most of the user-visible benefit sits in Levers 3–4 (~1 week, no cross-team dependency), and the
@@ -217,7 +226,7 @@ for both.
 
 ## Open questions carried forward
 
-- **Glossary hosting and Design review.** Glossary v1.2 (30 canonical terms, ~168 synonym rows,
+- **Glossary hosting and Design review.** Glossary v1.2 (28 canonical terms, 172 synonym rows,
   three sheets) exists only as `DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx` and is not in any
   repo. PPM-1129 recommends hosting the MCP-specific layer as a PDUX Confluence page linked to
   canonical Delphix terminology, the Perforce Lexicon and the Design System Glossary. Blocks the
@@ -229,12 +238,16 @@ for both.
   dSource as canonical throughout.
 - **Connector vs. connection/subconnection.** *Connector* has dual meanings and Delphix is moving
   toward connection/subconnection. Need Design confirmation of timing before renaming anything.
-- **Raw API error translation layer.** Which layer should catch engine error messages containing
-  implementation terminology. Needs engineering input; sits in the MCP-side epic.
-- **Terminology not yet applied by the prototype.** `timeflow` → `timeline`; VDB Group ↔
-  "container"; environment/host/machine synonyms; hiding the AppData vs. native connector split;
-  unqualified "engine" vs. DCT. These are PPM-1129's headline items and remain to be reconciled
-  against Glossary v1.2 — the prototype's terms were derived from the codebase, not the spreadsheet.
+- **Raw API error translation layer — resolved.** `tools/core/vocabulary.py:to_canonical()`,
+  driven by `config/mappings/vocabulary.txt`, translates raw DCT/engine error bodies in both the
+  dynamic `execute` tool and the pre-built tools (`core/decorators.py`), additively as
+  `message_for_user`. It never rewrites paths, URLs or IDs, and skips words with an unrelated
+  meaning (Oracle "container database", "VDB inventory report").
+- **Terminology not yet applied by the prototype — since applied.** `timeflow` → `timeline`;
+  VDB Group ↔ "container"; environment/host/machine synonyms; hiding the AppData vs. native
+  connector split; unqualified "engine" vs. DCT. These were PPM-1129's headline items; they have
+  since been reconciled against the real Glossary v1.2 and applied in `server_instructions.md`,
+  `vocabulary.txt`, `manual_confirmation.txt`, and the toolset/tool names and docstrings.
 
 ---
 
