@@ -18,8 +18,8 @@ POST|/snapshots/{snapshotId}/delete|manual|Are you sure you want to permanently 
 POST|/dsources/delete|manual|Are you sure you want to permanently delete dSource '{name}'? Dependent VDBs will lose their source.
 DELETE|/vdb-groups/{vdbGroupId}|manual|Are you sure you want to permanently delete VDB Group '{name}'?
 DELETE|/environments/{environmentId}|manual|Are you sure you want to permanently delete environment '{name}'?
-DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister Continuous Data engine '{name}'?
-DELETE|/database-templates/{databaseTemplateId}|manual|Are you sure you want to delete database template '{name}'?
+DELETE|/management/engines/{engineId}|manual|Are you sure you want to unregister Continuous Data or Continuous Compliance engine '{name}'?
+DELETE|/database-templates/{databaseTemplateId}|manual|Are you sure you want to delete VDB template '{name}'?
 DELETE|/hook-templates/{hookTemplateId}|manual|Are you sure you want to delete hook template '{name}'?
 DELETE|/virtualization-policies/{policyId}|manual|Are you sure you want to delete virtualization policy '{name}'?
 DELETE|/management/accounts/{id}|manual|Are you sure you want to delete user account '{name}'?
@@ -27,7 +27,7 @@ DELETE|/roles/{roleId}|manual|Are you sure you want to delete role '{name}'?
 DELETE|/management/tags/{tagId}|manual|Are you sure you want to delete tag '{name}'?
 DELETE|/replication-profiles/{replicationProfileId}|manual|Are you sure you want to delete replication profile '{name}'?
 DELETE|/access-groups/{accessGroupId}|manual|Are you sure you want to delete access group '{name}'?
-DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete connector '{name}'?
+DELETE|/toolkits/{toolkitId}|manual|Are you sure you want to delete connector schema '{name}'?
 DELETE|/groups/{groupId}|manual|Are you sure you want to delete dataset group '{name}'?
 POST|/cdbs/{cdbId}/delete|manual|Are you sure you want to delete CDB '{name}'?
 POST|/vcdbs/{vcdbId}/delete|manual|Are you sure you want to delete vCDB '{name}'?
@@ -102,7 +102,7 @@ POST|/vdb-groups/{vdbGroupId}/tags/delete|standard|This will remove tags from VD
 POST|/dsources/{dsourceId}/tags/delete|standard|This will remove tags from dSource '{name}'. Confirm?
 POST|/snapshots/{snapshotId}/tags/delete|standard|This will remove tags from snapshot '{name}'. Confirm?
 POST|/bookmarks/{bookmarkId}/tags/delete|standard|This will remove tags from bookmark '{name}'. Confirm?
-POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from database template '{name}'. Confirm?
+POST|/database-templates/{databaseTemplateId}/tags/delete|standard|This will remove tags from VDB template '{name}'. Confirm?
 POST|/hook-templates/{hookTemplateId}/tags/delete|standard|This will remove tags from hook template '{name}'. Confirm?
 POST|/timeflows/{timeflowId}/tags/delete|standard|This will remove tags from timeline '{name}'. Confirm?
 
@@ -125,7 +125,7 @@ POST|/vdb-groups/{vdbGroupId}/refresh_by_location|elevated|Review: Refreshing VD
 POST|/vdbs/{vdbId}/snapshots|standard|Creating a snapshot of VDB '{name}'. Confirm?
 POST|/bookmarks|standard|Creating a new bookmark. Confirm?
 POST|/vdb-groups|standard|Creating a new VDB Group. Confirm?
-POST|/database-templates|standard|Creating a new database template. Confirm?
+POST|/database-templates|standard|Creating a new VDB template. Confirm?
 POST|/hook-templates|standard|Creating a new hook template. Confirm?
 
 # ============================================

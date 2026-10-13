@@ -435,3 +435,122 @@ def test_inline_request_body_still_works():
     assert fields == [
         {"name": "name", "required": True, "type": "string", "description": "Name."}
     ]
+
+
+# --------------------------------------------------------------------------- #
+# Pre-built toolsets render confirmation placeholders too
+# --------------------------------------------------------------------------- #
+
+
+_PREBUILT_MODULES = [
+    "dataset",
+    "engine",
+    "environment",
+    "iam",
+    "job",
+    "misc",
+    "policy",
+    "reports",
+    "template",
+]
+
+
+@pytest.mark.parametrize("module", _PREBUILT_MODULES)
+def test_prebuilt_confirmation_message_resolves_name_from_path(module):
+    import importlib
+
+    tool_module = importlib.import_module(
+        f"dct_mcp_server.tools.{module}_endpoints_tool"
+    )
+    conf = tool_module.check_confirmation(
+        "DELETE", "/database-templates/tmpl-9", "delete", "vdb_template_tool"
+    )
+    assert conf["status"] == "confirmation_required"
+    assert conf["confirmation_message"] == (
+        "Are you sure you want to delete VDB template 'tmpl-9'?"
+    )
+
+
+def test_prebuilt_confirmation_message_prefers_body_name():
+    from dct_mcp_server.tools.dataset_endpoints_tool import check_confirmation
+
+    conf = check_confirmation(
+        "POST",
+        "/vdbs/vdb-1/delete",
+        "delete_vdb",
+        "vdb_tool",
+        request_body={"name": "sales-01"},
+    )
+    assert "'sales-01'" in conf["confirmation_message"]
+    assert "{" not in conf["confirmation_message"]
+
+
+# --------------------------------------------------------------------------- #
+# discovery shows OpenAPI summaries in canonical vocabulary
+# --------------------------------------------------------------------------- #
+
+
+_TIMEFLOW_SPEC = {
+    "openapi": "3.0.0",
+    "info": {"title": "DCT", "version": "1"},
+    "paths": {
+        "/timeflows/{timeflowId}": {
+            "get": {
+                "operationId": "getTimeflowById",
+                "summary": "Get a timeflow by ID.",
+                "description": "Returns the timeflow and its AppData toolkit.",
+                "tags": ["Timeflows"],
+            }
+        },
+        "/toolkits/search": {
+            "post": {
+                "operationId": "searchToolkits",
+                "summary": "Search for toolkits.",
+                "tags": ["Toolkits"],
+            }
+        },
+    },
+}
+
+
+@pytest.fixture
+def timeflow_discovery():
+    from unittest.mock import MagicMock, patch
+
+    from dct_mcp_server.tools.core.dynamic import _make_discovery_fn
+
+    fn = _make_discovery_fn(MagicMock())
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_TIMEFLOW_SPEC,
+    ):
+        yield fn
+
+
+def test_discovery_list_operations_translates_summaries(timeflow_discovery):
+    ops = timeflow_discovery(action="list_operations")["operations"]
+    by_path = {op["path"]: op for op in ops}
+    timeflow_op = by_path["/timeflows/{timeflowId}"]
+    assert timeflow_op["summary"] == "Get a timeline by ID."
+    # Identifiers are never translated.
+    assert timeflow_op["operationId"] == "getTimeflowById"
+    assert by_path["/toolkits/search"]["summary"] == "Search for connectors."
+
+
+@pytest.mark.parametrize("keyword", ["timeflow", "timeline"])
+def test_discovery_keyword_matches_either_vocabulary(timeflow_discovery, keyword):
+    ops = timeflow_discovery(action="list_operations", keyword=keyword)["operations"]
+    assert [op["path"] for op in ops] == ["/timeflows/{timeflowId}"]
+
+
+def test_discovery_operation_schema_translates_summary_and_description(
+    timeflow_discovery,
+):
+    result = timeflow_discovery(
+        action="get_operation_schema",
+        path="/timeflows/{timeflowId}",
+        operation_method="GET",
+    )
+    assert result["path"] == "/timeflows/{timeflowId}"
+    assert result["summary"] == "Get a timeline by ID."
+    assert result["description"] == "Returns the timeline and its connector."

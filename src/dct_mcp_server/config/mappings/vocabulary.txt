@@ -41,6 +41,8 @@ timeflows|timelines
 # --- Connectors: never expose the AppData vs native split (glossary #3a) ---
 appdata plugin|connector
 appdata plugins|connectors
+appdata toolkit|connector
+appdata toolkits|connectors
 appdata|connector
 plugin|connector|skip_if_preceded_by=jenkins,terraform,helm,kubectl,csi,ansible,gradle,maven,vault,browser,pytest
 plugins|connectors|skip_if_preceded_by=jenkins,terraform,helm,kubectl,csi,ansible,gradle,maven,vault,browser,pytest

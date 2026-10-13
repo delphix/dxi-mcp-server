@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
+from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 import asyncio
 import logging
 import threading
@@ -68,8 +69,12 @@ def check_confirmation(
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
+            # Resolve {name}/{days}/{count} so a raw brace never reaches the
+            # user -- the same renderer the dynamic execute gate uses.
+            "confirmation_message": render_message_template(
+                confirmation.get("message", "Please confirm this operation."),
+                api_path,
+                request_body,
             ),
             "action": action,
             "tool": tool_name,

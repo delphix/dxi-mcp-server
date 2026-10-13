@@ -1277,10 +1277,18 @@ def _action_list_operations(
 
             # Keyword filter
             op_id = op.get("operationId", "") or ""
-            summary = op.get("summary", "") or ""
+            raw_summary = op.get("summary", "") or ""
+            # OpenAPI summaries are upstream prose and carry internal terms
+            # ("timeflow", "toolkit"); show them in canonical vocabulary
+            # (PPM-1129). Paths and operationIds are identifiers and stay raw.
+            summary = to_canonical(raw_summary) or ""
             if keyword_filter:
                 kw = keyword_filter.lower()
-                if kw not in op_id.lower() and kw not in summary.lower():
+                # Match either vocabulary, so "timeflow" and "timeline" both
+                # find the same operations.
+                if not any(
+                    kw in text.lower() for text in (op_id, raw_summary, summary)
+                ):
                     continue
 
             # Confirmation flag
@@ -1403,8 +1411,8 @@ def _action_get_operation_schema(
         "path": path,
         "method": operation_method.upper(),
         "operationId": op.operation_id,
-        "summary": op.summary,
-        "description": op.description,
+        "summary": to_canonical(op.summary),
+        "description": to_canonical(op.description),
         "parameters": parameters,
         "request_body_fields": request_body_fields,
         "responses": responses,
