@@ -120,8 +120,8 @@ Canonical terms: VDB, dSource, environment, snapshot, **timeline** (not timeflow
 *Continuous Data engine* (never bare "engine"). Regression guards live in
 `tests/unit/test_vocabulary_regression.py`.
 
-Reconciled against the real `DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx` (28 canonical terms,
-172 synonym rows). Before adding or renaming any tool, action, docstring, or user-facing
+Reconciled against the real `DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx` (32 canonical-term
+rows, 169 synonym rows). Before adding or renaming any tool, action, docstring, or user-facing
 message, read [`.claude/rules/vocabulary-editorial-guidelines.md`](.claude/rules/vocabulary-editorial-guidelines.md) —
 it's the checklist that keeps this layer from regressing.
 

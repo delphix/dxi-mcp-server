@@ -98,7 +98,8 @@ introduce a new one, and would feed PPM-1127 (Tool Annotations) directly.
 
 The other half of the merged scope. Where agent-readiness asks whether an operation says anything
 useful, this decides the words it uses. Source is PPM-1129's problem statement, to be reconciled
-against Glossary v1.2 (28 canonical terms, 172 synonym rows).
+against Glossary v1.2 (32 Canonical Terms rows -- #1-#28 plus 3a, 7a, 7b and 19a -- and 169
+Synonym Map rows; the sheet's 172 rows include a title, a subtitle and a header row).
 
 | Concern | Canonical | Accept as input | Avoid in output | Why it matters |
 |------------|----------|--------------------|-------------|----------------------------------------|
@@ -224,9 +225,38 @@ for both.
 
 ---
 
+## Release note: breaking tool and action renames (Lever 1)
+
+**Breaking change, no compatibility aliases.** Lever 1 renamed every persona-toolset tool and
+action whose name carried retired terminology. The old names are gone -- there are deliberately
+no aliases, because an alias keeps the retired word in the surface the model reads. Anything
+that calls these tools by name (scripts, saved prompts, agent configurations, tests against a
+persona toolset) must be updated before upgrading. The underlying DCT API paths are unchanged,
+and the default `dynamic` toolset (`discovery` / `execute`) is not affected.
+
+| Kind | Old name | New name | Toolsets |
+|---|---|---|---|
+| Tool | `timeflow_tool` | `timeline_tool` | continuous_data_admin, self_service, self_service_provision |
+| Tool | `toolkit_tool` | `connector_schema_tool` | continuous_data_admin, platform_admin, self_service_provision |
+| Tool | `database_template_tool` | `vdb_template_tool` | continuous_data_admin, reporting_insights, self_service_provision |
+| Action (`connector_schema_tool`) | `upload_toolkit` / `delete_toolkit` | `upload_connector_schema` / `delete_connector_schema` | continuous_data_admin, platform_admin |
+| Action (`data_tool`) | `dsource_link_appdata` | `dsource_link_connector` | continuous_data_admin |
+| Action (`data_tool`) | `dsource_link_appdata_defaults` | `dsource_link_connector_defaults` | continuous_data_admin |
+| Action (`data_tool`) | `update_appdata_dsource` | `update_connector_dsource` | continuous_data_admin |
+| Action (`data_tool`) | `switch_vdb_timeflow` | `switch_vdb_timeline` | continuous_data_admin |
+| Action (`vdb_tool`) | `switch_timeflow` | `switch_timeline` | self_service_provision |
+| Action (`environment_source_tool`) | `create_appdata_source` / `update_appdata_source` | `create_connector_source` / `update_connector_source` | continuous_data_admin |
+| Action (`snapshot_bookmark_tool`) | `get_snapshot_timeflow_range` | `get_snapshot_timeline_range` | continuous_data_admin, reporting_insights |
+| Action (`snapshot_tool`) | `get_timeflow_range` | `get_timeline_range` | self_service (and self_service_provision, which inherits it) |
+| Action (`diagnostic_tool`) | `check_database_connectivity` | `check_connectivity` | continuous_data_admin, platform_admin |
+
+Also user-visible, not breaking: pre-built tools now report a DCT API failure as an MCP error
+(`isError: true`) whose text is the raw upstream message, followed by a `message_for_user:` line
+in canonical vocabulary when translation changed it.
+
 ## Open questions carried forward
 
-- **Glossary hosting and Design review.** Glossary v1.2 (28 canonical terms, 172 synonym rows,
+- **Glossary hosting and Design review.** Glossary v1.2 (32 canonical-term rows, 169 synonym rows,
   three sheets) exists only as `DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx` and is not in any
   repo. PPM-1129 recommends hosting the MCP-specific layer as a PDUX Confluence page linked to
   canonical Delphix terminology, the Perforce Lexicon and the Design System Glossary. Blocks the

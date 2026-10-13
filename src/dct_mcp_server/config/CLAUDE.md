@@ -58,8 +58,45 @@ METHOD|path_pattern|confirmation_level|message_template
 
 - Use `*` as the method wildcard to match any HTTP method.
 - Path patterns support `{paramName}` placeholders (matched as `[^/]+` regex).
-- Message templates support variable substitution with `{variable_name}`.
+- Message templates support `{name}`, `{days}` and `{count}`, rendered by
+  `tools/core/confirmation_resolver.py:render_message_template()`. A placeholder that cannot
+  be resolved is dropped together with the words that only frame it (quotes; "in {days} day(s)"),
+  so write each one as a removable clause.
 - Rules are evaluated in order; first match wins.
+
+### Vocabulary Map (`mappings/vocabulary.txt`)
+
+Internal-to-canonical term map (PPM-1129) applied by `tools/core/vocabulary.py:to_canonical()`
+to upstream text a user may see: raw DCT error bodies (as an additive `message_for_user`) and
+OpenAPI summaries. Parsed by `loader.py:load_vocabulary_rules()`.
+
+**Format:**
+```
+@signals name=word,word,...
+internal_term|canonical_term[|directive=word,word...]...
+```
+
+- Matching is case-insensitive and whole-word; longer internal terms are applied first.
+  Several lines may share an internal term: the first whose text conditions hold wins.
+- Directives (all optional, comma-separated, whole-word; a space in a phrase also matches a
+  hyphen; `@name` expands to a declared `@signals` set):
+
+| Directive | Effect |
+|---|---|
+| `only_if_text_mentions=` | Positive evidence: apply this line only if the text contains one of these words |
+| `skip_if_text_mentions=` | Do not apply this line if the text contains one of these words |
+| `skip_if_preceded_by=` | Leave a match alone directly after one of these words |
+| `skip_if_followed_by=` | Leave a match alone directly before one of these words |
+
+- Never translated: URLs, `/` and `\` paths, hyphen/dot/@-joined identifiers, `code spans`,
+  `{placeholders}`. A substitution never doubles a term ("VDB containers" -> "VDB Groups").
+- Words with an everyday meaning (`container`, `inventory`) or an ambiguous referent
+  (`Delphix engine`) are translated only on positive evidence -- tighten the `@signals` set
+  rather than adding skip words for the latest false positive.
+- The canonical column is customer-facing text: never put a model instruction in it.
+- Tests: `tests/unit/test_vocabulary.py` (cases), `tests/unit/test_vocabulary_spec_corpus.py`
+  (every summary/description in a real DCT spec). Editorial rules:
+  `.claude/rules/vocabulary-editorial-guidelines.md`.
 
 ### `config.py` and `loader.py`
 
