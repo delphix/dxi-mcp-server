@@ -175,58 +175,103 @@ def test_sync_function_multiple_calls():
 # ---------------------------------------------------------------------------
 # DCTClientError -- additive vocabulary translation (PPM-1129)
 #
-# Mirrors tools/core/dynamic.py's _error_response convention: a DCTClientError
-# raised by a pre-built tool is now returned as a structured error dict
-# instead of propagating, with message_for_user added only when to_canonical()
-# changes the raw text.
+# A DCTClientError raised by a pre-built tool must still be RAISED, so FastMCP
+# reports the call with isError=True exactly as before the vocabulary layer.
+# The canonical rendering is attached additively: the raw text (and the HTTP
+# status in it) is kept verbatim, and a "message_for_user:" line is appended
+# only when to_canonical() changes the text.
 # ---------------------------------------------------------------------------
 
 
-def test_sync_dct_client_error_translates_internal_terminology():
+def test_sync_dct_client_error_is_raised_with_translation_attached():
     from dct_mcp_server.core.exceptions import DCTClientError
+
+    raw = "HTTP 404: timeflow 'tf-1' not found for appdata source"
 
     @log_tool_execution
     def failing_tool():
-        raise DCTClientError("404: timeflow 'tf-1' not found for appdata source")
+        raise DCTClientError(raw)
 
-    result = failing_tool()
+    with pytest.raises(DCTClientError) as info:
+        failing_tool()
 
-    assert result["status"] == "error"
-    assert result["code"] == "DCT_API_ERROR"
-    assert "timeflow" in result["message"]
-    assert "message_for_user" in result
-    assert "timeline" in result["message_for_user"].lower()
-    assert "connector" in result["message_for_user"].lower()
+    err = info.value
+    assert str(err).startswith(raw)
+    assert err.raw_message == raw
+    assert err.http_status == 404
+    assert "timeline" in err.message_for_user.lower()
+    assert "connector" in err.message_for_user.lower()
+    assert f"message_for_user: {err.message_for_user}" in str(err)
+    assert isinstance(err.__cause__, DCTClientError)
 
 
-def test_sync_dct_client_error_without_internal_terms_omits_translation():
+def test_sync_dct_client_error_without_internal_terms_is_reraised_unchanged():
     from dct_mcp_server.core.exceptions import DCTClientError
+
+    original = DCTClientError("HTTP 404: VDB 'vdb-1' not found")
 
     @log_tool_execution
     def failing_tool():
-        raise DCTClientError("404: VDB 'vdb-1' not found")
+        raise original
 
-    result = failing_tool()
+    with pytest.raises(DCTClientError) as info:
+        failing_tool()
 
-    assert result["status"] == "error"
-    assert result["message"] == "404: VDB 'vdb-1' not found"
-    assert "message_for_user" not in result
+    assert info.value is original
+    assert str(info.value) == "HTTP 404: VDB 'vdb-1' not found"
+    assert info.value.message_for_user is None
+    assert info.value.http_status == 404
 
 
 @pytest.mark.asyncio
-async def test_async_dct_client_error_translates_internal_terminology():
+async def test_async_dct_client_error_is_raised_with_translation_attached():
     from dct_mcp_server.core.exceptions import DCTClientError
 
     @log_tool_execution
     async def failing_tool():
-        raise DCTClientError("500: Self-Service container 'cg-1' has no active timeflow")
+        raise DCTClientError("HTTP 500: Self-Service container 'cg-1' has no active timeflow")
 
-    result = await failing_tool()
+    with pytest.raises(DCTClientError) as info:
+        await failing_tool()
 
-    assert result["status"] == "error"
-    assert "message_for_user" in result
-    assert "vdb group" in result["message_for_user"].lower()
-    assert "timeline" in result["message_for_user"].lower()
+    assert info.value.http_status == 500
+    assert "vdb group" in info.value.message_for_user.lower()
+    assert "timeline" in info.value.message_for_user.lower()
+
+
+@pytest.mark.asyncio
+async def test_prebuilt_dct_error_reaches_the_mcp_client_as_iserror_with_translation():
+    """End to end through FastMCP: isError is preserved AND the translation
+    reaches the client."""
+    from mcp.server.fastmcp import FastMCP
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    app = FastMCP("t")
+
+    @app.tool()
+    @log_tool_execution
+    def timeline_tool(action: str) -> dict:
+        raise DCTClientError("HTTP 409: timeflow 'tf-1' is locked")
+
+    @app.tool()
+    @log_tool_execution
+    def vdb_tool(action: str) -> dict:
+        raise DCTClientError("HTTP 404: VDB 'vdb-1' not found")
+
+    async with create_connected_server_and_client_session(app._mcp_server) as client:
+        translated = await client.call_tool("timeline_tool", {"action": "get"})
+        untouched = await client.call_tool("vdb_tool", {"action": "get"})
+
+    assert translated.isError is True
+    text = translated.content[0].text
+    assert "HTTP 409: timeflow 'tf-1' is locked" in text
+    assert "message_for_user: HTTP 409: timeline 'tf-1' is locked" in text
+
+    assert untouched.isError is True
+    assert "HTTP 404: VDB 'vdb-1' not found" in untouched.content[0].text
+    assert "message_for_user" not in untouched.content[0].text
 
 
 def test_sync_other_exceptions_still_propagate_unchanged():
