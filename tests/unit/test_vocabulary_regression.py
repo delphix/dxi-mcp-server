@@ -29,6 +29,7 @@ _BANNED = [
     "delphix masking",
     "virtualization engine",
     "masking engine",
+    "rewind",
 ]
 
 

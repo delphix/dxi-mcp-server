@@ -103,7 +103,7 @@ against Glossary v1.2 (30 canonical terms, ~168 synonym rows).
 | Concern | Canonical | Accept as input | Avoid in output | Why it matters |
 |------------|----------|--------------------|-------------|----------------------------------------|
 | Core data object | VDB | database, virtual database, clone, copy | — | Customers use all five interchangeably; the model cannot know they are one thing unless told |
-| Source object | dSource | Delphix source, data source, source DB | — | Retained as canonical in v1.2; Design System Glossary recommends deprecating it — unresolved |
+| Source object | dSource | Delphix source, data source, source DB | — | Retained as canonical in v1.2; Design System Glossary recommends deprecating it — resolved, Product has decided to keep dSource as-is for this PPM |
 | Infrastructure | environment | host, infrastructure, machine, VM | — | Four common aliases, none currently mapped |
 | Timeline | timeline | timeflow | timeflow | Legacy Continuous Data engine term; the model echoes it back wherever tool definitions use it |
 | Grouping | VDB Group | container | container | "Container" reads as Kubernetes in today's context; legacy Self-Service / Jetstream users mean VDB Group |
@@ -204,9 +204,9 @@ for both.
 2. **Decision needed early:** how to clear the 3 MB ceiling — lift it deliberately (generator bump
    plus system property) or strip descriptions from the codegen input. This determines whether the
    DCT-side epic fits the November release at all.
-3. **Design input needed before the spec pass is finalised:** dSource deprecation direction,
-   connector vs. connection/subconnection timing, glossary hosting. Reviewers named in PPM-1129 are
-   Jake Smith and Brian Deverter.
+3. **Design input needed before the spec pass is finalised:** connector vs. connection/subconnection
+   timing, glossary hosting. (dSource deprecation direction is resolved — see below.) Reviewers
+   named in PPM-1129 are Jake Smith and Brian Deverter.
 4. **Downstream:** PPM-1174 Phase 2 (semantic search tool) depends on this landing. The fuzzy
    ranker that would back it already exists at `tools/core/endpoint_discovery.py` but is dormant —
    imported only by `meta_tools.py`, which is not registered as MCP tools. It ranks on the same
@@ -222,8 +222,11 @@ for both.
   repo. PPM-1129 recommends hosting the MCP-specific layer as a PDUX Confluence page linked to
   canonical Delphix terminology, the Perforce Lexicon and the Design System Glossary. Blocks the
   spec pass; does **not** block the MCP-side epic.
-- **dSource deprecation direction.** The Design System Glossary recommends deprecating
-  customer-facing *dSource*; Glossary v1.2 retains it because no clean replacement exists.
+- **dSource deprecation direction — resolved.** The Design System Glossary recommends deprecating
+  customer-facing *dSource*; Glossary v1.2 retains it because no clean replacement exists. Product
+  has confirmed (PPM-1129, 2026-10-12): deprecation is deferred to a future initiative, and dSource
+  stays canonical for this PPM. No code change was required — the vocabulary layer already treats
+  dSource as canonical throughout.
 - **Connector vs. connection/subconnection.** *Connector* has dual meanings and Delphix is moving
   toward connection/subconnection. Need Design confirmation of timing before renaming anything.
 - **Raw API error translation layer.** Which layer should catch engine error messages containing

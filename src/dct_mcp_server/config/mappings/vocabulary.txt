@@ -55,6 +55,13 @@ cloud engine|Elastic Data
 # re-introducing a single-product default.
 delphix engine|Continuous Data/Compliance engine (clarify which)
 
+# --- Retired Continuous Data operation terminology (glossary #7b) ---
+# "rewind" is retired; the raw-text swap below only standardizes the word
+# itself. The required explicit "rewind is retired" user note is a
+# conversational behavior and stays in server_instructions.md rule 7 -- this
+# flat map cannot add a sentence, only replace a term.
+rewind|refresh from self
+
 # --- Retired Continuous Compliance terminology (glossary #26, #27) ---
 inventory|Rule Set
 

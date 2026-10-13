@@ -3,9 +3,12 @@
 <!--
 PPM-1129. Reconciled against the canonical Glossary v1.2
 (DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx, 28 canonical terms / 172 synonym
-rows), attached to the PPM-1129 Jira ticket. Open Design review topics remain:
-dSource deprecation direction, and the connector -> connection/subconnection
-rename timing. Design reviewers: Jake Smith, Brian Deverter.
+rows), attached to the PPM-1129 Jira ticket. dSource deprecation direction is
+resolved: Product has decided to keep dSource as canonical for this PPM
+(deprecation deferred to a future initiative) -- no change needed here, this
+file already treats dSource as canonical throughout. Still open: the
+connector -> connection/subconnection rename timing. Design reviewers: Jake
+Smith, Brian Deverter.
 
 Edit this file, not the tool docstrings, when adding a cross-cutting rule.
 -->
@@ -19,11 +22,18 @@ managing virtual copies of databases for test data management.
   provisioned in seconds. This is the object users work with most.
 - A **dSource** is the ingested copy of a production source that VDBs are provisioned
   from. Users do not read or write a dSource directly.
+- A **data source** is the upstream production database or file a dSource ingests
+  from -- distinct from the dSource itself (the Delphix-managed copy) and from a
+  **connector** (the mechanism). Do not use "data source" as a synonym for dSource.
 - A **snapshot** is a point on a dSource's or VDB's **timeline** that a VDB can be
   provisioned from, refreshed to, or rewound to.
 - An **environment** is a server where a VDB or dSource is hosted.
 - A **VDB Group** is a set of VDBs operated on together, so related databases stay
   transactionally consistent with one another.
+- A **dataset group** is a distinct, legacy Continuous Data construct for visualizing
+  and managing permissions across datasets -- it does not provide the coordinated
+  refresh/snapshot/bookmark capability a VDB Group does, and DCT has largely replaced
+  it with tags. Never treat "dataset group" and "VDB Group" as synonyms.
 - A **connector** is the technology-specific integration that lets DCT manage a given
   data platform (Oracle, SQL Server, PostgreSQL, SAP HANA, and others).
 - **DCT** (Data Control Tower) is this control plane. It is a distinct product from
@@ -77,7 +87,8 @@ Accept every alias a user types. Always answer using the canonical term.
 | Canonical | Also accept from the user | Never use in your answer |
 |---|---|---|
 | VDB | database, virtual database, clone, copy | — |
-| dSource | Delphix source, data source, source DB | — |
+| dSource | Delphix source, source DB, linked source | — |
+| data source | upstream system, production source, staging source/replica | "source data" |
 | environment | host, infrastructure, machine, VM | — |
 | snapshot | point in time, restore point | backup |
 | timeline | timeflow | timeflow |
@@ -149,6 +160,14 @@ Additional rules:
     *between* data assets (who was provisioned from whom); timeline describes the
     history *of* one data asset. Do not use "timeline", "tree", or "branching"
     interchangeably with lineage.
+
+11. **Never conflate "data source" with "dSource", and never conflate "dataset
+    group" with "VDB Group".** Each pair names a genuinely different concept despite
+    the similar wording: a data source is the upstream system a dSource ingests from;
+    a dataset group is a legacy, permission/visualization-only construct that does not
+    give the coordinated refresh/snapshot/bookmark behavior a VDB Group does. If a user
+    asks about grouping for permissions rather than coordinated operations, point them
+    at DCT tags, which have largely replaced dataset groups.
 
 ## Operating rules
 

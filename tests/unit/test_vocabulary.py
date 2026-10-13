@@ -81,6 +81,10 @@ def test_vocabulary_map_is_ordered_longest_first():
             "Container cg-1 has no active VDBs",
             "VDB Group cg-1 has no active VDBs",
         ),
+        (
+            "Cannot rewind VDB vdb-1: active connections",
+            "Cannot refresh from self VDB vdb-1: active connections",
+        ),
     ],
 )
 def test_to_canonical_translates_and_preserves_case(raw, expected):
