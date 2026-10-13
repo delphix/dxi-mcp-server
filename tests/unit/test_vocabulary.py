@@ -408,6 +408,117 @@ def test_placeholder_clause_dropped_when_unresolvable():
     assert "{" not in out
 
 
+@pytest.mark.parametrize(
+    "path,expected_id",
+    [
+        # Multi-segment collection prefixes: the ID is the value in the
+        # template's placeholder position, not the second path segment.
+        ("/management/engines/eng-1", "eng-1"),
+        ("/management/accounts/12", "12"),
+        ("/management/vaults/hashicorp/v-1", "v-1"),
+        # Single-segment collections are unchanged.
+        ("/vdbs/vdb-123", "vdb-123"),
+        ("/vdbs/vdb-123/delete", "vdb-123"),
+    ],
+)
+def test_resource_id_skips_the_whole_collection_prefix(path, expected_id):
+    from dct_mcp_server.tools.core.confirmation_levels import _extract_resource_id
+
+    assert _extract_resource_id(path) == expected_id
+
+
+@pytest.mark.parametrize(
+    "method,path,expected",
+    [
+        (
+            "DELETE",
+            "/management/engines/eng-1",
+            "unregister Continuous Data or Continuous Compliance engine 'eng-1'?",
+        ),
+        ("DELETE", "/management/accounts/12", "delete user account '12'?"),
+        ("DELETE", "/management/vaults/hashicorp/v-1", "HashiCorp vault 'v-1'?"),
+        ("POST", "/vdbs/vdb-123/delete", "delete VDB 'vdb-123'"),
+    ],
+)
+def test_confirmation_message_names_the_real_resource(method, path, expected):
+    from dct_mcp_server.tools.core.confirmation_resolver import (
+        check_confirmation_with_fallback,
+    )
+
+    message = check_confirmation_with_fallback(method, path)["message_template"]
+    assert expected in message, message
+
+
+def test_days_clause_dropped_when_unresolvable():
+    out = render_message_template(
+        "Warning: Updating retention date will cause snapshot '{name}' to be "
+        "deleted in {days} day(s). Proceed?",
+        "/snapshots/provision_by_snapshot",
+    )
+    assert out == (
+        "Warning: Updating retention date will cause snapshot to be deleted. Proceed?"
+    )
+    assert "{" not in out and "(s)" not in out
+
+
+def test_count_clause_dropped_when_unresolvable():
+    out = render_message_template(
+        "Warning: This policy update will cause {count} snapshot(s)/bookmark(s) "
+        "to be deleted within 7 days. Proceed?",
+        "/virtualization-policies/p-1",
+    )
+    assert out == (
+        "Warning: This policy update will cause snapshots/bookmarks to be "
+        "deleted within 7 days. Proceed?"
+    )
+    out = render_message_template(
+        "Warning: This new policy will affect {count} existing resource(s) "
+        "within 7 days. Proceed?",
+        "/virtualization-policies",
+    )
+    assert out == (
+        "Warning: This new policy will affect existing resources within 7 days. "
+        "Proceed?"
+    )
+
+
+def test_resolved_numbers_agree_with_their_unit():
+    template = "Snapshot '{name}' will be deleted in {days} day(s)."
+    assert render_message_template(
+        template, "/snapshots/s-1", None, {"retention_days": 1}
+    ) == "Snapshot 's-1' will be deleted in 1 day."
+    assert render_message_template(
+        template, "/snapshots/s-1", None, {"retention_days": 3}
+    ) == "Snapshot 's-1' will be deleted in 3 days."
+
+
+def test_batch_message_count_comes_from_the_velocity_counter():
+    out = render_message_template(
+        "A single caller has started {count} VDBs within 60 seconds.",
+        "/vdbs/vdb-1/start",
+        None,
+        {"velocity_count": 11},
+    )
+    assert out == "A single caller has started 11 VDBs within 60 seconds."
+
+
+def test_no_shipped_rule_renders_garbled_text_without_context():
+    """Pre-built tools have no retention/impact context: every rule must
+    still render as clean prose."""
+    from dct_mcp_server.config.loader import load_manual_confirmation_rules
+
+    for rule in load_manual_confirmation_rules():
+        rendered = render_message_template(
+            rule.get("message"), "/vdbs/provision_by_snapshot"
+        )
+        if rendered is None:
+            continue
+        assert "{" not in rendered, rendered
+        assert "(s)" not in rendered or "{" not in rule["message"], rendered
+        assert " ." not in rendered and " ?" not in rendered, rendered
+        assert "''" not in rendered, rendered
+
+
 def test_days_and_count_placeholders_resolve_from_context():
     assert "3 days" in render_message_template(
         "Retention is {days} days. Confirm?",

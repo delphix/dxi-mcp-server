@@ -370,7 +370,11 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
     # Resolve the remaining {name}/{days}/{count} placeholders (or drop their
     # clause) so a raw brace never reaches the user (PPM-1129).
     message = render_message_template(
-        message, api_path, None, {"retention_days": (context or {}).get("days")}
+        message,
+        api_path,
+        None,
+        {"retention_days": (context or {}).get("days")},
+        path_template=confirmation.get("path_pattern"),
     )
 
     return {

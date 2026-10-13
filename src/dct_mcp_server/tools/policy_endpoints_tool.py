@@ -71,10 +71,13 @@ def check_confirmation(
             "confirmation_level": confirmation["level"],
             # Resolve {name}/{days}/{count} so a raw brace never reaches the
             # user -- the same renderer the dynamic execute gate uses.
+            # Pre-built tools have no retention/impact context, so {days} and
+            # {count} clauses are dropped cleanly rather than rendered.
             "confirmation_message": render_message_template(
                 confirmation.get("message", "Please confirm this operation."),
                 api_path,
                 request_body,
+                path_template=confirmation.get("path_pattern"),
             ),
             "action": action,
             "tool": tool_name,
