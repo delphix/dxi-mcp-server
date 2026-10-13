@@ -336,6 +336,14 @@ def test_no_rule_message_leaks_a_raw_brace():
         ("Delete it. AppData plugin required.", "Delete it. Connector required."),
         # Proper nouns keep their authored casing.
         ("link via mssql failed", "link via SQL Server failed"),
+        ("Update values of an MSSql dSource", "Update values of a SQL Server dSource"),
+        # Articles the translation did not touch are left alone, even where
+        # a vowel-letter rule would get them wrong.
+        (
+            "a user-provided script for a unique timeflow",
+            "a user-provided script for a unique timeline",
+        ),
+        ("A universal ID for an AppData plugin", "A universal ID for a connector"),
     ],
 )
 def test_translation_is_grammatical(raw, expected):

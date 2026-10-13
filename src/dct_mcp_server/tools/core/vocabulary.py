@@ -86,15 +86,14 @@ def _guard_blocks(text: str, match: re.Match, rule: dict) -> bool:
     return False
 
 
-
-
 # A word boundary preceded by sentence-ending punctuation, or the very start
 # of the text. Used to decide whether a replacement should be capitalised.
 _SENTENCE_START_RE = re.compile(r"(?:^|[.!?]\s+|\n\s*)$")
 
-# "a"/"an" immediately before a word, so the article can be corrected after a
-# substitution changes the following sound ("an AppData" -> "a connector").
-_ARTICLE_RE = re.compile(r"\b(a|an|A|An)(\s+)(\w)", re.IGNORECASE)
+# "a"/"an" ending the text just before a substituted term, so the article can
+# be corrected when the substitution changes the following sound
+# ("an AppData plugin" -> "a connector").
+_TRAILING_ARTICLE_RE = re.compile(r"\b(a|an)(\s+)$", re.IGNORECASE)
 
 
 def _match_case(matched: str, replacement: str, preceding: str) -> str:
@@ -113,17 +112,21 @@ def _match_case(matched: str, replacement: str, preceding: str) -> str:
     return replacement
 
 
-def _fix_articles(text: str) -> str:
-    """Correct a/an after substitution changed the following word."""
+def _fix_trailing_article(preceding: str, replacement: str) -> str:
+    """
+    Correct an "a"/"an" that ends *preceding* to agree with *replacement*.
 
-    def _sub(match: re.Match) -> str:
-        article, gap, first = match.group(1), match.group(2), match.group(3)
-        correct = "an" if first.lower() in "aeiou" else "a"
-        if article[:1].isupper():
-            correct = correct.capitalize()
-        return f"{correct}{gap}{first}"
-
-    return _ARTICLE_RE.sub(_sub, text)
+    Only the article directly before a substituted term is touched: text the
+    translation did not change is never rewritten, so upstream prose such as
+    "a user" or "a unique ID" keeps its own (correct) article.
+    """
+    article = _TRAILING_ARTICLE_RE.search(preceding)
+    if not article:
+        return preceding
+    correct = "an" if replacement[:1].lower() in "aeiou" else "a"
+    if article.group(1)[:1].isupper():
+        correct = correct.capitalize()
+    return preceding[: article.start()] + correct + article.group(2)
 
 
 def to_canonical(text: str | None) -> str | None:
@@ -168,16 +171,19 @@ def to_canonical(text: str | None) -> str | None:
                 result, match, rule
             ):
                 continue
-            pieces.append(result[cursor : match.start()])
-            pieces.append(
-                _match_case(match.group(0), rule["canonical"], result[: match.start()])
+            replacement = _match_case(
+                match.group(0), rule["canonical"], result[: match.start()]
             )
+            pieces.append(
+                _fix_trailing_article(result[cursor : match.start()], replacement)
+            )
+            pieces.append(replacement)
             cursor = match.end()
         if pieces:
             pieces.append(result[cursor:])
             result = "".join(pieces)
 
-    return _fix_articles(result)
+    return result
 
 
 def differs(original: str | None, translated: str | None) -> bool:
