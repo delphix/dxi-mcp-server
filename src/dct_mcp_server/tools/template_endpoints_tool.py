@@ -157,7 +157,9 @@ def vdb_template_tool(
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-    Unified tool for DATABASE TEMPLATE operations.
+    Unified tool for VDB TEMPLATE operations: reusable database configuration (e.g. init parameters) applied when provisioning a VDB.
+
+    Customer aliases (accept as input, never use in answers): "database template" -> VDB template. The DCT API still names this resource /database-templates.
 
     This tool supports 8 actions: search, get, create, update, delete, get_tags, add_tags, delete_tags
 
@@ -167,15 +169,15 @@ def vdb_template_tool(
 
     ACTION: search
     ----------------------------------------
-    Summary: Search DatabaseTemplates.
+    Summary: Search VDB templates.
     Method: POST
     Endpoint: /database-templates/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: The DatabaseTemplate entity ID.
-        - name: The DatabaseTemplate name.
+        - id: The VDB template entity ID.
+        - name: The VDB template name.
         - description: User provided description for this template.
         - source_type: The type of the source associated with the template.
         - parameters: A name/value map of string configuration parameters.
@@ -191,7 +193,7 @@ def vdb_template_tool(
 
     ACTION: get
     ----------------------------------------
-    Summary: Retrieve a DatabaseTemplate by ID.
+    Summary: Retrieve a VDB template by ID.
     Method: GET
     Endpoint: /database-templates/{databaseTemplateId}
     Required Parameters: database_template_id
@@ -201,7 +203,7 @@ def vdb_template_tool(
 
     ACTION: create
     ----------------------------------------
-    Summary: Create a database template.
+    Summary: Create a VDB template.
     Method: POST
     Endpoint: /database-templates
     Required Parameters: name, source_type
@@ -212,7 +214,7 @@ def vdb_template_tool(
 
     ACTION: update
     ----------------------------------------
-    Summary: Updates a DatabaseTemplate by ID
+    Summary: Updates a VDB template by ID
     Method: PATCH
     Endpoint: /database-templates/{databaseTemplateId}
     Required Parameters: database_template_id
@@ -223,7 +225,7 @@ def vdb_template_tool(
 
     ACTION: delete
     ----------------------------------------
-    Summary: Delete a DatabaseTemplate by ID.
+    Summary: Delete a VDB template by ID.
     Method: DELETE
     Endpoint: /database-templates/{databaseTemplateId}
     Required Parameters: database_template_id
@@ -233,7 +235,7 @@ def vdb_template_tool(
 
     ACTION: get_tags
     ----------------------------------------
-    Summary: Get tags for a DatabaseTemplate.
+    Summary: Get tags for a VDB template.
     Method: GET
     Endpoint: /database-templates/{databaseTemplateId}/tags
     Required Parameters: database_template_id
@@ -243,7 +245,7 @@ def vdb_template_tool(
 
     ACTION: add_tags
     ----------------------------------------
-    Summary: Create tags for a DatabaseTemplate.
+    Summary: Create tags for a VDB template.
     Method: POST
     Endpoint: /database-templates/{databaseTemplateId}/tags
     Required Parameters: database_template_id, tags
@@ -253,7 +255,7 @@ def vdb_template_tool(
 
     ACTION: delete_tags
     ----------------------------------------
-    Summary: Delete tags for a DatabaseTemplate.
+    Summary: Delete tags for a VDB template.
     Method: POST
     Endpoint: /database-templates/{databaseTemplateId}/tags/delete
     Required Parameters: database_template_id
@@ -282,9 +284,9 @@ def vdb_template_tool(
             [Optional for all actions]
         limit (int): Maximum number of objects to return per query. The value must be between 1 an...
             [Required for: search]
-        make_current_account_owner (bool): Whether the account creating this database template must be configured as own...
+        make_current_account_owner (bool): Whether the account creating this VDB template must be configured as own...
             [Optional for all actions]
-        name (str): The DatabaseTemplate name.
+        name (str): The VDB template name.
             [Required for: create]
         parameters (dict): A name/value map of string configuration parameters. (Pass as JSON object)
             [Optional for all actions]

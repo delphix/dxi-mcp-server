@@ -213,7 +213,7 @@ def instance_tool(
     Filterable Fields:
         - id: The CDB object entity ID.
         - name: The name of this CDB.
-        - description: The container description of this Linked CDB.
+        - description: The description of this linked CDB.
         - diagnose_no_logging_faults: If true, NOLOGGING operations on this container are treat...
         - namespace_id: The namespace id of this CDB.
         - namespace_name: The namespace name of this CDB.
@@ -358,7 +358,7 @@ def instance_tool(
     Filterable Fields:
         - id: The vCDB object entity ID.
         - name: The name of this vCDB.
-        - description: The container description of this virtual CDB.
+        - description: The description of this virtual CDB.
         - database_name: The name of the container database in the Oracle DBMS.
         - namespace_id: The namespace id of this vCDB.
         - namespace_name: The namespace name of this vCDB.
@@ -397,8 +397,8 @@ def instance_tool(
         - nfs_version_reason:
         - nfs_encryption_enabled: Flag indicating whether the data transfer is encrypted or...
         - environment_user_ref: The environment user reference.
-        - db_template_id: The database template ID for this Virtual CDB.
-        - db_template_name: Name of the Database Template.
+        - db_template_id: The VDB template ID for this Virtual CDB.
+        - db_template_name: Name of the VDB template.
         - okv_client_id: The id of the OKV client used for TDE keystore access.
 
     Filter Syntax:
@@ -558,7 +558,7 @@ def instance_tool(
             [Optional for all actions]
         delete_all_dependent_datasets (bool): Whether to delete all dependent datasets of the CDB. (Default: False)
             [Optional for all actions]
-        description (str): The container description of this Linked CDB.
+        description (str): The description of this linked CDB.
             [Optional for all actions]
         diagnose_no_logging_faults (bool): Request body parameter
             [Optional for all actions]
@@ -1551,8 +1551,8 @@ def staging_cdb_tool(
         - logsync_enabled: Whether logsync is enabled for this Staging CDB.
         - description: Description of this Staging CDB.
         - config_params: Database configuration parameter overrides.
-        - db_template_id: The database template ID for this Staging CDB.
-        - db_template_name: Name of the Database Template.
+        - db_template_id: The VDB template ID for this Staging CDB.
+        - db_template_name: Name of the VDB template.
         - environment_user_ref: The environment user reference.
         - okv_client_id: The id of the OKV client used for TDE keystore access.
 
@@ -1681,7 +1681,7 @@ def staging_cdb_tool(
             [Optional for all actions]
         custom_env_variables_paths (list): An array of strings of whitespace-separated parameters to be passed to the so...
             [Optional for all actions]
-        db_template_id (str): The ID of the database template to apply to this Staging CDB.
+        db_template_id (str): The ID of the VDB template to apply to this Staging CDB.
             [Optional for all actions]
         delete_all_dependent_datasets (bool): Whether to delete all dependent datasets of the Staging CDB. (Default: False)
             [Optional for all actions]
@@ -2079,8 +2079,8 @@ def cdb_dsource_tool(
         - name: The name of this CDB.
         - enabled: Whether the CDB is enabled or not.
         - status: The runtime status of the vCDB.
-        - description: The container description of this Linked CDB.
-        - cdb_source_id: The container description of this Linked CDB.
+        - description: The description of this linked CDB.
+        - cdb_source_id: The description of this linked CDB.
         - is_detached: Is this a detached CDB container.
         - logsync_enabled: True if LogSync is enabled for this dSource.
         - logsync_mode:
@@ -3293,7 +3293,7 @@ def diagnostic_tool(
             [Required for: check_connectivity]
         cyberark_vault_query_string (str): Query to find a credential in the CyberArk vault.
             [Optional for all actions]
-        destination_type (str): Whether the test is testing connectivity to a Delphix Engine or remote host. ...
+        destination_type (str): Whether the test is testing connectivity to a Continuous Data engine or remote host. ...
             [Optional for all actions]
         direction (str): Whether the test is a transmit or receive test. Valid values: TRANSMIT, RECEI...
             [Optional for all actions]
@@ -3361,13 +3361,13 @@ def diagnostic_tool(
             [Required for: check_commvault_connectivity]
         staging_environment (str): Id of the connector environment which is used to connect to this source envir...
             [Optional for all actions]
-        target_engine_address (str): Address of other target Delphix Engine.
+        target_engine_address (str): Address of the other target Continuous Data engine.
             [Optional for all actions]
         target_engine_id (str): engine id which test exc
             [Optional for all actions]
-        target_engine_password (str): Password for the other target Delphix Engine.
+        target_engine_password (str): Password for the other target Continuous Data engine.
             [Optional for all actions]
-        target_engine_user (str): Username for the other target Delphix Engine.
+        target_engine_user (str): Username for the other target Continuous Data engine.
             [Optional for all actions]
         timestamps (list): The list of timestamps to use for source files to be mapped. (Pass as JSON ar...
             [Required for: validate_file_mapping_by_timestamp]

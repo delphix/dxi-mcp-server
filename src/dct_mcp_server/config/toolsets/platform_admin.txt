@@ -15,7 +15,7 @@ POST|/jobs/{jobId}/tags|add_tags
 POST|/jobs/{jobId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 2: engine_tool - CD Engines
+# TOOL 2: engine_tool - Engines (Continuous Data and Continuous Compliance)
 # ----------------------------------------------------------------------------
 POST|/management/engines/search|search
 GET|/management/engines/{engineId}|get

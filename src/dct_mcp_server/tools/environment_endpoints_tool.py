@@ -572,13 +572,13 @@ def environment_source_tool(
         - fqdn: The FQDN of the source's host.
         - size: The total size of this source database, in bytes.
         - jdbc_connection_string: The JDBC connection URL for this source database.
-        - plugin_version: The version of the plugin associated with this source dat...
-        - toolkit_id: The ID of the toolkit associated with this source databas...
+        - plugin_version: The version of the connector associated with this source dat...
+        - toolkit_id: The ID of the connector associated with this source databas...
         - is_dsource:
         - repository: The repository id for this source
-        - recovery_model: Recovery model of the source database (MSSql Only).
-        - mssql_source_type: The type of this mssql source database (MSSql Only).
-        - appdata_source_type: The type of this appdata source database (Appdata Only).
+        - recovery_model: Recovery model of the source database (SQL Server Only).
+        - mssql_source_type: The type of this SQL Server source database (SQL Server Only).
+        - appdata_source_type: The type of this connector-schema-based source database.
         - is_pdb: If this source is of PDB type (Oracle Only).
         - mount_base: The base mount point for the NFS or iSCSI LUN mounts.
         - tags:
@@ -891,7 +891,7 @@ def environment_source_tool(
             [Optional for all actions]
         is_cluster (bool): Whether the environment to be created is a cluster. (Default: False)
             [Optional for all actions]
-        is_staging (bool): Flag indicating whether this repository can be used by the Delphix Engine for...
+        is_staging (bool): Flag indicating whether this repository can be used by the Continuous Data engine for...
             [Optional for all actions]
         is_target (bool): Whether the environment to be created is a target cluster environment. This p...
             [Optional for all actions]
@@ -973,11 +973,11 @@ def environment_source_tool(
             [Optional for all actions]
         tags (list): The tags to be created for this environment. (Pass as JSON array)
             [Required for: add_environment_tags, add_source_tags]
-        timeflow_id (str): ID of the timeflow from which compatible repos need to be fetched, mutually e...
+        timeflow_id (str): ID of the timeline from which compatible repos need to be fetched, mutually e...
             [Optional for all actions]
         timestamp (str): The point in time from which to execute the operation. If the timestamp is no...
             [Optional for all actions]
-        toolkit_path (str): The path for the toolkit that resides on the host.
+        toolkit_path (str): The path for the connector that resides on the host.
             [Optional for all actions]
         type (str): The type of source to create. Default is DIRECT. Valid values: DIRECT, STAGED...
             [Required for: list_environment_listeners, create_connector_source]
@@ -2205,7 +2205,9 @@ def connector_schema_tool(
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-    Unified tool for TOOLKIT operations.
+    Unified tool for CONNECTOR SCHEMA operations: the installed connector definitions (and their parameter schemas) on each engine.
+
+    Customer aliases (accept as input, never use in answers): "toolkit", "plugin", "AppData plugin" -> connector. The DCT API still names this resource /toolkits and its IDs toolkit_id.
 
     This tool supports 7 actions: search, get, upload_connector_schema, delete_connector_schema, get_tags, add_tags, delete_tags
 
@@ -2215,15 +2217,15 @@ def connector_schema_tool(
 
     ACTION: search
     ----------------------------------------
-    Summary: Search for toolkits.
+    Summary: Search for connectors.
     Method: POST
     Endpoint: /toolkits/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: Id of the toolkit.
-        - type: Specifies whether this object is toolkit or plugin
+        - id: Id of the connector.
+        - type: The connector packaging format (internal; do not surface it to users).
         - reference: The object reference.
         - engine_name: Name of the engine.
         - engine_id: Id of the engine.
@@ -2232,7 +2234,7 @@ def connector_schema_tool(
         - discovery_definition: Definition of how to discover sources of this type.
         - upgrade_definition: Definition of how to upgrade sources of this type.
         - snapshot_parameters_definition: The schema that defines the structure of the fields in Ap...
-        - build_api: The Delphix API version that the toolkit was built against.
+        - build_api: The Delphix API version that the connector was built against.
         - display_name:
         - pretty_name:
         - version:
@@ -2249,7 +2251,7 @@ def connector_schema_tool(
         - host_types:
         - snapshot_schema:
         - resources:
-        - tags: Tags associated to this toolkit.
+        - tags: Tags associated to this connector.
 
     Filter Syntax:
         Operators: EQ, NE, GT, GE, LT, LE, CONTAINS, IN, NOT_IN
@@ -2339,7 +2341,7 @@ def connector_schema_tool(
             [Required for: search]
         tags (list): Array of tags with key value pairs (Pass as JSON array)
             [Required for: add_tags]
-        toolkit_id (str): The unique identifier for the toolkit.
+        toolkit_id (str): The unique identifier for the connector.
             [Required for: get, delete_connector_schema, get_tags, add_tags, delete_tags]
         value (str): Value of the tag
             [Optional for all actions]

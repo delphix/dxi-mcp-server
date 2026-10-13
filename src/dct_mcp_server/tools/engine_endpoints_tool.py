@@ -195,7 +195,9 @@ def engine_tool(
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-        Unified tool for ENGINE operations.
+        Unified tool for ENGINE operations: the Continuous Data engines and Continuous Compliance engines registered with DCT. One DCT resource covers both products; say which one an engine is when you mention it.
+
+        Customer aliases (accept as input, never use in answers): "Virtualization Engine" -> Continuous Data engine; "Masking Engine" -> Continuous Compliance engine; "Delphix engine" -> whichever of the two the engine's type shows.
 
         This tool supports 11 actions: search, get, update, get_tags, add_tags, delete_tags, register, unregister, get_auto_tagging, get_compliance_settings, search_compliance_settings
 
@@ -246,7 +248,7 @@ def engine_tool(
             - masking_allocated_memory: The maximum amount of memory available for running maskin...
             - masking_jobs_running: The number of masking jobs currently running.
             - masking_max_concurrent_jobs: The maximum number of masking jobs that can be running at...
-            - masking_available_cores: The number of CPU cores available to the masking engine.
+            - masking_available_cores: The number of CPU cores available to the Continuous Compliance engine.
             - hyperscale_instance_ids: List of Hyperscale Instances that this engine is connecte...
             - hyperscale_truststore_filename: File name of a truststore which can be used to validate t...
             - hyperscale_truststore_password: Password to read the truststore as expected by associated...
@@ -411,7 +413,7 @@ def engine_tool(
                 [Required for: get, update, get_tags, add_tags, delete_tags, unregister, get_auto_tagging, get_compliance_settings, search_compliance_settings]
             filter_expression (str): Request body parameter
                 [Optional for all actions]
-            hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve virtualization engine cre...
+            hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve Continuous Data engine cre...
                 [Optional for all actions]
             hashicorp_vault_masking_password_command_args (list): Arguments to pass to the Vault CLI tool to retrieve the masking password for ...
                 [Optional for all actions]
@@ -440,9 +442,9 @@ def engine_tool(
                 [Required for: search, get_compliance_settings, search_compliance_settings]
             masking_allocated_memory (int): The maximum amount of memory available for running masking jobs in bytes.
                 [Optional for all actions]
-            masking_available_cores (int): The number of CPU cores available to the masking engine.
+            masking_available_cores (int): The number of CPU cores available to the Continuous Compliance engine.
                 [Optional for all actions]
-            masking_hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve masking engine credentials.
+            masking_hashicorp_vault_id (int): Reference to the Hashicorp vault to use to retrieve Continuous Compliance engine credentials.
                 [Optional for all actions]
             masking_jobs_running (int): The number of masking jobs currently running.
                 [Optional for all actions]

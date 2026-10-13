@@ -456,7 +456,9 @@ def data_tool(
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-        Unified tool for DATA operations.
+        Unified tool for DATA operations: VDBs, VDB Groups and dSources.
+
+        Customer aliases (accept as input, never use in answers): "container", "consistency group" -> VDB Group; "database", "clone", "copy" -> VDB; "Delphix source", "linked source" -> dSource.
 
         This tool supports 122 actions: list_vdbs, search_vdbs, get_vdb, update_vdb, provision_by_timestamp, provision_by_timestamp_defaults, provision_by_snapshot, provision_by_snapshot_defaults, provision_from_bookmark, provision_from_bookmark_defaults, provision_by_location, provision_by_location_defaults, provision_empty_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize, list_vdb_groups, search_vdb_groups, get_vdb_group, create_vdb_group, update_vdb_group, delete_vdb_group, provision_vdb_group_from_bookmark, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags, list_dsources, search_dsources, get_dsource, delete_dsource, enable_dsource, disable_dsource, list_dsource_snapshots, dsource_create_snapshot, upgrade_dsource, get_dsource_upgrade_compatible_repositories, get_dsource_deletion_dependencies, get_dsource_tags, add_dsource_tags, delete_dsource_tags, dsource_link_oracle, dsource_link_oracle_defaults, dsource_link_oracle_staging_push, dsource_link_oracle_staging_push_defaults, update_oracle_dsource, attach_oracle_dsource, detach_oracle_dsource, upgrade_oracle_dsource, dsource_link_ase, dsource_link_ase_defaults, update_ase_dsource, dsource_link_connector, dsource_link_connector_defaults, update_connector_dsource, dsource_link_mssql, dsource_link_mssql_defaults, dsource_link_mssql_staging_push, dsource_link_mssql_staging_push_defaults, attach_mssql_staging_push_dsource, update_mssql_dsource, attach_mssql_dsource, detach_mssql_dsource, export_dsource_by_snapshot, export_dsource_by_timestamp, export_dsource_by_location, export_dsource_from_bookmark, export_dsource_to_asm_by_snapshot, export_dsource_to_asm_by_timestamp, export_dsource_to_asm_by_location, export_dsource_to_asm_from_bookmark
 
@@ -491,7 +493,7 @@ def data_tool(
             - id: The VDB object entity ID.
             - database_type: The database type of this VDB.
             - name: The logical name of this VDB.
-            - description: The container description of this VDB.
+            - description: The description of this VDB.
             - database_name: The name of the database on the target environment or in ...
             - namespace_id: The namespace id of this VDB.
             - namespace_name: The namespace name of this VDB.
@@ -508,8 +510,8 @@ def data_tool(
             - status: The runtime status of the VDB. 'Unknown' if all attempts ...
             - masked: The VDB is masked or not.
             - content_type: The content type of the vdb.
-            - parent_timeflow_timestamp: The timestamp for parent timeflow.
-            - parent_timeflow_timezone: The timezone for parent timeflow.
+            - parent_timeflow_timestamp: The timestamp for parent timeline.
+            - parent_timeflow_timezone: The timezone for parent timeline.
             - environment_id: A reference to the Environment that hosts this VDB.
             - ip_address: The IP address of the VDB's host.
             - fqdn: The FQDN of the VDB's host.
@@ -523,22 +525,22 @@ def data_tool(
             - creation_date: The date this VDB was created.
             - hooks:
             - appdata_source_params: The JSON payload conforming to the DraftV4 schema based o...
-            - template_id: A reference to the Database Template.
-            - template_name: Name of the Database Template.
+            - template_id: A reference to the VDB template.
+            - template_name: Name of the VDB template.
             - config_params: Database configuration parameter overrides.
             - environment_user_ref: The environment user reference.
             - additional_mount_points: Specifies additional locations on which to mount a subdir...
             - appdata_config_params: The parameters specified by the source config schema in t...
-            - mount_point: Mount point for the VDB (Oracle, ASE, AppData).
-            - current_timeflow_id: A reference to the currently active timeflow for this VDB.
-            - previous_timeflow_id: A reference to the previous timeflow for this VDB.
+            - mount_point: Mount point for the VDB (Oracle, ASE and connector-schema-based VDBs).
+            - current_timeflow_id: A reference to the currently active timeline for this VDB.
+            - previous_timeflow_id: A reference to the previous timeline for this VDB.
             - last_refreshed_date: The date this VDB was last refreshed.
             - vdb_restart: Indicates whether the Engine should automatically restart...
-            - is_appdata: Indicates whether this VDB has an AppData database.
+            - is_appdata: API flag for VDBs whose parameters come from a connector schema (internal distinction; do not surface it to users).
             - exported_data_directory: ZFS exported data directory path.
             - vcdb_exported_data_directory: ZFS exported data directory path of the virtual CDB conta...
-            - toolkit_id: The ID of the toolkit associated with this VDB.
-            - plugin_version: The version of the plugin associated with this VDB.
+            - toolkit_id: The ID of the connector associated with this VDB.
+            - plugin_version: The version of the connector associated with this VDB.
             - primary_object_id: The ID of the parent object from which replication was done.
             - primary_engine_id: The ID of the parent engine from which replication was done.
             - primary_engine_name: The name of the parent engine from which replication was ...
@@ -558,11 +560,11 @@ def data_tool(
             - parent_pdb_tde_keystore_path: Path to a copy of the parent PDB's Oracle transparent dat...
             - target_pdb_tde_keystore_path: Path of the virtual PDB's Oracle transparent data encrypt...
             - recovery_model: Recovery model of the vdb database.
-            - cdc_on_provision: Whether to enable CDC on provision for MSSql.
+            - cdc_on_provision: Whether to enable CDC on provision for SQL Server.
             - data_connection_id: The ID of the associated DataConnection.
             - mssql_ag_backup_location: Shared backup location to be used for VDB provision on AG...
             - mssql_ag_backup_based: Indicates whether to do fast operations for VDB on AG whi...
-            - mssql_ag_replicas: Indicates the mssql replica sources constitutes in MSSQL ...
+            - mssql_ag_replicas: Indicates the SQL Server replica sources constitutes in SQL Server ...
             - database_unique_name: The unique name of the database.
             - db_username: The user name of the database.
             - new_db_id: Indicates whether Delphix will generate a new DBID during...
@@ -620,7 +622,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_by_timestamp', timestamp=..., timestamp_in_database_timezone=..., timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=...)
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — connector-schema parameters only: If this provision needs 'appdata_source_params' or 'appdata_config_params' (data platforms whose parameters are defined by a connector schema), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching connector schema's 'virtual_source_definition.parameters' for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, SQL Server, PostgreSQL, or other types that do not take these parameters, skip this step. This is an internal API distinction: to the user, every data platform is simply a connector.
 
         ACTION: provision_by_timestamp_defaults
         ----------------------------------------
@@ -643,7 +645,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_by_snapshot', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., snapshot_id='example-snapshot-123')
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — connector-schema parameters only: If this provision needs 'appdata_source_params' or 'appdata_config_params' (data platforms whose parameters are defined by a connector schema), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching connector schema's 'virtual_source_definition.parameters' for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, SQL Server, PostgreSQL, or other types that do not take these parameters, skip this step. This is an internal API distinction: to the user, every data platform is simply a connector.
 
         ACTION: provision_by_snapshot_defaults
         ----------------------------------------
@@ -666,7 +668,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_from_bookmark', make_current_account_owner=..., bookmark_id='example-bookmark-123')
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — connector-schema parameters only: If this provision needs 'appdata_source_params' or 'appdata_config_params' (data platforms whose parameters are defined by a connector schema), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching connector schema's 'virtual_source_definition.parameters' for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, SQL Server, PostgreSQL, or other types that do not take these parameters, skip this step. This is an internal API distinction: to the user, every data platform is simply a connector.
 
         ACTION: provision_from_bookmark_defaults
         ----------------------------------------
@@ -688,7 +690,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_by_location', timeflow_id='example-timeflow-123', engine_id='example-engine-123', source_data_id='example-source_data-123', make_current_account_owner=..., location=...)
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — connector-schema parameters only: If this provision needs 'appdata_source_params' or 'appdata_config_params' (data platforms whose parameters are defined by a connector schema), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching connector schema's 'virtual_source_definition.parameters' for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, SQL Server, PostgreSQL, or other types that do not take these parameters, skip this step. This is an internal API distinction: to the user, every data platform is simply a connector.
 
         ACTION: provision_by_location_defaults
         ----------------------------------------
@@ -710,7 +712,7 @@ def data_tool(
         Example:
             >>> data_tool(action='provision_empty_vdb', repository_id='example-repository-123', engine_id='example-engine-123')
 
-            IMPORTANT — AppData VDB only: If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' or 'appdata_config_params'), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching toolkit's 'virtual_source_definition.parameters' schema for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step.
+            IMPORTANT — connector-schema parameters only: If this provision needs 'appdata_source_params' or 'appdata_config_params' (data platforms whose parameters are defined by a connector schema), call connector_schema_tool(action='search') first and filter by the engine_id of the target environment, and use environment_user_id. Use the matching connector schema's 'virtual_source_definition.parameters' for 'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. For Oracle, SQL Server, PostgreSQL, or other types that do not take these parameters, skip this step. This is an internal API distinction: to the user, every data platform is simply a connector.
 
         ACTION: delete_vdb
         ----------------------------------------
@@ -979,12 +981,12 @@ def data_tool(
             - name: The user-defined name of this bookmark.
             - creation_date: The date and time that this bookmark was created.
             - data_timestamp: The timestamp for the data that the bookmark refers to.
-            - timeflow_id: The timeflow for the snapshot that the bookmark was creat...
+            - timeflow_id: The timeline for the snapshot that the bookmark was creat...
             - location: The location for the data that the bookmark refers to.
             - vdb_ids: The list of VDB IDs associated with this bookmark.
             - dsource_ids: The list of dSource IDs associated with this bookmark.
-            - vdb_group_id: The ID of the VDB group on which bookmark is created.
-            - vdb_group_name: The name of the VDB group on which bookmark is created.
+            - vdb_group_id: The ID of the VDB Group on which bookmark is created.
+            - vdb_group_name: The name of the VDB Group on which bookmark is created.
             - vdbs: The list of VDB IDs and VDB names associated with this bo...
             - dsources: The list of dSource IDs and dSource names associated with...
             - paas_databases: The list of PaaS Database IDs and PaaS Database names ass...
@@ -1214,7 +1216,7 @@ def data_tool(
             - is_locked: Indicates whether the VDB Group is locked.
             - locked_by: The Id of the account that locked the VDB Group.
             - locked_by_name: The name of the account that locked the VDB Group.
-            - vdb_group_source: Source of the vdb group, default is DCT. In case of self-...
+            - vdb_group_source: Source of the VDB Group, default is DCT. In case of self-...
             - ss_data_layout_id: Data-layout Id for engine-managed vdb groups.
             - vdbs: Dictates order of operations on VDBs. Operations can be p...
             - database_type: The database type of the VDB Group. If all VDBs in the gr...
@@ -1254,7 +1256,7 @@ def data_tool(
 
         ACTION: update_vdb_group
         ----------------------------------------
-        Summary: Update values of a VDB group.
+        Summary: Update values of a VDB Group.
         Method: PATCH
         Endpoint: /vdb-groups/{vdbGroupId}
         Required Parameters: vdb_group_id
@@ -1445,12 +1447,12 @@ def data_tool(
             - name: The user-defined name of this bookmark.
             - creation_date: The date and time that this bookmark was created.
             - data_timestamp: The timestamp for the data that the bookmark refers to.
-            - timeflow_id: The timeflow for the snapshot that the bookmark was creat...
+            - timeflow_id: The timeline for the snapshot that the bookmark was creat...
             - location: The location for the data that the bookmark refers to.
             - vdb_ids: The list of VDB IDs associated with this bookmark.
             - dsource_ids: The list of dSource IDs associated with this bookmark.
-            - vdb_group_id: The ID of the VDB group on which bookmark is created.
-            - vdb_group_name: The name of the VDB group on which bookmark is created.
+            - vdb_group_id: The ID of the VDB Group on which bookmark is created.
+            - vdb_group_name: The name of the VDB Group on which bookmark is created.
             - vdbs: The list of VDB IDs and VDB names associated with this bo...
             - dsources: The list of dSource IDs and dSource names associated with...
             - paas_databases: The list of PaaS Database IDs and PaaS Database names ass...
@@ -1524,8 +1526,8 @@ def data_tool(
         Filterable Fields:
             - id: The dSource object entity ID.
             - database_type: The database type of this dSource.
-            - name: The container name of this dSource.
-            - description: The container description of this dSource.
+            - name: The name of this dSource.
+            - description: The description of this dSource.
             - namespace_id: The namespace id of this dSource.
             - namespace_name: The namespace name of this dSource.
             - is_replica: Is this a replicated object.
@@ -1533,7 +1535,7 @@ def data_tool(
             - content_type: The content type of the dSource.
             - data_uuid: A universal ID that uniquely identifies the dSource datab...
             - storage_size: The actual space used by this dSource, in bytes.
-            - plugin_version: The version of the plugin associated with this source dat...
+            - plugin_version: The version of the connector associated with this source dat...
             - creation_date: The date this dSource was created.
             - group_name: The name of the group containing this dSource.
             - enabled: A value indicating whether this dSource is enabled.
@@ -1544,10 +1546,10 @@ def data_tool(
             - status: The runtime status of the dSource. 'Unknown' if all attem...
             - engine_name: Name of the Engine where this DSource is hosted
             - cdb_id: A reference to the CDB associated with this dSource.
-            - current_timeflow_id: A reference to the currently active timeflow for this dSo...
-            - previous_timeflow_id: A reference to the previous timeflow for this dSource.
-            - is_appdata: Indicates whether this dSource has an AppData database.
-            - toolkit_id: The ID of the toolkit associated with this dSource(AppDat...
+            - current_timeflow_id: A reference to the currently active timeline for this dSo...
+            - previous_timeflow_id: A reference to the previous timeline for this dSource.
+            - is_appdata: API flag for dSources whose parameters come from a connector schema (internal distinction; do not surface it to users).
+            - toolkit_id: The ID of the connector associated with this dSource.
             - unvirtualized_space: This is the sum of unvirtualized space from the dependant...
             - dependant_vdbs: The number of VDBs that are dependant on this dSource. Th...
             - appdata_source_params: The JSON payload conforming to the DraftV4 schema based o...
@@ -1566,7 +1568,7 @@ def data_tool(
             - logsync_mode:
             - logsync_interval: Interval between LogSync requests, in seconds.
             - exported_data_directory: ZFS exported data directory path.
-            - template_id: A reference to the Non Virtual Database Template.
+            - template_id: A reference to the template applied to the staging database.
             - allow_auto_staging_restart_on_host_reboot: Indicates whether Delphix should automatically restart th...
             - physical_standby: Indicates whether this staging database is configured as ...
             - validate_by_opening_db_in_read_only_mode: Indicates whether this staging database snapshot is valid...
@@ -1871,8 +1873,8 @@ def data_tool(
         Example:
             >>> data_tool(action='dsource_link_connector', environment_user=..., link_type=..., staging_mount_base=..., staging_environment=..., staging_environment_user=..., excludes=..., follow_symlinks=..., parameters=..., sync_parameters=...)
 
-            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call connector_schema_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
-        Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
+            IMPORTANT — connector schema: Before populating connector-specific parameters, call connector_schema_tool(action='search') to list the available connector schemas. Filter results by the engine_id of the environment you are operating on — use only connector schemas whose engine_id matches.
+        Use the matching connector schema's 'linked_source_definition.parameters' to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
 
         ACTION: dsource_link_connector_defaults
         ----------------------------------------
@@ -1884,8 +1886,8 @@ def data_tool(
         Example:
             >>> data_tool(action='dsource_link_connector_defaults', source_id='example-source-123')
 
-            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call connector_schema_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
-        Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
+            IMPORTANT — connector schema: Before populating connector-specific parameters, call connector_schema_tool(action='search') to list the available connector schemas. Filter results by the engine_id of the environment you are operating on — use only connector schemas whose engine_id matches.
+        Use the matching connector schema's 'linked_source_definition.parameters' to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
 
         ACTION: update_connector_dsource
         ----------------------------------------
@@ -1898,12 +1900,12 @@ def data_tool(
         Example:
             >>> data_tool(action='update_connector_dsource', name=..., description=..., hooks=..., retention_policy_id='example-retention_policy-123', dsource_id='example-dsource-123', sync_policy_id='example-sync_policy-123', ops_pre_sync=..., ops_post_sync=..., environment_user=..., staging_environment=..., staging_environment_user=..., parameters=...)
 
-            IMPORTANT — AppData toolkit schema: Before populating toolkit-specific parameters, call connector_schema_tool(action='search') to list available toolkits. Filter results by the engine_id of the environment you are operating on — use only toolkits whose engine_id matches.
-        Use the matching toolkit's 'linked_source_definition.parameters' schema to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
+            IMPORTANT — connector schema: Before populating connector-specific parameters, call connector_schema_tool(action='search') to list the available connector schemas. Filter results by the engine_id of the environment you are operating on — use only connector schemas whose engine_id matches.
+        Use the matching connector schema's 'linked_source_definition.parameters' to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'.
 
         ACTION: dsource_link_mssql
         ----------------------------------------
-        Summary: Link a MSSql database as dSource.
+        Summary: Link a SQL Server database as dSource.
         Method: POST
         Endpoint: /dsources/mssql
         Key Parameters (provide as applicable): ppt_repository, sync_strategy, mssql_backup_uuid, compression_enabled, availability_group_backup_policy, source_host_user, encryption_key, ppt_host_user, staging_pre_script, staging_post_script, sync_strategy_managed_type, mssql_user_environment_reference, mssql_user_domain_username, mssql_user_domain_password, mssql_user_domain_vault_username, mssql_user_domain_vault, mssql_user_domain_hashicorp_vault_engine, mssql_user_domain_hashicorp_vault_secret_path, mssql_user_domain_hashicorp_vault_username_key, mssql_user_domain_hashicorp_vault_secret_key, mssql_user_domain_azure_vault_name, mssql_user_domain_azure_vault_username_key, mssql_user_domain_azure_vault_secret_key, mssql_user_domain_cyberark_vault_query_string, mssql_database_username, mssql_database_password, delphix_managed_backup_compression_enabled, delphix_managed_backup_policy, external_managed_validate_sync_mode, external_managed_shared_backup_locations, external_netbackup_config_master_name, external_netbackup_config_source_client_name, external_netbackup_config_params, external_netbackup_config_templates, external_commserve_host_name, external_commvault_config_source_client_name, external_commvault_config_staging_client_name, external_commvault_config_params, external_commvault_config_templates
@@ -1913,7 +1915,7 @@ def data_tool(
 
         ACTION: dsource_link_mssql_defaults
         ----------------------------------------
-        Summary: Get defaults for a MSSql dSource linking.
+        Summary: Get defaults for a SQL Server dSource linking.
         Method: POST
         Endpoint: /dsources/mssql/defaults
         Required Parameters: source_id
@@ -1923,7 +1925,7 @@ def data_tool(
 
         ACTION: dsource_link_mssql_staging_push
         ----------------------------------------
-        Summary: Link a MSSql staging push database as dSource.
+        Summary: Link a SQL Server staging push database as dSource.
         Method: POST
         Endpoint: /dsources/mssql/staging-push
         Key Parameters (provide as applicable): engine_id, ppt_repository, encryption_key, ppt_host_user, staging_pre_script, staging_post_script, staging_database_name, db_state
@@ -1933,7 +1935,7 @@ def data_tool(
 
         ACTION: dsource_link_mssql_staging_push_defaults
         ----------------------------------------
-        Summary: Get defaults for a MSSql staging push dSource linking.
+        Summary: Get defaults for a SQL Server staging push dSource linking.
         Method: POST
         Endpoint: /dsources/mssql/staging-push/defaults
         Required Parameters: environment_id
@@ -1943,7 +1945,7 @@ def data_tool(
 
         ACTION: attach_mssql_staging_push_dsource
         ----------------------------------------
-        Summary: Attaches a MSSql staging push database to a previously detached dsource.
+        Summary: Attaches a SQL Server staging push database to a previously detached dsource.
         Method: POST
         Endpoint: /dsources/mssql/staging-push/{dsourceId}/attachSource
         Required Parameters: ppt_repository, dsource_id, staging_database_name
@@ -1954,7 +1956,7 @@ def data_tool(
 
         ACTION: update_mssql_dsource
         ----------------------------------------
-        Summary: Update values of an MSSql dSource
+        Summary: Update values of a SQL Server dSource
         Method: PATCH
         Endpoint: /dsources/mssql/{dsourceId}
         Required Parameters: dsource_id
@@ -1965,7 +1967,7 @@ def data_tool(
 
         ACTION: attach_mssql_dsource
         ----------------------------------------
-        Summary: Attaches a MSSql source to a previously detached dsource.
+        Summary: Attaches a SQL Server source to a previously detached dsource.
         Method: POST
         Endpoint: /dsources/mssql/{dsourceId}/attachSource
         Required Parameters: ppt_repository, dsource_id, source_id
@@ -1976,7 +1978,7 @@ def data_tool(
 
         ACTION: detach_mssql_dsource
         ----------------------------------------
-        Summary: Detaches a linked source from a MSSql database.
+        Summary: Detaches a linked source from a SQL Server database.
         Method: POST
         Endpoint: /dsources/mssql/{dsourceId}/detachSource
         Required Parameters: dsource_id
@@ -2084,11 +2086,11 @@ def data_tool(
                 [Optional for all actions]
             account_id (int): Id of the account on whose behalf this request is being made. Only accounts h...
                 [Optional for all actions]
-            additional_mount_points (list): Specifies additional locations on which to mount a subdirectory of an AppData...
+            additional_mount_points (list): Specifies additional locations on which to mount a subdirectory of a connector-based VDB...
                 [Optional for all actions]
             allow_auto_staging_restart_on_host_reboot (bool): Boolean value indicates whether this staging database should automatically be...
                 [Optional for all actions]
-            appdata_config_params (dict): The parameters specified by the source config schema in the toolkit (Pass as ...
+            appdata_config_params (dict): The parameters specified by the source config schema in the connector (Pass as ...
                 [Optional for all actions]
             appdata_parameters (dict): The list of parameters specified by the snapshotParametersDefinition schema i...
                 [Optional for all actions]
@@ -2108,7 +2110,7 @@ def data_tool(
                 [Optional for all actions]
             auto_staging_restart (bool): Boolean value indicates whether this staging database should automatically be...
                 [Optional for all actions]
-            availability_group_backup_policy (str): When using the `new_backup` sync_strategy for an MSSql Availability Group, de...
+            availability_group_backup_policy (str): When using the `new_backup` sync_strategy for a SQL Server Availability Group, de...
                 [Optional for all actions]
             backup_frequency_minutes (int): The frequency with which the incremental backup will be taken in minutes. (De...
                 [Optional for all actions]
@@ -2128,7 +2130,7 @@ def data_tool(
                 [Optional for all actions]
             cdb_tde_keystore_password (str): The password for the Transparent Data Encryption keystore associated with the...
                 [Optional for all actions]
-            cdc_on_provision (bool): Whether to enable CDC on provision for MSSql
+            cdc_on_provision (bool): Whether to enable CDC on provision for SQL Server
                 [Optional for all actions]
             check_logical (bool): True if extended block checking should be used for this linked database. (Def...
                 [Optional for all actions]
@@ -2208,7 +2210,7 @@ def data_tool(
                 [Optional for all actions]
             delphix_managed_backup_policy (str): Specify which node of an availability group to run the copy-only full backup ...
                 [Optional for all actions]
-            description (str): The container description of this VDB.
+            description (str): The description of this VDB.
                 [Optional for all actions]
             diagnose_no_logging_faults (bool): If true, NOLOGGING operations on this container are treated as faults and can...
                 [Optional for all actions]
@@ -2359,13 +2361,13 @@ def data_tool(
                 [Optional for all actions]
             max_allowed_backups_pending_restore (int): The maximum number of pending backup restores at which export-finalize operat...
                 [Optional for all actions]
-            mirroring_state (str): Recovery model of the database (MSSql Only). Valid values: SUSPENDED, DISCONN...
+            mirroring_state (str): Recovery model of the database (SQL Server Only). Valid values: SUSPENDED, DISCONN...
                 [Optional for all actions]
             mode (str): Refresh Mode either self or parent, if PARENT then VDB Group is refreshed fro...
                 [Optional for all actions]
             mount_base (str): The base mount point to use for the NFS mounts for the temporary VDB.
                 [Optional for all actions]
-            mount_point (str): Mount point for the VDB (AppData only), can only be updated while the VDB is ...
+            mount_point (str): Mount point for the VDB (connector-schema-based VDBs only), can only be updated while the VDB is ...
                 [Optional for all actions]
             mssql_ag_backup_based (bool): Indicates whether to do fast operations for VDB on AG which will use a health...
                 [Optional for all actions]
@@ -2481,7 +2483,7 @@ def data_tool(
                 [Optional for all actions]
             post_rollback (list): The commands to execute on the target environment after rewinding the VDB. (P...
                 [Optional for all actions]
-            post_script (str): Post script for MSSql.
+            post_script (str): Post script for SQL Server.
                 [Optional for all actions]
             post_self_refresh (list): The commands to execute on the target environment after refreshing the VDB wi...
                 [Optional for all actions]
@@ -2503,7 +2505,7 @@ def data_tool(
                 [Optional for all actions]
             pre_rollback (list): The commands to execute on the target environment before rewinding the VDB. (...
                 [Optional for all actions]
-            pre_script (str): Pre script for MSSql.
+            pre_script (str): Pre script for SQL Server.
                 [Optional for all actions]
             pre_self_refresh (list): The commands to execute on the target environment before refreshing the VDB w...
                 [Optional for all actions]
@@ -2587,10 +2589,10 @@ def data_tool(
                 [Optional for all actions]
             sync_policy_id (str): The ID of the SnapSync policy for the dSource.
                 [Optional for all actions]
-            sync_strategy (str): Determines how the Delphix Engine will take a backup:
+            sync_strategy (str): Determines how the Continuous Data engine will take a backup:
     * `latest_backup` - Use...
                 [Optional for all actions]
-            sync_strategy_managed_type (str): MSSQL specific parameters for source based sync strategy.:
+            sync_strategy_managed_type (str): SQL Server specific parameters for source based sync strategy.:
     * `external` - MSS...
                 [Optional for all actions]
             tags (list): The tags to be created for VDB. (Pass as JSON array)
@@ -2613,9 +2615,9 @@ def data_tool(
                 [Optional for all actions]
             temp_directory (str): The directory for temporary files.
                 [Optional for all actions]
-            template_id (str): The ID of the target VDB Template (Oracle and MSSql Only).
+            template_id (str): The ID of the target VDB Template (Oracle and SQL Server Only).
                 [Optional for all actions]
-            timeflow_id (str): The Timeflow ID.
+            timeflow_id (str): The timeline ID.
                 [Required for: export_vdb_by_timestamp, export_vdb_to_asm_by_timestamp, export_dsource_by_timestamp, export_dsource_to_asm_by_timestamp]
             timestamp (str): The point in time from which to execute the operation. Mutually exclusive wit...
                 [Required for: export_vdb_by_timestamp, export_vdb_to_asm_by_timestamp, export_dsource_by_timestamp, export_dsource_to_asm_by_timestamp]
@@ -2637,7 +2639,7 @@ def data_tool(
                 [Optional for all actions]
             vdb_enable_param_mappings (list): Request body parameter (Pass as JSON array)
                 [Optional for all actions]
-            vdb_group_id (str): The unique identifier for the vdbGroup.
+            vdb_group_id (str): The unique identifier for the VDB Group.
                 [Required for: get_vdb_group, update_vdb_group, delete_vdb_group, refresh_vdb_group, refresh_vdb_group_from_bookmark, refresh_vdb_group_by_snapshot, refresh_vdb_group_by_timestamp, rollback_vdb_group, lock_vdb_group, unlock_vdb_group, start_vdb_group, stop_vdb_group, enable_vdb_group, disable_vdb_group, get_vdb_group_latest_snapshots, get_vdb_group_timestamp_summary, list_vdb_group_bookmarks, search_vdb_group_bookmarks, get_vdb_group_tags, add_vdb_group_tags]
             vdb_id (str): The unique identifier for the vdb.
                 [Required for: get_vdb, update_vdb, delete_vdb, start_vdb, stop_vdb, enable_vdb, disable_vdb, refresh_vdb_by_timestamp, refresh_vdb_by_snapshot, refresh_vdb_from_bookmark, refresh_vdb_by_location, undo_vdb_refresh, rollback_vdb_by_timestamp, rollback_vdb_by_snapshot, rollback_vdb_from_bookmark, switch_vdb_timeline, lock_vdb, unlock_vdb, migrate_vdb, get_migrate_compatible_repositories, upgrade_vdb, upgrade_oracle_vdb, get_upgrade_compatible_repositories, list_vdb_snapshots, snapshot_vdb, list_vdb_bookmarks, search_vdb_bookmarks, get_vdb_deletion_dependencies, verify_vdb_jdbc_connection, get_vdb_tags, add_vdb_tags, export_vdb_in_place, export_vdb_asm_in_place, export_vdb_by_snapshot, export_vdb_by_timestamp, export_vdb_by_location, export_vdb_from_bookmark, export_vdb_to_asm_by_snapshot, export_vdb_to_asm_by_timestamp, export_vdb_to_asm_by_location, export_vdb_to_asm_from_bookmark, export_cleanup, export_finalize]
@@ -2656,10 +2658,10 @@ def data_tool(
             vdbs (list): Dictates order of operations on VDBs. Operations can be performed in parallel...
                 [Optional for all actions]
 
-          -- MSSql-specific parameters (SKIP if not provisioning mssql) --
-            mssql_failover_drive_letter (str): [MSSql only] Base drive letter location for mount points. (MSSql Only).
+          -- SQL Server-specific parameters (SKIP if not provisioning SQL Server) --
+            mssql_failover_drive_letter (str): [SQL Server only] Base drive letter location for mount points. (SQL Server Only).
                 [Optional for all actions]
-            recovery_model (str): Recovery model of the database (MSSql Only). Valid values: FULL, SIMPLE, BULK...
+            recovery_model (str): Recovery model of the database (SQL Server Only). Valid values: FULL, SIMPLE, BULK...
                 [Optional for all actions]
 
           -- Oracle-specific parameters (SKIP if not provisioning oracle) --
@@ -7214,7 +7216,7 @@ def snapshot_bookmark_tool(
         - missing_non_logged_data: Indicates if a virtual database provisioned from this sna...
         - dataset_id: The ID of the Snapshot's dSource or VDB.
         - creation_time: The time when the snapshot was created.
-        - start_timestamp: The timestamp within the parent TimeFlow at which this sn...
+        - start_timestamp: The timestamp within the parent timeline at which this sn...
         - start_location: The database specific indentifier within the parent TimeF...
         - timestamp: The logical time of the data contained in this Snapshot.
         - location: Database specific identifier for the data contained in th...
@@ -7223,11 +7225,11 @@ def snapshot_bookmark_tool(
         - retain_forever: Indicates that the snapshot is protected from retention, ...
         - effective_expiration: The effective expiration is that max of the snapshot expi...
         - effective_retain_forever: True if retain_forever is set or a Bookmark retains this ...
-        - timeflow_id: The TimeFlow this snapshot was taken on.
+        - timeflow_id: The timeline this snapshot was taken on.
         - timezone: Time zone of the source database at the time the snapshot...
         - version: Version of database source repository at the time the sna...
         - temporary: Indicates that this snapshot is in a transient state and ...
-        - appdata_toolkit: The toolkit associated with this snapshot.
+        - appdata_toolkit: The connector associated with this snapshot.
         - appdata_metadata: The JSON payload conforming to the DraftV4 schema based o...
         - ase_db_encryption_key: Database encryption key present for this snapshot.
         - mssql_internal_version: Internal version of the source database at the time the s...
@@ -7354,12 +7356,12 @@ def snapshot_bookmark_tool(
         - name: The user-defined name of this bookmark.
         - creation_date: The date and time that this bookmark was created.
         - data_timestamp: The timestamp for the data that the bookmark refers to.
-        - timeflow_id: The timeflow for the snapshot that the bookmark was creat...
+        - timeflow_id: The timeline for the snapshot that the bookmark was creat...
         - location: The location for the data that the bookmark refers to.
         - vdb_ids: The list of VDB IDs associated with this bookmark.
         - dsource_ids: The list of dSource IDs associated with this bookmark.
-        - vdb_group_id: The ID of the VDB group on which bookmark is created.
-        - vdb_group_name: The name of the VDB group on which bookmark is created.
+        - vdb_group_id: The ID of the VDB Group on which bookmark is created.
+        - vdb_group_name: The name of the VDB Group on which bookmark is created.
         - vdbs: The list of VDB IDs and VDB names associated with this bo...
         - dsources: The list of dSource IDs and dSource names associated with...
         - paas_databases: The list of PaaS Database IDs and PaaS Database names ass...
@@ -7527,7 +7529,7 @@ def snapshot_bookmark_tool(
             [Required for: search_snapshots, search_bookmarks, get_bookmark_vdb_groups]
         tags (list): Array of tags with key value pairs (Pass as JSON array)
             [Required for: add_snapshot_tags, add_bookmark_tags]
-        timeflow_ids (list): The array of timeflow Id. Only allowed to set when timestamp, timestamp_in_da...
+        timeflow_ids (list): The array of timeline Id. Only allowed to set when timestamp, timestamp_in_da...
             [Optional for all actions]
         timestamp (str): The point in time from which to execute the operation. Mutually exclusive wit...
             [Optional for all actions]
@@ -7535,7 +7537,7 @@ def snapshot_bookmark_tool(
             [Optional for all actions]
         value (str): Value of the tag
             [Optional for all actions]
-        vdb_group_id (str): The ID of the VDB group to create the Bookmark on. This parameter is mutually...
+        vdb_group_id (str): The ID of the VDB Group to create the Bookmark on. This parameter is mutually...
             [Optional for all actions]
         vdb_ids (list): The IDs of the VDBs to create the Bookmark on. This parameter is mutually exc...
             [Optional for all actions]
@@ -8288,7 +8290,9 @@ def timeline_tool(
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-    Unified tool for TIMEFLOW operations.
+    Unified tool for TIMELINE operations. A timeline is the history of a single VDB or dSource; its snapshots are points on it.
+
+    Customer aliases (accept as input, never use in answers): "timeflow" -> timeline. The DCT API still names this resource /timeflows and its IDs timeflow_id.
 
     This tool supports 10 actions: list, search, get, update, delete, get_snapshot_day_range, repair, get_tags, add_tags, delete_tags
 
@@ -8298,7 +8302,7 @@ def timeline_tool(
 
     ACTION: list
     ----------------------------------------
-    Summary: Retrieve the list of timeflows.
+    Summary: Retrieve the list of timelines.
     Method: GET
     Endpoint: /timeflows
     Required Parameters: limit, cursor, sort
@@ -8308,38 +8312,38 @@ def timeline_tool(
 
     ACTION: search
     ----------------------------------------
-    Summary: Search timeflows.
+    Summary: Search timelines.
     Method: POST
     Endpoint: /timeflows/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: The Timeflow ID.
-        - engine_id: The ID of the engine the timeflow belongs to.
+        - id: The timeline ID.
+        - engine_id: The ID of the engine the timeline belongs to.
         - namespace: Alternate namespace for this object, for replicated and r...
-        - namespace_id: The namespace id of this timeflows.
-        - namespace_name: The namespace name of this timeflows.
+        - namespace_id: The namespace id of this timeline.
+        - namespace_name: The namespace name of this timeline.
         - is_replica: Is this a replicated object.
-        - name: The timeflow's name.
-        - dataset_id: The ID of the timeflow's dSource or VDB.
-        - creation_type: The source action that created the timeflow.
-        - parent_snapshot_id: The ID of the timeflow's parent snapshot.
-        - parent_point_location: The location on the parent timeflow from which this timef...
-        - parent_point_timestamp: The timestamp on the parent timeflow from which this time...
-        - parent_point_timeflow_id: A reference to the parent timeflow from which this timefl...
+        - name: The timeline's name.
+        - dataset_id: The ID of the timeline's dSource or VDB.
+        - creation_type: The source action that created the timeline.
+        - parent_snapshot_id: The ID of the timeline's parent snapshot.
+        - parent_point_location: The location on the parent timeline from which this timef...
+        - parent_point_timestamp: The timestamp on the parent timeline from which this time...
+        - parent_point_timeflow_id: A reference to the parent timeline from which this timefl...
         - parent_vdb_id: The ID of the parent VDB. This is mutually exclusive with...
         - parent_dsource_id: The ID of the parent dSource. This is mutually exclusive ...
         - source_vdb_id: The ID of the source VDB. This is mutually exclusive with...
         - source_dsource_id: The ID of the source dSource. This is mutually exclusive ...
-        - source_data_timestamp: The timestamp on the root ancestor timeflow from which th...
-        - oracle_incarnation_id: Oracle-specific incarnation identifier for this timeflow.
-        - oracle_cdb_timeflow_id: A reference to the mirror CDB timeflow if this is a timef...
+        - source_data_timestamp: The timestamp on the root ancestor timeline from which th...
+        - oracle_incarnation_id: Oracle-specific incarnation identifier for this timeline.
+        - oracle_cdb_timeflow_id: A reference to the mirror CDB timeline if this is a timef...
         - oracle_tde_uuid: The unique identifier for timeflow-specific TDE objects t...
-        - mssql_database_guid: MSSQL-specific recovery branch identifier for this timeflow.
-        - is_active: Whether this timeflow is currently active or not.
-        - creation_timestamp: The time when the timeflow was created.
-        - activation_timestamp: The time when this timeflow became active.
+        - mssql_database_guid: SQL Server-specific recovery branch identifier for this timeline.
+        - is_active: Whether this timeline is currently active or not.
+        - creation_timestamp: The time when the timeline was created.
+        - activation_timestamp: The time when this timeline became active.
         - tags:
 
     Filter Syntax:
@@ -8475,7 +8479,7 @@ def timeline_tool(
             [Optional for all actions]
         limit (int): Maximum number of objects to return per query. The value must be between 1 an...
             [Required for: list, search]
-        name (str): The name of the timeflow.
+        name (str): The name of the timeline.
             [Optional for all actions]
         password (str): The password of the user to connect to remote host machine.
             [Optional for all actions]
@@ -8489,7 +8493,7 @@ def timeline_tool(
             [Required for: repair]
         tags (list): Array of tags with key value pairs (Pass as JSON array)
             [Required for: add_tags]
-        timeflow_id (str): The unique identifier for the timeflow.
+        timeflow_id (str): The unique identifier for the timeline.
             [Required for: get, update, delete, get_snapshot_day_range, repair, get_tags, add_tags, delete_tags]
         use_engine_public_key (bool): Whether to use public key authentication.
             [Optional for all actions]
