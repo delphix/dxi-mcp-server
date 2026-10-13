@@ -376,12 +376,29 @@ def load_server_instructions() -> str:
 
 
 # Optional guard directives a vocabulary.txt line may carry after the term
-# pair. Each value is a comma-separated, case-insensitive word list.
+# pair. Each value is a comma-separated, case-insensitive word list; an entry
+# of the form "@name" expands to the words of an "@signals name=..." line.
 _VOCABULARY_GUARD_KEYS = (
     "skip_if_preceded_by",
     "skip_if_followed_by",
     "only_if_text_mentions",
+    "skip_if_text_mentions",
 )
+
+
+def _expand_signal_words(words: str, signals: Dict[str, frozenset]) -> frozenset:
+    expanded: set = set()
+    for word in (w.strip().lower() for w in words.split(",")):
+        if not word:
+            continue
+        if word.startswith("@"):
+            if word[1:] not in signals:
+                logger.warning(f"Unknown vocabulary signal set {word!r}")
+                continue
+            expanded |= signals[word[1:]]
+        else:
+            expanded.add(word)
+    return frozenset(expanded)
 
 
 @lru_cache(maxsize=1)
@@ -392,13 +409,16 @@ def load_vocabulary_rules() -> Tuple[Dict[str, Any], ...]:
     Used to translate upstream text (raw DCT error bodies, OpenAPI summaries)
     into customer-facing terminology before it is shown to a user (PPM-1129).
 
-    Line format::
+    Line formats::
 
+        @signals name=word,word,...
         internal|canonical[|guard=word,word...]...
 
-    where ``guard`` is one of ``skip_if_preceded_by``, ``skip_if_followed_by``
-    or ``only_if_text_mentions``. Several lines may share an internal term;
-    the first one whose ``only_if_text_mentions`` condition holds wins.
+    where ``guard`` is one of ``skip_if_preceded_by``, ``skip_if_followed_by``,
+    ``only_if_text_mentions`` or ``skip_if_text_mentions``, and a guard word
+    of the form ``@name`` expands to a previously declared signal set. Several
+    lines may share an internal term; the first one whose text conditions hold
+    wins.
 
     Returns:
         Tuple of rule dicts with keys ``internal``, ``canonical`` and one
@@ -413,10 +433,15 @@ def load_vocabulary_rules() -> Tuple[Dict[str, Any], ...]:
         return ()
 
     rules: List[Dict[str, Any]] = []
+    signals: Dict[str, frozenset] = {}
     with open(vocab_file, "r") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
+                continue
+            if line.startswith("@signals"):
+                name, _, words = line[len("@signals") :].partition("=")
+                signals[name.strip().lower()] = _expand_signal_words(words, signals)
                 continue
             parts = line.split("|")
             if len(parts) < 2:
@@ -437,9 +462,7 @@ def load_vocabulary_rules() -> Tuple[Dict[str, Any], ...]:
                         f"Unknown vocabulary guard {key!r} for term {internal!r}"
                     )
                     continue
-                rule[key] = frozenset(
-                    w.strip().lower() for w in words.split(",") if w.strip()
-                )
+                rule[key] = _expand_signal_words(words, signals)
             rules.append(rule)
 
     # Longest first: "delphix engine" must win over a bare "engine" entry.

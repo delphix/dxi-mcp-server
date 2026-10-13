@@ -219,7 +219,7 @@ async def test_async_dct_client_error_translates_internal_terminology():
 
     @log_tool_execution
     async def failing_tool():
-        raise DCTClientError("500: container 'cg-1' has no active timeflow")
+        raise DCTClientError("500: Self-Service container 'cg-1' has no active timeflow")
 
     result = await failing_tool()
 

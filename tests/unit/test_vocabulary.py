@@ -84,7 +84,7 @@ def test_vocabulary_map_is_ordered_longest_first():
         ),
         ("Masking Engine returned an error", "Continuous Compliance engine returned an error"),
         (
-            "Container cg-1 has no active VDBs",
+            "Self-Service container cg-1 has no active VDBs",
             "VDB Group cg-1 has no active VDBs",
         ),
         (
@@ -130,6 +130,60 @@ def test_to_canonical_output_never_carries_a_model_instruction():
 )
 def test_to_canonical_resolves_delphix_engine_from_the_text(raw, expected):
     assert to_canonical(raw) == expected
+
+
+# "Delphix engine" names a product only on whole-word evidence for exactly one
+# of them. Substring/prefix evidence ("profil" in "profile") and words with an
+# unrelated meaning ("inventory" in "VDB inventory report") are not evidence.
+_NEUTRAL_ENGINE = "Continuous Data or Continuous Compliance engine"
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # Replication is a Continuous Data feature; "profile" is not masking
+        # evidence. Must not resolve to Continuous Compliance.
+        (
+            "Replication profile sync failed on Delphix engine",
+            "Replication profile sync failed on Continuous Data engine",
+        ),
+        # A user profile is evidence of neither product.
+        (
+            "Delphix engine could not load user profile admin",
+            f"{_NEUTRAL_ENGINE} could not load user profile admin",
+        ),
+        # The VDB inventory report is a Continuous Data report; "inventory"
+        # is not masking evidence.
+        (
+            "Delphix engine: VDB inventory report unavailable",
+            "Continuous Data engine: VDB inventory report unavailable",
+        ),
+        # Evidence for both products: say exactly what is known.
+        (
+            "Delphix engine failed to provision VDB during masking",
+            f"{_NEUTRAL_ENGINE} failed to provision VDB during masking",
+        ),
+        (
+            "Delphix engine: masking job 4 blocked by snapshot policy",
+            f"{_NEUTRAL_ENGINE}: masking job 4 blocked by snapshot policy",
+        ),
+    ],
+)
+def test_delphix_engine_never_resolves_to_the_wrong_product(raw, expected):
+    out = to_canonical(raw)
+    assert out == expected
+    if "masking" not in raw.lower():
+        assert "Compliance engine" not in out.replace(_NEUTRAL_ENGINE, "")
+
+
+def test_delphix_engine_evidence_is_whole_word():
+    # "unmasked" and "profiles" are not "masked"/"profiling".
+    assert to_canonical("Delphix engine stores profiles for unmaskedish data").startswith(
+        _NEUTRAL_ENGINE
+    )
+    assert to_canonical("Delphix engine profiling job failed").startswith(
+        "Continuous Compliance engine"
+    )
 
 
 def test_elastic_data_is_framed_as_an_add_on_not_an_engine():
@@ -186,6 +240,45 @@ def test_prose_around_identifiers_is_still_translated(raw, expected):
     assert to_canonical(raw) == expected
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "C:\\delphix\\toolkit\\bin",
+        "Install path C:\\Program_Files\\Delphix\\toolkit is missing",
+        "\\\\fileserver\\appdata\\plugins",
+        "toolkit@1.0.0",
+        "upload of plugin@2.3 failed",
+        "set `timeflow_mode` to `appdata`",
+    ],
+)
+def test_windows_paths_versioned_names_and_code_spans_are_protected(raw):
+    assert to_canonical(raw) == raw
+
+
+def test_versioned_name_at_text_start_is_not_capitalised_or_translated():
+    # Round-3 report: "toolkit@1.0.0" -> "Connector@1.0.0". Not a sentence
+    # capitalisation bug -- the identifier itself must not be rewritten.
+    assert to_canonical("toolkit@1.0.0 is installed") == "toolkit@1.0.0 is installed"
+    # A real sentence start is still capitalised.
+    assert to_canonical("toolkit 1.0.0 is installed") == "Connector 1.0.0 is installed"
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # Neighbouring words already spell part of the canonical term.
+        (
+            "Self-Service: VDB containers cg-1 and cg-2 are locked",
+            "Self-Service: VDB Groups cg-1 and cg-2 are locked",
+        ),
+        ("Jetstream container vdbgroup refresh failed", "VDB Group refresh failed"),
+        ("Self-Service container VDB Group is locked", "VDB Group is locked"),
+    ],
+)
+def test_translation_never_doubles_a_term(raw, expected):
+    assert to_canonical(raw) == expected
+
+
 # --------------------------------------------------------------------------- #
 # Words with an unrelated everyday meaning
 # --------------------------------------------------------------------------- #
@@ -210,6 +303,24 @@ def test_prose_around_identifiers_is_still_translated(raw, expected):
         "The inventory location /u01/app/oraInventory is not readable",
         # Inventory with no Continuous Compliance context at all.
         "The inventory is locked",
+        # A bare "container" with no Self-Service evidence: real DCT API text
+        # where it means an Oracle CDB, an Azure blob container, a connector
+        # mount point or a Linux container (DCT 3.31 OpenAPI spec).
+        "Container cg-1 has no active VDBs",
+        "The Azure blob container name (AZURE_BLOB_STORAGE mode).",
+        "The container description of this Linked CDB.",
+        "Whether the database is running inside a container.",
+        "If true, NOLOGGING operations on this container are treated as faults.",
+        "Type of the object, either CONTAINER or TEMPLATE.",
+        "Relative path within the container of the directory that should be mounted.",
+        # Current DCT text where "inventory" is part of a rule set, not a name
+        # for one: translating would produce "the rule set's rule set".
+        "Number of algorithms in this rule set's inventory that can be re-aligned.",
+        "Starts an asynchronous export of the Rule Set (and its table/column "
+        "inventory) to a CSV file.",
+        "Update the existing ruleset's inventory using the imported ruleset (csv) file.",
+        # Not the retired term: no masking evidence in the text.
+        "List the migratable-job inventory across every engine the caller can see",
         # Third-party plugins are not Delphix connectors.
         "Jenkins plugin returned an error",
         "Terraform plugin crashed",
@@ -222,8 +333,20 @@ def test_unrelated_meanings_are_not_translated(raw):
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("Container cg-1 has no active VDBs", "VDB Group cg-1 has no active VDBs"),
+        (
+            "Jetstream container cg-1 has no active VDBs",
+            "VDB Group cg-1 has no active VDBs",
+        ),
         ("Data container dc-7 is locked", "VDB Group dc-7 is locked"),
+        # A bare "container" is translated on positive Self-Service evidence.
+        (
+            "Self-Service: container cg-1 is locked",
+            "Self-Service: VDB Group cg-1 is locked",
+        ),
+        (
+            "Data template dt-1: container cg-1 is locked",
+            "Data template dt-1: VDB Group cg-1 is locked",
+        ),
         (
             "Masking job 12 failed: inventory has no columns",
             "Masking job 12 failed: rule set has no columns",
