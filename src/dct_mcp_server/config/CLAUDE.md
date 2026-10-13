@@ -30,7 +30,9 @@ METHOD|/endpoint/path/{pathParam}|action_name
 1. Find the relevant `# TOOL` section in the `.txt` file.
 2. Add a line: `METHOD|/path/{param}|action_name`
 3. Implement `action_name` handling in the corresponding `tools/*_endpoints_tool.py`.
-4. No other changes needed.
+4. Check `action_name` and its docstring against
+   [`../../../.claude/rules/vocabulary-editorial-guidelines.md`](../../../.claude/rules/vocabulary-editorial-guidelines.md)
+   before merging — this is where internal-terminology regressions have slipped in before.
 
 **Creating a new toolset:**
 1. Create `toolsets/my_toolset.txt` with the format above.
