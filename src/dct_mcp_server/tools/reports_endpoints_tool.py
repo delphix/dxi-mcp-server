@@ -182,7 +182,7 @@ def reporting_tool(
 
     ACTION: search_storage_savings_report
     ----------------------------------------
-    Summary: Search the saving storage summary report for virtualization engines.
+    Summary: Search the saving storage summary report for Continuous Data engines.
     Method: POST
     Endpoint: /reporting/storage-savings-report/search
     Required Parameters: limit, cursor, sort

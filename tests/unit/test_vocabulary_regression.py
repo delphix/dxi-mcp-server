@@ -37,6 +37,30 @@ _BANNED = [
     "delphix engine",
 ]
 
+# Irregular inflections the suffix rule below cannot derive.
+_IRREGULAR = {"rewind": ["rewound"]}
+
+
+def _term_re(term: str) -> str:
+    """
+    A pattern for *term* and its common inflections.
+
+    Matching only the bare word let "timeflows", "toolkits", "containers" and
+    "rewinding" through. A trailing "y" also inflects as "ies" (inventories).
+    Hyphens are word boundaries, so a compound such as "timeflow-specific"
+    or "AppData-style" is caught by its banned half.
+    """
+    words = term.split()
+    last = words[-1]
+    if last.endswith("y"):
+        last = rf"{re.escape(last[:-1])}(?:y|ies)"
+    else:
+        last = rf"{re.escape(last)}(?:s|es|ed|ing|er|ers)?"
+    stem = r"\s+".join([re.escape(w) for w in words[:-1]] + [last])
+    alternatives = [stem] + [re.escape(w) for w in _IRREGULAR.get(term, [])]
+    return rf"\b(?:{'|'.join(alternatives)})\b"
+
+
 _SRC = Path(__file__).resolve().parents[2] / "src/dct_mcp_server"
 _PREBUILT_TOOL_FILES = sorted((_SRC / "tools").glob("*_endpoints_tool.py"))
 
@@ -47,7 +71,7 @@ def _rule_messages():
 
 @pytest.mark.parametrize("term", _BANNED)
 def test_no_confirmation_message_uses_internal_term(term):
-    offenders = [m for m in _rule_messages() if re.search(rf"\b{term}\b", m, re.I)]
+    offenders = [m for m in _rule_messages() if re.search(_term_re(term), m, re.I)]
     assert not offenders, f"{term!r} leaks in: {offenders}"
 
 
@@ -110,12 +134,14 @@ def _name_offences(name: str) -> list[str]:
     cleaned = name.lower()
     for allowed in _NAME_EXCEPTIONS:
         cleaned = cleaned.replace(allowed, "_")
-    tokens = "_" + "_".join(re.split(r"[_\-\s]+", cleaned)) + "_"
+    # Identifier separators become spaces so _term_re's word boundaries and
+    # inflections apply ("search_timeflows", "list_toolkits").
+    words = " ".join(re.split(r"[_\-\s]+", cleaned))
     return [
         term
         for term in _NAME_BANNED
-        if f"_{term.replace(' ', '_')}_" in tokens
-        or f"_{term.replace(' ', '')}_" in tokens
+        if re.search(_term_re(term), words)
+        or re.search(_term_re(term.replace(" ", "")), words)
     ]
 
 
@@ -162,6 +188,10 @@ def test_name_scanner_catches_a_regression():
     assert _name_offences("search_compliance_inventory") == ["inventory"]
     assert _name_offences("search_vdb_inventory_report") == []
     assert _name_offences("timeline_tool") == []
+    # Inflected forms.
+    assert _name_offences("search_timeflows") == ["timeflow"]
+    assert _name_offences("list_toolkits") == ["toolkit"]
+    assert _name_offences("search_compliance_inventories") == ["inventory"]
 
 
 def test_toolset_tool_and_action_names_use_canonical_terms():
@@ -192,11 +222,18 @@ def test_prebuilt_tool_and_action_names_use_canonical_terms():
 # compounds, {placeholders}, snake_case and camelCase names. API identifiers
 # (timeflow_id, /toolkits, appdata_source_params) are the DCT contract and
 # cannot be renamed here.
+#
+# A hyphenated compound of plain words ("timeflow-specific", "AppData-style")
+# is prose, not an identifier: it is deliberately NOT stripped, so the banned
+# half of the compound is still checked. Only compounds carrying a digit or a
+# dot (tf-1, v1.2, com.delphix.toolkit) are treated as identifiers.
 _IDENTIFIER_RE = re.compile(
     r"https?://\S+"
-    r"|[\w.{}:~%-]*/[\w.{}:~%/-]*"
-    r"|\w+(?:[-.]\w+)+"
+    r"|[\w.{}:~%-]*[/\\][\w.{}:~%/\\-]*"
+    r"|\w+(?:\.\w+)+"
+    r"|[\w-]*\d[\w-]*-[\w-]*|[\w-]+-[\w-]*\d[\w-]*"
     r"|\{[^{}]*\}"
+    r"|`[^`]*`"
     r"|\w*_\w*"
     r"|\b[a-z]+[A-Z]\w*"
 )
@@ -243,6 +280,20 @@ def test_docstring_scanner_catches_a_regression():
     assert re.search(r"\btimeflow\b", prose)
     prose = _IDENTIFIER_RE.sub(" ", "timeflow_id (str): ID of the timeline").lower()
     assert not re.search(r"\btimeflow\b", prose)
+    # The two leaks the bare-word scanner missed.
+    for leak, term in (
+        ("commands to execute after rewinding the VDB", "rewind"),
+        ("identifier for timeflow-specific TDE objects", "timeflow"),
+        ("an AppData-style connector", "appdata"),
+        ("all toolkits on the host", "toolkit"),
+        ("the VDB was rewound", "rewind"),
+    ):
+        prose = _IDENTIFIER_RE.sub(" ", leak).lower()
+        assert re.search(_term_re(term), prose), leak
+    # Identifiers are still stripped.
+    for ident in ("tf-1", "com.delphix.toolkit", "/timeflows/{id}", "C:\\toolkit\\bin"):
+        assert not re.search(_term_re("timeflow"), _IDENTIFIER_RE.sub(" ", ident))
+        assert not re.search(_term_re("toolkit"), _IDENTIFIER_RE.sub(" ", ident))
 
 
 @pytest.mark.parametrize("term", _BANNED)
@@ -250,7 +301,7 @@ def test_prebuilt_docstrings_are_free_of_internal_terms(term):
     offenders = [
         f"{source}:{func}: {line[:120]}"
         for source, func, line, prose in _docstring_prose()
-        if re.search(rf"\b{term}\b", prose)
+        if re.search(_term_re(term), prose)
     ]
     assert not offenders, f"{term!r} leaks in pre-built docstrings: {offenders}"
 
