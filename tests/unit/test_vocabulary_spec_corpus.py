@@ -82,9 +82,7 @@ def _load_corpora() -> list:
 
 
 _CORPORA = _load_corpora()
-_TEXTS = sorted(
-    {t for c in _CORPORA for t in c["operation_text"] + c["schema_text"]}
-)
+_TEXTS = sorted({t for c in _CORPORA for t in c["operation_text"] + c["schema_text"]})
 _PAIRS = [(raw, to_canonical(raw)) for raw in _TEXTS]
 _CHANGED = [(raw, out) for raw, out in _PAIRS if out != raw]
 
@@ -122,7 +120,9 @@ def test_translation_never_nests_a_canonical_term_inside_itself():
     for raw, out in _CHANGED:
         for canonical in {r["canonical"] for r in load_vocabulary_rules()}:
             pattern = rf"{re.escape(canonical)}'s {re.escape(canonical)}"
-            if len(re.findall(pattern, out, re.I)) > len(re.findall(pattern, raw, re.I)):
+            if len(re.findall(pattern, out, re.I)) > len(
+                re.findall(pattern, raw, re.I)
+            ):
                 offenders.append((raw, out))
     assert not offenders, offenders[:10]
 
@@ -191,7 +191,9 @@ def test_vdb_inventory_report_is_never_called_a_rule_set():
 
 
 def test_delphix_engine_never_survives_and_names_one_product_only_on_evidence():
-    compliance = re.compile(r"\b(mask|masks|masked|masking|compliance|profiling)\b", re.I)
+    compliance = re.compile(
+        r"\b(mask|masks|masked|masking|compliance|profiling)\b", re.I
+    )
     data = re.compile(
         r"\b(vdbs?|dsources?|snapshots?|timeflows?|timelines?|virtualization|"
         r"provision\w*|bookmarks?|replication|staging)\b",
@@ -206,12 +208,15 @@ def test_delphix_engine_never_survives_and_names_one_product_only_on_evidence():
                 "Continuous Data or Continuous Compliance engine", ""
             ), (raw, out)
         if not data.search(raw):
-            assert not re.search(r"(?<!or )Continuous Data engine", out.replace(
-                "Continuous Data or Continuous Compliance engine", ""
-            )), (raw, out)
+            assert not re.search(
+                r"(?<!or )Continuous Data engine",
+                out.replace("Continuous Data or Continuous Compliance engine", ""),
+            ), (raw, out)
 
 
-@pytest.mark.parametrize("term", ["timeflow", "timeflows", "appdata", "toolkit", "mssql"])
+@pytest.mark.parametrize(
+    "term", ["timeflow", "timeflows", "appdata", "toolkit", "mssql"]
+)
 def test_unambiguous_retired_terms_do_not_survive_in_prose(term):
     """Terms with a single meaning must be translated wherever they are prose."""
     offenders = []

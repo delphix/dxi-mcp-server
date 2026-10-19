@@ -229,7 +229,9 @@ async def test_async_dct_client_error_is_raised_with_translation_attached():
 
     @log_tool_execution
     async def failing_tool():
-        raise DCTClientError("HTTP 500: Self-Service container 'cg-1' has no active timeflow")
+        raise DCTClientError(
+            "HTTP 500: Self-Service container 'cg-1' has no active timeflow"
+        )
 
     with pytest.raises(DCTClientError) as info:
         await failing_tool()

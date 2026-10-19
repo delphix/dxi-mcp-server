@@ -82,7 +82,10 @@ def test_vocabulary_map_is_ordered_longest_first():
             "Virtualization Engine is unreachable",
             "Continuous Data engine is unreachable",
         ),
-        ("Masking Engine returned an error", "Continuous Compliance engine returned an error"),
+        (
+            "Masking Engine returned an error",
+            "Continuous Compliance engine returned an error",
+        ),
         (
             "Self-Service container cg-1 has no active VDBs",
             "VDB Group cg-1 has no active VDBs",
@@ -178,9 +181,9 @@ def test_delphix_engine_never_resolves_to_the_wrong_product(raw, expected):
 
 def test_delphix_engine_evidence_is_whole_word():
     # "unmasked" and "profiles" are not "masked"/"profiling".
-    assert to_canonical("Delphix engine stores profiles for unmaskedish data").startswith(
-        _NEUTRAL_ENGINE
-    )
+    assert to_canonical(
+        "Delphix engine stores profiles for unmaskedish data"
+    ).startswith(_NEUTRAL_ENGINE)
     assert to_canonical("Delphix engine profiling job failed").startswith(
         "Continuous Compliance engine"
     )
@@ -484,12 +487,14 @@ def test_count_clause_dropped_when_unresolvable():
 
 def test_resolved_numbers_agree_with_their_unit():
     template = "Snapshot '{name}' will be deleted in {days} day(s)."
-    assert render_message_template(
-        template, "/snapshots/s-1", None, {"retention_days": 1}
-    ) == "Snapshot 's-1' will be deleted in 1 day."
-    assert render_message_template(
-        template, "/snapshots/s-1", None, {"retention_days": 3}
-    ) == "Snapshot 's-1' will be deleted in 3 days."
+    assert (
+        render_message_template(template, "/snapshots/s-1", None, {"retention_days": 1})
+        == "Snapshot 's-1' will be deleted in 1 day."
+    )
+    assert (
+        render_message_template(template, "/snapshots/s-1", None, {"retention_days": 3})
+        == "Snapshot 's-1' will be deleted in 3 days."
+    )
 
 
 def test_batch_message_count_comes_from_the_velocity_counter():

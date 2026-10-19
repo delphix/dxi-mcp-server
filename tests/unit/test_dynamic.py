@@ -463,7 +463,9 @@ async def test_execute_dct_client_error_translates_internal_terminology():
             result = await fn(path="/vdbs", method="GET")
 
     assert result["status"] == "error"
-    assert result["message"] == "HTTP 404: timeflow 'tf-123' not found for appdata source"
+    assert (
+        result["message"] == "HTTP 404: timeflow 'tf-123' not found for appdata source"
+    )
     assert "message_for_user" in result
     assert "timeflow" not in result["message_for_user"].lower()
     assert "appdata" not in result["message_for_user"].lower()

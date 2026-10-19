@@ -334,7 +334,9 @@ def _split_path(path: str) -> list[str]:
     return segments
 
 
-def _id_from_template(segments: list[str], template: str) -> tuple[int, str | None] | None:
+def _id_from_template(
+    segments: list[str], template: str
+) -> tuple[int, str | None] | None:
     """Align *segments* with *template*.
 
     Returns ``(literal_segment_count, value_at_first_placeholder)`` when the
