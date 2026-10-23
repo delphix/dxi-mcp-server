@@ -17,7 +17,7 @@ POST|/vdbs/provision_by_location|provision_by_location
 GET|/vdbs/provision_by_location/defaults|get_provision_by_location_defaults
 PATCH|/vdbs/{vdbId}|update
 POST|/vdbs/{vdbId}/delete|delete
-POST|/vdbs/{vdbId}/switch_timeflow|switch_timeflow
+POST|/vdbs/{vdbId}/switch_timeflow|switch_timeline
 POST|/vdbs/{vdbId}/undo_refresh|undo_refresh
 GET|/vdbs/{vdbId}/deletion-dependencies|get_deletion_dependencies
 POST|/vdbs/{vdbId}/tags|add_tags
@@ -50,7 +50,7 @@ GET|/vcdbs/{vcdbId}|get_vcdb
 GET|/vcdbs/{vcdbId}/tags|get_vcdb_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 8: database_template_tool - VDB Templates
+# TOOL 8: vdb_template_tool - VDB Templates
 # ----------------------------------------------------------------------------
 POST|/database-templates/search|search
 GET|/database-templates/{databaseTemplateId}|get
@@ -89,7 +89,7 @@ GET|/environments/{environmentId}/listeners|list_listeners
 GET|/environments/{environmentId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 12: toolkit_tool - Toolkits (AppData plugin schemas)
+# TOOL 12: connector_schema_tool - Connectors (schema definitions)
 # ----------------------------------------------------------------------------
 POST|/toolkits/search|search
 GET|/toolkits/{toolkitId}|get
@@ -102,7 +102,7 @@ GET|/management/tags/{tagId}|get
 GET|/management/tags|list
 
 # ----------------------------------------------------------------------------
-# TOOL 14: timeflow_tool - Timeflows
+# TOOL 14: timeline_tool - Timelines
 # ----------------------------------------------------------------------------
 GET|/timeflows|list
 POST|/timeflows/search|search

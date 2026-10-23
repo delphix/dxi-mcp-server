@@ -296,6 +296,7 @@ prefix = """from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
+from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 from datetime import datetime, timezone
 import asyncio
 import logging
@@ -366,6 +367,15 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
     message = confirmation.get("message", "Please confirm this operation.")
     if context:
         message = message.format_map(_SafeDict(context))
+    # Resolve the remaining {name}/{days}/{count} placeholders (or drop their
+    # clause) so a raw brace never reaches the user (PPM-1129).
+    message = render_message_template(
+        message,
+        api_path,
+        None,
+        {"retention_days": (context or {}).get("days")},
+        path_template=confirmation.get("path_pattern"),
+    )
 
     return {
         "status": "confirmation_required",

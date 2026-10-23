@@ -18,6 +18,7 @@ _OPTIONAL_VARS = [
     "DCT_LOG_LEVEL",
     "DCT_TOOLSET",
     "IS_LOCAL_TELEMETRY_ENABLED",
+    "DCT_SERVER_INSTRUCTIONS",
 ]
 
 
@@ -77,3 +78,17 @@ def test_missing_api_key_raises(monkeypatch):
     monkeypatch.delenv("DCT_API_KEY", raising=False)
     with pytest.raises(ValueError):
         get_dct_config()
+
+
+def test_server_instructions_path_defaults_to_none(monkeypatch):
+    """Unset DCT_SERVER_INSTRUCTIONS means use the packaged file."""
+    monkeypatch.delenv("DCT_SERVER_INSTRUCTIONS", raising=False)
+    assert get_dct_config(require_key=False)["server_instructions_path"] is None
+
+
+def test_server_instructions_path_honours_override(monkeypatch):
+    monkeypatch.setenv("DCT_SERVER_INSTRUCTIONS", "  /tmp/custom.md  ")
+    assert (
+        get_dct_config(require_key=False)["server_instructions_path"]
+        == "/tmp/custom.md"
+    )

@@ -433,6 +433,76 @@ async def test_execute_dct_client_error_returns_dct_api_error():
     assert result["http_status"] == 404
 
 
+async def test_execute_dct_client_error_translates_internal_terminology():
+    """PPM-1129: a raw upstream error containing internal terms (e.g. 'timeflow',
+    'appdata') gets an additive message_for_user in canonical vocabulary, while
+    message keeps the raw text verbatim for support-ticket purposes."""
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    app = _make_app_mock()
+    client = _make_client_mock()
+    client.make_request = AsyncMock(
+        side_effect=DCTClientError(
+            "HTTP 404: timeflow 'tf-123' not found for appdata source"
+        )
+    )
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_VALID_SPEC,
+    ):
+        with patch(
+            "dct_mcp_server.tools.core.dynamic.check_confirmation",
+            return_value={
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            },
+        ):
+            result = await fn(path="/vdbs", method="GET")
+
+    assert result["status"] == "error"
+    assert (
+        result["message"] == "HTTP 404: timeflow 'tf-123' not found for appdata source"
+    )
+    assert "message_for_user" in result
+    assert "timeflow" not in result["message_for_user"].lower()
+    assert "appdata" not in result["message_for_user"].lower()
+    assert "timeline" in result["message_for_user"].lower()
+    assert "connector" in result["message_for_user"].lower()
+
+
+async def test_execute_dct_client_error_without_internal_terms_omits_translation():
+    """A raw error with no internal terminology should not get a redundant
+    message_for_user field."""
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    app = _make_app_mock()
+    client = _make_client_mock()
+    client.make_request = AsyncMock(
+        side_effect=DCTClientError("HTTP 404: VDB 'vdb-123' not found")
+    )
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_VALID_SPEC,
+    ):
+        with patch(
+            "dct_mcp_server.tools.core.dynamic.check_confirmation",
+            return_value={
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            },
+        ):
+            result = await fn(path="/vdbs", method="GET")
+
+    assert result["status"] == "error"
+    assert "message_for_user" not in result
+
+
 # =========================================================================== #
 # execute — success path (GET read)
 # =========================================================================== #

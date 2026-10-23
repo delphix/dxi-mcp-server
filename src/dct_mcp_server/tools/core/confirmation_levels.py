@@ -305,33 +305,104 @@ def validate_manual(
 # ---------------------------------------------------------------------------
 
 
-def _extract_resource_id(path: str) -> str | None:
+def _known_path_templates() -> list[str]:
+    """Every API path template the server's own config knows about.
+
+    The confirmation rules cover every gated operation; the toolset files
+    cover the rest of the curated surface. Both loaders are cached.
+    """
+    from dct_mcp_server.config.loader import (
+        get_available_toolsets,
+        load_manual_confirmation_rules,
+        load_toolset_apis,
+    )
+
+    templates = {r["path_pattern"] for r in load_manual_confirmation_rules()}
+    for toolset in get_available_toolsets():
+        try:
+            templates.update(api["path"] for api in load_toolset_apis(toolset))
+        except ValueError:
+            continue
+    return sorted(t for t in templates if t.startswith("/"))
+
+
+def _split_path(path: str) -> list[str]:
+    segments = [s for s in path.split("?")[0].split("/") if s]
+    # Tolerate a fully-qualified API path ("/dct/v3/vdbs/vdb-1").
+    if segments[:2] == ["dct", "v3"]:
+        segments = segments[2:]
+    return segments
+
+
+def _id_from_template(
+    segments: list[str], template: str
+) -> tuple[int, str | None] | None:
+    """Align *segments* with *template*.
+
+    Returns ``(literal_segment_count, value_at_first_placeholder)`` when the
+    path matches the template, else None. The value is None when the
+    template has no placeholder (a literal collection or action path).
+    """
+    parts = _split_path(template)
+    if len(parts) != len(segments):
+        return None
+    literal, value = 0, None
+    for part, segment in zip(parts, segments):
+        if part.startswith("{") and part.endswith("}"):
+            if value is None:
+                value = segment
+        elif part.lower() == segment.lower():
+            literal += 1
+        else:
+            return None
+    return literal, value
+
+
+def _extract_resource_id(path: str, path_template: str | None = None) -> str | None:
     """Extract the resource ID from a resolved DCT API path.
 
-    Strategy:
-      1. Split the path on '/' and discard empty segments.
-      2. Skip the first segment — it is the collection name (e.g. "vdbs").
-      3. From the remaining segments, return the first one that:
-           - Is not a template placeholder (does not start with '{').
-           - Does not match a known action word.
-      4. Return None if no qualifying segment is found.
+    Structural first: the resolved path is aligned with its API path template
+    (the matched confirmation rule's pattern when the caller has it, else the
+    most specific template the config knows), and the value in the
+    template's first ``{placeholder}`` position is the ID. That is what makes
+    multi-segment collection prefixes work:
 
-    Examples:
-      "/vdbs/vdb-123/refresh_by_timestamp"  → "vdb-123"
-      "/vdb-groups/grp-456/rollback"        → "grp-456"
-      "/dsources/ds-789/delete"             → "ds-789"
-      "/vdbs/provision_by_snapshot"         → None  (provision is an action)
-      "/vdbs/{vdbId}/delete"                → None  (template placeholder)
+      "/management/engines/eng-1"            → "eng-1"   (/management/engines/{engineId})
+      "/management/accounts/12"              → "12"      (/management/accounts/{id})
+      "/management/vaults/hashicorp/v-1"     → "v-1"     (/management/vaults/hashicorp/{vaultId})
+      "/vdbs/vdb-123/refresh_by_timestamp"   → "vdb-123"
+      "/vdbs/provision_by_snapshot"          → None      (literal template, no ID)
+
+    Only a path no known template matches falls back to the positional
+    heuristic: skip the first segment, then return the first segment that is
+    neither a ``{placeholder}`` nor a known action word.
     """
     if not path:
         return None
 
-    segments = [s for s in path.split("/") if s]
+    segments = _split_path(path)
+    if not segments:
+        return None
+
+    candidates = [path_template] if path_template and "{" in path_template else []
+    best: tuple[int, str | None] | None = None
+    for template in candidates + _known_path_templates():
+        aligned = _id_from_template(segments, template)
+        if aligned and (best is None or aligned[0] > best[0]):
+            best = aligned
+        if aligned and template in candidates:
+            # The caller's own matched template is authoritative.
+            break
+    if best is not None:
+        value = best[1]
+        if value is None or value.startswith("{") or value.lower() in _ACTION_WORDS:
+            return None
+        return value
 
     if len(segments) < 2:  # Only the collection name; nothing else to check.
         return None
 
-    # Skip segment 0 (collection name), scan the rest.
+    # Fallback heuristic: skip segment 0 (collection name), scan the rest.
     for segment in segments[1:]:
         if segment.startswith("{"):
             # Unresolved template placeholder — path was not fully substituted.

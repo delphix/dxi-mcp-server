@@ -62,11 +62,11 @@ async def test_cda_engine_search_get_tags(persona_tools, dct_stub):
 
 
 @pytest.mark.asyncio
-async def test_cda_database_template_search_get_tags(persona_tools, dct_stub):
-    """database_template_tool: search -> get -> get_tags."""
+async def test_cda_vdb_template_search_get_tags(persona_tools, dct_stub):
+    """vdb_template_tool: search -> get -> get_tags."""
     tools = persona_tools(TOOLSET)
-    func, first_id = await _search_get(tools, dct_stub, "database_template_tool")
-    await _get_tags_step(func, dct_stub, "database_template_tool", first_id)
+    func, first_id = await _search_get(tools, dct_stub, "vdb_template_tool")
+    await _get_tags_step(func, dct_stub, "vdb_template_tool", first_id)
 
 
 @pytest.mark.asyncio

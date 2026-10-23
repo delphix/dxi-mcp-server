@@ -35,7 +35,7 @@ try:
 except ImportError:
     _ELICITATION_AVAILABLE = False
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.core.auth import resolve_auth
@@ -43,6 +43,7 @@ from dct_mcp_server.core.client_registry import ClientRegistry
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
+from dct_mcp_server.tools.core.vocabulary import differs, to_canonical
 from dct_mcp_server.core.session import get_process_identity
 from dct_mcp_server.tools.core.audit import emit_gate_event
 from dct_mcp_server.tools.core.confirmation_levels import (
@@ -77,25 +78,41 @@ _MAX_PAGE_SIZE = 50
 # =========================================================================== #
 
 
+_CONFIRM_FIELD = Field(
+    description="Approve this operation?",
+)
+_RESOURCE_NAME_FIELD = Field(
+    description=(
+        "Type the name or ID of the target exactly as it appears in Delphix, "
+        "to confirm you are acting on the right one."
+    ),
+)
+_ACK_IMPACT_FIELD = Field(
+    description=(
+        "I understand this permanently changes or removes data and cannot be undone."
+    ),
+)
+
+
 class _StandardConfirmationSchema(BaseModel):
     """Elicitation schema for standard confirmation level."""
 
-    confirm: bool
+    confirm: bool = _CONFIRM_FIELD
 
 
 class _ElevatedConfirmationSchema(BaseModel):
     """Elicitation schema for elevated confirmation level."""
 
-    confirm: bool
-    confirmed_resource_name: str
+    confirm: bool = _CONFIRM_FIELD
+    confirmed_resource_name: str = _RESOURCE_NAME_FIELD
 
 
 class _ManualConfirmationSchema(BaseModel):
     """Elicitation schema for manual confirmation level."""
 
-    confirm: bool
-    confirmed_resource_name: str
-    acknowledged_impact: bool
+    confirm: bool = _CONFIRM_FIELD
+    confirmed_resource_name: str = _RESOURCE_NAME_FIELD
+    acknowledged_impact: bool = _ACK_IMPACT_FIELD
 
 
 def _build_elicitation_schema(level: str | None) -> type[BaseModel]:
@@ -208,28 +225,44 @@ def _make_discovery_fn(app: FastMCP):
         page_size: int = 20,
     ) -> dict[str, Any]:
         """
-        Browse the DCT API surface from the cached OpenAPI spec.
+        Find the Delphix operation that does what the user is asking for.
+
+        Use this before `execute` whenever you are not already certain of the
+        exact path and method. Delphix manages VDBs (virtual databases), the
+        dSources they are provisioned from, the snapshots on each timeline, the
+        environments that host them, and VDB Groups that are operated on together.
+
+        Start with `list_tags` to see the available areas, narrow with
+        `list_operations`, then call `get_operation_schema` to learn exactly
+        which fields an operation needs before running it.
 
         Actions:
-          list_tags            — list all DCT domain tags with operation counts
-          list_operations      — list operations with optional tag/method/keyword filters
-          get_operation_schema — get fully resolved schema for a specific operation
+          list_tags            — list the areas of Delphix you can operate on, with operation counts
+          list_operations      — find operations, filtered by area, method or keyword
+          get_operation_schema — show the full input and output shape of one operation
 
         Args:
             action:           Required. One of: list_tags, list_operations, get_operation_schema
-            tag:              Filter list_operations to a specific OpenAPI tag (e.g. "VDBs")
-            method:           Filter list_operations to an HTTP method (GET, POST, PATCH, DELETE, PUT)
-            keyword:          Case-insensitive keyword filter on operationId and summary
-            path:             Required for get_operation_schema. API path (e.g. "/vdbs/{vdbId}")
-            operation_method: Required for get_operation_schema. HTTP method for the path
+            tag:              Restrict to one area, as named by list_tags (e.g. "VDBs").
+                              This is an area of the API, not a Delphix resource tag.
+            method:           Restrict to one HTTP method (GET, POST, PATCH, DELETE, PUT)
+            keyword:          Case-insensitive match on the operation name and summary.
+                              Try the user's own words first, then a canonical
+                              synonym — a user's "clone" or "copy" is a VDB, their
+                              "host" or "machine" is an environment.
+            path:             Required for get_operation_schema, e.g. "/vdbs/{vdbId}"
+            operation_method: Required for get_operation_schema. HTTP method for that path
             page:             Page number for paginated list_operations results (default 1)
             page_size:        Results per page, max 50 (default 20)
 
         Returns:
             For list_tags: {"tags": [{"name": str, "operation_count": int}]}
             For list_operations: {"operations": [...], "total_count": int, "page": int, "total_pages": int}
-            For get_operation_schema: full operation dict with resolved schemas
+            For get_operation_schema: the operation with all schemas resolved
             On error: {"status": "error", "code": str, "message": str}
+
+        Results include a requires_confirmation flag. An operation marked true
+        will ask for the user's approval when you run it.
         """
         spec = _get_spec(app)
         if not spec:
@@ -307,18 +340,21 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
-        Validate, confirm, and dispatch a DCT API call.
+        Run a Delphix operation found with `discovery`.
 
-        The execute tool acts as a universal DCT API dispatcher.  It:
-          1. Substitutes {paramName} placeholders in path using path_params
-          2. Looks up the operation in the cached spec (OPERATION_NOT_FOUND if absent)
-          3. Validates required parameters against the spec (VALIDATION_ERROR if missing)
-          4. Checks confirmation gates for destructive operations (FR-001 through FR-008).
-             A destructive op returns confirmation_required (with a confirmation_token)
-             until the caller re-calls with that exact token — a bare confirmed=true
-             cannot bypass it. Supports batch grants (batch_intent/grant_token) and
-             differentiated confirmation levels (standard/elevated/manual).
-          5. Dispatches the call via DCTAPIClient
+        This runs any operation against Delphix — reading VDBs, dSources,
+        snapshots and environments, and making changes to them. It:
+          1. Fills {paramName} placeholders in path from path_params
+          2. Finds the operation (OPERATION_NOT_FOUND if there is no such path)
+          3. Checks required fields (VALIDATION_ERROR lists any that are missing)
+          4. Applies the approval gate. An operation that changes or removes data
+             returns confirmation_required together with a confirmation_token.
+             Show the user the message, get their explicit approval, then re-call
+             with that exact token. A bare confirmed=true does not work.
+          5. Runs the operation
+
+        Many operations are asynchronous and return a job. Poll the job rather
+        than assuming the work is finished when this returns.
 
         Args:
             path:         DCT API path, e.g. "/vdbs/{vdbId}/refresh_by_timestamp".
@@ -327,18 +363,16 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             path_params:  Key-value map for {paramName} substitution in path
             query_params: Key-value map for query string parameters
             body:         JSON request body
-            confirmed:    Deprecated/ignored for destructive operations — a bare
-                          confirmed=true no longer bypasses the gate. Use
-                          confirmation_token instead.
-            confirmation_token: Echo the token returned in a prior
-                          confirmation_required response to proceed with a
-                          destructive operation (only after explicit user approval).
-            confirmed_resource_name: For elevated/manual operations, the resource name
-                          or ID of the target as it appears in DCT (e.g. "vdb-123").
-                          Required for elevated and manual confirmation levels.
-            acknowledged_impact: For manual-level operations, must be set to True to
-                          explicitly acknowledge the destructive impact. Required for
-                          manual confirmation level.
+            confirmed:    Ignored for operations that change data — it cannot
+                          bypass the approval gate. Use confirmation_token.
+            confirmation_token: Echo back the token from a prior
+                          confirmation_required response, only after the user
+                          has explicitly approved.
+            confirmed_resource_name: The name or ID of the target as it appears
+                          in Delphix (e.g. "vdb-123"). Required at the elevated
+                          and manual approval levels.
+            acknowledged_impact: Set True to acknowledge that the change cannot
+                          be undone. Required at the manual approval level.
             batch_intent: Declare a batch grant for N calls. Dict with:
                           - operation (str): "METHOD /path/template"
                           - targets (list): list of canonical bodies or target IDs
@@ -346,15 +380,16 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             grant_token:  Token from a prior batch_intent confirmation. Pass this on
                           subsequent calls to execute against the active batch grant
                           without requiring individual confirmation for each call.
-            sensitive_applied: Reserved for the embedding host, which uses it to
-                          name the secret fields it captured from the user and
-                          injected into body. Authenticated with a nonce only
-                          the host holds, so setting it gains a caller nothing.
-            human_approved: Reserved for the embedding host, which uses it to
-                          attest that a human approved this exact operation in
-                          its own trusted UI. Authenticated with the same nonce,
-                          so setting it gains a caller nothing; the confirmation
-                          gate below still applies to everyone else.
+            sensitive_applied: Reserved for the application Delphix is embedded
+                          in. It names the secret fields it captured from the
+                          user and placed in body. Authenticated with a nonce
+                          only that application holds, so setting it yourself
+                          achieves nothing.
+            human_approved: Reserved for the same application, to attest that a
+                          person approved this exact operation in its own
+                          trusted interface. Authenticated with the same nonce,
+                          so setting it yourself achieves nothing — the approval
+                          gate still applies.
 
         Returns:
             On confirmation required: {"status": "confirmation_required", "confirmation_level": str, ...}
@@ -1145,12 +1180,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             return result
         except DCTClientError as exc:
             http_status = _extract_http_status(str(exc))
-            return {
-                "status": "error",
-                "code": "DCT_API_ERROR",
-                "http_status": http_status,
-                "message": str(exc),
-            }
+            return _error_response(str(exc), http_status)
         except Exception as exc:
             logger.error(
                 "Unexpected error dispatching %s %s: %s",
@@ -1158,14 +1188,33 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 resolved_path,
                 exc,
             )
-            return {
-                "status": "error",
-                "code": "DCT_API_ERROR",
-                "http_status": None,
-                "message": str(exc),
-            }
+            return _error_response(str(exc), None)
 
     return execute
+
+
+def _error_response(raw_message: str, http_status: int | None) -> dict[str, Any]:
+    """
+    Build the error payload for a failed DCT call.
+
+    ``message`` carries the upstream text verbatim — it is what a user needs in
+    order to raise a support ticket, and ``_extract_http_status`` parses the
+    status back out of it. When that text contains internal terminology we add
+    ``message_for_user`` alongside it, rendered into canonical vocabulary
+    (PPM-1129). The raw text is never replaced.
+    """
+    response: dict[str, Any] = {
+        "status": "error",
+        "code": "DCT_API_ERROR",
+        "http_status": http_status,
+        "message": raw_message,
+    }
+
+    translated = to_canonical(raw_message)
+    if differs(raw_message, translated):
+        response["message_for_user"] = translated
+
+    return response
 
 
 # =========================================================================== #
@@ -1228,10 +1277,18 @@ def _action_list_operations(
 
             # Keyword filter
             op_id = op.get("operationId", "") or ""
-            summary = op.get("summary", "") or ""
+            raw_summary = op.get("summary", "") or ""
+            # OpenAPI summaries are upstream prose and carry internal terms
+            # ("timeflow", "toolkit"); show them in canonical vocabulary
+            # (PPM-1129). Paths and operationIds are identifiers and stay raw.
+            summary = to_canonical(raw_summary) or ""
             if keyword_filter:
                 kw = keyword_filter.lower()
-                if kw not in op_id.lower() and kw not in summary.lower():
+                # Match either vocabulary, so "timeflow" and "timeline" both
+                # find the same operations.
+                if not any(
+                    kw in text.lower() for text in (op_id, raw_summary, summary)
+                ):
                     continue
 
             # Confirmation flag
@@ -1354,8 +1411,8 @@ def _action_get_operation_schema(
         "path": path,
         "method": operation_method.upper(),
         "operationId": op.operation_id,
-        "summary": op.summary,
-        "description": op.description,
+        "summary": to_canonical(op.summary),
+        "description": to_canonical(op.description),
         "parameters": parameters,
         "request_body_fields": request_body_fields,
         "responses": responses,

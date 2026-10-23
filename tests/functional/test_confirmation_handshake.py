@@ -75,7 +75,7 @@ _ACTION_MAP = {
     # snapshot_tool
     ("snapshot_tool", "search"): "search_snapshots",
     ("snapshot_tool", "get"): "get_snapshot",
-    ("snapshot_tool", "get_timeflow_range"): "get_snapshot_timeflow_range",
+    ("snapshot_tool", "get_timeline_range"): "get_snapshot_timeline_range",
     ("snapshot_tool", "get_runtime"): "get_runtime",
     ("snapshot_tool", "find_by_location"): "find_snapshot_by_location",
     ("snapshot_tool", "find_by_timestamp"): "find_snapshot_by_timestamp",

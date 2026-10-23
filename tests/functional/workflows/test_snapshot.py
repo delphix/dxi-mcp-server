@@ -5,7 +5,7 @@ Translates `.claude/test/testing/self_service.md` prompts 39-47:
 
     39. Search for all snapshots
     40. Get the first snapshot's details
-    41. Get the timeflow range for that snapshot
+    41. Get the timeline range for that snapshot
     42. Get the runtime details for that snapshot
     43. Find a snapshot by location
     44. Find a snapshot by timestamp (one hour ago)
@@ -39,10 +39,10 @@ async def test_snapshot_workflow(mcp_client_self_service, dct_stub):
     assert payload(res).get("id") == snap_id
     assert dct_stub.received_request("GET", f"/dct/v3/snapshots/{snap_id}")
 
-    # Prompt 41 — Get the timeflow range for that snapshot.
+    # Prompt 41 — Get the timeline range for that snapshot.
     res = await client.call_tool(
         "snapshot_bookmark_tool",
-        {"action": "get_snapshot_timeflow_range", "snapshot_id": snap_id},
+        {"action": "get_snapshot_timeline_range", "snapshot_id": snap_id},
     )
     assert not res.is_error
     assert dct_stub.received_request(
