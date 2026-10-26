@@ -12,13 +12,14 @@ Configuration Files:
 
 import os
 import re
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from functools import lru_cache
 
-logger = logging.getLogger(__name__)
+from dct_mcp_server.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Configuration directories
 CONFIG_DIR = Path(__file__).parent
