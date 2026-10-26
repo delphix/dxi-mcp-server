@@ -20,6 +20,8 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
     │       ├── tools/core/meta_tools.py          ← Retained spec helpers (find_endpoint, get_spec_chunk)
     │       ├── tools/core/tool_factory.py         ← Runtime tool generation from OpenAPI spec
     │       ├── tools/core/dynamic.py              ← Dynamic mode: discovery + execute + FR-001–008 gate
+    │       ├── tools/core/host_trust.py           ← Shared nonce check (_SENSITIVE_NONCE_ENV, host_nonce_ok); moved from dynamic.py (DLPXECO-14781)
+    │       ├── tools/core/connector_secrets.py    ← AppData connector-secret detection: toolkit walker, caches, gate entry point (DLPXECO-14781)
     │       ├── tools/core/confirmation_token.py   ← Single-use body-bound HMAC tokens + ConsumedTokenStore
     │       ├── tools/core/confirmation_store.py   ← ConsumedTokenStore + GrantStore (in-memory, TTL)
     │       ├── tools/core/confirmation_levels.py  ← validate_elevated(), validate_manual(), build_required_fields()
@@ -33,7 +35,8 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
     │       ├── config/toolsets/*.txt              ← Persona toolset definitions
     │       ├── config/mappings/manual_confirmation.txt
     │       ├── config/mappings/floor_operations.txt  ← Patterns for non-bypassable operations
-    │       └── config/mappings/read_exclusions.txt   ← POSTs excluded from keyword fallback
+    │       ├── config/mappings/read_exclusions.txt   ← POSTs excluded from keyword fallback
+    │       └── config/mappings/appdata_operations.txt← AppData operation→sub-object→toolkit-definition→resolver-chain mapping (DLPXECO-14781)
     ├── dct_client/client.py         ← Async httpx client with retry/backoff
     ├── testing/cli.py               ← dct-mcp-test CLI — test runner wrapping pytest with layer routing
     └── core/
