@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "DLPXECO-14781",
+  "domain": "feature",
+  "lite_mode": false,
+  "domain_source": "Jira issuetype: Story",
+  "created_at": "2026-10-26T06:33:24Z",
+  "steps": {
+    "context": "completed",
+    "vision": "completed",
+    "design": "pending",
+    "implement": "pending",
+    "build": "pending",
+    "test-infra": "pending",
+    "test": "pending",
+    "validate": "pending",
+    "pr": "pending",
+    "release": "pending",
+    "retrospective": "pending"
+  },
+  "last_completed": "vision",
+  "next_step": "design",
+  "skipped_phases": [],
+  "pr_url": ""
+}
