@@ -331,26 +331,38 @@ def _resolve_client(dct_client: Any) -> tuple[Any, str]:
 
 def _extract_path_params(resolved_path: str, spec: Any) -> dict:
     """Extract path parameter values from a resolved path by matching templates."""
-    import re as _re
     if not isinstance(spec, dict):
         return {}
     paths = spec.get("paths") or {}
     for template, _ in paths.items():
-        # Build regex from template
-        pattern = _re.sub(r"\{([^}]+)\}", r"(?P<\1>[^/]+)", _re.escape(template))
-        m = _re.fullmatch(pattern, resolved_path.lstrip("/"))
-        if m is None:
-            # Try with leading slash stripped from resolved_path differently
-            m = _re.fullmatch(pattern, resolved_path)
-        if m:
-            return m.groupdict()
+        # Build regex from template: escape literal segments, turn {name} into named groups
+        parts = re.split(r"\{([^}]+)\}", template)
+        pattern = "".join(
+            re.escape(p) if i % 2 == 0 else f"(?P<{p}>[^/]+)"
+            for i, p in enumerate(parts)
+        )
+        try:
+            m = re.fullmatch(pattern, resolved_path.lstrip("/"))
+            if m is None:
+                m = re.fullmatch(pattern, resolved_path)
+            if m:
+                return m.groupdict()
+        except re.error:
+            pass
     # Fallback: parse from matched appdata operation template
     op = _match_appdata_operation("ANY", resolved_path)
     if op:
-        pattern = _re.sub(r"\{([^}]+)\}", r"(?P<\1>[^/]+)", _re.escape(op.path_template))
-        m = _re.fullmatch(pattern, resolved_path.lstrip("/"))
-        if m:
-            return m.groupdict()
+        parts = re.split(r"\{([^}]+)\}", op.path_template)
+        pattern = "".join(
+            re.escape(p) if i % 2 == 0 else f"(?P<{p}>[^/]+)"
+            for i, p in enumerate(parts)
+        )
+        try:
+            m = re.fullmatch(pattern, resolved_path.lstrip("/"))
+            if m:
+                return m.groupdict()
+        except re.error:
+            pass
     return {}
 
 
