@@ -14,7 +14,6 @@ This module is independent of the existing tool_factory.py grouped-tool generati
 
 from __future__ import annotations
 
-import hmac
 import os
 import re
 import uuid
@@ -62,6 +61,10 @@ from dct_mcp_server.tools.core.confirmation_token import (
     verify_and_consume_token,
 )
 from dct_mcp_server.tools.core.floor_operations import is_floor_operation
+from dct_mcp_server.tools.core.host_trust import (
+    _SENSITIVE_NONCE_ENV,
+    host_nonce_ok as _host_nonce_ok,
+)
 from dct_mcp_server.tools.core.spec_cache import get_cached_spec
 from dct_mcp_server.tools.core.spec_model import OpenAPISpec, RequestBody
 from dct_mcp_server.tools.core.velocity_counter import increment_and_check  # noqa: F401
@@ -1487,28 +1490,6 @@ _CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
 
 # Per-spec cache keyed by id(spec); the spec is loaded once at startup.
 _credential_field_cache: dict[int, frozenset[str]] = {}
-
-# Shared secret proving a `sensitive_applied` marker came from the embedding
-# host and not from the model. The host generates it and passes it in this
-# server's environment when it spawns the process (stdio embedded mode), so it
-# never appears in a tool result, a prompt or the conversation. Unset
-# (non-embedded deployments) => no marker is honoured and nothing changes.
-_SENSITIVE_NONCE_ENV = "DCT_MCP_SENSITIVE_NONCE"
-
-
-def _host_nonce_ok(marker: Any) -> bool:
-    """True when a marker carries the spawning host's shared secret.
-
-    The one trust check behind every host-only argument: the nonce is passed in
-    this server's environment at spawn and never appears in a tool result, a
-    prompt or the conversation, so only the embedding host can present it.
-    Unset (non-embedded deployments) => no marker is ever honoured.
-    """
-    expected = os.environ.get(_SENSITIVE_NONCE_ENV) or ""
-    if not expected or not isinstance(marker, dict):
-        return False
-    return hmac.compare_digest(str(marker.get("nonce") or ""), expected)
-
 
 def _host_approved(human_approved: Any) -> bool:
     """True when the host attests a human approved *this* call, just now.
