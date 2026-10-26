@@ -1,0 +1,63 @@
+{
+  "id": "db2-toolkit-001",
+  "version": "2.3.1",
+  "name": "DB2 Toolkit",
+  "linked_source_definition": {
+    "type": "object",
+    "properties": {
+      "instanceUser": {"type": "string"},
+      "instancePassword": {"type": "string", "format": "password"},
+      "port": {"type": "integer"},
+      "mountPath": {"type": "string"},
+      "backupPath": {"type": "string"},
+      "nodes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "instanceId": {"type": "string"},
+            "instancePassword": {"type": "string", "format": "password"}
+          },
+          "required": ["instanceId", "instancePassword"]
+        }
+      }
+    },
+    "required": ["instanceUser", "instancePassword", "port", "mountPath"]
+  },
+  "virtual_source_definition": {
+    "type": "object",
+    "properties": {
+      "mountPath": {"type": "string"},
+      "appDataPort": {"type": "integer"}
+    }
+  },
+  "virtual_to_physical_definition": {
+    "type": "object",
+    "properties": {
+      "targetHost": {"type": "string"},
+      "targetUser": {"type": "string"},
+      "targetPassword": {"type": "string", "format": "password"},
+      "targetMountPath": {"type": "string"}
+    },
+    "required": ["targetHost", "targetUser", "targetPassword", "targetMountPath"]
+  },
+  "snapshot_parameters_definition": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "resync": {"type": "boolean"},
+        "snapshotLabel": {"type": "string"}
+      }
+    }
+  },
+  "discovery_definition": {
+    "source_config_schema": {
+      "type": "object",
+      "properties": {
+        "databaseName": {"type": "string"},
+        "instanceId": {"type": "string"}
+      },
+      "required": ["databaseName", "instanceId"]
+    }
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "id": "mysql-toolkit-001",
+  "version": "3.1.0",
+  "name": "MySQL Toolkit",
+  "linked_source_definition": {
+    "type": "object",
+    "definitions": {
+      "Credentials": {
+        "type": "object",
+        "properties": {
+          "dbUser": {"type": "string"},
+          "dbPassword": {"type": "string", "format": "password"}
+        },
+        "required": ["dbUser", "dbPassword"]
+      }
+    },
+    "properties": {
+      "host": {"type": "string"},
+      "port": {"type": "integer"},
+      "credentials": {"$ref": "#/definitions/Credentials"},
+      "replicationUser": {"type": "string"},
+      "replicationPassword": {"type": "string", "format": "password"},
+      "authConfig": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "method": {"type": "string", "enum": ["password"]},
+              "password": {"type": "string", "format": "password"}
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {"type": "string", "enum": ["key"]},
+              "privateKeyPath": {"type": "string"}
+            }
+          }
+        ]
+      }
+    },
+    "required": ["host", "port", "credentials"]
+  },
+  "virtual_source_definition": {
+    "type": "object",
+    "properties": {
+      "mountPath": {"type": "string"},
+      "port": {"type": "integer"}
+    }
+  },
+  "virtual_to_physical_definition": {
+    "type": "object",
+    "properties": {
+      "targetHost": {"type": "string"},
+      "targetUser": {"type": "string"},
+      "targetPassword": {"type": "string", "format": "password"}
+    }
+  },
+  "snapshot_parameters_definition": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "resync": {"type": "boolean"}
+      }
+    }
+  },
+  "discovery_definition": {
+    "source_config_schema": {
+      "type": "object",
+      "properties": {
+        "databaseName": {"type": "string"},
+        "port": {"type": "integer"}
+      }
+    }
+  }
+}
