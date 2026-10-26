@@ -25,7 +25,7 @@ from typing import Any, Callable
 from dct_mcp_server.config.loader import load_appdata_operations, match_appdata_operation
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
-from dct_mcp_server.tools.core.host_trust import _SENSITIVE_NONCE_ENV, host_nonce_ok
+from dct_mcp_server.tools.core.host_trust import host_nonce_ok
 
 logger = get_logger(__name__)
 
@@ -377,7 +377,7 @@ class _ToolkitSecretCache:
             except Exception:
                 return None
 
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
         self._inflight[g_key] = fut
         try:
             result = await self._fetch_and_derive(
@@ -470,11 +470,12 @@ class _ToolkitSecretCache:
 
 def _extract_http_status(exc: DCTClientError) -> int | None:
     """Extract HTTP status from a DCTClientError without logging its message."""
-    try:
-        return int(exc.args[0]) if exc.args else None
-    except (ValueError, TypeError):
-        # Try looking for a status attribute
-        return getattr(exc, "status_code", getattr(exc, "status", None))
+    import re
+    if exc.args:
+        m = re.match(r"^HTTP (\d{3})", str(exc.args[0]))
+        if m:
+            return int(m.group(1))
+    return getattr(exc, "status_code", getattr(exc, "status", None))
 
 
 # Module-level cache instances
