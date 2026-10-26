@@ -1,0 +1,38 @@
+# AppData operation → sub-object → toolkit-definition → resolver-chain mapping
+# DLPXECO-14781
+#
+# Grammar:
+#   @toolkit|<GET path>                          directive: toolkit details endpoint
+#   METHOD|path_template|sub_obj:def[,...]|chain[;chain...]
+#
+#   definition ∈ linked_source_definition | snapshot_parameters_definition |
+#                virtual_source_definition | virtual_to_physical_definition |
+#                source_config_definition
+#
+#   chain  := source ( ">" hop )*
+#   source := "body:" field | "path:" param
+#   hop    := get_path ( "^" get_path )* [ "." select ]
+#   select : field | field "[" n "]" | field "[id=$]"
+#   A hop with no select ends the chain: toolkit id = response["toolkit_id"].
+
+@toolkit|/toolkits/{id}
+
+POST|/dsources/appdata|parameters:linked_source_definition,sync_parameters:snapshot_parameters_definition|body:toolkit_id;body:source_id>/sources/{id}
+PATCH|/dsources/appdata/{dsourceId}|parameters:linked_source_definition|body:toolkit_id;path:dsourceId>/dsources/{id}
+POST|/dsources/{dsourceId}/snapshots|appdata_parameters:snapshot_parameters_definition|path:dsourceId>/dsources/{id}
+POST|/vdbs/provision_by_snapshot|appdata_source_params:virtual_source_definition,appdata_config_params:source_config_definition|body:toolkit_id;body:source_data_id>/dsources/{id}^/vdbs/{id};body:snapshot_id>/snapshots/{id}.dataset_id>/dsources/{id}^/vdbs/{id}
+POST|/vdbs/provision_by_timestamp|appdata_source_params:virtual_source_definition,appdata_config_params:source_config_definition|body:toolkit_id;body:source_data_id>/dsources/{id}^/vdbs/{id};body:timeflow_id>/timeflows/{id}.dataset_id>/dsources/{id}^/vdbs/{id}
+POST|/vdbs/provision_by_location|appdata_source_params:virtual_source_definition,appdata_config_params:source_config_definition|body:toolkit_id;body:source_data_id>/dsources/{id}^/vdbs/{id};body:timeflow_id>/timeflows/{id}.dataset_id>/dsources/{id}^/vdbs/{id}
+POST|/vdbs/provision_from_bookmark|appdata_source_params:virtual_source_definition,appdata_config_params:source_config_definition|body:toolkit_id;body:bookmark_id>/bookmarks/{id}.dsource_ids[0]>/dsources/{id};body:bookmark_id>/bookmarks/{id}.vdb_ids[0]>/vdbs/{id}
+POST|/vdbs/empty_vdb|appdata_source_params:virtual_source_definition,appdata_config_params:source_config_definition|body:toolkit_id;body:repository_id>/environments/{body.environment_id}.repositories[id=$]
+PATCH|/vdbs/{vdbId}|appdata_source_params:virtual_source_definition,appdata_config_params:source_config_definition|body:toolkit_id;path:vdbId>/vdbs/{id}
+POST|/sources/appdata|parameters:source_config_definition|body:toolkit_id;body:repository_id>/environments/{body.environment_id}.repositories[id=$]
+PATCH|/sources/appdata/{sourceId}|parameters:source_config_definition|body:toolkit_id;path:sourceId>/sources/{id}
+POST|/dsources/{dsourceId}/export-by-snapshot|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:dsourceId>/dsources/{id}
+POST|/dsources/{dsourceId}/export-by-timestamp|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:dsourceId>/dsources/{id}
+POST|/dsources/{dsourceId}/export-by-location|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:dsourceId>/dsources/{id}
+POST|/dsources/{dsourceId}/export-from-bookmark|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:dsourceId>/dsources/{id}
+POST|/vdbs/{vdbId}/export-by-snapshot|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:vdbId>/vdbs/{id}
+POST|/vdbs/{vdbId}/export-by-timestamp|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:vdbId>/vdbs/{id}
+POST|/vdbs/{vdbId}/export-by-location|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:vdbId>/vdbs/{id}
+POST|/vdbs/{vdbId}/export-from-bookmark|appdata_config_params:source_config_definition,appdata_v2p_params:virtual_to_physical_definition|path:vdbId>/vdbs/{id}

@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "ticket": "DLPXECO-14781",
+  "title": "dxi-mcp-server: Detect AppData connector credential fields from toolkit schema.json for out-of-band secure capture",
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "text": "For an AppData operation (e.g. DB2 or MySQL dSource link / VDB provision) on a capture-capable host, every connector parameter declared \"format\": \"password\" in the toolkit schema.json triggers sensitive_input_required when missing or supplied inline. This includes nested properties.",
+      "permanent": true
+    },
+    {
+      "id": "ac-2",
+      "text": "The DCT AI Assistant shows the secure credential UI for those fields, and the value reaches DCT without entering the LLM context.",
+      "permanent": true
+    },
+    {
+      "id": "ac-3",
+      "text": "Re-calls with the field supplied via sensitive_applied (valid nonce) succeed and do not re-prompt (no regression of DLPXECO-14603).",
+      "permanent": true
+    },
+    {
+      "id": "ac-4",
+      "text": "Non-password connector fields (usernames, ports, paths, ids) are never flagged.",
+      "permanent": true
+    },
+    {
+      "id": "ac-5",
+      "text": "Native (non-AppData) operations behave exactly as today, still driven by x-dct-toolkit-credential-field.",
+      "permanent": true
+    },
+    {
+      "id": "ac-6",
+      "text": "Non-capture-capable clients (Claude Desktop/Code, VS Code Copilot) behave as today. The gate stays host-scoped (DLPXECO-14642).",
+      "permanent": true
+    },
+    {
+      "id": "ac-7",
+      "text": "If the toolkit schema can't be fetched or parsed, the server logs a warning and falls back to spec-annotation-only behaviour. The operation is not blocked.",
+      "permanent": true
+    },
+    {
+      "id": "ac-8",
+      "text": "Unit tests cover the schema walker (nested, arrays, combinators, $ref), path-scoped matching, caching and fallback. Integration tests cover at least DB2 and MySQL toolkits.",
+      "permanent": true
+    },
+    {
+      "id": "ac-9",
+      "text": "sensitive_input_required returns each flagged field's location in the request (e.g. appdata_source_params.dbPassword), alongside today's required_sensitive_fields names, which stay for backward compatibility. Exact shape to be agreed with DLPXECO-14782.",
+      "permanent": true
+    },
+    {
+      "id": "ac-10",
+      "text": "sensitive_applied.fields (from the host) is matched by location as well as by name, so injected connector fields are not flagged again.",
+      "permanent": true
+    }
+  ],
+  "constraints": [
+    {
+      "text": "required_sensitive_fields names must remain in sensitive_input_required response for backward compatibility \u2014 new location-keyed fields are additions, not replacements.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "Must not regress DLPXECO-14603: re-calls with sensitive_applied (valid nonce) must not re-prompt.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "Native (non-AppData) credential detection via x-dct-toolkit-credential-field must remain unchanged.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "Host scoping from DLPXECO-14642 must remain: gate only fires for capture-capable hosts.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "If the toolkit schema can't be fetched or parsed, fall back gracefully to spec-annotation-only \u2014 do not block the operation.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "Cache derived credential set per toolkit (id + version) to avoid re-fetching schema on every call.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "Path-scoped matching: connector password fields must be matched relative to the AppData parameters sub-object, not globally by name.",
+      "source": "ticket",
+      "permanent": true
+    }
+  ],
+  "limits": {
+    "coverage_threshold": 80,
+    "build_retry_max": 3
+  },
+  "branch": null,
+  "worktree_path": null,
+  "domain": null,
+  "current_state": {
+    "phase": "test",
+    "updated_at": "2026-10-26T10:20:37Z"
+  },
+  "decisions": [
+    {
+      "text": "- Absent connector password fields are flagged only when schema-required, outside oneOf/anyOf-only branches, with parent object present; present ones are always flagged.\n- Connector secret detection relies solely on exact \"format\": \"password\"; no name heuristics and no identity-pairing for connector fields.\n- New sensitive_input_required location data is additive (proposed key sensitive_field_locations: [{name, location}]), pending agreement with DLPXECO-14782.\n- Toolkit resolution unions body toolkit_id and referenced-object toolkit so a caller-supplied id can never narrow detection.\n- Discovery secret marking and all toolkit lookups only occur on capture-capable hosts.",
+      "phase": "vision",
+      "permanent": false,
+      "at": "2026-10-26T06:41:33Z",
+      "superseded_by": null
+    },
+    {
+      "text": "- New module tools/core/connector_secrets.py plus config/mappings/appdata_operations.txt (resolver-chain grammar); paths live in config, not code.\n- Toolkit source-config schema is read from Toolkit.discovery_definition (DCT 3.31 has no source_config_definition); empty_vdb and sources/appdata resolve the toolkit via GET /environments/{id}.repositories[].\n- Native walker skips connector sub-objects that connector detection covered, and applied-location leaf names also satisfy native names, which closes the DLPXECO-14603 re-prompt loop. In fallback, native behaviour is unchanged.\n- New response key sensitive_field_locations is emitted only when connector fields are flagged; the shape is pending DLPXECO-14782.\n- Cache: derived records keyed (base_url, id, version), LRU 256; id-to-version binding 15 min (explicit deviation from FR-008 AC-2/EC-13/QR-6); negative cache 60 s (401/403/404 per identity); whole resolution capped at DCT_TIMEOUT, fail-open.\n- Discovery gives a generic per-sub-object note only (no I/O, no new discovery argument).",
+      "phase": "design",
+      "permanent": false,
+      "at": "2026-10-26T07:22:19Z",
+      "superseded_by": null
+    }
+  ],
+  "scope": {
+    "expected_files_hint": [
+      "src/dct_mcp_server/tools/core/dynamic.py",
+      "src/dct_mcp_server/config/loader.py",
+      "src/dct_mcp_server/core/client_registry.py",
+      "src/dct_mcp_server/tools/core/connector_secrets.py",
+      "src/dct_mcp_server/tools/core/host_trust.py",
+      "src/dct_mcp_server/config/mappings/appdata_operations.txt",
+      "CLAUDE.md",
+      ".claude/architecture.md",
+      "tests/unit/test_connector_secrets.py",
+      "tests/unit/test_appdata_operations_loader.py",
+      "tests/integration/test_appdata_secret_gate.py",
+      "tests/fixtures/toolkits/db2_toolkit.json",
+      "tests/fixtures/toolkits/mysql_toolkit.json"
+    ],
+    "non_goals": [
+      "No change to how secrets are captured, stored or injected by the DCT AI Assistant. The host-side secure UI and its re-call behaviour are owned by the host (the response shape is coordinated with DLPXECO-14782; implementing the host side is out of scope here).",
+      "No secret detection by name heuristics for AppData fields. A connector field is a secret only when its schema declares `\"format\": \"password\"`. A field merely named `password`, `token`, `secret` or similar, with no such declaration, is not flagged.",
+      "No change to secret handling for non-capture-capable clients (Claude Desktop, Claude Code, VS Code Copilot, other MCP clients). They keep passing credentials inline as today; the gate stays host-scoped.",
+      "No change to the native credential mechanism (the spec's credential-field annotation and its identity-pairing rule) beyond merging in the new connector-derived set.",
+      "No validation of connector parameter values against the toolkit schema (types, required properties, enums). DCT remains the validator of the payload; this feature only identifies secrets.",
+      "No persistence of derived credential sets across server restarts. The cache is in-memory only.",
+      "No change to the confirmation gate, batch grants, floor operations or host-attested approval flows."
+    ]
+  }
+}

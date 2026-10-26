@@ -7,6 +7,7 @@ import threading
 from collections import OrderedDict
 from typing import TYPE_CHECKING, List
 
+from dct_mcp_server.core.auth import AuthContext
 from dct_mcp_server.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -30,6 +31,16 @@ class ClientRegistry:
         """Stable hash of the caller's identity — never logs raw values."""
         raw = f"{auth_ctx.account_id}:{auth_ctx.auth_mode}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    def identity_key(self, auth_ctx: AuthContext) -> str:
+        """Return a stable, non-logged hash for *auth_ctx* for use as a cache key.
+
+        Delegates to the private ``_identity_hash`` so callers outside this
+        module have a stable, public surface without depending on the private
+        name.  The return value is safe to use as a dict key but must not be
+        logged raw (it is a hash of account_id and auth_mode).
+        """
+        return self._identity_hash(auth_ctx)
 
     def get_client(self, auth_ctx) -> "DCTAPIClient":
         """Return cached or new DCTAPIClient for the given AuthContext."""
