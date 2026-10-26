@@ -18,6 +18,10 @@ def test_identity_key_consistent():
 
 def test_identity_key_differs_by_account():
     reg = ClientRegistry(max_size=4)
-    a1 = reg.identity_key(AuthContext(account_id="u1", api_key=None, auth_mode="embedded"))
-    a2 = reg.identity_key(AuthContext(account_id="u2", api_key=None, auth_mode="embedded"))
+    a1 = reg.identity_key(
+        AuthContext(account_id="u1", api_key=None, auth_mode="embedded")
+    )
+    a2 = reg.identity_key(
+        AuthContext(account_id="u2", api_key=None, auth_mode="embedded")
+    )
     assert a1 != a2

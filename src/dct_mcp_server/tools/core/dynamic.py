@@ -69,7 +69,9 @@ from dct_mcp_server.tools.core.spec_cache import get_cached_spec
 from dct_mcp_server.tools.core.spec_model import OpenAPISpec, RequestBody
 from dct_mcp_server.tools.core.velocity_counter import increment_and_check  # noqa: F401
 from dct_mcp_server.tools.core import connector_secrets as _connector_secrets
-from dct_mcp_server.config.loader import match_appdata_operation as _match_appdata_operation
+from dct_mcp_server.config.loader import (
+    match_appdata_operation as _match_appdata_operation,
+)
 
 logger = get_logger(__name__)
 
@@ -293,7 +295,7 @@ def _make_discovery_fn(app: FastMCP):
                     existing_desc = result.get("description", "")
                     connector_note = (
                         "\n\n**Connector credential note:** Parameters declared "
-                        "`\"format\": \"password\"` in the toolkit schema for sub-objects "
+                        '`"format": "password"` in the toolkit schema for sub-objects '
                         + ", ".join(f"`{k}`" for k in op.sub_objects)
                         + " are captured by the host securely. Do NOT request them in "
                         "chat or include them in the body — the host captures them "
@@ -541,7 +543,9 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
 
             # -- Native detection -----------------------------------------
             # Parse applied fields so we can use applied_location_leaf_names
-            applied_names, applied_locs = _connector_secrets.parse_applied(sensitive_applied)
+            applied_names, applied_locs = _connector_secrets.parse_applied(
+                sensitive_applied
+            )
             # Leaf names of location-based applied entries satisfy native name check too
             applied_loc_leaf_names = frozenset(
                 loc.rsplit(".", 1)[-1].rstrip("]").rsplit("[", 1)[0]
@@ -551,7 +555,8 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             # walker doesn't double-report connector fields (FR-009 step 3).
             if connector_result.covered_sub_objects:
                 body_view = {
-                    k: v for k, v in (body or {}).items()
+                    k: v
+                    for k, v in (body or {}).items()
                     if k not in connector_result.covered_sub_objects
                 }
             else:
@@ -575,8 +580,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                     "status": "sensitive_input_required",
                     "required_sensitive_fields": all_names,
                     "message": (
-                        "This operation needs sensitive input: "
-                        + ", ".join(all_names)
+                        "This operation needs sensitive input: " + ", ".join(all_names)
                     ),
                     "operation": {"path": resolved_path, "method": method_upper},
                     "instructions": (
@@ -1595,6 +1599,7 @@ _CREDENTIAL_FIELD_ANNOTATION = "x-dct-toolkit-credential-field"
 
 # Per-spec cache keyed by id(spec); the spec is loaded once at startup.
 _credential_field_cache: dict[int, frozenset[str]] = {}
+
 
 def _host_approved(human_approved: Any) -> bool:
     """True when the host attests a human approved *this* call, just now.

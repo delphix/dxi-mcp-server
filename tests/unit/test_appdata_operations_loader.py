@@ -1,7 +1,7 @@
 """Unit tests for AppData operation loader (DLPXECO-14781)."""
+
 import pytest
 from dct_mcp_server.config.loader import (
-    AppDataOperation,
     load_appdata_operations,
     match_appdata_operation,
     clear_cache,
@@ -87,8 +87,6 @@ def test_chains_nonempty():
 
 
 def test_load_is_cached(monkeypatch):
-    calls = []
-    original = load_appdata_operations.__wrapped__
     ops1, _ = load_appdata_operations()
     ops2, _ = load_appdata_operations()
     assert ops1 is ops2  # same object (cached)

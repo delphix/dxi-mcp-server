@@ -640,10 +640,10 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
 class AppDataOperation:
     """Parsed record from appdata_operations.txt (DLPXECO-14781)."""
 
-    method: str          # upper-case HTTP method, e.g. "POST"
-    path_template: str   # e.g. "/dsources/appdata" or "/vdbs/{vdbId}"
-    sub_objects: dict    # {sub_object_name: definition_name}
-    chains: list         # list of raw chain strings; resolver in Task 6 parses them
+    method: str  # upper-case HTTP method, e.g. "POST"
+    path_template: str  # e.g. "/dsources/appdata" or "/vdbs/{vdbId}"
+    sub_objects: dict  # {sub_object_name: definition_name}
+    chains: list  # list of raw chain strings; resolver in Task 6 parses them
 
 
 @lru_cache(maxsize=1)

@@ -1,8 +1,8 @@
 """Unit tests for connector_secrets.py (DLPXECO-14781)."""
+
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from dct_mcp_server.tools.core.connector_secrets import (
     walk_secret_paths,
@@ -12,7 +12,6 @@ from dct_mcp_server.tools.core.connector_secrets import (
     clear_caches,
     SecretPath,
     FlaggedLocation,
-    ConnectorResult,
 )
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "toolkits"
@@ -26,6 +25,7 @@ def reset():
 
 
 # ── walk_secret_paths ─────────────────────────────────────────────────────────
+
 
 def test_flat_password_field():
     schema = {
@@ -79,7 +79,7 @@ def test_nested_object():
                 },
                 "required": ["user", "pass"],
             }
-        }
+        },
     }
     paths = walk_secret_paths(schema)
     names = {p.path for p in paths}
@@ -100,9 +100,9 @@ def test_array_items():
                         "nodePassword": {"type": "string", "format": "password"},
                     },
                     "required": ["nodeId", "nodePassword"],
-                }
+                },
             }
-        }
+        },
     }
     paths = walk_secret_paths(schema)
     names = {p.path for p in paths}
@@ -113,9 +113,7 @@ def test_array_items():
 def test_ref_resolution():
     schema = {
         "type": "object",
-        "properties": {
-            "creds": {"$ref": "#/definitions/Creds"}
-        },
+        "properties": {"creds": {"$ref": "#/definitions/Creds"}},
         "definitions": {
             "Creds": {
                 "type": "object",
@@ -124,7 +122,7 @@ def test_ref_resolution():
                 },
                 "required": ["pw"],
             }
-        }
+        },
     }
     paths = walk_secret_paths(schema, root=schema)
     names = {p.path for p in paths}
@@ -148,10 +146,10 @@ def test_oneof_marks_conditional():
                             "method": {"type": "string"},
                             "keyPath": {"type": "string"},
                         }
-                    }
+                    },
                 ]
             }
-        }
+        },
     }
     paths = walk_secret_paths(schema)
     pw = next((p for p in paths if "password" in p.path), None)
@@ -168,7 +166,7 @@ def test_allof_not_conditional():
                     "sharedPass": {"type": "string", "format": "password"},
                 }
             }
-        ]
+        ],
     }
     paths = walk_secret_paths(schema)
     pw = next((p for p in paths if "sharedPass" in p.path), None)
@@ -194,7 +192,10 @@ def test_cycle_guard():
 
 def test_depth_bound_terminates():
     """Deeply nested schema terminates before depth 33."""
-    schema: dict = {"type": "object", "properties": {"pw": {"type": "string", "format": "password"}}}
+    schema: dict = {
+        "type": "object",
+        "properties": {"pw": {"type": "string", "format": "password"}},
+    }
     current = schema
     for i in range(40):
         wrapper = {"type": "object", "properties": {"child": current}}
@@ -230,6 +231,7 @@ def test_mysql_fixture_ref_password():
 
 # ── expand_and_flag ───────────────────────────────────────────────────────────
 
+
 def test_expand_present_flat():
     records = frozenset([SecretPath("password", required=True, conditional=False)])
     body_val = {"username": "alice", "password": "s3cr3t"}
@@ -239,7 +241,9 @@ def test_expand_present_flat():
 
 
 def test_expand_array_present():
-    records = frozenset([SecretPath("nodes[*].nodePassword", required=True, conditional=False)])
+    records = frozenset(
+        [SecretPath("nodes[*].nodePassword", required=True, conditional=False)]
+    )
     body_val = {
         "nodes": [
             {"nodeId": "n1", "nodePassword": "pw1"},
@@ -285,8 +289,10 @@ def test_expand_present_overrides_conditional():
 
 # ── parse_applied / drop_applied ──────────────────────────────────────────────
 
+
 def test_parse_applied_no_nonce(monkeypatch):
     from dct_mcp_server.tools.core import host_trust
+
     monkeypatch.delenv(host_trust._SENSITIVE_NONCE_ENV, raising=False)
     names, locs = parse_applied({"nonce": "any", "fields": ["password"]})
     assert names == frozenset()
@@ -295,15 +301,17 @@ def test_parse_applied_no_nonce(monkeypatch):
 
 def test_parse_applied_good_nonce(monkeypatch):
     from dct_mcp_server.tools.core import host_trust
+
     monkeypatch.setenv(host_trust._SENSITIVE_NONCE_ENV, "testnonce")
-    names, locs = parse_applied({"nonce": "testnonce", "fields": ["password", "parameters.dbPass"]})
+    names, locs = parse_applied(
+        {"nonce": "testnonce", "fields": ["password", "parameters.dbPass"]}
+    )
     assert "password" in names
     assert "parameters.dbPass" in locs
 
 
 def test_drop_applied_exact_location():
     flagged = [FlaggedLocation(name="dbPass", location="parameters.dbPass")]
-    _, locs = frozenset(), frozenset(["parameters.dbPass"])
     result = drop_applied(flagged, frozenset(), frozenset(["parameters.dbPass"]))
     assert result == []
 
@@ -324,9 +332,15 @@ def test_drop_applied_relative_location():
 
 def test_drop_applied_different_index_no_match():
     flagged = [
-        FlaggedLocation(name="nodePassword", location="parameters.nodes[0].nodePassword"),
-        FlaggedLocation(name="nodePassword", location="parameters.nodes[1].nodePassword"),
+        FlaggedLocation(
+            name="nodePassword", location="parameters.nodes[0].nodePassword"
+        ),
+        FlaggedLocation(
+            name="nodePassword", location="parameters.nodes[1].nodePassword"
+        ),
     ]
-    result = drop_applied(flagged, frozenset(), frozenset(["parameters.nodes[0].nodePassword"]))
+    result = drop_applied(
+        flagged, frozenset(), frozenset(["parameters.nodes[0].nodePassword"])
+    )
     assert len(result) == 1
     assert result[0].location == "parameters.nodes[1].nodePassword"

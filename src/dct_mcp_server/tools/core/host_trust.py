@@ -4,6 +4,7 @@ host_trust.py — shared nonce trust check for the sensitive-input gate.
 Moved from tools/core/dynamic.py so that connector_secrets.py can import it
 without creating a circular dependency.
 """
+
 from __future__ import annotations
 
 import hmac

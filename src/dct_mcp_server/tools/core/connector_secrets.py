@@ -13,6 +13,7 @@ Public API:
     find_flagged_connector_secrets(...) -> ConnectorResult  (async, never raises)
     clear_caches() -> None
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,7 +23,10 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from dct_mcp_server.config.loader import load_appdata_operations, match_appdata_operation
+from dct_mcp_server.config.loader import (
+    load_appdata_operations,
+    match_appdata_operation,
+)
 from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
 from dct_mcp_server.tools.core.host_trust import host_nonce_ok
@@ -35,9 +39,9 @@ _MAX_NODES = 10_000
 
 # Cache limits and TTLs (seconds)
 _MAX_CACHE_ENTRIES = 256
-_VERSION_BINDING_TTL_S = 900   # 15 min — id→version binding
-_OBJECT_TTL_S = 900            # 15 min — referenced object id→next_id
-_NEGATIVE_TTL_S = 60           # 60 s  — failures
+_VERSION_BINDING_TTL_S = 900  # 15 min — id→version binding
+_OBJECT_TTL_S = 900  # 15 min — referenced object id→next_id
+_NEGATIVE_TTL_S = 60  # 60 s  — failures
 _OBJECT_NEGATIVE_TTL_S = 60
 
 
@@ -49,21 +53,26 @@ _OBJECT_NEGATIVE_TTL_S = 60
 @dataclass(frozen=True)
 class SecretPath:
     """A password-format field path within a toolkit schema."""
-    path: str           # dotted path with [*] for arrays, e.g. "nodes[*].password"
-    required: bool      # field is in parent "required" list
-    conditional: bool   # inside oneOf/anyOf/if/then/else/dependencies
+
+    path: str  # dotted path with [*] for arrays, e.g. "nodes[*].password"
+    required: bool  # field is in parent "required" list
+    conditional: bool  # inside oneOf/anyOf/if/then/else/dependencies
 
 
 @dataclass(frozen=True)
 class FlaggedLocation:
     """A concrete secret location within the request body."""
-    name: str           # leaf property name
-    location: str       # full dotted path from body root, e.g. "parameters.nodes[0].password"
+
+    name: str  # leaf property name
+    location: (
+        str  # full dotted path from body root, e.g. "parameters.nodes[0].password"
+    )
 
 
 @dataclass
 class ConnectorResult:
     """Result of AppData connector-secret detection for one execute call."""
+
     flagged: list[FlaggedLocation] = field(default_factory=list)
     covered_sub_objects: frozenset[str] = field(default_factory=frozenset)
 
@@ -118,11 +127,15 @@ def walk_secret_paths(
     visited_refs: set[str] = set()
     node_count = [0]
 
-    def _walk(node: Any, path: str, required: bool, conditional: bool, depth: int) -> None:
+    def _walk(
+        node: Any, path: str, required: bool, conditional: bool, depth: int
+    ) -> None:
         if depth > _MAX_DEPTH:
             logger.warning(
                 "AppData secret detection: max depth %d reached; context=%s path=%s",
-                _MAX_DEPTH, context, path,
+                _MAX_DEPTH,
+                context,
+                path,
             )
             return
         if node_count[0] >= _MAX_NODES:
@@ -141,7 +154,9 @@ def walk_secret_paths(
             resolved = _resolve_ref(ref, root)
             if resolved is None:
                 logger.warning(
-                    "AppData secret detection: unresolvable $ref %r; context=%s", ref, context
+                    "AppData secret detection: unresolvable $ref %r; context=%s",
+                    ref,
+                    context,
                 )
                 visited_refs.discard(ref)
                 return
@@ -151,11 +166,15 @@ def walk_secret_paths(
 
         # password-format leaf — record and do NOT descend (EC-16)
         if node.get("format") == "password":
-            results.add(SecretPath(path=path, required=required, conditional=conditional))
+            results.add(
+                SecretPath(path=path, required=required, conditional=conditional)
+            )
             return
 
         # properties
-        req_set: set[str] = set(node.get("required", []) if isinstance(node.get("required"), list) else [])
+        req_set: set[str] = set(
+            node.get("required", []) if isinstance(node.get("required"), list) else []
+        )
         for prop_name, prop_schema in (node.get("properties") or {}).items():
             child_path = f"{path}.{prop_name}" if path else prop_name
             child_req = prop_name in req_set
@@ -180,12 +199,12 @@ def walk_secret_paths(
                         _walk(pschema, f"{path}.*", False, conditional, depth + 1)
 
         # allOf — same path, conditional unchanged
-        for sub in (node.get("allOf") or []):
+        for sub in node.get("allOf") or []:
             _walk(sub, path, False, conditional, depth + 1)
 
         # oneOf, anyOf, if/then/else, dependencies, dependentSchemas → conditional=True
         for kw in ("oneOf", "anyOf"):
-            for sub in (node.get(kw) or []):
+            for sub in node.get(kw) or []:
                 _walk(sub, path, False, True, depth + 1)
         for kw in ("if", "then", "else"):
             sub = node.get(kw)
@@ -222,16 +241,27 @@ _DEFINITION_LOOKUP: dict[str, tuple[list[str], Callable[[dict], dict | None]]] =
         lambda d: d.get("parameters") if isinstance(d.get("parameters"), dict) else d,
     ),
     "snapshot_parameters_definition": (
-        ["snapshot_parameters_definition", "snapshotParametersDefinition", "snapshot_schema", "snapshotSchema"],
+        [
+            "snapshot_parameters_definition",
+            "snapshotParametersDefinition",
+            "snapshot_schema",
+            "snapshotSchema",
+        ],
         lambda d: (
-            d.get("schema") if isinstance(d.get("schema"), dict)
-            else d.get("parameters") if isinstance(d.get("parameters"), dict)
+            d.get("schema")
+            if isinstance(d.get("schema"), dict)
+            else d.get("parameters")
+            if isinstance(d.get("parameters"), dict)
             else d
         ),
     ),
     "source_config_definition": (
-        ["discovery_definition.source_config_schema", "discoveryDefinition.sourceConfigSchema",
-         "source_config_definition", "sourceConfigDefinition"],
+        [
+            "discovery_definition.source_config_schema",
+            "discoveryDefinition.sourceConfigSchema",
+            "source_config_definition",
+            "sourceConfigDefinition",
+        ],
         lambda d: d,
     ),
 }
@@ -311,7 +341,9 @@ class _ToolkitSecretCache:
 
     def __init__(self) -> None:
         self._version_bindings: _TTLCache = _TTLCache(512, _VERSION_BINDING_TTL_S)
-        self._derived: _TTLCache = _TTLCache(_MAX_CACHE_ENTRIES, _VERSION_BINDING_TTL_S * 10)
+        self._derived: _TTLCache = _TTLCache(
+            _MAX_CACHE_ENTRIES, _VERSION_BINDING_TTL_S * 10
+        )
         self._global_neg: _TTLCache = _TTLCache(512, _NEGATIVE_TTL_S)
         self._identity_neg: _TTLCache = _TTLCache(512, _NEGATIVE_TTL_S)
         # Single-flight: pending asyncio.Future per (base_url, toolkit_id)
@@ -337,6 +369,7 @@ class _ToolkitSecretCache:
         Never raises.
         """
         from dct_mcp_server.config.config import get_dct_config
+
         try:
             cfg = get_dct_config(require_key=False)
             base_url = cfg.get("base_url", "")
@@ -363,8 +396,13 @@ class _ToolkitSecretCache:
                 return records
             # version known but derived evicted — re-derive
             return await self._fetch_and_derive(
-                client, identity, toolkit_id, toolkit_path, base_url,
-                version, context,
+                client,
+                identity,
+                toolkit_id,
+                toolkit_path,
+                base_url,
+                version,
+                context,
             )
 
         # Cache miss — single-flight coalescing
@@ -378,8 +416,13 @@ class _ToolkitSecretCache:
         self._inflight[g_key] = fut
         try:
             result = await self._fetch_and_derive(
-                client, identity, toolkit_id, toolkit_path, base_url,
-                None, context,
+                client,
+                identity,
+                toolkit_id,
+                toolkit_path,
+                base_url,
+                None,
+                context,
             )
             fut.set_result(result)
             return result
@@ -411,20 +454,26 @@ class _ToolkitSecretCache:
             if status in (401, 403, 404):
                 logger.warning(
                     "AppData secret detection fallback: op=GET %s toolkit=%s stage=fetch reason=%s",
-                    endpoint, toolkit_id, status,
+                    endpoint,
+                    toolkit_id,
+                    status,
                 )
                 self._identity_neg.set(i_key, True)
             else:
                 logger.warning(
                     "AppData secret detection fallback: op=GET %s toolkit=%s stage=fetch reason=%s",
-                    endpoint, toolkit_id, type(exc).__name__,
+                    endpoint,
+                    toolkit_id,
+                    type(exc).__name__,
                 )
                 self._global_neg.set(g_key, True)
             return None
         except Exception as exc:
             logger.warning(
                 "AppData secret detection fallback: op=GET %s toolkit=%s stage=fetch reason=%s",
-                endpoint, toolkit_id, type(exc).__name__,
+                endpoint,
+                toolkit_id,
+                type(exc).__name__,
             )
             self._global_neg.set(g_key, True)
             return None
@@ -432,7 +481,8 @@ class _ToolkitSecretCache:
         if not isinstance(resp, dict):
             logger.warning(
                 "AppData secret detection fallback: op=GET %s toolkit=%s stage=parse reason=non-dict-response",
-                endpoint, toolkit_id,
+                endpoint,
+                toolkit_id,
             )
             self._global_neg.set(g_key, True)
             return None
@@ -453,12 +503,15 @@ class _ToolkitSecretCache:
             if schema is None:
                 continue
             try:
-                paths = walk_secret_paths(schema, root=schema, context=f"{toolkit_id}/{def_name}")
+                paths = walk_secret_paths(
+                    schema, root=schema, context=f"{toolkit_id}/{def_name}"
+                )
                 records[def_name] = paths
             except Exception as exc:
                 logger.warning(
                     "AppData secret detection fallback: toolkit=%s stage=walk reason=%s",
-                    toolkit_id, type(exc).__name__,
+                    toolkit_id,
+                    type(exc).__name__,
                 )
 
         self._derived.set(d_key, records)
@@ -566,11 +619,12 @@ def expand_and_flag(
             expansions = _expand_path(path, value)
             for concrete_path, leaf_val in expansions:
                 if leaf_val is not None or (
-                    isinstance(value, dict)
-                    and _path_exists(value, concrete_path)
+                    isinstance(value, dict) and _path_exists(value, concrete_path)
                 ):
                     leaf_name = re.split(r"[.\[]", path)[-1].rstrip("]")
-                    full_loc = f"{sub_object}.{concrete_path}" if concrete_path else sub_object
+                    full_loc = (
+                        f"{sub_object}.{concrete_path}" if concrete_path else sub_object
+                    )
                     flagged.append(FlaggedLocation(name=leaf_name, location=full_loc))
         else:
             # No wildcard — navigate the path
@@ -724,6 +778,7 @@ def _resolution_budget_s() -> float:
     """Return the configured DCT_TIMEOUT as the overall resolution budget."""
     try:
         from dct_mcp_server.config.config import get_dct_config
+
         cfg = get_dct_config(require_key=False)
         return float(cfg.get("timeout", 30))
     except Exception:
@@ -765,13 +820,15 @@ async def _execute_chain(
             if status != 404:
                 logger.warning(
                     "AppData secret detection fallback: op=GET %s stage=resolve reason=%s",
-                    endpoint, status or type(exc).__name__,
+                    endpoint,
+                    status or type(exc).__name__,
                 )
             _object_neg_cache.set(cache_key, True)
         except Exception as exc:
             logger.warning(
                 "AppData secret detection fallback: op=GET %s stage=resolve reason=%s",
-                endpoint, type(exc).__name__,
+                endpoint,
+                type(exc).__name__,
             )
             _object_neg_cache.set(cache_key, True)
         return None
@@ -809,7 +866,9 @@ async def _execute_chain(
             # Extract select
             # Pattern: get_path "." select (select may contain brackets)
             # A select is present if there's a "." AFTER the last "/" in the path
-            match = re.match(r"^([^.]+(?:\.[^.]+)*?)(?:\.([a-zA-Z_][a-zA-Z0-9_\[\]=$.]*))$", alt)
+            match = re.match(
+                r"^([^.]+(?:\.[^.]+)*?)(?:\.([a-zA-Z_][a-zA-Z0-9_\[\]=$.]*))$", alt
+            )
             if match:
                 get_path_part = match.group(1).strip()
                 select = match.group(2).strip()
@@ -831,7 +890,9 @@ async def _execute_chain(
 
             # Parse select
             # Could be: "field", "field[N]", "field[id=$]"
-            arr_match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)(?:\[(\d+|id=\$)\])?$", select)
+            arr_match = re.match(
+                r"^([a-zA-Z_][a-zA-Z0-9_]*)(?:\[(\d+|id=\$)\])?$", select
+            )
             if not arr_match:
                 continue
             field_name = arr_match.group(1)
@@ -905,7 +966,8 @@ async def find_flagged_connector_secrets(
         )
     except Exception as exc:
         logger.warning(
-            "AppData secret detection fallback: stage=budget reason=%s", type(exc).__name__
+            "AppData secret detection fallback: stage=budget reason=%s",
+            type(exc).__name__,
         )
         return ConnectorResult()
 
@@ -927,8 +989,7 @@ async def _find_flagged_inner(
     if body is None:
         return ConnectorResult()
     present_sub_objects = {
-        k: v for k, v in op.sub_objects.items()
-        if isinstance(body.get(k), dict)
+        k: v for k, v in op.sub_objects.items() if isinstance(body.get(k), dict)
     }
     if not present_sub_objects:
         return ConnectorResult()
@@ -939,7 +1000,9 @@ async def _find_flagged_inner(
     except Exception as exc:
         logger.warning(
             "AppData secret detection fallback: op=%s %s stage=resolve reason=%s",
-            method, resolved_path, type(exc).__name__,
+            method,
+            resolved_path,
+            type(exc).__name__,
         )
         return ConnectorResult()
 
@@ -947,7 +1010,8 @@ async def _find_flagged_inner(
     if not toolkit_path:
         logger.warning(
             "AppData secret detection fallback: op=%s %s stage=resolve reason=no-toolkit-path",
-            method, resolved_path,
+            method,
+            resolved_path,
         )
         return ConnectorResult()
 
@@ -956,7 +1020,9 @@ async def _find_flagged_inner(
     async def _run_with_budget() -> ConnectorResult:
         # Step 4: Resolve toolkit ids from all chains concurrently
         chain_tasks = [
-            _execute_chain(client, identity, chain, path_params, body or {}, method_path)
+            _execute_chain(
+                client, identity, chain, path_params, body or {}, method_path
+            )
             for chain in op.chains
         ]
         chain_results = await asyncio.gather(*chain_tasks, return_exceptions=True)
@@ -967,7 +1033,8 @@ async def _find_flagged_inner(
             elif isinstance(r, Exception):
                 logger.warning(
                     "AppData secret detection fallback: op=%s stage=resolve reason=%s",
-                    method_path, type(r).__name__,
+                    method_path,
+                    type(r).__name__,
                 )
 
         if not toolkit_ids:
@@ -994,7 +1061,8 @@ async def _find_flagged_inner(
             elif isinstance(result, Exception):
                 logger.warning(
                     "AppData secret detection fallback: op=%s toolkit=unknown stage=fetch reason=%s",
-                    method_path, type(result).__name__,
+                    method_path,
+                    type(result).__name__,
                 )
 
         # Parse applied fields

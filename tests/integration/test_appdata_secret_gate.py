@@ -7,6 +7,7 @@ is stubbed — everything between execute() and the wire is production code.
 pytest-asyncio is not installed on this host; tests use @pytest.mark.anyio
 (provided by the installed anyio package).
 """
+
 from __future__ import annotations
 
 import json
@@ -76,7 +77,9 @@ def _as_host(monkeypatch, *, nonce=True, auth_mode="embedded"):
 
 def _make_client_with_toolkit(toolkit_json: dict):
     """Return (execute_fn, client_mock) where GET /toolkits/{id} returns toolkit_json."""
-    execute, client = make_execute(return_value={"id": "ds-1", "toolkit_id": toolkit_json["id"]})
+    execute, client = make_execute(
+        return_value={"id": "ds-1", "toolkit_id": toolkit_json["id"]}
+    )
 
     async def _smart_request(method, endpoint, **kwargs):
         if method.upper() == "GET" and "/toolkits/" in endpoint:
@@ -117,7 +120,9 @@ async def test_db2_dsource_link_triggers_gate(spec_loaded, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_mysql_dsource_link_triggers_gate_for_ref_password(spec_loaded, monkeypatch):
+async def test_mysql_dsource_link_triggers_gate_for_ref_password(
+    spec_loaded, monkeypatch
+):
     """MySQL dSource link: $ref-reached password triggers the gate."""
     _as_host(monkeypatch)
     execute, _ = _make_client_with_toolkit(MYSQL_TK)
@@ -274,7 +279,7 @@ async def test_native_op_unchanged(spec_loaded, monkeypatch):
 
     client.make_request = tracking_request
 
-    result = await execute(
+    await execute(
         path="/environments",
         method="POST",
         body={"name": "test-env", "hostname": "h.example.com"},
@@ -644,7 +649,9 @@ async def test_chain_hop_error_then_alternative_succeeds(spec_loaded, monkeypatc
 
 
 @pytest.mark.anyio
-async def test_array_node_without_password_does_not_flag_non_secret_fields(spec_loaded, monkeypatch):
+async def test_array_node_without_password_does_not_flag_non_secret_fields(
+    spec_loaded, monkeypatch
+):
     """Array nodes that lack instancePassword don't generate spurious flags.
 
     The db2 schema has nodes[*].instancePassword (format: password).
@@ -711,7 +718,11 @@ async def test_hop_error_neg_cache_skips_second_fetch(spec_loaded, monkeypatch):
     async def _failing_hop(method, endpoint, **kwargs):
         if "/toolkits/" in endpoint:
             return DB2_TK
-        if method.upper() == "GET" and "/dsources/" in endpoint and "/appdata/" not in endpoint:
+        if (
+            method.upper() == "GET"
+            and "/dsources/" in endpoint
+            and "/appdata/" not in endpoint
+        ):
             # This is the hop fetch (GET /dsources/ds-99)
             dsource_get_count[0] += 1
             raise DCTClientError("HTTP 503 Service Unavailable")
@@ -757,7 +768,11 @@ async def test_generic_exception_in_hop_causes_fallback(spec_loaded, monkeypatch
     async def _generic_exc_request(method, endpoint, **kwargs):
         if "/toolkits/" in endpoint:
             return DB2_TK
-        if method.upper() == "GET" and "/sources/" in endpoint and "/dsources/" not in endpoint:
+        if (
+            method.upper() == "GET"
+            and "/sources/" in endpoint
+            and "/dsources/" not in endpoint
+        ):
             # This is GET /sources/{id} (the source_id hop) — raise generic error
             raise RuntimeError("unexpected network error")
         return {"ok": True}

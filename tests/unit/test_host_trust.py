@@ -1,5 +1,5 @@
 """Unit tests for dct_mcp_server.tools.core.host_trust."""
-import os
+
 from dct_mcp_server.tools.core.host_trust import _SENSITIVE_NONCE_ENV, host_nonce_ok
 
 
