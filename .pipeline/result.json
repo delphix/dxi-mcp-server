@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
-  "status": "paused",
-  "phase": "design",
+  "status": "phase-complete",
+  "phase": "test-infra",
+  "attempt": 1,
   "pr_url": null,
   "error": null,
   "interview": null,

@@ -9,17 +9,17 @@
     "context": "completed",
     "vision": "completed",
     "design": "completed",
-    "implement": "pending",
-    "build": "pending",
-    "test-infra": "pending",
+    "implement": "completed",
+    "build": "completed",
+    "test-infra": "completed",
     "test": "pending",
     "validate": "pending",
     "pr": "pending",
     "release": "pending",
     "retrospective": "pending"
   },
-  "last_completed": "design",
-  "next_step": "implement",
+  "last_completed": "test-infra",
+  "next_step": "test",
   "skipped_phases": [],
   "pr_url": ""
 }

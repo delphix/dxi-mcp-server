@@ -77,3 +77,37 @@ Result: 27 passed, 0 failed
 ```
 
 Note: `Architecture Changes has content` failed intermittently (2 of 5 runs). The cause is a false negative in `check-structure.sh`: under `set -o pipefail`, `section_has_content` pipes into `grep -q .`, which exits early, so the upstream `grep` stages get SIGPIPE on sections larger than one pipe write. The Architecture Changes section here is about 30 KB. The run above is the first fully clean run. Fix in the eval script: drop pipefail inside `section_has_content`, or replace `grep -q .` with `grep -c . >/dev/null`.
+
+### Step: build
+
+```
+
+Checking: DLPXECO-14781 (step: build)
+---
+[build]
+SKIP  Build checks (no build command found in .claude/rules/build-and-execution.md)
+---
+Result: 0 passed, 0 failed
+```
+
+### Step: test-infra
+```
+Checking: DLPXECO-14781 (step: test-infra)
+---
+[test-infra]
+PASS  test-infra.md is non-empty
+---
+Result: 1 passed, 0 failed
+```
+
+POST-GATE: test-infra
+- No VMs section in test-infra.md — N/A (no dc list check needed)
+- uv sync completed: 87 packages resolved, .venv updated
+- pytest 9.0.3 installed and operational
+- connector_secrets importable: PASS
+- host_trust importable: PASS
+- fastmcp importable: PASS
+- Unit tests (test_connector_secrets.py): 25/25 PASS
+- Integration tests (test_appdata_secret_gate.py + unit): 690 passed, 0 failed
+- Functional tests: 36 passed, 947 skipped (DCT-live tests expected to skip without credentials), exit 0
+- GATE-PASS: test-infra

@@ -1,0 +1,128 @@
+F841 Local variable `result` is assigned to but never used
+   --> tests/integration/test_appdata_secret_gate.py:277:5
+    |
+275 |     client.make_request = tracking_request
+276 |
+277 |     result = await execute(
+    |     ^^^^^^
+278 |         path="/environments",
+279 |         method="POST",
+    |
+help: Remove assignment to unused variable `result`
+
+F401 [*] `dct_mcp_server.config.loader.AppDataOperation` imported but unused
+ --> tests/unit/test_appdata_operations_loader.py:4:5
+  |
+2 | import pytest
+3 | from dct_mcp_server.config.loader import (
+4 |     AppDataOperation,
+  |     ^^^^^^^^^^^^^^^^
+5 |     load_appdata_operations,
+6 |     match_appdata_operation,
+  |
+help: Remove unused import: `dct_mcp_server.config.loader.AppDataOperation`
+
+F841 Local variable `calls` is assigned to but never used
+  --> tests/unit/test_appdata_operations_loader.py:90:5
+   |
+89 | def test_load_is_cached(monkeypatch):
+90 |     calls = []
+   |     ^^^^^
+91 |     original = load_appdata_operations.__wrapped__
+92 |     ops1, _ = load_appdata_operations()
+   |
+help: Remove assignment to unused variable `calls`
+
+F841 Local variable `original` is assigned to but never used
+  --> tests/unit/test_appdata_operations_loader.py:91:5
+   |
+89 | def test_load_is_cached(monkeypatch):
+90 |     calls = []
+91 |     original = load_appdata_operations.__wrapped__
+   |     ^^^^^^^^
+92 |     ops1, _ = load_appdata_operations()
+93 |     ops2, _ = load_appdata_operations()
+   |
+help: Remove assignment to unused variable `original`
+
+F401 [*] `unittest.mock.AsyncMock` imported but unused
+ --> tests/unit/test_connector_secrets.py:5:27
+  |
+3 | import pytest
+4 | from pathlib import Path
+5 | from unittest.mock import AsyncMock, MagicMock, patch
+  |                           ^^^^^^^^^
+6 |
+7 | from dct_mcp_server.tools.core.connector_secrets import (
+  |
+help: Remove unused import
+
+F401 [*] `unittest.mock.MagicMock` imported but unused
+ --> tests/unit/test_connector_secrets.py:5:38
+  |
+3 | import pytest
+4 | from pathlib import Path
+5 | from unittest.mock import AsyncMock, MagicMock, patch
+  |                                      ^^^^^^^^^
+6 |
+7 | from dct_mcp_server.tools.core.connector_secrets import (
+  |
+help: Remove unused import
+
+F401 [*] `unittest.mock.patch` imported but unused
+ --> tests/unit/test_connector_secrets.py:5:49
+  |
+3 | import pytest
+4 | from pathlib import Path
+5 | from unittest.mock import AsyncMock, MagicMock, patch
+  |                                                 ^^^^^
+6 |
+7 | from dct_mcp_server.tools.core.connector_secrets import (
+  |
+help: Remove unused import
+
+F401 [*] `dct_mcp_server.tools.core.connector_secrets.ConnectorResult` imported but unused
+  --> tests/unit/test_connector_secrets.py:15:5
+   |
+13 |     SecretPath,
+14 |     FlaggedLocation,
+15 |     ConnectorResult,
+   |     ^^^^^^^^^^^^^^^
+16 | )
+   |
+help: Remove unused import: `dct_mcp_server.tools.core.connector_secrets.ConnectorResult`
+
+F841 Local variable `locs` is assigned to but never used
+   --> tests/unit/test_connector_secrets.py:306:8
+    |
+304 | def test_drop_applied_exact_location():
+305 |     flagged = [FlaggedLocation(name="dbPass", location="parameters.dbPass")]
+306 |     _, locs = frozenset(), frozenset(["parameters.dbPass"])
+    |        ^^^^
+307 |     result = drop_applied(flagged, frozenset(), frozenset(["parameters.dbPass"]))
+308 |     assert result == []
+    |
+help: Remove assignment to unused variable `locs`
+
+F401 [*] `os` imported but unused
+ --> tests/unit/test_host_trust.py:2:8
+  |
+1 | """Unit tests for dct_mcp_server.tools.core.host_trust."""
+2 | import os
+  |        ^^
+3 | from dct_mcp_server.tools.core.host_trust import _SENSITIVE_NONCE_ENV, host_nonce_ok
+  |
+help: Remove unused import: `os`
+
+Found 10 errors.
+[*] 6 fixable with the `--fix` option (4 hidden fixes can be enabled with the `--unsafe-fixes` option).
+Would reformat: src/dct_mcp_server/config/loader.py
+Would reformat: src/dct_mcp_server/tools/core/connector_secrets.py
+Would reformat: src/dct_mcp_server/tools/core/dynamic.py
+Would reformat: src/dct_mcp_server/tools/core/host_trust.py
+Would reformat: tests/integration/test_appdata_secret_gate.py
+Would reformat: tests/unit/test_appdata_operations_loader.py
+Would reformat: tests/unit/test_client_registry_identity.py
+Would reformat: tests/unit/test_connector_secrets.py
+Would reformat: tests/unit/test_host_trust.py
+9 files would be reformatted, 127 files already formatted

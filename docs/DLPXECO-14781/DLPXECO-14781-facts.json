@@ -99,8 +99,8 @@
   "worktree_path": null,
   "domain": null,
   "current_state": {
-    "phase": "vision",
-    "updated_at": "2026-10-26T06:36:00Z"
+    "phase": "test",
+    "updated_at": "2026-10-26T10:20:37Z"
   },
   "decisions": [
     {
