@@ -68,6 +68,8 @@ from dct_mcp_server.tools.core.host_trust import (
 from dct_mcp_server.tools.core.spec_cache import get_cached_spec
 from dct_mcp_server.tools.core.spec_model import OpenAPISpec, RequestBody
 from dct_mcp_server.tools.core.velocity_counter import increment_and_check  # noqa: F401
+from dct_mcp_server.tools.core import connector_secrets as _connector_secrets
+from dct_mcp_server.config.loader import match_appdata_operation as _match_appdata_operation
 
 logger = get_logger(__name__)
 
@@ -271,11 +273,35 @@ def _make_discovery_fn(app: FastMCP):
                     "code": "MISSING_PARAMETER",
                     "message": "'operation_method' is required for get_operation_schema",
                 }
-            return _action_get_operation_schema(
+            result = _action_get_operation_schema(
                 model=OpenAPISpec.wrap(spec),
                 path=path,
                 operation_method=operation_method.upper(),
             )
+            # FR-010: On a capture-capable host, annotate AppData operations
+            # with a note that connector password fields are host-captured.
+            if _secure_capture_host() and isinstance(result, dict):
+                op = _match_appdata_operation(
+                    result.get("method", "").upper(),
+                    result.get("path", ""),
+                )
+                if op is not None:
+                    sub_obj_list = [
+                        {"sub_object": k, "toolkit_definition": v}
+                        for k, v in op.sub_objects.items()
+                    ]
+                    existing_desc = result.get("description", "")
+                    connector_note = (
+                        "\n\n**Connector credential note:** Parameters declared "
+                        "`\"format\": \"password\"` in the toolkit schema for sub-objects "
+                        + ", ".join(f"`{k}`" for k in op.sub_objects)
+                        + " are captured by the host securely. Do NOT request them in "
+                        "chat or include them in the body — the host captures them "
+                        "out-of-band and applies them automatically."
+                    )
+                    result["description"] = existing_desc + connector_note
+                    result["host_captured_connector_secrets"] = sub_obj_list
+            return result
 
         return {
             "status": "error",
@@ -287,6 +313,45 @@ def _make_discovery_fn(app: FastMCP):
         }
 
     return discovery
+
+
+def _resolve_client(dct_client: Any) -> tuple[Any, str]:
+    """Return (client, identity) for the current request.
+
+    In embedded mode with a ClientRegistry: uses the per-caller client.
+    In standalone mode: returns (dct_client, "standalone").
+    """
+    if isinstance(dct_client, ClientRegistry):
+        auth = resolve_auth()
+        client = dct_client.get_client(auth)
+        identity = dct_client.identity_key(auth)
+        return client, identity
+    return dct_client, "standalone"
+
+
+def _extract_path_params(resolved_path: str, spec: Any) -> dict:
+    """Extract path parameter values from a resolved path by matching templates."""
+    import re as _re
+    if not isinstance(spec, dict):
+        return {}
+    paths = spec.get("paths") or {}
+    for template, _ in paths.items():
+        # Build regex from template
+        pattern = _re.sub(r"\{([^}]+)\}", r"(?P<\1>[^/]+)", _re.escape(template))
+        m = _re.fullmatch(pattern, resolved_path.lstrip("/"))
+        if m is None:
+            # Try with leading slash stripped from resolved_path differently
+            m = _re.fullmatch(pattern, resolved_path)
+        if m:
+            return m.groupdict()
+    # Fallback: parse from matched appdata operation template
+    op = _match_appdata_operation("ANY", resolved_path)
+    if op:
+        pattern = _re.sub(r"\{([^}]+)\}", r"(?P<\1>[^/]+)", _re.escape(op.path_template))
+        m = _re.fullmatch(pattern, resolved_path.lstrip("/"))
+        if m:
+            return m.groupdict()
+    return {}
 
 
 def _make_execute_fn(app: FastMCP, dct_client: Any):
@@ -446,38 +511,60 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
             return validation_error
 
         # ---------------------------------------------------------------- #
-        # Step 3.5 — Sensitive-input gate
+        # Step 3.5 — Sensitive-input gate (DLPXECO-14641/14642/14603/14781)
         # ---------------------------------------------------------------- #
-        # Secret-shaped body fields (password/token/…) must never be supplied
-        # by the model in `body`. When a mutating operation needs such a field
-        # and it is absent, pause so the host can capture it out-of-band (masked
-        # input or a stored-credential alias) and re-call with it applied. Runs
-        # before the confirmation gate: capture the secret first, then confirm.
-        #
-        # Only a capture-capable host can answer this, so the gate is scoped to
-        # one (DLPXECO-14642). Elsewhere -- Claude Desktop, Claude Code, any
-        # third-party MCP client -- nothing can supply the value out-of-band,
-        # and raising the gate only deadlocks the operation. Those clients pass
-        # the credential inline instead: a deliberate trade, since such a value
-        # has already been typed into the conversation by the time it reaches
-        # us and refusing here would not un-type it.
+        # On a capture-capable host, detect both spec-annotated native
+        # secrets AND AppData connector secrets (DLPXECO-14781). Runs
+        # before the confirmation gate: capture the secret first.
         if method_upper in ("POST", "PUT", "PATCH") and _secure_capture_host():
-            # Fields the host captured out-of-band are dropped from the
-            # credential set: they are in the body because *we* put them there,
-            # and re-flagging them re-prompts for the secret the user just
-            # entered, forever (DLPXECO-14603).
-            missing_secrets = _missing_sensitive_fields(
-                body,
-                _annotated_credential_fields(spec)
-                - _host_applied_fields(sensitive_applied),
+            # -- Connector detection (DLPXECO-14781) ----------------------
+            connector_result = await _connector_secrets.find_flagged_connector_secrets(
+                client_resolver=lambda: _resolve_client(dct_client),
+                method=method_upper,
+                resolved_path=resolved_path,
+                path_params=_extract_path_params(resolved_path, spec),
+                body=body if isinstance(body, dict) else None,
+                sensitive_applied=sensitive_applied,
             )
-            if missing_secrets:
-                return {
+
+            # -- Native detection -----------------------------------------
+            # Parse applied fields so we can use applied_location_leaf_names
+            applied_names, applied_locs = _connector_secrets.parse_applied(sensitive_applied)
+            # Leaf names of location-based applied entries satisfy native name check too
+            applied_loc_leaf_names = frozenset(
+                loc.rsplit(".", 1)[-1].rstrip("]").rsplit("[", 1)[0]
+                for loc in applied_locs
+            )
+            # Exclude covered sub-objects from native body view so the native
+            # walker doesn't double-report connector fields (FR-009 step 3).
+            if connector_result.covered_sub_objects:
+                body_view = {
+                    k: v for k, v in (body or {}).items()
+                    if k not in connector_result.covered_sub_objects
+                }
+            else:
+                body_view = body
+
+            missing_secrets = _missing_sensitive_fields(
+                body_view,
+                _annotated_credential_fields(spec)
+                - (_host_applied_fields(sensitive_applied) | applied_loc_leaf_names),
+            )
+
+            # -- Merge names ----------------------------------------------
+            connector_names = [f.name for f in connector_result.flagged]
+            all_names = list(missing_secrets)
+            for name in connector_names:
+                if name not in all_names:
+                    all_names.append(name)
+
+            if all_names:
+                response = {
                     "status": "sensitive_input_required",
-                    "required_sensitive_fields": missing_secrets,
+                    "required_sensitive_fields": all_names,
                     "message": (
                         "This operation needs sensitive input: "
-                        + ", ".join(missing_secrets)
+                        + ", ".join(all_names)
                     ),
                     "operation": {"path": resolved_path, "method": method_upper},
                     "instructions": (
@@ -488,6 +575,12 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                         "wait for the next turn."
                     ),
                 }
+                if connector_result.flagged:
+                    response["sensitive_field_locations"] = [
+                        {"name": f.name, "location": f.location}
+                        for f in connector_result.flagged
+                    ]
+                return response
 
         # ---------------------------------------------------------------- #
         # Step 4 — Confirmation gate (FR-001 through FR-008)
