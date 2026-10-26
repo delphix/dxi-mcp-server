@@ -168,3 +168,4 @@ dct-mcp-test remote --layer llm            # Run Layer 5 tests against remote DC
 - **Retries**: Exponential backoff up to `DCT_MAX_RETRIES` (default 3) on transient failures
 - **Toolset config cache**: `loader.py` uses `@lru_cache` — call `clear_cache()` if `.txt` files change at runtime
 - **Telemetry**: Opt-in only (`IS_LOCAL_TELEMETRY_ENABLED=true`); session logs written to `logs/sessions/{id}.log`
+- **AppData secret detection** (DLPXECO-14781): capture-host-only (embedded mode + nonce), fail-open on any lookup failure, time-budgeted by `DCT_TIMEOUT`, in-memory caches only (not persisted across restart). `config/mappings/appdata_operations.txt` maps 19 AppData operations.
