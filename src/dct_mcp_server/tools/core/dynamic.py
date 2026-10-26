@@ -329,7 +329,7 @@ def _resolve_client(dct_client: Any) -> tuple[Any, str]:
     return dct_client, "standalone"
 
 
-def _extract_path_params(resolved_path: str, spec: Any) -> dict:
+def _extract_path_params(resolved_path: str, spec: Any, method: str = "POST") -> dict:
     """Extract path parameter values from a resolved path by matching templates."""
     if not isinstance(spec, dict):
         return {}
@@ -350,7 +350,7 @@ def _extract_path_params(resolved_path: str, spec: Any) -> dict:
         except re.error:
             pass
     # Fallback: parse from matched appdata operation template
-    op = _match_appdata_operation("ANY", resolved_path)
+    op = _match_appdata_operation(method, resolved_path)
     if op:
         parts = re.split(r"\{([^}]+)\}", op.path_template)
         pattern = "".join(
@@ -534,7 +534,7 @@ def _make_execute_fn(app: FastMCP, dct_client: Any):
                 client_resolver=lambda: _resolve_client(dct_client),
                 method=method_upper,
                 resolved_path=resolved_path,
-                path_params=_extract_path_params(resolved_path, spec),
+                path_params=_extract_path_params(resolved_path, spec, method_upper),
                 body=body if isinstance(body, dict) else None,
                 sensitive_applied=sensitive_applied,
             )

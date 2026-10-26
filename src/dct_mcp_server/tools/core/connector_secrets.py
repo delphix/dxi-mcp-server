@@ -151,9 +151,6 @@ def walk_secret_paths(
 
         # password-format leaf — record and do NOT descend (EC-16)
         if node.get("format") == "password":
-            leaf = path.rsplit(".", 1)[-1] if "." in path else path
-            # strip array suffix for the name
-            leaf = re.sub(r"\[\*\]$", "", leaf).split(".")[-1]
             results.add(SecretPath(path=path, required=required, conditional=conditional))
             return
 
@@ -470,7 +467,6 @@ class _ToolkitSecretCache:
 
 def _extract_http_status(exc: DCTClientError) -> int | None:
     """Extract HTTP status from a DCTClientError without logging its message."""
-    import re
     if exc.args:
         m = re.match(r"^HTTP (\d{3})", str(exc.args[0]))
         if m:
@@ -647,12 +643,12 @@ def parse_applied(
     Returns (bare_names, location_strings). Both empty if nonce is wrong/missing.
 
     sensitive_applied must be a dict with:
-      - "marker": the nonce string (compared against _SENSITIVE_NONCE_ENV)
+      - "nonce": the nonce string (compared against _SENSITIVE_NONCE_ENV)
       - "fields": list of str — bare names (no "." or "[") or location paths
     """
     if not isinstance(sensitive_applied, dict):
         return frozenset(), frozenset()
-    marker_val = sensitive_applied.get("marker")
+    marker_val = sensitive_applied.get("nonce")
     # host_nonce_ok expects a dict with a "nonce" key
     if not host_nonce_ok({"nonce": marker_val}):
         return frozenset(), frozenset()

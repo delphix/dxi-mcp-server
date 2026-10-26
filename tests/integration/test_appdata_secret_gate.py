@@ -191,7 +191,7 @@ async def test_recall_with_applied_location_dispatches(spec_loaded, monkeypatch)
             },
         },
         sensitive_applied={
-            "marker": NONCE,
+            "nonce": NONCE,
             "fields": ["parameters.instancePassword"],
         },
     )
@@ -219,7 +219,7 @@ async def test_recall_with_applied_bare_name_dispatches(spec_loaded, monkeypatch
             },
         },
         sensitive_applied={
-            "marker": NONCE,
+            "nonce": NONCE,
             "fields": ["instancePassword"],
         },
     )

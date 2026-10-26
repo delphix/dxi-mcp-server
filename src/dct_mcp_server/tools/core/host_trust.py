@@ -10,10 +10,6 @@ import hmac
 import os
 from typing import Any
 
-from dct_mcp_server.core.logging import get_logger
-
-logger = get_logger(__name__)
-
 # Name of the env var the embedding host injects at startup.
 # Shared secret proving a `sensitive_applied` marker came from the embedding
 # host and not from the model. The host generates it and passes it in this

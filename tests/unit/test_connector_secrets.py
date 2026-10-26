@@ -288,7 +288,7 @@ def test_expand_present_overrides_conditional():
 def test_parse_applied_no_nonce(monkeypatch):
     from dct_mcp_server.tools.core import host_trust
     monkeypatch.delenv(host_trust._SENSITIVE_NONCE_ENV, raising=False)
-    names, locs = parse_applied({"marker": "any", "fields": ["password"]})
+    names, locs = parse_applied({"nonce": "any", "fields": ["password"]})
     assert names == frozenset()
     assert locs == frozenset()
 
@@ -296,7 +296,7 @@ def test_parse_applied_no_nonce(monkeypatch):
 def test_parse_applied_good_nonce(monkeypatch):
     from dct_mcp_server.tools.core import host_trust
     monkeypatch.setenv(host_trust._SENSITIVE_NONCE_ENV, "testnonce")
-    names, locs = parse_applied({"marker": "testnonce", "fields": ["password", "parameters.dbPass"]})
+    names, locs = parse_applied({"nonce": "testnonce", "fields": ["password", "parameters.dbPass"]})
     assert "password" in names
     assert "parameters.dbPass" in locs
 
