@@ -94,6 +94,10 @@ The confirmation system was hardened in DLPXECO-14458 to add:
 
 Read-shaped POSTs (e.g. `/vdbs/provision_by_snapshot/defaults`, `/snapshots/search`) are excluded from the keyword fallback via `config/mappings/read_exclusions.txt`.
 
+**AppData connector secrets (DLPXECO-14781):** On a capture-capable host, the gate also resolves the toolkit behind each AppData operation (DB2, MySQL, HANA, MongoDB, Couchbase) and detects connector parameters declared `"format": "password"` in the toolkit's schema. Those fields are routed through secure capture like spec-annotated credentials. The gate response gains an additive `sensitive_field_locations` key (list of `{name, location}`) when connector secrets are flagged. Detection is host-scoped (embedded mode only), fail-open, and time-budgeted (budget = `DCT_TIMEOUT`). Caches are in-memory only (not persisted across restart). The `config/mappings/appdata_operations.txt` file maps 19 AppData operations to their sub-objects and toolkit resolver chains.
+
+**Known gaps:** `POST /vdb-groups/provision_from_bookmark` (nested `provision_parameters.<vdb_id>` AppData params) is not mapped. Resolution falls back to annotation-only for operations where the toolkit id cannot be determined.
+
 ### Dynamic Tool Generation
 
 Tools can be generated at runtime from an OpenAPI spec via `src/dct_mcp_server/tools/core/tool_factory.py` and `src/dct_mcp_server/toolsgenerator/driver.py`. The server checks `$TEMP/dct_mcp_tools/` first, then falls back to the bundled spec. Pre-built tools in `tools/*_endpoints_tool.py` serve as a fallback if generation fails.
@@ -110,7 +114,8 @@ src/dct_mcp_server/
 │   └── mappings/
 │       ├── manual_confirmation.txt   # Per-operation confirmation rules
 │       ├── floor_operations.txt      # Non-bypassable floor operations
-│       └── read_exclusions.txt       # POSTs excluded from keyword fallback
+│       ├── read_exclusions.txt       # POSTs excluded from keyword fallback
+│       └── appdata_operations.txt    # AppData operation → sub-object → toolkit resolver mapping (DLPXECO-14781)
 ├── core/
 │   ├── logging.py             # Global + session logging setup
 │   ├── session.py             # Session management, telemetry; PROCESS_IDENTITY
@@ -130,7 +135,10 @@ src/dct_mcp_server/
 │       ├── confirmation_resolver.py # check_confirmation_with_fallback(); velocity + grant routing
 │       ├── audit.py                # Immutable local gate-event emitter
 │       ├── floor_operations.py     # is_floor_operation() — always requires individual confirm
-│       └── velocity_counter.py     # Sliding-window per-identity batch-check counter
+│       ├── velocity_counter.py     # Sliding-window per-identity batch-check counter
+│       ├── host_trust.py           # Shared nonce check (_SENSITIVE_NONCE_ENV, host_nonce_ok); moved from dynamic.py
+│       └── connector_secrets.py    # AppData connector-secret detection: toolkit schema walker, in-memory caches, gate entry (DLPXECO-14781)
+│                                   # Detects "format": "password" fields in toolkit schema.json
 └── toolsgenerator/driver.py   # OpenAPI spec processor
 ```
 
