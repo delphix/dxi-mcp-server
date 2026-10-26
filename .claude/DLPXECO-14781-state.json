@@ -8,7 +8,7 @@
   "steps": {
     "context": "completed",
     "vision": "completed",
-    "design": "pending",
+    "design": "completed",
     "implement": "pending",
     "build": "pending",
     "test-infra": "pending",
@@ -18,8 +18,8 @@
     "release": "pending",
     "retrospective": "pending"
   },
-  "last_completed": "vision",
-  "next_step": "design",
+  "last_completed": "design",
+  "next_step": "implement",
   "skipped_phases": [],
   "pr_url": ""
 }

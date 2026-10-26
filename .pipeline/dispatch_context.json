@@ -1,7 +1,7 @@
 {
   "plugin_name": "dataconnectors-and-integrations@dlpx-claude-plugins",
   "skill_name": "feature-implement",
-  "skill_flags": "--pipeline-skill feature-implement --no-interview",
+  "skill_flags": "--pipeline-skill feature-implement --no-interview --pipeline-mode --skip context,vision",
   "worktree_path": "/aidlc-app/dxi-aidlc/repos/users/shreyas.kulkarni/dxi-mcp-server/.worktrees/dlpxeco-14781",
   "ticket_id": "DLPXECO-14781",
   "spec_review_feedback": false

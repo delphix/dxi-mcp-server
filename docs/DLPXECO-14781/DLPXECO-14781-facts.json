@@ -109,6 +109,39 @@
       "permanent": false,
       "at": "2026-10-26T06:41:33Z",
       "superseded_by": null
+    },
+    {
+      "text": "- New module tools/core/connector_secrets.py plus config/mappings/appdata_operations.txt (resolver-chain grammar); paths live in config, not code.\n- Toolkit source-config schema is read from Toolkit.discovery_definition (DCT 3.31 has no source_config_definition); empty_vdb and sources/appdata resolve the toolkit via GET /environments/{id}.repositories[].\n- Native walker skips connector sub-objects that connector detection covered, and applied-location leaf names also satisfy native names, which closes the DLPXECO-14603 re-prompt loop. In fallback, native behaviour is unchanged.\n- New response key sensitive_field_locations is emitted only when connector fields are flagged; the shape is pending DLPXECO-14782.\n- Cache: derived records keyed (base_url, id, version), LRU 256; id-to-version binding 15 min (explicit deviation from FR-008 AC-2/EC-13/QR-6); negative cache 60 s (401/403/404 per identity); whole resolution capped at DCT_TIMEOUT, fail-open.\n- Discovery gives a generic per-sub-object note only (no I/O, no new discovery argument).",
+      "phase": "design",
+      "permanent": false,
+      "at": "2026-10-26T07:22:19Z",
+      "superseded_by": null
     }
-  ]
+  ],
+  "scope": {
+    "expected_files_hint": [
+      "src/dct_mcp_server/tools/core/dynamic.py",
+      "src/dct_mcp_server/config/loader.py",
+      "src/dct_mcp_server/core/client_registry.py",
+      "src/dct_mcp_server/tools/core/connector_secrets.py",
+      "src/dct_mcp_server/tools/core/host_trust.py",
+      "src/dct_mcp_server/config/mappings/appdata_operations.txt",
+      "CLAUDE.md",
+      ".claude/architecture.md",
+      "tests/unit/test_connector_secrets.py",
+      "tests/unit/test_appdata_operations_loader.py",
+      "tests/integration/test_appdata_secret_gate.py",
+      "tests/fixtures/toolkits/db2_toolkit.json",
+      "tests/fixtures/toolkits/mysql_toolkit.json"
+    ],
+    "non_goals": [
+      "No change to how secrets are captured, stored or injected by the DCT AI Assistant. The host-side secure UI and its re-call behaviour are owned by the host (the response shape is coordinated with DLPXECO-14782; implementing the host side is out of scope here).",
+      "No secret detection by name heuristics for AppData fields. A connector field is a secret only when its schema declares `\"format\": \"password\"`. A field merely named `password`, `token`, `secret` or similar, with no such declaration, is not flagged.",
+      "No change to secret handling for non-capture-capable clients (Claude Desktop, Claude Code, VS Code Copilot, other MCP clients). They keep passing credentials inline as today; the gate stays host-scoped.",
+      "No change to the native credential mechanism (the spec's credential-field annotation and its identity-pairing rule) beyond merging in the new connector-derived set.",
+      "No validation of connector parameter values against the toolkit schema (types, required properties, enums). DCT remains the validator of the payload; this feature only identifies secrets.",
+      "No persistence of derived credential sets across server restarts. The cache is in-memory only.",
+      "No change to the confirmation gate, batch grants, floor operations or host-attested approval flows."
+    ]
+  }
 }
