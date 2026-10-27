@@ -131,6 +131,8 @@ class DCTAPIClient:
             "Accept": "application/json",
             "User-Agent": f"Delphix-AI-Assistant/{version}",
         }
+        if config.get("client_ip"):
+            instance.headers["X-Dct-Client-IP"] = config["client_ip"]
         instance._client = None
         logger.debug("Created per-identity client for %s", _mask_secret(account_id))
         return instance

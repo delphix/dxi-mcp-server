@@ -34,6 +34,9 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         # request headers, so the host passes the caller's DCT account id in the
         # child process environment at spawn — one process per caller.
         "client_id": (os.getenv("DCT_CLIENT_ID") or "").strip() or None,
+        # The caller's own address, passed the same way, so DCT's audit log
+        # records the user rather than the host this process runs on.
+        "client_ip": (os.getenv("DCT_CLIENT_IP") or "").strip() or None,
         # Confirmation system settings
         "confirmation_token_ttl": int(os.getenv("DCT_CONFIRMATION_TOKEN_TTL", "3600")),
         "confirmation_enforcement": os.getenv(
@@ -146,6 +149,12 @@ def print_config_help():
     )
     print(
         "                   host spawns one process per caller with the id in its environment."
+    )
+    print(
+        "  DCT_CLIENT_IP    Caller's own IP address (embedded mode, optional), sent to DCT as"
+    )
+    print(
+        "                   X-Dct-Client-IP so its audit log records the user, not this host."
     )
     print()
     print("Dynamic mode (DCT_TOOLSET=dynamic) optional variables:")

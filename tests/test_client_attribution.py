@@ -27,3 +27,22 @@ def test_standalone_client_is_not_attributed():  # AI-generated
     assert "X-Dct-Client-Name" not in c.headers
     assert c.headers["User-Agent"].startswith("dct-mcp-server/")
     assert c.headers["Authorization"].startswith("apk ")
+
+
+def test_embedded_client_sends_the_callers_ip(monkeypatch):  # AI-generated
+    monkeypatch.setenv("DCT_CLIENT_IP", " 203.0.113.9 ")
+    c = DCTAPIClient.for_identity("acct-4711")
+    assert c.headers["X-Dct-Client-IP"] == "203.0.113.9"
+
+
+def test_embedded_client_without_an_ip_sends_no_ip_header(monkeypatch):  # AI-generated
+    monkeypatch.delenv("DCT_CLIENT_IP", raising=False)
+    c = DCTAPIClient.for_identity("acct-4711")
+    assert "X-Dct-Client-IP" not in c.headers
+
+
+def test_standalone_client_never_sends_an_ip(monkeypatch):  # AI-generated
+    # Only the DCT AI Assistant host vouches for the caller's address.
+    monkeypatch.setenv("DCT_CLIENT_IP", "203.0.113.9")
+    c = DCTAPIClient()
+    assert "X-Dct-Client-IP" not in c.headers
