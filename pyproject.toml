@@ -24,6 +24,15 @@ dependencies = [
     # detection bypass (CVE-2026-102268), and public JWK container accepted as HMAC
     # secret (CVE-2026-102273). Pulled in transitively via mcp[crypto]. Pin to >=2.14.0.
     "pyjwt>=2.14.0",
+    # CVE-2026-63374, CVE-2026-63349, CVE-2026-64847: anyio < 4.14.2 has three vulnerabilities:
+    # IDNA 2003 hostname validation bypass enabling MITM (CVE-2026-63374, Critical 9.1),
+    # extra_groups privilege-drop bypass in open_process() (CVE-2026-63349, Medium 5.7),
+    # and process-pool stderr pipe never drained causing DoS (CVE-2026-64847, Medium 5.5).
+    # Pulled in transitively via httpx and mcp. Pin to >=4.14.2.
+    "anyio>=4.14.2",
+    # WS-2026-0133: certifi < 2026.10.19 ships a stale CA bundle missing revocations.
+    # Pulled in transitively via httpx. Pin to >=2026.10.19.
+    "certifi>=2026.10.19",
 ]
 
 [project.scripts]
