@@ -11,6 +11,8 @@ from dct_mcp_server.core.exceptions import DCTClientError
 from dct_mcp_server.core.logging import get_logger
 from dct_mcp_server.core.session import log_tool_call
 
+logger = get_logger(__name__)
+
 
 def _get_caller_id() -> Optional[str]:
     try:
@@ -48,22 +50,34 @@ def _with_message_for_user(exc: DCTClientError) -> DCTClientError:
 
     Imports ``vocabulary`` lazily: ``tools.core`` imports ``log_tool_execution``
     at package-init time, so a module-level import here would be circular.
+
+    Translation is defensive (GAP-1 layer 3): if the vocabulary layer raises
+    for any reason, the original exception is returned unmodified so the tool
+    call still fails with a proper MCP error rather than crashing silently.
     """
-    from dct_mcp_server.tools.core.vocabulary import differs, to_canonical
+    try:
+        from dct_mcp_server.tools.core.vocabulary import differs, to_canonical
 
-    raw_message = str(exc)
-    status = _HTTP_STATUS_RE.search(raw_message)
-    translated = to_canonical(raw_message)
-    message_for_user = translated if differs(raw_message, translated) else None
+        raw_message = str(exc)
+        status = _HTTP_STATUS_RE.search(raw_message)
+        translated = to_canonical(raw_message)
+        message_for_user = translated if differs(raw_message, translated) else None
 
-    if message_for_user is None:
-        error = exc
-    else:
-        error = type(exc)(f"{raw_message}\nmessage_for_user: {message_for_user}")
-    error.raw_message = raw_message
-    error.message_for_user = message_for_user
-    error.http_status = int(status.group(1)) if status else None
-    return error
+        if message_for_user is None:
+            error = exc
+        else:
+            error = type(exc)(f"{raw_message}\nmessage_for_user: {message_for_user}")
+        error.raw_message = raw_message
+        error.message_for_user = message_for_user
+        error.http_status = int(status.group(1)) if status else None
+        return error
+    except Exception as e:
+        logger.warning(
+            f"_with_message_for_user raised unexpectedly; returning original "
+            f"exception unmodified. Exception: {e}",
+            exc_info=True,
+        )
+        return exc
 
 
 def log_tool_execution(func):

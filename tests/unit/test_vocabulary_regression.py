@@ -313,3 +313,133 @@ def test_alias_lines_are_the_only_place_legacy_words_are_quoted():
         assert any(
             _ALIAS_LINE in line and legacy in line for line in text.splitlines()
         ), f"no customer-alias line maps {legacy}"
+
+
+# --------------------------------------------------------------------------- #
+# GAP-2: dynamic-mode docstrings and elicitation text (S31, S32, S33)
+# --------------------------------------------------------------------------- #
+
+_DYNAMIC_PY = (
+    Path(__file__).resolve().parents[2] / "src/dct_mcp_server/tools/core/dynamic.py"
+)
+
+
+def _dynamic_tool_prose() -> list[tuple[str, str]]:
+    """Yield (func_name, docstring_line) for ``discovery`` and ``execute``."""
+    source = _DYNAMIC_PY.read_text()
+    tree = ast.parse(source)
+    results = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name not in ("discovery", "execute"):
+            continue
+        doc = ast.get_docstring(node, clean=False)
+        if not doc:
+            continue
+        for line in doc.splitlines():
+            prose = _IDENTIFIER_RE.sub(" ", line).lower()
+            results.append((node.name, prose))
+    return results
+
+
+def _elicitation_prose() -> list[tuple[str, str]]:
+    """Yield (location, prose) for every string literal inside elicitation schemas.
+
+    Covers ``_CONFIRM_FIELD``, ``_RESOURCE_NAME_FIELD``, ``_ACK_IMPACT_FIELD``,
+    and elicitation schema class docstrings — the text the MCP client shows the
+    user during the confirmation flow.
+    """
+    source = _DYNAMIC_PY.read_text()
+    tree = ast.parse(source)
+    results = []
+
+    # Walk every Constant (string literal) that is a direct child of a
+    # call to ``Field(...)`` or the field of a Pydantic BaseModel.
+    for node in ast.walk(tree):
+        # Field(description=...) literals
+        if isinstance(node, ast.Call):
+            func_name = ""
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            if func_name == "Field":
+                for kw in node.keywords:
+                    if kw.arg == "description" and isinstance(kw.value, ast.Constant):
+                        prose = _IDENTIFIER_RE.sub(" ", str(kw.value.value)).lower()
+                        results.append(("Field.description", prose))
+        # Docstrings of elicitation schema classes
+        if isinstance(node, ast.ClassDef) and "Schema" in node.name:
+            doc = ast.get_docstring(node, clean=False)
+            if doc:
+                for line in doc.splitlines():
+                    prose = _IDENTIFIER_RE.sub(" ", line).lower()
+                    results.append((node.name, prose))
+
+    return results
+
+
+@pytest.mark.parametrize("term", _BANNED)
+def test_dynamic_docstrings_are_free_of_internal_terms(term):
+    """S31: discovery/execute docstrings must not contain retired Delphix terms."""
+    offenders = [
+        f"{func}: {prose[:120]}"
+        for func, prose in _dynamic_tool_prose()
+        if re.search(_term_re(term), prose)
+    ]
+    assert not offenders, f"{term!r} leaks in dynamic tool docstrings: {offenders}"
+
+
+@pytest.mark.parametrize("term", _BANNED)
+def test_elicitation_text_is_free_of_internal_terms(term):
+    """S32: Elicitation schema strings shown to the user must be jargon-free."""
+    offenders = [
+        f"{loc}: {prose[:120]}"
+        for loc, prose in _elicitation_prose()
+        if re.search(_term_re(term), prose)
+    ]
+    assert not offenders, f"{term!r} leaks in elicitation text: {offenders}"
+
+
+def test_dynamic_docstring_scanner_catches_a_regression():
+    """S33: Verify the scanner picks up injected banned terms in a synthetic docstring."""
+    # Simulate a docstring line with a banned term
+    sample_prose = _IDENTIFIER_RE.sub(" ", "Retrieves the timeflow for a VDB").lower()
+    assert re.search(_term_re("timeflow"), sample_prose), (
+        "Scanner failed to detect 'timeflow' — the dynamic docstring check is broken"
+    )
+    # And a clean line passes
+    clean_prose = _IDENTIFIER_RE.sub(
+        " ", "Returns the current timeline for a VDB"
+    ).lower()
+    assert not re.search(_term_re("timeflow"), clean_prose)
+
+
+# --------------------------------------------------------------------------- #
+# GAP-6: editorial guidelines cover dynamic-docstring scan (S43)
+# --------------------------------------------------------------------------- #
+
+
+def test_editorial_guidelines_mention_dynamic_docstring_scan():
+    """S43: vocabulary-editorial-guidelines.md must document the GAP-2 scan.
+
+    When the guidelines were written (PPM-1129 pre-GAP phase), they only listed
+    the toolset .txt files and pre-built module docstrings as surfaces to check.
+    GAP-2 adds dynamic.py's discovery/execute docstrings and elicitation text as
+    a third surface. The guidelines must be updated to prevent future regressions
+    by omission.
+    """
+    guidelines = (
+        Path(__file__).resolve().parents[2]
+        / ".claude/rules/vocabulary-editorial-guidelines.md"
+    )
+    text = guidelines.read_text()
+    # The guidelines must mention dynamic-mode docstrings or elicitation text
+    # as a surface that requires vocabulary review.
+    assert any(
+        phrase in text.lower()
+        for phrase in ("dynamic", "elicitation", "discovery", "execute")
+    ), (
+        "vocabulary-editorial-guidelines.md does not mention the dynamic-mode "
+        "docstring / elicitation surface (GAP-2). Add a row to the 'Where a "
+        "vocabulary rule belongs' table."
+    )

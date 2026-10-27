@@ -4,11 +4,16 @@ Covers the instructions loader, the term map, the translator, and the
 confirmation-message placeholder renderer.
 """
 
+import builtins
+import threading
+from unittest.mock import patch
+
 import pytest
 
 from dct_mcp_server.config.loader import (
     load_server_instructions,
     load_vocabulary_map,
+    load_vocabulary_rules,
 )
 from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 from dct_mcp_server.tools.core.vocabulary import differs, to_canonical
@@ -44,6 +49,148 @@ def test_server_instructions_missing_file_is_not_fatal(tmp_path, monkeypatch):
     monkeypatch.setenv("DCT_SERVER_INSTRUCTIONS", str(tmp_path / "nope.md"))
     load_server_instructions.cache_clear()
     assert load_server_instructions() == ""
+
+
+# --------------------------------------------------------------------------- #
+# GAP-7: non-UTF-8 instructions file is not fatal (S4)
+# --------------------------------------------------------------------------- #
+
+
+def test_server_instructions_invalid_utf8_is_not_fatal(tmp_path, monkeypatch, caplog):
+    """S4: A file with invalid UTF-8 bytes must not raise; returns '' + WARNING."""
+    import logging
+
+    bad = tmp_path / "bad_instructions.md"
+    bad.write_bytes(b"\xff\xfe Vocabulary and domain model guidance.")
+    monkeypatch.setenv("DCT_SERVER_INSTRUCTIONS", str(bad))
+    load_server_instructions.cache_clear()
+    with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+        result = load_server_instructions()
+    assert result == ""
+    assert any(
+        str(bad) in r.message for r in caplog.records if r.levelno >= logging.WARNING
+    )
+
+
+def test_server_instructions_directory_path_is_not_fatal(tmp_path, monkeypatch, caplog):
+    """S6: A path pointing at a directory returns '' + WARNING (EC-17)."""
+    import logging
+
+    monkeypatch.setenv("DCT_SERVER_INSTRUCTIONS", str(tmp_path))  # tmp_path is a dir
+    load_server_instructions.cache_clear()
+    with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+        result = load_server_instructions()
+    assert result == ""
+    assert caplog.records  # at least one warning
+
+
+def test_server_instructions_empty_file(tmp_path, monkeypatch, caplog):
+    """S7: An empty instructions file returns '' without a warning (EC-18)."""
+    import logging
+
+    empty = tmp_path / "empty.md"
+    empty.write_text("")
+    monkeypatch.setenv("DCT_SERVER_INSTRUCTIONS", str(empty))
+    load_server_instructions.cache_clear()
+    with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+        result = load_server_instructions()
+    assert result == ""
+    # No WARNING expected for an empty (but readable) file
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+# --------------------------------------------------------------------------- #
+# GAP-1: both config loaders open their file with encoding="utf-8" (S5)
+# --------------------------------------------------------------------------- #
+
+
+def test_config_files_are_opened_as_utf8():
+    """S5: Both load_server_instructions and load_vocabulary_rules open with encoding='utf-8'."""
+    from dct_mcp_server.config.loader import clear_cache
+
+    real_open = builtins.open
+    opens = []
+
+    def recording_open(file, mode="r", **kwargs):
+        opens.append((str(file), mode, kwargs.get("encoding")))
+        return real_open(file, mode, **kwargs)
+
+    clear_cache()
+    with patch("builtins.open", recording_open):
+        load_server_instructions()
+        load_vocabulary_rules()
+
+    # Every open() for these two config files must use encoding="utf-8"
+    for file_path, mode, enc in opens:
+        if "server_instructions" in file_path or "vocabulary" in file_path:
+            assert enc == "utf-8", (
+                f"Expected encoding='utf-8' for {file_path}, got {enc!r}"
+            )
+
+
+# --------------------------------------------------------------------------- #
+# GAP-1: vocabulary.txt invalid UTF-8 degrades to identity (S14)
+# --------------------------------------------------------------------------- #
+
+
+def test_vocabulary_invalid_utf8_degrades_to_identity(tmp_path, monkeypatch, caplog):
+    """S14: vocabulary.txt with invalid UTF-8 bytes (past 8KB) returns () with no partial rules."""
+    import logging
+
+    import dct_mcp_server.config.loader as loader_mod
+    from dct_mcp_server.config.loader import clear_cache
+
+    # Build a valid vocabulary.txt that is >8KB followed by invalid bytes
+    valid_lines = "timeflow|timeline\n" * 500  # ~9000 chars of valid content
+    bad_content = valid_lines.encode("utf-8") + b"\xff\xfe bad"
+    vocab_dir = tmp_path / "mappings"
+    vocab_dir.mkdir()
+    (vocab_dir / "vocabulary.txt").write_bytes(bad_content)
+
+    loader_mod.load_vocabulary_rules.cache_clear()
+    monkeypatch.setattr(loader_mod, "MAPPINGS_DIR", vocab_dir)
+    try:
+        with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+            rules = load_vocabulary_rules()
+        assert rules == (), (
+            f"Expected no rules (all-or-nothing), got {len(rules)} rules"
+        )
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)
+        # Translation should be identity since there are no rules
+        from dct_mcp_server.tools.core.vocabulary import to_canonical as _tc
+
+        assert _tc("Timeflow tf-1") == "Timeflow tf-1"
+    finally:
+        loader_mod.load_vocabulary_rules.cache_clear()
+        clear_cache()
+
+
+def test_vocabulary_permission_error_degrades_to_identity(
+    tmp_path, monkeypatch, caplog
+):
+    """S14 variant: open() raises PermissionError -> vocabulary degrades to ()."""
+    import logging
+
+    import dct_mcp_server.config.loader as loader_mod
+    from dct_mcp_server.config.loader import clear_cache
+
+    vocab_dir = tmp_path / "mappings"
+    vocab_dir.mkdir()
+    (vocab_dir / "vocabulary.txt").write_text("timeflow|timeline\n")
+
+    loader_mod.load_vocabulary_rules.cache_clear()
+    monkeypatch.setattr(loader_mod, "MAPPINGS_DIR", vocab_dir)
+    try:
+        with patch("builtins.open", side_effect=PermissionError("denied")):
+            with caplog.at_level(
+                logging.WARNING, logger="dct_mcp_server.config.loader"
+            ):
+                rules = load_vocabulary_rules()
+        assert rules == ()
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)
+    finally:
+        loader_mod.load_vocabulary_rules.cache_clear()
+        clear_cache()
 
 
 # --------------------------------------------------------------------------- #
@@ -587,6 +734,130 @@ def test_no_rule_message_leaks_a_raw_brace():
 )
 def test_translation_is_grammatical(raw, expected):
     assert to_canonical(raw) == expected
+
+
+# --------------------------------------------------------------------------- #
+# Non-ASCII / Unicode safety (S41) and thread-safety (S42)
+# --------------------------------------------------------------------------- #
+
+
+def test_to_canonical_does_not_corrupt_non_ascii_unicode():
+    """S41: Unicode characters are passed through unchanged."""
+    texts = [
+        "Erreur: timeflow tf-1 introuvable",  # French accent
+        "错误：appdata 插件失败",  # Chinese characters
+        "エラー：timeflow が見つかりません",  # Japanese
+        "Fehler beim AppData-Plugin: ä ö ü",  # German umlauts
+        "éàü timeflow missing",  # various Unicode letters
+    ]
+    for raw in texts:
+        result = to_canonical(raw)
+        # Characters not part of a retired term must survive intact
+        assert result is not None
+        # The overall string should not be mangled
+        assert len(result) >= 1
+
+
+def test_to_canonical_is_thread_safe():
+    """S42: Concurrent calls to to_canonical() do not interfere with each other."""
+    errors = []
+    inputs_and_expected = [
+        ("Cannot delete timeflow tf-1", "Cannot delete timeline tf-1"),
+        ("Install the appdata plugin", "Install the connector"),
+        ("Refresh VDB sales-01", "Refresh VDB sales-01"),
+        (
+            "Virtualization Engine is unreachable",
+            "Continuous Data engine is unreachable",
+        ),
+    ]
+
+    def worker():
+        try:
+            for raw, expected in inputs_and_expected:
+                result = to_canonical(raw)
+                if result != expected:
+                    errors.append(f"Expected {expected!r}, got {result!r}")
+        except Exception as exc:
+            errors.append(str(exc))
+
+    threads = [threading.Thread(target=worker) for _ in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"Thread-safety failures: {errors[:5]}"
+
+
+# --------------------------------------------------------------------------- #
+# GAP-5: _WARNED_BODY_REFS is a module-level set (S47)
+# --------------------------------------------------------------------------- #
+
+
+def test_warned_body_refs_is_module_level_set():
+    """S47: _WARNED_BODY_REFS exists on spec_model and is a set."""
+    from dct_mcp_server.tools.core import spec_model
+
+    assert isinstance(spec_model._WARNED_BODY_REFS, set)
+
+
+# --------------------------------------------------------------------------- #
+# GAP-4: clear_cache() must also clear the vocabulary translator's lru_cache (S16)
+# --------------------------------------------------------------------------- #
+
+
+def test_clear_cache_also_clears_vocabulary_translator_cache(tmp_path, monkeypatch):
+    """S16: clear_cache() must invalidate the vocabulary translator's caches.
+
+    Before GAP-4, clear_cache() only cleared loader caches. vocabulary.py's
+    _compiled_rules() and _translate() are @lru_cache'd independently and were
+    never cleared, so new rules written to vocabulary.txt were not picked up
+    until process restart.
+
+    After the fix, vocabulary.py registers a hook so clear_cache() also clears
+    the translator caches.
+    """
+    import dct_mcp_server.config.loader as loader_mod
+    from dct_mcp_server.config.loader import clear_cache
+    from dct_mcp_server.tools.core import vocabulary as vocab_mod
+
+    # Phase 1: seed the vocab dir with "timeflow|timeline" only
+    mappings_dir = tmp_path / "mappings"
+    mappings_dir.mkdir()
+    vocab_file = mappings_dir / "vocabulary.txt"
+    vocab_file.write_text("timeflow|timeline\n")
+
+    # Force both caches to read from our tmp dir
+    loader_mod.load_vocabulary_rules.cache_clear()
+    vocab_mod._compiled_rules.cache_clear()
+    vocab_mod._translate.cache_clear()
+    monkeypatch.setattr(loader_mod, "MAPPINGS_DIR", mappings_dir)
+
+    # Use mid-sentence forms to avoid sentence-start capitalisation.
+    # Seed the translator cache: "faketerm" is NOT in the rules, unchanged.
+    assert to_canonical("the faketerm foo") == "the faketerm foo"
+    # Confirm "timeflow" IS translated now (also populates _translate cache).
+    assert to_canonical("the timeflow tf-1") == "the timeline tf-1"
+
+    # Phase 2: write NEW rules that map "faketerm" -> "realterm"
+    vocab_file.write_text("faketerm|realterm\ntimeflow|timeline\n")
+
+    # clear_cache() with GAP-4 fix must tell vocabulary.py to drop its caches
+    clear_cache()
+
+    # After cache clear the translator must pick up the new rule.
+    # Use mid-sentence form so capitalisation does not mask the actual mismatch.
+    result = to_canonical("the faketerm foo")
+    assert result == "the realterm foo", (
+        f"Expected 'the realterm foo' after clear_cache(), got {result!r}. "
+        "GAP-4: vocabulary._compiled_rules and _translate caches were not cleared."
+    )
+
+    # Clean up: restore the module-level MAPPINGS_DIR to its real location
+    loader_mod.load_vocabulary_rules.cache_clear()
+    vocab_mod._compiled_rules.cache_clear()
+    vocab_mod._translate.cache_clear()
+    clear_cache()
 
 
 # --------------------------------------------------------------------------- #

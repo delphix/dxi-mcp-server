@@ -942,3 +942,50 @@ def test_generate_tools_from_openapi_download_failure_propagates(monkeypatch, tm
         ):
             with pytest.raises(requests.exceptions.RequestException):
                 driver_mod.generate_tools_from_openapi()
+
+
+# ---------------------------------------------------------------------------
+# GAP-5: spec_model imports and RequestBody._resolved() smoke test (S38)
+# ---------------------------------------------------------------------------
+
+
+def test_spec_model_imports_cleanly_after_gap5():
+    """S38: spec_model.py imports without error and RequestBody._resolved is usable.
+
+    GAP-5 replaced the dead resolve_ref loop with a direct resolve_refs() call.
+    This smoke test ensures the refactoring didn't break the import or the
+    module-level _WARNED_BODY_REFS set.
+    """
+    from dct_mcp_server.tools.core.spec_model import (
+        OpenAPISpec,
+        RequestBody,
+        _WARNED_BODY_REFS,
+    )
+
+    assert isinstance(_WARNED_BODY_REFS, set)
+
+    spec = OpenAPISpec(
+        {
+            "paths": {},
+            "components": {
+                "schemas": {
+                    "Body": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {"id": {"type": "string"}},
+                                }
+                            }
+                        },
+                    }
+                }
+            },
+        }
+    )
+    rb = RequestBody(spec, {"$ref": "#/components/schemas/Body"})
+    result = rb._resolved()
+    # Should return a dict (may be error marker since Body is not in requestBodies,
+    # but should NOT raise)
+    assert isinstance(result, dict)

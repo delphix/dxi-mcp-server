@@ -63,6 +63,7 @@ is caught by a checklist and a test, not by another reconciliation pass.
 | A cross-cutting rule the model needs to apply in conversation (e.g. "never say X", "retrain gently", "ask instead of guessing") | `config/server_instructions.md` — add to the terminology table and/or the numbered "Additional rules" |
 | A confirmation/error message template | `config/mappings/manual_confirmation.txt` — use canonical terms only |
 | A tool or action name | Rename in the relevant `config/toolsets/*.txt` file and the corresponding `tools/*_endpoints_tool.py` handler |
+| A dynamic-mode tool docstring (`discovery`, `execute`) or elicitation field description (the text shown to a user during confirmation) | Edit directly in `tools/core/dynamic.py`; the `test_dynamic_docstrings_are_free_of_internal_terms` and `test_elicitation_text_is_free_of_internal_terms` tests in `tests/unit/test_vocabulary_regression.py` scan these surfaces (GAP-2) |
 
 ## After making the change
 

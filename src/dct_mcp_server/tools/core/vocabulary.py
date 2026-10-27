@@ -15,10 +15,43 @@ HTTP status can still be parsed back out of the original message.
 import re
 from functools import lru_cache
 
-from dct_mcp_server.config.loader import load_vocabulary_rules
+from dct_mcp_server.config.loader import (
+    load_vocabulary_rules,
+    register_cache_clear_hook,
+)
 from dct_mcp_server.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# Rate-limit the vocabulary-fallback WARNING to one per cache generation so
+# a pathological rules file does not flood the log with the same message.
+# Reset to False by _vocabulary_cache_clear_hook() so the first failure after
+# a rules reload is always logged.
+_failure_logged: bool = False
+
+
+def _vocabulary_cache_clear_hook() -> None:
+    """Clear the vocabulary translator's lru_cache'd functions (GAP-4).
+
+    Called by ``clear_cache()`` via the hook registry so that a change to
+    ``config/mappings/vocabulary.txt`` is picked up without a process restart.
+    The loader caches (``load_vocabulary_rules``) are cleared first by
+    ``clear_cache()`` itself; this hook then clears the translator's derived
+    caches so the next ``to_canonical()`` call recompiles from the fresh rules.
+    Also resets ``_failure_logged`` so the first failure after a reload is
+    always reported.
+    """
+    global _failure_logged
+    _compiled_rules.cache_clear()
+    _translate.cache_clear()
+    _failure_logged = False
+
+
+register_cache_clear_hook(
+    "dct_mcp_server.tools.core.vocabulary.clear_hook",
+    _vocabulary_cache_clear_hook,
+)
 
 
 def _word_set_pattern(words: frozenset) -> re.Pattern | None:
@@ -216,6 +249,12 @@ def to_canonical(text: str | None) -> str | None:
     translated when the text carries positive evidence for the retired Delphix
     meaning -- see the guard directives in ``config/mappings/vocabulary.txt``.
 
+    Translation is defensive (GAP-1): if the translation machinery raises for
+    any reason (a corrupt rules file that slipped past the loader, an
+    unexpected regex error), the original text is returned unchanged.  A
+    WARNING is emitted once per cache generation so that failures are visible
+    in logs without flooding them.
+
     Args:
         text: Arbitrary upstream text, or None.
 
@@ -223,9 +262,21 @@ def to_canonical(text: str | None) -> str | None:
         The translated text, or *text* unchanged when there is nothing to
         translate. None in, None out.
     """
+    global _failure_logged
     if not text:
         return text
-    return _translate(text)
+    try:
+        return _translate(text)
+    except Exception as exc:  # pragma: no cover — defence-in-depth path
+        if not _failure_logged:
+            logger.warning(
+                "vocabulary.to_canonical() raised unexpectedly; returning text unchanged. "
+                "Check config/mappings/vocabulary.txt for encoding or syntax errors. "
+                f"Exception: {exc}",
+                exc_info=True,
+            )
+            _failure_logged = True
+        return text
 
 
 # Pure function of the text: the compiled rules are fixed for the life of the

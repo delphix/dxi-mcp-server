@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 from dct_mcp_server.config.loader import load_vocabulary_rules
-from dct_mcp_server.tools.core.vocabulary import to_canonical
+from dct_mcp_server.tools.core.vocabulary import _translate, to_canonical
 
 _FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "dct_api_text_corpus.json.gz"
@@ -83,7 +83,11 @@ def _load_corpora() -> list:
 
 _CORPORA = _load_corpora()
 _TEXTS = sorted({t for c in _CORPORA for t in c["operation_text"] + c["schema_text"]})
-_PAIRS = [(raw, to_canonical(raw)) for raw in _TEXTS]
+# Use _translate directly (S10 / GAP-1): to_canonical() now has an exception
+# guard that silently returns the original text on errors, which would mask a
+# broken translation rule in the corpus. _translate() raises if something goes
+# wrong, so the corpus test will catch actual failures rather than swallowing them.
+_PAIRS = [(raw, _translate(raw)) for raw in _TEXTS]
 _CHANGED = [(raw, out) for raw, out in _PAIRS if out != raw]
 
 

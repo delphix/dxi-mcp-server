@@ -1210,9 +1210,18 @@ def _error_response(raw_message: str, http_status: int | None) -> dict[str, Any]
         "message": raw_message,
     }
 
-    translated = to_canonical(raw_message)
-    if differs(raw_message, translated):
-        response["message_for_user"] = translated
+    try:
+        translated = to_canonical(raw_message)
+        if differs(raw_message, translated):
+            response["message_for_user"] = translated
+    except (
+        Exception
+    ) as exc:  # GAP-1 layer 4: translation must never break error delivery
+        logger.warning(
+            f"_error_response: vocabulary translation raised unexpectedly; "
+            f"omitting message_for_user. Exception: {exc}",
+            exc_info=True,
+        )
 
     return response
 

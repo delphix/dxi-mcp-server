@@ -14,7 +14,7 @@ import os
 import re
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Callable, Dict, List, Any, Tuple, Optional
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -363,14 +363,16 @@ def load_server_instructions() -> str:
         Path(override) if override else CONFIG_DIR / "server_instructions.md"
     )
 
-    if not instructions_file.exists():
-        logger.warning(f"Server instructions file not found: {instructions_file}")
+    if not instructions_file.is_file():
+        logger.warning(
+            f"Server instructions file not found or is not a file: {instructions_file}"
+        )
         return ""
 
     try:
-        with open(instructions_file, "r") as f:
+        with open(instructions_file, "r", encoding="utf-8") as f:
             return f.read().strip()
-    except OSError as e:
+    except (OSError, UnicodeDecodeError) as e:
         logger.warning(f"Could not read server instructions {instructions_file}: {e}")
         return ""
 
@@ -434,36 +436,40 @@ def load_vocabulary_rules() -> Tuple[Dict[str, Any], ...]:
 
     rules: List[Dict[str, Any]] = []
     signals: Dict[str, frozenset] = {}
-    with open(vocab_file, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if line.startswith("@signals"):
-                name, _, words = line[len("@signals") :].partition("=")
-                signals[name.strip().lower()] = _expand_signal_words(words, signals)
-                continue
-            parts = line.split("|")
-            if len(parts) < 2:
-                continue
-            internal, canonical = parts[0].strip(), parts[1].strip()
-            if not (internal and canonical):
-                continue
-            rule: Dict[str, Any] = {
-                "internal": internal,
-                "canonical": canonical,
-                **{key: frozenset() for key in _VOCABULARY_GUARD_KEYS},
-            }
-            for directive in parts[2:]:
-                key, _, words = directive.partition("=")
-                key = key.strip()
-                if key not in _VOCABULARY_GUARD_KEYS:
-                    logger.warning(
-                        f"Unknown vocabulary guard {key!r} for term {internal!r}"
-                    )
+    try:
+        with open(vocab_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
                     continue
-                rule[key] = _expand_signal_words(words, signals)
-            rules.append(rule)
+                if line.startswith("@signals"):
+                    name, _, words = line[len("@signals") :].partition("=")
+                    signals[name.strip().lower()] = _expand_signal_words(words, signals)
+                    continue
+                parts = line.split("|")
+                if len(parts) < 2:
+                    continue
+                internal, canonical = parts[0].strip(), parts[1].strip()
+                if not (internal and canonical):
+                    continue
+                rule: Dict[str, Any] = {
+                    "internal": internal,
+                    "canonical": canonical,
+                    **{key: frozenset() for key in _VOCABULARY_GUARD_KEYS},
+                }
+                for directive in parts[2:]:
+                    key, _, words = directive.partition("=")
+                    key = key.strip()
+                    if key not in _VOCABULARY_GUARD_KEYS:
+                        logger.warning(
+                            f"Unknown vocabulary guard {key!r} for term {internal!r}"
+                        )
+                        continue
+                    rule[key] = _expand_signal_words(words, signals)
+                rules.append(rule)
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning(f"Could not read vocabulary rules {vocab_file}: {e}")
+        return ()
 
     # Longest first: "delphix engine" must win over a bare "engine" entry.
     rules.sort(key=lambda rule: len(rule["internal"]), reverse=True)
@@ -772,11 +778,36 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
 # ============================================================================
 
 
+# Hook registry: functions to call when clear_cache() resets loader caches.
+# Keys are fully-qualified hook names (e.g. "dct_mcp_server.tools.core.vocabulary.clear_hook").
+# Re-registering with the same name replaces the old entry, so a module reload
+# never leaves a stale hook pointing at old cached-function objects.
+_CACHE_CLEAR_HOOKS: Dict[str, Callable[[], None]] = {}
+
+
+def register_cache_clear_hook(name: str, fn: Callable[[], None]) -> None:
+    """Register (or replace) a cache-clear hook.
+
+    ``name`` is a stable qualified string that uniquely identifies the hook
+    (e.g. ``"dct_mcp_server.tools.core.vocabulary.clear_hook"``). If a hook
+    with the same name is already registered it is replaced, so a module
+    reload never leaves two copies of the same hook in the list.
+
+    Args:
+        name: Unique qualified name for this hook.
+        fn:   Zero-argument callable; called at the end of ``clear_cache()``.
+    """
+    _CACHE_CLEAR_HOOKS[name] = fn
+
+
 def clear_cache():
     """
     Clear all cached configuration data.
 
     Call this if configuration files change during runtime.
+    Registered hooks (e.g. vocabulary.py's translator caches) are called
+    after the loader caches are cleared, so the next rule-load reads the file
+    fresh before the translator re-compiles.
     """
     load_toolset_apis.cache_clear()
     load_toolset_grouped_apis.cache_clear()
@@ -786,6 +817,11 @@ def clear_cache():
     load_vocabulary_map.cache_clear()
     load_vocabulary_rules.cache_clear()
     logger.info("Configuration cache cleared")
+    for hook_name, hook_fn in list(_CACHE_CLEAR_HOOKS.items()):
+        try:
+            hook_fn()
+        except Exception as e:
+            logger.warning(f"Cache-clear hook {hook_name!r} raised: {e}", exc_info=True)
 
 
 # ============================================================================
