@@ -12,7 +12,8 @@ dependencies = [
     "httpx>=0.24.0",
     "pyyaml",
     "requests",
-    # CVE-2026-97689: urllib3 < 2.8.0 buffers unbounded chunk-size lines in
+    # CVE-2026-97687: urllib3 < 2.8.0 HTTPS proxy TLS configuration may be ignored or
+    # overridden. CVE-2026-97689: urllib3 < 2.8.0 buffers unbounded chunk-size lines in
     # HTTPResponse.stream()/read_chunked(). Pin to >=2.8.0 (fixed version).
     "urllib3>=2.8.0",
     # CVE-2026-7246: click<=8.3.2 has a command-injection flaw in click.edit().
