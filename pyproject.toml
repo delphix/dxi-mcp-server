@@ -19,10 +19,11 @@ dependencies = [
     # click is pulled in transitively via mcp -> uvicorn. Pin here to guarantee
     # the patched version (>=8.3.3) is installed regardless of what uvicorn resolves.
     "click>=8.3.3",
-    # CVE-2026-102266, CVE-2026-102268, CVE-2026-102273: PyJWT has three vulnerabilities
-    # in versions < 2.14.0: empty HMAC key acceptance (CVE-2026-102266), asymmetric-PEM
-    # detection bypass (CVE-2026-102268), and public JWK container accepted as HMAC
-    # secret (CVE-2026-102273). Pulled in transitively via mcp[crypto]. Pin to >=2.14.0.
+    # CVE-2026-102266, CVE-2026-102268, CVE-2026-102272, CVE-2026-102273: PyJWT has four
+    # vulnerabilities in versions < 2.14.0: empty HMAC key acceptance (CVE-2026-102266),
+    # asymmetric-PEM detection bypass (CVE-2026-102268), BOM bypass (CVE-2026-102272),
+    # and public JWK container accepted as HMAC secret (CVE-2026-102273). Pulled in
+    # transitively via mcp[crypto]. Pin to >=2.14.0.
     "pyjwt>=2.14.0",
 ]
 
