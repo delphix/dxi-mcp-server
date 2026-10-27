@@ -793,3 +793,44 @@ def test_extract_http_status_returns_none_for_no_match():
     from dct_mcp_server.tools.core.dynamic import _extract_http_status
 
     assert _extract_http_status("connection timed out") is None
+
+
+# ---------------------------------------------------------------------------
+# S21: error payload survives a raising translator (GAP-1 layer 4)
+# ---------------------------------------------------------------------------
+
+
+def test_error_response_keeps_raw_error_when_translation_raises(caplog):
+    """S21: When to_canonical (bound at dynamic.py import time) raises, _error_response
+    still returns a valid error dict with no message_for_user.
+
+    Fails on d5f89d6 (no try/except around the to_canonical call in _error_response;
+    RuntimeError propagated to the caller instead of being swallowed);
+    passes at HEAD (GAP-1 layer 4 fix).
+    """
+    import logging
+    from unittest.mock import patch
+
+    from dct_mcp_server.tools.core.dynamic import _error_response
+
+    raw = "HTTP 404: timeflow 'tf-s21' not found for appdata source"
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.to_canonical",
+        side_effect=RuntimeError("forced translator crash for S21"),
+    ):
+        with caplog.at_level(
+            logging.WARNING, logger="dct_mcp_server.tools.core.dynamic"
+        ):
+            result = _error_response(raw, 404)
+
+    assert result["status"] == "error", f"Unexpected status: {result}"
+    assert result["code"] == "DCT_API_ERROR"
+    assert result["http_status"] == 404
+    assert result["message"] == raw
+    assert "message_for_user" not in result, (
+        "message_for_user must be absent when translation raised"
+    )
+    assert any(r.levelno >= logging.WARNING for r in caplog.records), (
+        "Expected a WARNING about the translation failure"
+    )

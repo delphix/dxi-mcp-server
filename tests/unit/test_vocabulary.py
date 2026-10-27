@@ -1072,3 +1072,183 @@ def test_discovery_operation_schema_translates_summary_and_description(
     assert result["path"] == "/timeflows/{timeflowId}"
     assert result["summary"] == "Get a timeline by ID."
     assert result["description"] == "Returns the timeline and its connector."
+
+
+# --------------------------------------------------------------------------- #
+# S12: missing vocabulary.txt makes translation the identity function
+# --------------------------------------------------------------------------- #
+
+
+def test_missing_vocabulary_file_is_identity(tmp_path, monkeypatch, caplog):
+    """S12: When vocabulary.txt is absent, load_vocabulary_rules() returns () and
+    translation becomes the identity function.  Fails on d5f89d6 (no explicit
+    test existed); passes at HEAD."""
+    import logging
+
+    import dct_mcp_server.config.loader as loader_mod
+    from dct_mcp_server.config.loader import clear_cache
+
+    # Point MAPPINGS_DIR to an empty directory — no vocabulary.txt present
+    empty_dir = tmp_path / "mappings"
+    empty_dir.mkdir()
+    loader_mod.load_vocabulary_rules.cache_clear()
+    monkeypatch.setattr(loader_mod, "MAPPINGS_DIR", empty_dir)
+    try:
+        with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+            rules = load_vocabulary_rules()
+        assert rules == (), f"Expected empty rules tuple, got {len(rules)} rules"
+        assert any(r.levelno >= logging.WARNING for r in caplog.records), (
+            "Expected a WARNING about missing vocabulary file"
+        )
+        # Translation must be identity when no rules are loaded
+        from dct_mcp_server.tools.core import vocabulary as vocab_mod
+
+        vocab_mod._compiled_rules.cache_clear()
+        vocab_mod._translate.cache_clear()
+        assert to_canonical("Timeflow tf-1") == "Timeflow tf-1"
+    finally:
+        loader_mod.load_vocabulary_rules.cache_clear()
+        import dct_mcp_server.tools.core.vocabulary as _vm
+
+        _vm._compiled_rules.cache_clear()
+        _vm._translate.cache_clear()
+        clear_cache()
+
+
+# --------------------------------------------------------------------------- #
+# S13: malformed vocabulary lines are skipped and warnings are emitted
+# --------------------------------------------------------------------------- #
+
+
+def test_malformed_vocabulary_lines_are_skipped_with_warnings(
+    tmp_path, monkeypatch, caplog
+):
+    """S13: Unknown guard directive and unknown @signal set emit warnings and are
+    skipped without aborting the load; other rules still load.
+    Fails on d5f89d6 (no explicit test existed); passes at HEAD."""
+    import logging
+
+    import dct_mcp_server.config.loader as loader_mod
+    from dct_mcp_server.config.loader import clear_cache
+
+    vocab_dir = tmp_path / "mappings"
+    vocab_dir.mkdir()
+    vocab_file = vocab_dir / "vocabulary.txt"
+    # Line "a"            → only one field → len(parts) < 2 → silently skipped
+    # Line "|x"           → internal="" → if not (internal and canonical) → skipped
+    # Line "timeflow|timeline|bogus=x"
+    #   → unknown guard key "bogus" → logger.warning; rule still inserted
+    # Line "container|VDB Group|only_if_text_mentions=@nope"
+    #   → @nope not in signals → logger.warning in _expand_signal_words; rule inserted
+    vocab_file.write_text(
+        "a\n"
+        "|x\n"
+        "timeflow|timeline|bogus=x\n"
+        "container|VDB Group|only_if_text_mentions=@nope\n",
+        encoding="utf-8",
+    )
+
+    loader_mod.load_vocabulary_rules.cache_clear()
+    monkeypatch.setattr(loader_mod, "MAPPINGS_DIR", vocab_dir)
+    try:
+        with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+            rules = load_vocabulary_rules()
+        # The two non-trivially-malformed lines still produce rule entries
+        assert len(rules) >= 1, "Expected at least one valid rule from the test file"
+        messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("bogus" in m for m in messages), (
+            f"Expected a warning mentioning 'bogus' guard, got: {messages}"
+        )
+        assert any("nope" in m.lower() for m in messages), (
+            f"Expected a warning mentioning '@nope' signal set, got: {messages}"
+        )
+    finally:
+        loader_mod.load_vocabulary_rules.cache_clear()
+        clear_cache()
+
+
+# --------------------------------------------------------------------------- #
+# S15: to_canonical returns its input when the translator raises (GAP-1)
+# --------------------------------------------------------------------------- #
+
+
+def test_to_canonical_returns_input_when_translation_raises(caplog):
+    """S15: When _compiled_rules raises, to_canonical returns its input unchanged
+    and logs a WARNING once.  Fails on d5f89d6 (no try/except in to_canonical;
+    RuntimeError propagated); passes at HEAD."""
+    import logging
+    from unittest.mock import patch
+
+    import dct_mcp_server.tools.core.vocabulary as vocab_mod
+    from dct_mcp_server.config.loader import clear_cache
+
+    # Clear translator caches so _translate() is not served from cache and
+    # actually calls _compiled_rules() during this test.
+    vocab_mod._compiled_rules.cache_clear()
+    vocab_mod._translate.cache_clear()
+    vocab_mod._failure_logged = False
+    try:
+        text = "timeflow tf-unique-s15-test"
+        with patch.object(
+            vocab_mod, "_compiled_rules", side_effect=RuntimeError("forced for S15")
+        ):
+            with caplog.at_level(
+                logging.WARNING, logger="dct_mcp_server.tools.core.vocabulary"
+            ):
+                result = to_canonical(text)
+        # Must return input unchanged — not raise
+        assert result == text, f"Expected input unchanged, got {result!r}"
+        # First failure must be logged at WARNING (rate-limited to once per cache gen)
+        assert any(r.levelno >= logging.WARNING for r in caplog.records), (
+            "Expected at least one WARNING from the defensive to_canonical() catch"
+        )
+    finally:
+        vocab_mod._compiled_rules.cache_clear()
+        vocab_mod._translate.cache_clear()
+        vocab_mod._failure_logged = False
+        clear_cache()
+
+
+# --------------------------------------------------------------------------- #
+# S41/S42: GAP-3 pin tests — bare "engine" and "Delphix engine" + bare "engine"
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "engine cd-01 is unreachable",
+        "The engine failed to provision the VDB",
+        "Continuous Data engine is offline",
+    ],
+)
+def test_bare_engine_is_not_rewritten(raw):
+    """S41: Bare relayed 'engine' passes through unchanged (pins GAP-3 decision).
+
+    The vocabulary.txt has no rule for bare 'engine'.  Enforcement is via
+    server_instructions.md rule 2 only (instruction-level retraining).
+    'Continuous Data engine' is already canonical and must not be double-wrapped.
+    """
+    assert to_canonical(raw) == raw
+
+
+def test_delphix_engine_beside_bare_engine():
+    """S42: 'Delphix engine' resolves once when a bare 'engine' is also present.
+
+    The 'delphix engine' pattern matches only the two-word phrase, not 'engine'
+    alone, so the second bare 'engine' in the sentence is unchanged.
+    'VDB' is a @data signal, so the Continuous Data product is named.
+    """
+    raw = "The Delphix engine failed; check the engine logs for the VDB"
+    result = to_canonical(raw)
+    assert "Continuous Data engine" in result, (
+        f"Expected Continuous Data engine in: {result!r}"
+    )
+    assert "Delphix engine" not in result, (
+        f"'Delphix engine' was not translated in: {result!r}"
+    )
+    assert "engine engine" not in result.lower(), (
+        f"'engine engine' doubling found in: {result!r}"
+    )
+    # The bare "engine" in "engine logs" must survive unchanged
+    assert "engine logs" in result, f"Expected 'engine logs' to remain in: {result!r}"

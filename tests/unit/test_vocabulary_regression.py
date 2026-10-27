@@ -419,6 +419,97 @@ def test_dynamic_docstring_scanner_catches_a_regression():
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# S29: every FR-005 rename registered under new name only, documented old→new
+# --------------------------------------------------------------------------- #
+
+# FR-005 rename table: (old_name, new_name).  Hard-coded so any future revert
+# immediately breaks this test rather than silently passing with a stale set.
+_RENAMES = [
+    ("timeflow_tool", "timeline_tool"),
+    ("toolkit_tool", "connector_schema_tool"),
+    ("database_template_tool", "vdb_template_tool"),
+    ("upload_toolkit", "upload_connector_schema"),
+    ("delete_toolkit", "delete_connector_schema"),
+    ("dsource_link_appdata", "dsource_link_connector"),
+    ("dsource_link_appdata_defaults", "dsource_link_connector_defaults"),
+    ("update_appdata_dsource", "update_connector_dsource"),
+    ("switch_vdb_timeflow", "switch_vdb_timeline"),
+    ("switch_timeflow", "switch_timeline"),
+    ("create_appdata_source", "create_connector_source"),
+    ("update_appdata_source", "update_connector_source"),
+    ("get_snapshot_timeflow_range", "get_snapshot_timeline_range"),
+    ("get_timeflow_range", "get_timeline_range"),
+    ("check_database_connectivity", "check_connectivity"),
+]
+
+_PROPOSAL_DOC = (
+    Path(__file__).resolve().parents[2]
+    / "docs/PPM-1129/PPM-1129-agent-ready-api-surface-proposal.md"
+)
+_TOOLSETS_DIR = _SRC / "config/toolsets"
+
+
+def _all_toolset_identifiers() -> set[str]:
+    """Collect all tool names (from # TOOL headers) and action names (third column)
+    from every config/toolsets/*.txt file."""
+    names: set[str] = set()
+    for path in sorted(_TOOLSETS_DIR.glob("*.txt")):
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            header = re.match(r"^#\s*TOOL\s+\d+:\s*([A-Za-z0-9_]+)\s*-", line)
+            if header:
+                names.add(header.group(1))
+            elif re.match(r"^[A-Z*]+\|", line):
+                parts = line.split("|")
+                if len(parts) >= 3:
+                    names.add(parts[2].strip())
+    return names
+
+
+def test_persona_renames_are_complete_and_documented():
+    """S29: every FR-005 rename must be registered under its *new* name only
+    and documented old-to-new in the proposal doc.
+
+    Three assertions:
+    1. new_name is present in at least one config/toolsets/*.txt file (as a
+       TOOL header or as an action name in column 3).
+    2. old_name is absent from every toolsets/*.txt file in column 3 / TOOL headers
+       (note: the unchanged DCT API path column may still contain the old word;
+       that is intentional per NG3 and is not checked here).
+    3. Both old_name and new_name appear in the proposal doc's rename table.
+    """
+    toolset_ids = _all_toolset_identifiers()
+    proposal_text = _PROPOSAL_DOC.read_text()
+
+    missing_new: list[str] = []
+    present_old: list[str] = []
+    undocumented: list[tuple[str, str]] = []
+
+    for old_name, new_name in _RENAMES:
+        if new_name not in toolset_ids:
+            missing_new.append(new_name)
+        if old_name in toolset_ids:
+            present_old.append(old_name)
+        if old_name not in proposal_text or new_name not in proposal_text:
+            undocumented.append((old_name, new_name))
+
+    assert not missing_new, (
+        f"New names not found in any config/toolsets/*.txt: {missing_new}"
+    )
+    assert not present_old, (
+        f"Old names still present in config/toolsets/*.txt: {present_old}"
+    )
+    assert not undocumented, (
+        f"Rename pairs not in PPM-1129-agent-ready-api-surface-proposal.md: {undocumented}"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# GAP-6: editorial guidelines cover dynamic-docstring scan (S43)
+# --------------------------------------------------------------------------- #
+
+
 def test_editorial_guidelines_mention_dynamic_docstring_scan():
     """S43: vocabulary-editorial-guidelines.md must document the GAP-2 scan.
 
