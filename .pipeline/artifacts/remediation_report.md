@@ -1,38 +1,44 @@
-# CVE Remediation Report — DLPXECO-14802
+# CVE Remediation Report — DLPXECO-14812
 
-**Run date:** 2026-10-27  
-**Ticket:** [DLPXECO-14802](https://perforce.atlassian.net/browse/DLPXECO-14802)  
-**PR:** https://github.com/delphix/dxi-mcp-server/pull/144
+**Run:** 2026-10-27  
+**Pipeline mode:** pipeline  
+**Branch:** dlpx/pr/akshay.kamble/dlpxeco-14812  
+**PR:** https://github.com/delphix/dxi-mcp-server/pull/146
 
-## Summary
+## Tickets Fixed
 
-| Ticket | CVE | GHSA | Package | Old Version | New Version | Severity |
-|--------|-----|------|---------|-------------|-------------|----------|
-| DLPXECO-14802 | CVE-2026-102268 | GHSA-ffc3-869f-jxw9 | PyJWT | 2.13.0 | 2.15.1 | Critical |
+| Ticket | CVE | Package | Old → New | Severity |
+|--------|-----|---------|-----------|----------|
+| DLPXECO-14812 | CVE-2026-102273 | pyjwt | 2.13.0 → 2.15.1 | HIGH (CVSS 7.4) |
 
 ## Vulnerability Details
 
-**CVE-2026-102268** — PyJWT asymmetric-PEM detection bypass.
+**CVE-2026-102273** (GHSA-w2cx-738m-mc7w)  
+PyJWT accepts public JWK containers as HMAC secrets. An attacker who can supply a public JWK
+can forge JWT tokens by having the library treat public key material as the HMAC secret.
 
-PyJWT <= 2.13.0 contains a flaw where whitespace or line-ending mutations in
-public keys cause the HS/asymmetric confusion guard to be skipped. This allows
-an attacker to use a public key as an HMAC secret to forge JWT signatures,
-completely bypassing signature verification.
-
-PyJWT is a transitive dependency via `mcp[crypto]`.
+- Affected: PyJWT == 2.13.0
+- Fixed: PyJWT >= 2.14.0
+- Dependency path: mcp[crypto] → pyjwt
 
 ## Fix Applied
 
-- Added `pyjwt>=2.14.0` to `[project].dependencies` in `pyproject.toml` with a CVE comment
-- Ran `uv lock --upgrade-package pyjwt` — lock now resolves pyjwt==2.15.1
+Updated `pyproject.toml` pin comment to document both CVE-2026-102268 and CVE-2026-102273.
+The `pyjwt>=2.14.0` lower-bound was already in place from PR #144 (DLPXECO-14802).
+`uv.lock` resolves to pyjwt 2.15.1 which satisfies both CVEs.
+
+No constraint changes were required; only the comment was updated for audit traceability.
 
 ## Validation
 
-- `uv sync --extra dev`: pyjwt 2.13.0 → 2.15.1 installed, no resolver conflicts
-- `pytest tests/ -q -m "not real_dct and not llm_driven and not scenario"`: **855 passed, 0 failed**
-- `uv.lock` confirms: `name = "pyjwt"` / `version = "2.15.1"` (>= patched 2.14.0)
+- `uv sync --extra dev`: passed
+- `pre-commit run --all-files` (ruff lint + format): passed
+- `pytest tests/ -q -m "not real_dct and not llm_driven and not scenario"`: 855 passed, 947 skipped, 25 deselected
 
-## Jira State Change
+## Jira Updates
 
-- Added label: `mcp-cve-fix-inreview`
-- Kept triage labels: `mcp-cve-triage-done`, `AI-BUGTRIAGE-DONE`
+- Label added: `mcp-cve-fix-inreview`
+- Labels retained: `mcp-cve-triage-done`, `AI-BUGTRIAGE-DONE`
+- Status transitioned: In Progress → In Review
+- PR comment added with `PR:` prefix for merge tracking
+- Remote link added to ticket

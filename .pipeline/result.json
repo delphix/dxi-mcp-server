@@ -3,11 +3,11 @@
   "status": "complete",
   "phase": "fix",
   "dry_run": false,
-  "pr_url": "https://github.com/delphix/dxi-mcp-server/pull/144",
+  "pr_url": "https://github.com/delphix/dxi-mcp-server/pull/146",
   "tickets_fixed": [
     {
-      "key": "DLPXECO-14802",
-      "cve": "CVE-2026-102268",
+      "key": "DLPXECO-14812",
+      "cve": "CVE-2026-102273",
       "package": "pyjwt",
       "from": "2.13.0",
       "to": "2.15.1",
@@ -21,7 +21,7 @@
     {
       "type": "patch",
       "path": ".pipeline/artifacts/cve_fixes.patch",
-      "files_modified": 2
+      "files_modified": 1
     },
     {
       "type": "report",
