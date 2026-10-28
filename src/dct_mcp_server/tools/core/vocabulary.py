@@ -96,14 +96,16 @@ def _compiled_rules() -> tuple[tuple[re.Pattern, dict], ...]:
 #   - hyphen-, dot- or @-joined compounds (slugs, IDs, package names,
 #     name@version: tf-1, delphix-postgres-plugin, com.delphix.toolkit,
 #     toolkit@1.0.0)
-#   - {placeholders} and `code spans`
+#   - {placeholders} and `code spans`. A placeholder is braces around a bare identifier
+#     ({vdbId}, {name}); a JSON object such as a DCT error body is prose-bearing
+#     and is translated, with its keys, IDs and paths protected by the rules above.
 _PROTECTED_RE = re.compile(
     r"https?://\S+"
     r"|`[^`\n]*`"
     r"|[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
     r"|[\w.{}:~%$-]*\\[\w.{}:~%$\\-]*"
     r"|\w+(?:[-.@]\w+)+"
-    r"|\{[^{}]*\}"
+    r"|\{\s*[\w.-]*\s*\}"
 )
 
 _PREV_WORD_RE = re.compile(r"(\w+)\s+$")
@@ -159,9 +161,11 @@ def _guard_blocks(text: str, match: re.Match, rule: dict) -> bool:
     return False
 
 
-# A word boundary preceded by sentence-ending punctuation, or the very start
-# of the text. Used to decide whether a replacement should be capitalised.
-_SENTENCE_START_RE = re.compile(r"(?:^|[.!?]\s+|\n\s*)$")
+# A word boundary preceded by sentence-ending punctuation, the very start of
+# the text, or the opening quote of a JSON string value (DCT error bodies are
+# ``{"error_description":"Timeflow not found."}``). Used to decide whether a
+# replacement should be capitalised.
+_SENTENCE_START_RE = re.compile(r'(?:^|[.!?]\s+|\n\s*|":\s*")$')
 
 # "a"/"an" ending the text just before a substituted term, so the article can
 # be corrected when the substitution changes the following sound

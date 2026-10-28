@@ -1252,3 +1252,35 @@ def test_delphix_engine_beside_bare_engine():
     )
     # The bare "engine" in "engine logs" must survive unchanged
     assert "engine logs" in result, f"Expected 'engine logs' to remain in: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# Real DCT error bodies: "HTTP <code>: {json}" (found in manual testing)
+# ---------------------------------------------------------------------------
+
+
+def test_json_error_body_description_is_translated():
+    """The DCT client builds errors as ``HTTP <code>: <json body>``. A flat JSON
+    object must not be treated as a ``{placeholder}`` and skipped wholesale."""
+    raw = 'HTTP 404: {"error":"failed","error_description":"Timeflow not found."}'
+    out = to_canonical(raw)
+    assert "Timeline not found." in out
+    assert "Timeflow" not in out
+
+
+def test_json_error_body_keys_and_ids_are_left_alone():
+    raw = (
+        'HTTP 404: {"error":"failed","error_description":"Toolkit not found.",'
+        '"toolkit_id":"toolkit-1","path":"/toolkits/toolkit-1"}'
+    )
+    out = to_canonical(raw)
+    assert "Connector not found." in out
+    assert '"toolkit_id":"toolkit-1"' in out
+    assert '"path":"/toolkits/toolkit-1"' in out
+
+
+@pytest.mark.parametrize(
+    "text", ["{timeflowId}", "{ vdbId }", "/vdbs/{vdbId}", "Delete '{name}'"]
+)
+def test_identifier_placeholders_are_still_protected(text):
+    assert to_canonical(text) == text

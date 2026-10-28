@@ -101,7 +101,8 @@ original is always kept.
    unknown guards or signal sets, and sorts rules longest-internal-term first (stable).
 2. `to_canonical()` returns `None`/empty input unchanged.
 3. It computes protected spans: URLs, tokens containing `/` or `\`, hyphen/dot/`@`-joined IDs,
-   `code spans`, `{placeholders}`.
+   `code spans`, `{placeholders}` (braces around a bare identifier only; a JSON object such as a
+   DCT error body is not a placeholder and is translated).
 4. Per rule, it matches case-insensitive whole words (a space in a phrase also matches a hyphen),
    skips matches in protected spans or blocked by a guard; among lines sharing an internal
    term, the first whose text-level conditions hold wins.
@@ -682,6 +683,13 @@ Status and Evidence columns are filled in by the validate phase.
   caught, WARNING, `instructions=""`.
 - EC-18: `DCT_SERVER_INSTRUCTIONS` points at an empty file: `instructions=""` with no warning.
 - EC-19: `DCT_SERVER_INSTRUCTIONS` points at a non-UTF-8 file: startup fails today (GAP-7).
+
+- EC-20: A real DCT error `HTTP 404: {"error":"failed","error_description":"Timeflow not found."}`
+  gets `message_for_user` with `Timeline not found.` (a JSON string value counts as a sentence
+  start for capitalisation); JSON keys, IDs and paths stay byte-identical. Found in manual
+  testing against a live DCT; tests: `test_json_error_body_description_is_translated`,
+  `test_json_error_body_keys_and_ids_are_left_alone`,
+  `test_identifier_placeholders_are_still_protected`, `test_error_response_translates_a_json_error_body`.
 - EC-20: A pre-built tool raises an exception other than `DCTClientError`: re-raised
   untranslated, no `message_for_user` (scope limit).
 

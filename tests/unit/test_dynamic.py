@@ -834,3 +834,14 @@ def test_error_response_keeps_raw_error_when_translation_raises(caplog):
     assert any(r.levelno >= logging.WARNING for r in caplog.records), (
         "Expected a WARNING about the translation failure"
     )
+
+
+def test_error_response_translates_a_json_error_body():
+    """The real DCT error format ``HTTP <code>: {json}`` gets a message_for_user
+    while ``message`` keeps the raw text verbatim."""
+    from dct_mcp_server.tools.core.dynamic import _error_response
+
+    raw = 'HTTP 404: {"error":"failed","error_description":"Timeflow not found."}'
+    resp = _error_response(raw, 404)
+    assert resp["message"] == raw
+    assert "Timeline not found." in resp["message_for_user"]
