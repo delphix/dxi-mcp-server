@@ -11,15 +11,16 @@
 
 ## Landscape / Environment
 
-- Landscape: local developer machine (macOS Darwin 25.6.0, arm64)
-- Branch under test: `dlpx/pr/vinay.byrappa/ppm-1129-vocabulary-agent-ready-api` (HEAD: 41de161)
-- Service under test: `dct-mcp-server` package from this checkout, in-process (no live DCT)
+- Landscape: local developer machine (macOS Darwin 25.6.0 / macOS-26.7.1-arm64-arm-64bit)
+- Branch under test: `dlpx/pr/vinay.byrappa/ppm-1129-vocabulary-agent-ready-api` (HEAD: e8cab64)
+- Service under test: `dct-mcp-server` package from this checkout, in-process (unit/CI) and via stdio MCP client (live MCP flow)
 - Test runner: `pytest` + `pytest-asyncio` + `pytest-cov` (via `uv run --with pytest-cov`)
 - Python: 3.11.6
 - uv: 0.8.11
 - VMs provisioned: none (unit/functional layer only; S35 requires live DCT — not run)
 - Coverage instrumentation: `--cov=src/dct_mcp_server --cov-report=term-missing`
 - RED-before-fix methodology: src files reverted to `d5f89d6` while test files remain at HEAD; listed tests confirmed FAIL at d5f89d6 and PASS at HEAD (commit 41de161)
+- Live DCT for e2e/MCP flow: https://localhost (DCT_VERIFY_SSL=false), credentials referenced as $DCT_API_KEY
 
 No generated test files found for PPM-1129 in `.claude/test/generated-test/` — unit tests for this feature are in the project's own `tests/unit/` CI layer, not in generated-test.
 
@@ -30,7 +31,7 @@ No generated test files found for PPM-1129 in `.claude/test/generated-test/` —
 - mcp 1.29.1 (locked in uv.lock; `FastMCP`, `Tool.from_function`, elicitation API)
 - pydantic 2.12.4 (locked; `model_json_schema()` for elicitation)
 - DCT 2026.x spec: bundled corpus fixture `tests/fixtures/dct_api_text_corpus.json.gz`
-- Live DCT: NOT RUN (credentials not provided — see S35)
+- Live DCT: https://localhost — exercised for e2e smoke tests and manual MCP flow (S35 excluded; credentials redacted in all evidence)
 
 ## Functional (primary)
 
@@ -70,7 +71,7 @@ No generated test files found for PPM-1129 in `.claude/test/generated-test/` —
 | S32: [NEW] elicitation schema text is free of banned terms (GAP-2) | py 3.11 | PASS | `test_elicitation_text_is_free_of_internal_terms` (parametrized) — tests/unit/test_vocabulary_regression.py:393 |
 | S33: [NEW] dynamic/elicitation scanners catch an injected regression (GAP-2) | py 3.11 | PASS | `test_dynamic_docstring_scanner_catches_a_regression` — tests/unit/test_vocabulary_regression.py:403 |
 | S34: [EXISTS] confirmation messages render canonical names and drop unresolvable placeholders | py 3.11 | PASS | `test_no_confirmation_message_uses_internal_term` (parametrized), `test_engine_is_always_qualified_in_confirmation_messages`, `test_vdb_group_casing_is_canonical`, `test_no_confirmation_message_contains_a_pipe`, `test_placeholder_clause_dropped_when_unresolvable`, `test_days_clause_dropped_when_unresolvable`, `test_confirmation_message_names_the_real_resource` — tests/unit/test_vocabulary_regression.py + tests/unit/test_vocabulary.py |
-| S35: [EXISTS, manual non-gating] live session: "rewind my VDB" treated as refresh from self | live DCT | NOT RUN | Manual, non-gating check requiring live DCT credentials. Credentials (DCT_API_KEY / DCT_BASE_URL) not provided per user constraint. S35 does not gate merge per test plan Exit Criteria. |
+| S35: [EXISTS, manual non-gating] live session: "rewind my VDB" treated as refresh from self | live DCT | NOT RUN | Manual, non-gating check requiring live DCT credentials and an LLM-in-the-loop. Excluded per user constraint ("only things affecting dxi mcp server should be used") — does not gate merge per test plan Exit Criteria. |
 | S36: [NEW] keyword-fallback confirmation prompt translates the OpenAPI summary | py 3.11 | PASS | `test_keyword_fallback_prompt_uses_canonical_summary` — tests/unit/test_dynamic_confirmation.py. Summary "Delete timeflow" yields a prompt containing "timeline" and not "timeflow" (FR-007 AC-6). |
 | S37: [NEW] keyword-fallback prompt survives a raising translator (GAP-1 layer 2) | py 3.11 | PASS | `test_keyword_fallback_prompt_when_translation_raises` — tests/unit/test_dynamic_confirmation.py. FAILS on d5f89d6 (RuntimeError propagated), PASSES at HEAD: the prompt is built from the raw summary and confirmation is still required. |
 | S38: [NEW] generated-tool confirmations render placeholders like persona toolsets | py 3.11 | PASS | `test_generated_tool_confirmation_renders_placeholders` — tests/unit/test_driver.py. Generates a tool for `DELETE /vdb-groups/{vdbGroupId}`, imports it, and checks the prompt reads "…delete VDB Group 'payroll'?" with a resolved name and no raw brace (FR-007 AC-4). |
@@ -86,15 +87,76 @@ No generated test files found for PPM-1129 in `.claude/test/generated-test/` —
 | S46b: [NEW] deeply nested $ref request body keeps its top-level fields | py 3.11 | PASS | `test_request_body_resolved_inline_body_returns_content` — tests/test_spec_model.py:350 |
 | S47: [NEW] concurrent first translations agree | py 3.11 | PASS | `test_to_canonical_is_thread_safe` — tests/unit/test_vocabulary.py:761 |
 | S48: [NEW] control characters and replacement characters pass through the translator | py 3.11 | PASS | `test_to_canonical_does_not_corrupt_non_ascii_unicode` — tests/unit/test_vocabulary.py:744 |
-| S49: [EXISTS] full CI suite and lint stay green | py 3.11 | PASS | `pytest tests/ -m "not real_dct and not llm_driven and not scenario"`: 1119 passed, 947 skipped (require DCT creds), 25 deselected, 0 failures; `ruff check` and `ruff format --check` clean |
+| S49: [EXISTS] full CI suite and lint stay green | py 3.11 | PASS | `pytest tests/ -m "not real_dct and not llm_driven and not scenario" --cov=src/dct_mcp_server`: **1126 passed**, 947 skipped, 25 deselected, 0 failures; `ruff check` and `ruff format --check` both clean (HEAD: e8cab64) |
 
 ## E2E / Live Smoke Tests
 
-<!-- Dispatcher-run live-DCT smoke; not re-run here per user constraint. -->
+<!-- Live e2e smoke; run at HEAD e8cab64 against local DCT https://localhost (DCT_VERIFY_SSL=false, $DCT_API_KEY). -->
 
 | Test Suite | Outcome | Notes |
 |------------|---------|-------|
-| `tests/e2e/test_smoke.py` + `tests/e2e/test_smoke_cda.py` (live DCT at https://localhost) | 23 PASS, 1 SKIP | Run by dispatcher pre-evidence-refresh. 1 skipped: no VDBs on the instance to round-trip. `tests/e2e/cleanup/test_purge.py` deliberately not run: it deletes objects on the live instance. |
+| `tests/e2e/test_smoke.py` (8 tests) | 7 PASS, 1 SKIP | `test_server_boots_and_registers_self_service` PASS; `test_read_only_search_returns_well_shaped_response` PASS for all 6 tools (vdb_tool, vdb_group_tool, dsource_tool, snapshot_tool, bookmark_tool, job_tool, timeline_tool); `test_vdb_get_roundtrip_if_any_exist` SKIPPED — no VDBs on empty instance |
+| `tests/e2e/test_smoke_cda.py` (16 tests) | 16 PASS | `test_cda_registers_all_configured_tools` PASS; `test_cda_read_only_search_well_shaped` PASS for all 14 tools (cdb_dsource_tool, connector_schema_tool, data_connection_tool, engine_tool, group_tool, hook_template_tool, job_tool, replication_tool, staging_cdb_tool, staging_source_tool, tag_tool, timeline_tool, vdb_template_tool, virtualization_policy_tool) |
+| `tests/e2e/cleanup/test_purge.py` | NOT RUN | Deliberately excluded — deletes objects on the live DCT instance |
+
+## Manual MCP Client Flow
+
+<!-- Exercised via a Python stdio MCP client (mcp.ClientSession + StdioServerParameters) against the
+     worktree's .venv/bin/dct-mcp-server entry point with $DCT_API_KEY and DCT_BASE_URL=https://localhost.
+     Script written to scratchpad (not in repo). 18/18 checks passed. -->
+
+### (a) Initialize — vocabulary instructions
+
+| Check | Outcome | Notes |
+|-------|---------|-------|
+| `initialize` returns instructions containing "timeline" | PASS | instructions length=13518 chars; all five required terms present |
+| "VDB Group" present in instructions | PASS | |
+| "Continuous Data engine" present in instructions | PASS | |
+| "connector" present in instructions | PASS | |
+| "dSource" present in instructions | PASS | |
+
+### (b) Discovery
+
+| Check | Outcome | Notes |
+|-------|---------|-------|
+| `discovery(action="list_tags")` returns tag list | PASS | 105 tags returned; sample: Accounts, AiGenerate, AiManagement |
+| `discovery(action="list_operations", keyword="timeflow")` — prose summaries canonical (no "timeflow" prose) | PASS | 20 operations returned; zero summaries contained uncanonical "timeflow" prose; identifiers/paths correctly untranslated |
+| `discovery(action="list_operations", keyword="toolkit")` — no "toolkit" in summaries | PASS | 10 operations; zero summaries contained "toolkit" |
+| `discovery(action="get_operation_schema", method="GET", path="/vdbs")` returns schema | PASS | Schema payload non-empty |
+
+### (c) Execute GET reads
+
+| Check | Outcome | Notes |
+|-------|---------|-------|
+| `execute(method="GET", path="/vdbs")` succeeds | PASS | isError=False; response key present; empty items (instance has no VDBs) |
+| `execute(method="GET", path="/environments")` succeeds | PASS | isError=False |
+| `execute(method="GET", path="/vdb-groups")` succeeds | PASS | isError=False |
+| `execute(method="GET", path="/dsources")` succeeds | PASS | isError=False |
+
+### (d) DCT error translation (commit e8cab64 JSON-error-body fix)
+
+| Check | Outcome | Notes |
+|-------|---------|-------|
+| GET /timeflows/{timeflowId} timeflowId=no-such-tf → raw `message` preserved | PASS | `message='HTTP 404: {"error":"failed","error_description":"Timeflow not found."}'` — raw JSON body intact |
+| GET /timeflows/{timeflowId} timeflowId=no-such-tf → `message_for_user` canonical | PASS | `message_for_user='HTTP 404: {"error":"failed","error_description":"Timeline not found."}'` — "Timeflow" translated to "Timeline" in the user-facing field |
+| GET /vdbs/{vdbId} vdbId=no-such-vdb → raw `message` preserved | PASS | `message='HTTP 404: {"error":"failed","error_description":"Unable to find object matching the provided ID."}'` |
+
+### (e) Confirmation gate
+
+| Check | Outcome | Notes |
+|-------|---------|-------|
+| POST /vdbs/{vdbId}/delete vdbId=no-such-vdb body={} (no token) → `status=confirmation_required` | PASS | Returned `"status": "confirmation_required"` |
+| Confirmation `level=manual` | PASS | `"confirmation_level": "manual"` |
+| Confirmation message canonical (no banned terms) | PASS | `"Are you sure you want to permanently delete VDB 'no-such-vdb'? This action cannot be undone."` — no timeflow/container/inventory/rewind present. Call NOT re-issued with a token. |
+
+### (f) Persona toolset: self_service
+
+| Check | Outcome | Notes |
+|-------|---------|-------|
+| `timeline_tool` registered (not `timeflow_tool`) | PASS | Tools: vdb_tool, vdb_group_tool, dsource_tool, snapshot_tool, bookmark_tool, timeline_tool, job_tool (7 tools total) |
+| `timeflow_tool` absent | PASS | Not in registered tool list |
+| `timeline_tool(action="list")` read action succeeds | PASS | Returned `{"items": [], "response_metadata": {"total": 0}}` (empty instance). Corrected after review: the first run called a non-existent action `list_timeflows`, which the server answers with an `Unknown action` error body and `isError=False`, so that earlier PASS was invalid. Re-run by the dispatcher with the real action name. |
+| Post-run tracked file state | PASS | `git checkout -- src/dct_mcp_server/tools/` restored all regenerated `*_endpoints_tool.py` files; `git status` shows no tracked modifications after restore |
 
 ## Smoke (previously-generated functional tests)
 
@@ -102,16 +164,17 @@ No generated test files found for PPM-1129 in `.claude/test/generated-test/` —
 
 | Test File | Outcome | Notes |
 |-----------|---------|-------|
-| .claude/test/generated-test/test_DLPXECO-13984.py | PASS | Included in the 1119 passed via the full test run above; no failures |
-| .claude/test/generated-test/test_DLPXECO-14324.py | PASS | Included in the 1119 passed via the full test run above; no failures |
+| .claude/test/generated-test/test_DLPXECO-13984.py | PASS | Included in the 1126 passed via the full test run |
+| .claude/test/generated-test/test_DLPXECO-14324.py | PASS | Included in the 1126 passed via the full test run |
 
 ## Failure Triage (if any FAIL or unexplained SKIPPED)
 
-No FAILs. The only non-PASS entry is S35:
+No FAILs. The only non-PASS entries are:
 
 | Scenario | Reason |
 |----------|--------|
-| S35 | Manual, non-gating live DCT scenario (Track 1); credentials not provided per user constraint; does not gate merge per test plan Exit Criteria |
+| S35 | Manual, non-gating live DCT scenario (Track 1); excluded per user constraint (requires LLM-in-the-loop); does not gate merge per test plan Exit Criteria |
+| `test_vdb_get_roundtrip_if_any_exist` (e2e smoke) | SKIPPED — no VDBs exist on the empty local DCT instance; the test explicitly skips when no VDBs are present |
 
 ## RED-before-fix Evidence (GAP-1/4/5/7)
 
@@ -139,7 +202,7 @@ Methodology: `git checkout d5f89d6 -- src/dct_mcp_server/{config/loader,core/dec
 
 ## Summary
 
-50 of 51 functional scenarios passed; 1 not run (S35 — manual live DCT, non-gating, no credentials provided). Smoke: 2 of 2 previously-generated test files passed. E2E live smoke (dispatcher-run): 23 passed, 1 skipped. Full CI suite: 1119 passed, 0 failures, ruff check and ruff format --check clean.
+50 of 51 functional scenarios passed; 1 not run (S35 — manual live DCT/LLM check, non-gating, excluded per user constraint). Smoke: 2 of 2 previously-generated test files passed. E2E live smoke (run at e8cab64): 23 passed, 1 skipped (no VDBs on instance). Manual MCP client flow: 18/18 checks passed (all vocabulary, discovery, execute, error-translation, confirmation-gate, and persona-toolset checks). Full CI suite: **1126 passed**, 0 failures, ruff check and ruff format --check clean.
 
 ---
 <!-- Cross-references:

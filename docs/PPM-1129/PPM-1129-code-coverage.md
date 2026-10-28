@@ -13,7 +13,7 @@
 | File | Stmts | Miss | Cover | Uncovered Lines |
 |------|-------|------|-------|----------------|
 | `src/dct_mcp_server/config/loader.py` | 316 | 6 | 98% | 395, 507, 582-585 |
-| `src/dct_mcp_server/tools/core/vocabulary.py` | 126 | 5 | 96% | 156-158, 310, 331 |
+| `src/dct_mcp_server/tools/core/vocabulary.py` | 126 | 5 | 96% | 158-160, 314, 335 |
 | `src/dct_mcp_server/core/decorators.py` | 96 | 4 | 96% | 22-23, 101, 139 |
 | `src/dct_mcp_server/tools/core/dynamic_confirmation.py` | 55 | 5 | 91% | 126-127, 142-144 |
 | `src/dct_mcp_server/tools/core/spec_model.py` | 292 | 28 | 90% | 83, 212, 246, 258, 359, 363, 367, 371, 419, 427, 444, 450, 462, 465, 475, 480, 503-505, 509, 513, 517-522, 565 |
@@ -37,12 +37,12 @@ src/dct_mcp_server/tools/core/confirmation_levels.py       104     13    88%   1
 src/dct_mcp_server/tools/core/confirmation_resolver.py     101      0   100%
 src/dct_mcp_server/tools/core/confirmation_store.py        128      9    93%   54-55, 86-88, 188-189, 278-279
 src/dct_mcp_server/tools/core/confirmation_token.py         30      1    97%   103
-src/dct_mcp_server/tools/core/dynamic.py                   491     84    83%   ...
+src/dct_mcp_server/tools/core/dynamic.py                   491     84    83%   35-36, 124-128, 138, 141-147, 210, 478, 543-547, 561, 568, 583-584, 588, 598, 829-836, 865-955, 1049-1060, 1239, 1242, 1244, 1269, 1272, 1274, 1347, 1361, 1371-1376, 1387, 1398-1400, 1405-1407, 1412-1414, 1432, 1487, 1493-1495, 1502, 1507-1509, 1735, 1738-1739
 src/dct_mcp_server/tools/core/dynamic_confirmation.py       55      5    91%   126-127, 142-144
 src/dct_mcp_server/tools/core/endpoint_discovery.py         83      0   100%
 src/dct_mcp_server/tools/core/floor_operations.py           51      7    86%   37-38, 73, 77-78, 112, 127
-src/dct_mcp_server/tools/core/spec_model.py                292     28    90%   ...
-src/dct_mcp_server/tools/core/vocabulary.py                126      5    96%   156-158, 310, 331
+src/dct_mcp_server/tools/core/spec_model.py                292     28    90%   83, 212, 246, 258, 359, 363, 367, 371, 419, 427, 444, 450, 462, 465, 475, 480, 503-505, 509, 513, 517-522, 565
+src/dct_mcp_server/tools/core/vocabulary.py                126      5    96%   158-160, 314, 335
 TOTAL                                                     3006    373    88%
-1119 passed, 947 skipped, 25 deselected, 113 warnings in 194.88s (0:03:14)
+1126 passed, 947 skipped, 25 deselected, 113 warnings in 157.05s (0:02:37)
 ```
