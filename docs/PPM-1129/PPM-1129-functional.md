@@ -470,7 +470,7 @@ appear as customer-facing concepts.
 ## FR-010: Resolve engine / DCT / product conflation on evidence
 
 **Implementation status**: Implemented for "Delphix engine(s)" and retired engine names; bare
-relayed "engine" is a gap (GAP-3). Files: `server_instructions.md` rule 2, the
+relayed "engine" is a pinned design decision (GAP-3: no rule; instruction rule 2 is the mitigation). Files: `server_instructions.md` rule 2, the
 `delphix engine(s)` / `virtualization engine` / `masking engine` / `cloud engine(s)` entries in
 `vocabulary.txt`. Tests:
 `test_vocabulary_spec_corpus.py::test_delphix_engine_never_survives_and_names_one_product_only_on_evidence`,
@@ -492,10 +492,9 @@ no rule and passes through; `engine_tool` keeps its name because bare `engine` i
    engine; Cloud Engine -> Continuous Data engine with Elastic Data.
 2. "Delphix engine" takes the first rule whose `only_if_text_mentions=@<product>` matches and no
    `skip_if_text_mentions` vetoes; else the "either" fallback.
-3. Bare "engine": no rule today. **Design decision required (GAP-3)**: either add
-   evidence-gated rules reusing `@data`/`@compliance` (with no fallback for bare "engine", since
-   it is often already qualified nearby), or record that instruction rule 2 is the accepted
-   mitigation.
+3. Bare "engine": no rule, by design (GAP-3). Evidence-gated rules were rejected because
+   "engine" is also a real DCT object name and is often already qualified nearby; instruction
+   rule 2 is the accepted mitigation, and S41/S42 pin the current behaviour.
 
 ### Output
 - A qualified engine phrase or the explicit "either" phrase for "Delphix engine" and retired
@@ -512,7 +511,8 @@ no rule and passes through; `engine_tool` keeps its name because bare `engine` i
       Source: facts.json acceptance_criteria[3]
 - [ ] AC-4: Given relayed text with bare "engine" and Continuous Data evidence, when translated,
       then the outcome matches the GAP-3 design decision and a test pins it (including that
-      "Continuous Data engine" is never doubled). **Open on branch (GAP-3).**
+      "Continuous Data engine" is never doubled). **Pinned (GAP-3):** `test_bare_engine_is_not_rewritten` and
+      `test_delphix_engine_beside_bare_engine` in `tests/unit/test_vocabulary.py`.
       Source: facts.json acceptance_criteria[3]
 
 ---
@@ -727,7 +727,7 @@ Status and Evidence columns are filled in by the validate phase.
 - Only the server-affecting ticket outcomes (facts.json acceptance_criteria[0], [1], [2], [3],
   [5]) are traced, per the user's scope constraint. FR numbering is new in this revision.
 - FR-005: breaking renames are accepted without aliases; persona toolsets are opt-in surfaces.
-- FR-010: whether bare "engine" gets a rule is left to design (GAP-3).
+- FR-010: bare "engine" gets no rule; recorded as a design decision and pinned by tests (GAP-3).
 - FR-012: included as a server-side agent-readiness fix although no ticket outcome names it.
 - Implementation status and test names come from the branch at `d5f89d6` and PR #134's
   description (1055 passed, 972 skipped, 0 failed); GAP-1, GAP-4, GAP-5 and GAP-7 were

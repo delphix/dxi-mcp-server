@@ -945,12 +945,12 @@ def test_generate_tools_from_openapi_download_failure_propagates(monkeypatch, tm
 
 
 # ---------------------------------------------------------------------------
-# GAP-5: spec_model imports and RequestBody._resolved() smoke test (S38)
+# GAP-5: spec_model imports and RequestBody._resolved() smoke test
 # ---------------------------------------------------------------------------
 
 
 def test_spec_model_imports_cleanly_after_gap5():
-    """S38: spec_model.py imports without error and RequestBody._resolved is usable.
+    """GAP-5 smoke: spec_model.py imports without error and RequestBody._resolved is usable.
 
     GAP-5 replaced the dead resolve_ref loop with a direct resolve_refs() call.
     This smoke test ensures the refactoring didn't break the import or the
@@ -989,3 +989,68 @@ def test_spec_model_imports_cleanly_after_gap5():
     # Should return a dict (may be error marker since Body is not in requestBodies,
     # but should NOT raise)
     assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# FR-007 AC-4: generated tools render confirmation placeholders
+# ---------------------------------------------------------------------------
+
+
+def test_generated_tool_confirmation_renders_placeholders(tmp_path):
+    """S38: a tool generated from a spec has a working ``check_confirmation`` that
+    resolves ``{name}`` like the persona toolsets do, never printing a raw brace."""
+    import importlib.util
+
+    spec = {
+        "paths": {
+            "/vdb-groups/{vdbGroupId}": {
+                "delete": {
+                    "summary": "Delete a VDB Group",
+                    "operationId": "deleteVdbGroup",
+                    "parameters": [
+                        {
+                            "name": "vdbGroupId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"},
+                        }
+                    ],
+                    "responses": {"204": {"description": "ok"}},
+                }
+            }
+        }
+    }
+    apis = [
+        {
+            "method": "DELETE",
+            "path": "/vdb-groups/{vdbGroupId}",
+            "action": "delete_vdb_group",
+        }
+    ]
+    # The generated module is the driver's shared prefix plus the tool code.
+    code = (
+        driver_mod.prefix
+        + "\n"
+        + driver_mod._generate_unified_tool("vdb_group_tool", apis, spec)
+    )
+    path = tmp_path / "gen_vdb_group_tool.py"
+    path.write_text(code)
+    module_spec = importlib.util.spec_from_file_location("gen_vdb_group_tool", path)
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+
+    named = module.check_confirmation(
+        "DELETE",
+        "/vdb-groups/vg-1",
+        "delete_vdb_group",
+        "vdb_group_tool",
+        False,
+        {"name": "payroll"},
+    )
+    assert named["status"] == "confirmation_required"
+    assert "VDB Group 'payroll'" in named["confirmation_message"]
+
+    unnamed = module.check_confirmation(
+        "DELETE", "/vdb-groups/vg-1", "delete_vdb_group", "vdb_group_tool", False, None
+    )
+    assert "{" not in unnamed["confirmation_message"]

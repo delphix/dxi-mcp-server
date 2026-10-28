@@ -291,12 +291,12 @@ def test_get_confirmation_dynamic_spec_none_triggers_lazy_import():
 
 
 # ---------------------------------------------------------------------------
-# GAP-1: decorator exception guard (S36, S37)
+# GAP-1: decorator exception guard
 # ---------------------------------------------------------------------------
 
 
 def test_with_message_for_user_returns_original_exception_when_vocabulary_raises():
-    """S36: _with_message_for_user falls back to the original exception if the
+    """GAP-1 decorator guard: _with_message_for_user falls back to the original exception if the
     vocabulary layer raises, so tool calls still fail with a proper MCP error."""
     from unittest.mock import patch
 
@@ -316,7 +316,7 @@ def test_with_message_for_user_returns_original_exception_when_vocabulary_raises
 
 
 def test_with_message_for_user_attaches_canonical_message_for_user_on_success():
-    """S37: When the vocabulary layer succeeds, message_for_user is attached."""
+    """GAP-1 decorator success path: when the vocabulary layer succeeds, message_for_user is attached."""
     from dct_mcp_server.core.decorators import _with_message_for_user
     from dct_mcp_server.core.exceptions import DCTClientError
 
@@ -327,3 +327,62 @@ def test_with_message_for_user_attaches_canonical_message_for_user_on_success():
     assert result.message_for_user is not None
     assert "timeline" in result.message_for_user.lower()
     assert "timeflow" not in result.message_for_user.lower()
+
+
+# ---------------------------------------------------------------------------
+# FR-007: keyword-fallback prompt renders the OpenAPI summary canonically
+# ---------------------------------------------------------------------------
+
+_TIMEFLOW_SPEC = {
+    "paths": {
+        "/vdbs/vdb-123": {
+            "post": {
+                "operationId": "deleteTimeflow",
+                "summary": "Delete timeflow",
+                "description": "",
+            }
+        }
+    }
+}
+
+
+def test_keyword_fallback_prompt_uses_canonical_summary():
+    """S36: the OpenAPI summary is rendered into canonical terms in the prompt."""
+    result = get_confirmation_for_operation_dynamic(
+        "POST", "/vdbs/vdb-123", _TIMEFLOW_SPEC
+    )
+    assert result["level"] == "manual"
+    assert "timeline" in result["message"].lower()
+    assert "timeflow" not in result["message"].lower()
+
+
+def test_keyword_fallback_prompt_when_translation_raises():
+    """S37: a failing translator must not break the prompt; confirmation is still
+    required and the prompt is built from the raw summary (GAP-1 layer 2)."""
+    import dct_mcp_server.tools.core.vocabulary as vocab_mod
+
+    spec = {
+        "paths": {
+            "/vdbs/vdb-456": {
+                "post": {
+                    "operationId": "deleteTimeflowRaw",
+                    "summary": "Delete timeflow raw-s37",
+                    "description": "",
+                }
+            }
+        }
+    }
+    vocab_mod._translate.cache_clear()
+    try:
+        with patch.object(
+            vocab_mod, "_translate", side_effect=RuntimeError("forced for S37")
+        ):
+            result = get_confirmation_for_operation_dynamic(
+                "POST", "/vdbs/vdb-456", spec
+            )
+    finally:
+        vocab_mod._translate.cache_clear()
+        vocab_mod._failure_logged = False
+
+    assert result["level"] == "manual"
+    assert "Delete timeflow raw-s37" in result["message"]
