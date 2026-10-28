@@ -133,6 +133,8 @@ class DCTAPIClient:
         }
         if config.get("client_ip"):
             instance.headers["X-Dct-Client-IP"] = config["client_ip"]
+        if config.get("client_user_agent"):
+            instance.headers["User-Agent"] = config["client_user_agent"]
         instance._client = None
         logger.debug("Created per-identity client for %s", _mask_secret(account_id))
         return instance

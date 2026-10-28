@@ -37,6 +37,9 @@ def get_dct_config(require_key: bool = True) -> Dict[str, Any]:
         # The caller's own address, passed the same way, so DCT's audit log
         # records the user rather than the host this process runs on.
         "client_ip": (os.getenv("DCT_CLIENT_IP") or "").strip() or None,
+        # The caller's browser User-Agent, passed the same way, so the audit log
+        # records the user's client rather than this server.
+        "client_user_agent": (os.getenv("DCT_CLIENT_USER_AGENT") or "").strip() or None,
         # Confirmation system settings
         "confirmation_token_ttl": int(os.getenv("DCT_CONFIRMATION_TOKEN_TTL", "3600")),
         "confirmation_enforcement": os.getenv(
@@ -156,6 +159,8 @@ def print_config_help():
     print(
         "                   X-Dct-Client-IP so its audit log records the user, not this host."
     )
+    print("  DCT_CLIENT_USER_AGENT  Caller's own User-Agent (embedded mode, optional),")
+    print("                   sent to DCT in place of Delphix-AI-Assistant/<version>.")
     print()
     print("Dynamic mode (DCT_TOOLSET=dynamic) optional variables:")
     print(

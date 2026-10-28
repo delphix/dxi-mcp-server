@@ -46,3 +46,26 @@ def test_standalone_client_never_sends_an_ip(monkeypatch):  # AI-generated
     monkeypatch.setenv("DCT_CLIENT_IP", "203.0.113.9")
     c = DCTAPIClient()
     assert "X-Dct-Client-IP" not in c.headers
+
+
+_BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/130.0 Safari/537.36"
+
+
+def test_embedded_client_sends_the_callers_user_agent(monkeypatch):  # AI-generated
+    monkeypatch.setenv("DCT_CLIENT_USER_AGENT", f" {_BROWSER} ")
+    c = DCTAPIClient.for_identity("acct-4711")
+    assert c.headers["User-Agent"] == _BROWSER
+    # the client name still marks the call as the assistant's
+    assert c.headers["X-Dct-Client-Name"] == "Delphix AI Assistant"
+
+
+def test_embedded_client_without_a_ua_keeps_its_own(monkeypatch):  # AI-generated
+    monkeypatch.delenv("DCT_CLIENT_USER_AGENT", raising=False)
+    c = DCTAPIClient.for_identity("acct-4711")
+    assert c.headers["User-Agent"].startswith("Delphix-AI-Assistant/")
+
+
+def test_standalone_client_never_sends_the_callers_ua(monkeypatch):  # AI-generated
+    monkeypatch.setenv("DCT_CLIENT_USER_AGENT", _BROWSER)
+    c = DCTAPIClient()
+    assert c.headers["User-Agent"].startswith("dct-mcp-server/")
