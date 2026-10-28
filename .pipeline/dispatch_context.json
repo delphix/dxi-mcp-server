@@ -1,0 +1,8 @@
+{
+  "plugin_name": "",
+  "skill_name": "mcp-cve-fix",
+  "skill_flags": "--start-from mcp-cve-fix",
+  "worktree_path": "/aidlc-app/dxi-aidlc/repos/users/akshay.kamble/dxi-mcp-server/.worktrees/dlpxeco-14812",
+  "ticket_id": "DLPXECO-14812",
+  "spec_review_feedback": false
+}

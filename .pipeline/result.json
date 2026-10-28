@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "phase": "fix",
+  "dry_run": false,
+  "pr_url": "https://github.com/delphix/dxi-mcp-server/pull/146",
+  "tickets_fixed": [
+    {
+      "key": "DLPXECO-14812",
+      "cve": "CVE-2026-102273",
+      "package": "pyjwt",
+      "from": "2.13.0",
+      "to": "2.15.1",
+      "labeled": "mcp-cve-fix-inreview"
+    }
+  ],
+  "tickets_needs_human": [],
+  "tickets_skipped": [],
+  "tickets_merged": [],
+  "artifacts": [
+    {
+      "type": "patch",
+      "path": ".pipeline/artifacts/cve_fixes.patch",
+      "files_modified": 1
+    },
+    {
+      "type": "report",
+      "path": ".pipeline/artifacts/remediation_report.md"
+    }
+  ],
+  "validation_passed": true,
+  "error": null
+}
