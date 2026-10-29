@@ -254,18 +254,6 @@ Also user-visible, not breaking: pre-built tools now report a DCT API failure as
 (`isError: true`) whose text is the raw upstream message, followed by a `message_for_user:` line
 in canonical vocabulary when translation changed it.
 
-**Behaviour change in dynamic mode (not a rename): required request-body fields are now enforced for
-`$ref` bodies.** Before GAP-5, an operation whose request body was given as a `$ref` looked
-field-less to `execute`, so its required-field check was silently skipped and an incomplete body
-went straight to the confirmation gate or to DCT. The `$ref` is now resolved, so `execute` returns
-`VALIDATION_ERROR` with the missing fields. Measured against DCT 3.31.0, this newly applies to 9
-operations (11 -> 20 operations reject an empty body): `POST /bookmarks`, `/dsources/appdata`,
-`/dsources/ase`, `/dsources/mssql`, `/dsources/mssql/staging-push`, `/database-templates`,
-`/vdb-groups/provision_from_bookmark`, `/vdbs/empty_vdb`, and
-`/access-groups/{accessGroupId}/scopes/{scopeId}/objects/delete`. A client that was sending
-incomplete bodies to these must now send the required fields; a client that sends complete bodies
-is unaffected. No API path or action name changed.
-
 ## Open questions carried forward
 
 - **Glossary hosting and Design review.** Glossary v1.2 (32 canonical-term rows, 169 synonym rows,
