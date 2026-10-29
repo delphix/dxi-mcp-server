@@ -16,6 +16,7 @@ import re
 from functools import lru_cache
 
 from dct_mcp_server.config.loader import (
+    load_vocabulary_preserved,
     load_vocabulary_rules,
     register_cache_clear_hook,
 )
@@ -45,6 +46,9 @@ def _vocabulary_cache_clear_hook() -> None:
     global _failure_logged
     _compiled_rules.cache_clear()
     _translate.cache_clear()
+    _translate_words.cache_clear()
+    _preserved_re.cache_clear()
+    _single_word_terms.cache_clear()
     _failure_logged = False
 
 
@@ -105,7 +109,8 @@ _PROTECTED_RE = re.compile(
     # A path-like token. A Title/Title pair ("Container/Template") is prose, not a path.
     r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
     r"|[\w.{}:~%$-]*\\[\w.{}:~%$\\-]*"
-    r"|\w+(?:[-.@]\w+)+"
+    # A hyphen/dot/@-joined identifier. "plugin-specific" and the like are prose.
+    r"|(?<![\w.@-])(?!\w+-(?:specific|based|related)\b(?![-.@]\w))\w+(?:[-.@]\w+)+"
     r"|\{\s*[\w.-]*\s*\}"
 )
 
@@ -114,8 +119,21 @@ _NEXT_WORD_RE = re.compile(r"^\s+(\w+)")
 _WORD_RE = re.compile(r"\w+")
 
 
+@lru_cache(maxsize=1)
+def _preserved_re() -> re.Pattern | None:
+    """API values (vocabulary.txt ``@preserve``) that are never rewritten."""
+    tokens = sorted(load_vocabulary_preserved(), key=len, reverse=True)
+    if not tokens:
+        return None
+    return re.compile(r"(?<![\w])(?:" + "|".join(map(re.escape, tokens)) + r")(?![\w])")
+
+
 def _protected_spans(text: str) -> list[tuple[int, int]]:
-    return [m.span() for m in _PROTECTED_RE.finditer(text)]
+    spans = [m.span() for m in _PROTECTED_RE.finditer(text)]
+    preserved = _preserved_re()
+    if preserved is not None:
+        spans += [m.span() for m in preserved.finditer(text)]
+    return spans
 
 
 def _inside(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
@@ -292,6 +310,70 @@ def to_canonical(text: str | None) -> str | None:
 # the bound keeps one-off error messages from growing it without limit.
 @lru_cache(maxsize=8192)
 def _translate(text: str) -> str:
+    return _translate_words(_translate_type_names(text))
+
+
+# DCT also names API types in prose and titles ("PaaSTimeflow", "ListToolkitResponse"). The
+# rules match whole words, so a retired word inside such a name is invisible to them.
+# Split a PascalCase name into words, translate those, and rejoin; a name the rules leave
+# alone is returned unchanged, and lowerCamel names (field names such as timeflowId) are
+# never touched.
+_PASCAL_TOKEN_RE = re.compile(r"\b[A-Z][A-Za-z0-9]*\b")
+_CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+@lru_cache(maxsize=1)
+def _single_word_terms() -> frozenset:
+    """Internal terms that are one word ("appdata"): CamelCase splitting must not cut them."""
+    return frozenset(
+        r["internal"].lower()
+        for r in load_vocabulary_rules()
+        if " " not in r["internal"]
+    )
+
+
+def _camel_words(token: str) -> list[str]:
+    parts = _CAMEL_BOUNDARY_RE.split(token)
+    words, i, terms = [], 0, _single_word_terms()
+    while i < len(parts):
+        for size in (3, 2):
+            if "".join(parts[i : i + size]).lower() in terms:
+                words.append("".join(parts[i : i + size]))
+                i += size
+                break
+        else:
+            words.append(parts[i])
+            i += 1
+    return words
+
+
+def _translate_type_names(text: str) -> str:
+    spans = _protected_spans(text)
+    preserved = load_vocabulary_preserved()
+    pieces, cursor = [], 0
+    for match in _PASCAL_TOKEN_RE.finditer(text):
+        token = match.group(0)
+        if token in preserved:
+            continue
+        words = _camel_words(token)
+        if len(words) < 2 or _inside(match.start(), match.end(), spans):
+            continue
+        spaced = " ".join(words)
+        translated = _translate_words(spaced)
+        if translated == spaced:
+            continue
+        rejoined = "".join(w[:1].upper() + w[1:] for w in translated.split())
+        pieces.append(text[cursor : match.start()])
+        pieces.append(rejoined)
+        cursor = match.end()
+    if not pieces:
+        return text
+    pieces.append(text[cursor:])
+    return "".join(pieces)
+
+
+@lru_cache(maxsize=8192)
+def _translate_words(text: str) -> str:
     result = text
     settled: set[str] = set()
 

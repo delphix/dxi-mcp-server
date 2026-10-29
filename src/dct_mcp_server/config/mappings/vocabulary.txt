@@ -53,6 +53,12 @@
 # (32 Canonical Terms rows -- #1-#28 plus 3a, 7a, 7b, 19a -- and 169 Synonym
 # Map rows). See config/server_instructions.md for the full domain model.
 
+# --- API values that must not be rewritten ---
+# Values a client sends back to DCT exactly as DCT defines them (the `link_type` values).
+# They contain a retired word but are data, not wording, so the model must be able to pass
+# them through unchanged.
+@preserve AppDataDirect,AppDataStaged
+
 # --- Positive-context signal sets ---
 # Words that only make sense when the text is about masking / Continuous
 # Compliance. Deliberately absent: "profile" (user profiles, replication

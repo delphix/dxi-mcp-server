@@ -1439,3 +1439,67 @@ def test_title_case_slash_compound_is_prose_not_a_path():
 )
 def test_real_paths_are_still_protected(raw):
     assert to_canonical(raw) == raw
+
+
+# --------------------------------------------------------------------------- #
+# Every API: type names, hyphenated compounds and API values (PPM-1129 lever 2/4)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (
+            "The ID of the PaaSTimeflow this snapshot belongs to.",
+            "The ID of the PaaSTimeline this snapshot belongs to.",
+        ),
+        ("ListToolkitResponse", "ListConnectorResponse"),
+        ("MaskingPluginCreateResponse", "MaskingConnectorCreateResponse"),
+        (
+            "ListPaaSDatabaseTimeflowsResponse",
+            "ListPaaSDatabaseTimelinesResponse",
+        ),
+        (
+            "Schema that defines the structure of AppDataSyncParameters.",
+            "Schema that defines the structure of ConnectorSyncParameters.",
+        ),
+        (
+            "ToolkitSchemaDefinitions: Delphix configuration.",
+            "ConnectorSchemaDefinitions: Delphix configuration.",
+        ),
+    ],
+)
+def test_camelcase_type_names_are_translated(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("The plugin-specific parameters.", "The connector-specific parameters."),
+        (
+            "The unique identifier for timeflow-specific TDE objects.",
+            "The unique identifier for timeline-specific TDE objects.",
+        ),
+    ],
+)
+def test_hyphenated_prose_compounds_are_translated(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # API values a client must send back exactly as DCT defines them.
+        "The type of link to create. Default is AppDataDirect.",
+        "Mount point on the staging environment [AppDataStaged only].",
+        # Identifiers, field names and ordinary type names are never rewritten.
+        "Use delphix-postgres-plugin as the name.",
+        "Response for the transfer-engine-timeflow-bookmarks endpoint.",
+        "Pass the timeflowId field.",
+        "A PostgreSQL DataLayout and VirtualizationPolicies object.",
+        "Install the JenkinsPlugin first.",
+    ],
+)
+def test_values_identifiers_and_unrelated_type_names_are_left_alone(raw):
+    assert to_canonical(raw) == raw

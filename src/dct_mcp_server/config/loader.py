@@ -409,6 +409,31 @@ def _expand_signal_words(words: str, signals: Dict[str, frozenset]) -> frozenset
 
 
 @lru_cache(maxsize=1)
+def load_vocabulary_preserved() -> frozenset:
+    """
+    Tokens vocabulary.txt marks with ``@preserve`` (PPM-1129): API values a client
+    must send back exactly as DCT defines them (for example the ``link_type`` values),
+    so they are never rewritten even though they contain a retired word.
+    """
+    vocab_file = MAPPINGS_DIR / "vocabulary.txt"
+    tokens: set = set()
+    try:
+        with open(vocab_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("@preserve"):
+                    tokens.update(
+                        t.strip()
+                        for t in line[len("@preserve") :].split(",")
+                        if t.strip()
+                    )
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning(f"Could not read vocabulary preserve list {vocab_file}: {e}")
+        return frozenset()
+    return frozenset(tokens)
+
+
+@lru_cache(maxsize=1)
 def load_vocabulary_rules() -> Tuple[Dict[str, Any], ...]:
     """
     Load the internal-to-canonical term rules from mappings/vocabulary.txt.
@@ -821,6 +846,7 @@ def clear_cache():
     load_server_instructions.cache_clear()
     load_vocabulary_map.cache_clear()
     load_vocabulary_rules.cache_clear()
+    load_vocabulary_preserved.cache_clear()
     logger.info("Configuration cache cleared")
     for hook_name, hook_fn in list(_CACHE_CLEAR_HOOKS.items()):
         try:
