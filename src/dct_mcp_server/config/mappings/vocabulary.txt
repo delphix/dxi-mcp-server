@@ -1,0 +1,165 @@
+# Vocabulary translation map (PPM-1129)
+#
+# Applied by tools/core/vocabulary.py:to_canonical() to text that originates
+# upstream and is shown to a user -- raw DCT/engine error bodies (pre-built
+# tools and the dynamic execute tool, surfaced additively as
+# message_for_user), and OpenAPI operation summaries surfaced by the dynamic
+# discovery tool and the keyword-fallback confirmation prompt. Internal
+# terminology on the left, the canonical customer-facing term on the right.
+#
+# Format:
+#   @signals name=w1,w2,...                       declare a named word set
+#   internal_term|canonical_term[|guard=w1,w2...]...
+#
+# Matching is case-insensitive and whole-word. The canonical term keeps its
+# authored casing mid-sentence, is capitalised at a sentence start and
+# upper-cased when the match was all caps.
+#
+# Never translated, whatever the term: URLs, anything containing "/" or "\"
+# (API, POSIX and Windows paths), hyphen/dot/@-joined identifiers (tf-1,
+# delphix-postgres-plugin, toolkit@1.0.0) and {placeholders}. Those are
+# machine identifiers, not prose.
+#
+# A substitution never doubles a term: if the neighbouring words already spell
+# part of the canonical term ("VDB containers"), they are merged into it
+# ("VDB Groups"), never repeated ("VDB VDB Groups").
+#
+# Guards. Words are whole-word and case-insensitive (a phrase's spaces also
+# match a hyphen: "self service" matches "self-service"); "@name" expands to a
+# declared signal set. No prefix or substring matching -- "profil" would match
+# "profile", and "inventory" would match "VDB inventory report".
+#   only_if_text_mentions=...  POSITIVE CONTEXT: apply this line only if the
+#                              text contains one of these words.
+#   skip_if_text_mentions=...  do not apply this line if the text contains one
+#                              of these words.
+#   skip_if_preceded_by=...    leave a match alone right after one of these
+#   skip_if_followed_by=...    leave a match alone right before one of these
+# Several lines may share an internal term; the first line whose text
+# conditions hold wins, the rest are ignored for that text.
+#
+# Words with an everyday meaning ("container", "inventory") or an ambiguous
+# referent ("Delphix engine") are translated only on POSITIVE evidence that
+# they carry the retired Delphix meaning. Do not "fix" a false positive by
+# adding words to a skip list: an exception list is only ever as good as the
+# examples someone thought of. Tighten the positive signal instead.
+# tests/unit/test_vocabulary_spec_corpus.py runs every summary and description
+# in a real DCT OpenAPI spec through the translator to catch regressions.
+#
+# Output must be text a customer can read as-is. Never put an instruction to
+# the model ("clarify which") in the canonical column -- conversational rules
+# belong in config/server_instructions.md.
+#
+# Reconciled against the real DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx
+# (32 Canonical Terms rows -- #1-#28 plus 3a, 7a, 7b, 19a -- and 169 Synonym
+# Map rows). See config/server_instructions.md for the full domain model.
+
+# --- API values that must not be rewritten ---
+# Values a client sends back to DCT exactly as DCT defines them (the `link_type` values).
+# They contain a retired word but are data, not wording, so the model must be able to pass
+# them through unchanged.
+@preserve AppDataDirect,AppDataStaged
+
+# --- Positive-context signal sets ---
+# Words that only make sense when the text is about masking / Continuous
+# Compliance. Deliberately absent: "profile" (user profiles, replication
+# profiles), "inventory" (VDB inventory report), "algorithm" (hash and
+# compression algorithms), "domain" (DNS/AD domains).
+@signals compliance=mask,masks,masked,masking,compliance,profiling,profiler,rule set,rule sets,ruleset,rulesets,sensitive data,data class,data classes
+# Words that only make sense when the text is about virtualization /
+# Continuous Data.
+@signals data=vdb,vdbs,dsource,dsources,snapshot,snapshots,timeflow,timeflows,timeline,timelines,virtualization,virtual database,virtual databases,provision,provisions,provisioned,provisioning,bookmark,bookmarks,replication,staging
+# Words that place a bare "container" in legacy Delphix Self-Service
+# (Jetstream), where it meant what is now a VDB Group.
+@signals selfservice=self service,selfservice,jetstream,data layout,data layouts,data template,data templates,coordinated
+
+# --- Timeline (glossary #17) ---
+timeflow|timeline
+timeflows|timelines
+
+# --- Connectors: never expose the AppData vs native split (glossary #3a) ---
+appdata plugin|connector
+appdata plugins|connectors
+appdata toolkit|connector
+appdata toolkits|connectors
+appdata|connector
+plugin|connector|skip_if_preceded_by=jenkins,terraform,helm,kubectl,csi,ansible,gradle,maven,vault,browser,pytest
+plugins|connectors|skip_if_preceded_by=jenkins,terraform,helm,kubectl,csi,ansible,gradle,maven,vault,browser,pytest
+toolkit|connector
+toolkits|connectors
+
+# --- Grouping: "container" is retired Self-Service/Jetstream terminology for
+# what is now a VDB Group (glossary #19). In current usage "container" means
+# Kubernetes/Docker, and the DCT API also uses it for Oracle multitenant
+# (CDB), Azure blob containers and connector mount points -- so a bare
+# "container" is the retired term only when the text itself says it is
+# talking about Self-Service/Jetstream. Qualified forms are unambiguous. ---
+vdb group|VDB Group
+vdbgroup|VDB Group
+delphix self-service container|VDB Group
+delphix self-service containers|VDB Groups
+self-service container|VDB Group
+self-service containers|VDB Groups
+jetstream container|VDB Group
+jetstream containers|VDB Groups
+data container|VDB Group
+data containers|VDB Groups
+container|VDB Group|only_if_text_mentions=@selfservice
+containers|VDB Groups|only_if_text_mentions=@selfservice
+
+# --- Retired/forbidden product-and-engine terms (glossary #8, #10, #28) ---
+# "virtualization engine" and "masking engine" are unambiguous despite being
+# forbidden -- each names exactly one of the two engine products, so a flat
+# replacement is safe here (unlike bare "engine"/"Delphix engine" below).
+virtualization engine|Continuous Data engine
+virtualization engines|Continuous Data engines
+masking engine|Continuous Compliance engine
+masking engines|Continuous Compliance engines
+delphix masking|Delphix Continuous Compliance
+# Elastic Data is an add-on to the Continuous Data engine, not an engine of its
+# own (glossary #28: "frame as an add-on -- 'the Continuous Data engine with
+# Elastic Data'"), so the replacement keeps the engine as the subject.
+cloud engine|Continuous Data engine with Elastic Data
+cloud engines|Continuous Data engines with Elastic Data
+
+# --- "Delphix engine" (glossary #8) ---
+# Forbidden, and ambiguous between the two engine products; the glossary
+# forbids defaulting to one. Name a product only when the text carries
+# evidence for exactly one of them; with evidence for both, or for neither,
+# say exactly what is known -- one of the two -- in plain customer language.
+# The model is told in server_instructions.md rule 2 to pin it down from
+# conversation context or ask. Do not re-introduce a single-product default,
+# and do not put a model instruction ("clarify which") in the output.
+delphix engine|Continuous Compliance engine|only_if_text_mentions=@compliance|skip_if_text_mentions=@data
+delphix engine|Continuous Data engine|only_if_text_mentions=@data|skip_if_text_mentions=@compliance
+delphix engine|Continuous Data or Continuous Compliance engine
+delphix engines|Continuous Compliance engines|only_if_text_mentions=@compliance|skip_if_text_mentions=@data
+delphix engines|Continuous Data engines|only_if_text_mentions=@data|skip_if_text_mentions=@compliance
+delphix engines|Continuous Data or Continuous Compliance engines
+
+# --- Retired Continuous Data operation terminology (glossary #7b) ---
+# "rewind" is retired; the raw-text swap below only standardizes the word
+# itself. The required explicit "rewind is retired" user note is a
+# conversational behavior and stays in server_instructions.md rule 7 -- this
+# flat map cannot add a sentence, only replace a term.
+rewind|refresh from self
+rewinding|refreshing
+rewinds|refreshes
+rewound|refreshed
+
+# --- Retired Continuous Compliance terminology (glossary #27) ---
+# "inventory" is retired only as the old name of the Continuous Compliance
+# object now called a rule set. The everyday word is live elsewhere in
+# upstream text: DCT's "VDB inventory report" (a Continuous Data report), the
+# migratable-job inventory, an Oracle central inventory, and -- in current DCT
+# text -- a rule set's own table/column inventory ("the rule set's
+# inventory"). So translate only on positive evidence that the text is about
+# masking, and never when the text already uses the current term "rule set":
+# then "inventory" is a part of the rule set, not a name for it, and
+# translating would produce "the rule set's rule set".
+# "domain" (glossary #26) is deliberately not mapped: the glossary says to keep
+# it until the Continuous Compliance UI migrates.
+inventory|rule set|only_if_text_mentions=@compliance|skip_if_text_mentions=rule set,rule sets,ruleset,rulesets
+inventories|rule sets|only_if_text_mentions=@compliance|skip_if_text_mentions=rule set,rule sets,ruleset,rulesets
+
+# --- Product naming ---
+mssql|SQL Server

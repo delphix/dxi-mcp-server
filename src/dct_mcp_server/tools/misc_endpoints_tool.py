@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
+from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 import asyncio
 import logging
 import threading
@@ -68,8 +69,15 @@ def check_confirmation(
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
+            # Resolve {name}/{days}/{count} so a raw brace never reaches the
+            # user -- the same renderer the dynamic execute gate uses.
+            # Pre-built tools have no retention/impact context, so {days} and
+            # {count} clauses are dropped cleanly rather than rendered.
+            "confirmation_message": render_message_template(
+                confirmation.get("message", "Please confirm this operation."),
+                api_path,
+                request_body,
+                path_template=confirmation.get("path_pattern"),
             ),
             "action": action,
             "tool": tool_name,
@@ -208,7 +216,7 @@ def instance_tool(
     Filterable Fields:
         - id: The CDB object entity ID.
         - name: The name of this CDB.
-        - description: The container description of this Linked CDB.
+        - description: The description of this linked CDB.
         - diagnose_no_logging_faults: If true, NOLOGGING operations on this container are treat...
         - namespace_id: The namespace id of this CDB.
         - namespace_name: The namespace name of this CDB.
@@ -353,7 +361,7 @@ def instance_tool(
     Filterable Fields:
         - id: The vCDB object entity ID.
         - name: The name of this vCDB.
-        - description: The container description of this virtual CDB.
+        - description: The description of this virtual CDB.
         - database_name: The name of the container database in the Oracle DBMS.
         - namespace_id: The namespace id of this vCDB.
         - namespace_name: The namespace name of this vCDB.
@@ -392,8 +400,8 @@ def instance_tool(
         - nfs_version_reason:
         - nfs_encryption_enabled: Flag indicating whether the data transfer is encrypted or...
         - environment_user_ref: The environment user reference.
-        - db_template_id: The database template ID for this Virtual CDB.
-        - db_template_name: Name of the Database Template.
+        - db_template_id: The VDB template ID for this Virtual CDB.
+        - db_template_name: Name of the VDB template.
         - okv_client_id: The id of the OKV client used for TDE keystore access.
 
     Filter Syntax:
@@ -553,7 +561,7 @@ def instance_tool(
             [Optional for all actions]
         delete_all_dependent_datasets (bool): Whether to delete all dependent datasets of the CDB. (Default: False)
             [Optional for all actions]
-        description (str): The container description of this Linked CDB.
+        description (str): The description of this linked CDB.
             [Optional for all actions]
         diagnose_no_logging_faults (bool): Request body parameter
             [Optional for all actions]
@@ -1546,8 +1554,8 @@ def staging_cdb_tool(
         - logsync_enabled: Whether logsync is enabled for this Staging CDB.
         - description: Description of this Staging CDB.
         - config_params: Database configuration parameter overrides.
-        - db_template_id: The database template ID for this Staging CDB.
-        - db_template_name: Name of the Database Template.
+        - db_template_id: The VDB template ID for this Staging CDB.
+        - db_template_name: Name of the VDB template.
         - environment_user_ref: The environment user reference.
         - okv_client_id: The id of the OKV client used for TDE keystore access.
 
@@ -1676,7 +1684,7 @@ def staging_cdb_tool(
             [Optional for all actions]
         custom_env_variables_paths (list): An array of strings of whitespace-separated parameters to be passed to the so...
             [Optional for all actions]
-        db_template_id (str): The ID of the database template to apply to this Staging CDB.
+        db_template_id (str): The ID of the VDB template to apply to this Staging CDB.
             [Optional for all actions]
         delete_all_dependent_datasets (bool): Whether to delete all dependent datasets of the Staging CDB. (Default: False)
             [Optional for all actions]
@@ -2074,8 +2082,8 @@ def cdb_dsource_tool(
         - name: The name of this CDB.
         - enabled: Whether the CDB is enabled or not.
         - status: The runtime status of the vCDB.
-        - description: The container description of this Linked CDB.
-        - cdb_source_id: The container description of this Linked CDB.
+        - description: The description of this linked CDB.
+        - cdb_source_id: The description of this linked CDB.
         - is_detached: Is this a detached CDB container.
         - logsync_enabled: True if LogSync is enabled for this dSource.
         - logsync_mode:
@@ -3047,7 +3055,7 @@ def vault_tool(
 
 @log_tool_execution
 def diagnostic_tool(
-    action: str,  # One of: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
+    action: str,  # One of: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
     azure_vault_name: Optional[str] = None,
     azure_vault_secret_key: Optional[str] = None,
     azure_vault_username_key: Optional[str] = None,
@@ -3107,7 +3115,7 @@ def diagnostic_tool(
     """
     Unified tool for DIAGNOSTIC operations.
 
-    This tool supports 14 actions: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
+    This tool supports 14 actions: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
 
     ======================================================================
     ACTION REFERENCE
@@ -3124,7 +3132,7 @@ def diagnostic_tool(
     Example:
         >>> diagnostic_tool(action='check_engine_connectivity', engine_id='example-engine-123', use_engine_public_key=..., os_name=..., staging_environment=..., host=..., port=..., username=..., password=..., vault_id='example-vault-123', hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., use_kerberos_authentication=...)
 
-    ACTION: check_database_connectivity
+    ACTION: check_connectivity
     ----------------------------------------
     Summary: Tests the validity of the supplied database credentials, returning an error if unable to connect to the database.
     Method: POST
@@ -3133,7 +3141,7 @@ def diagnostic_tool(
     Key Parameters (provide as applicable): username, password, hashicorp_vault_engine, hashicorp_vault_secret_path, hashicorp_vault_username_key, hashicorp_vault_secret_key, azure_vault_name, azure_vault_username_key, azure_vault_secret_key, cyberark_vault_query_string, vault, environment_id, environment_user
 
     Example:
-        >>> diagnostic_tool(action='check_database_connectivity', username=..., password=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., credentials_type=..., source_id='example-source-123', vault=..., environment_id='example-environment-123', environment_user=...)
+        >>> diagnostic_tool(action='check_connectivity', username=..., password=..., hashicorp_vault_engine=..., hashicorp_vault_secret_path=..., hashicorp_vault_username_key=..., hashicorp_vault_secret_key=..., azure_vault_name=..., azure_vault_username_key=..., azure_vault_secret_key=..., cyberark_vault_query_string=..., credentials_type=..., source_id='example-source-123', vault=..., environment_id='example-environment-123', environment_user=...)
 
     ACTION: check_netbackup_connectivity
     ----------------------------------------
@@ -3267,7 +3275,7 @@ def diagnostic_tool(
     ======================================================================
 
     Args:
-        action (str): The operation to perform. One of: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
+        action (str): The operation to perform. One of: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark
 
       -- General parameters (all database types) --
         azure_vault_name (str): Azure key vault name (ORACLE, ASE and MSSQL_DOMAIN_USER only).
@@ -3285,10 +3293,10 @@ def diagnostic_tool(
         compression (bool): Whether or not compression is used for the test. (Default: False)
             [Optional for all actions]
         credentials_type (str): The type of credentials. Valid values: MSSQL_ENVIRONMENT_USER, MSSQL_DOMAIN_U...
-            [Required for: check_database_connectivity]
+            [Required for: check_connectivity]
         cyberark_vault_query_string (str): Query to find a credential in the CyberArk vault.
             [Optional for all actions]
-        destination_type (str): Whether the test is testing connectivity to a Delphix Engine or remote host. ...
+        destination_type (str): Whether the test is testing connectivity to a Continuous Data engine or remote host. ...
             [Optional for all actions]
         direction (str): Whether the test is a transmit or receive test. Valid values: TRANSMIT, RECEI...
             [Optional for all actions]
@@ -3351,18 +3359,18 @@ def diagnostic_tool(
         source_data_id (str): The ID of the source object (dSource or VDB) to provision from.
             [Required for: validate_file_mapping_by_location, validate_file_mapping_by_timestamp]
         source_id (str): Source database config Id.
-            [Required for: check_database_connectivity]
+            [Required for: check_connectivity]
         staging_client_name (str): The name of the Staging Client in CommServe.
             [Required for: check_commvault_connectivity]
         staging_environment (str): Id of the connector environment which is used to connect to this source envir...
             [Optional for all actions]
-        target_engine_address (str): Address of other target Delphix Engine.
+        target_engine_address (str): Address of the other target Continuous Data engine.
             [Optional for all actions]
         target_engine_id (str): engine id which test exc
             [Optional for all actions]
-        target_engine_password (str): Password for the other target Delphix Engine.
+        target_engine_password (str): Password for the other target Continuous Data engine.
             [Optional for all actions]
-        target_engine_user (str): Username for the other target Delphix Engine.
+        target_engine_user (str): Username for the other target Continuous Data engine.
             [Optional for all actions]
         timestamps (list): The list of timestamps to use for source files to be mapped. (Pass as JSON ar...
             [Required for: validate_file_mapping_by_timestamp]
@@ -3429,7 +3437,7 @@ def diagnostic_tool(
             params=params,
             json_body=body if body else None,
         )
-    elif action == "check_database_connectivity":
+    elif action == "check_connectivity":
         params = build_params(credentials_type=credentials_type)
         body = {
             k: v
@@ -3819,7 +3827,7 @@ def diagnostic_tool(
         )
     else:
         return {
-            "error": f"Unknown action: {action}. Valid actions: check_engine_connectivity, check_database_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark"
+            "error": f"Unknown action: {action}. Valid actions: check_engine_connectivity, check_connectivity, check_netbackup_connectivity, check_commvault_connectivity, test_network_latency, get_network_latency_result, test_network_dsp, get_network_dsp_result, test_network_throughput, get_network_throughput_result, validate_file_mapping_by_snapshot, validate_file_mapping_by_location, validate_file_mapping_by_timestamp, validate_file_mapping_by_bookmark"
         }
 
 

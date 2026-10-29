@@ -27,6 +27,7 @@ import tempfile
 from dct_mcp_server.config.config import get_dct_config
 from dct_mcp_server.config.loader import TOOLSETS_DIR
 from dct_mcp_server.tools.core.spec_model import OpenAPISpec, SchemaObject
+from dct_mcp_server.tools.core.vocabulary import to_canonical
 
 # Get the absolute path of the project root
 project_root = os.path.abspath(
@@ -66,7 +67,7 @@ TOOL_DOMAIN_HINTS = {
         '"dSource database X", they want to LINK a new dSource for database X, '
         "NOT look up an existing dSource named X. Use the appropriate "
         "dsource_link_* action (dsource_link_oracle, dsource_link_mssql, "
-        "dsource_link_ase, dsource_link_appdata) depending on the database type.\n"
+        "dsource_link_ase, dsource_link_connector) depending on the database type.\n"
         '  • "provision" or "spin up" a VDB or "create a golden image of a '
         'VDB" means creating a virtual database from a dSource or bookmark  —'
         " use provision_by_timestamp, provision_by_snapshot, etc.\n"
@@ -75,16 +76,17 @@ TOOL_DOMAIN_HINTS = {
     ),
 }
 
-# Actions whose request payload depends on a toolkit schema (AppData link/provision).
+# Actions whose request payload depends on a connector schema (connector link/provision).
 # When generating docstrings for these actions, we append a hint telling the AI to
-# call toolkit_tool(action='search') to find the right toolkit before filling params.
+# call connector_schema_tool(action='search') to find the right connector before filling params.
+# Keys must be the current action names in config/toolsets/*.txt (PPM-1129 renames).
 # Maps action name -> hint group.
 # "dsource" group: payload field is 'parameters' (and 'sync_parameters').
 # "provision" group: payload fields are 'appdata_source_params' and 'appdata_config_params'.
 ACTIONS_REQUIRING_TOOLKIT_SCHEMA: dict[str, str] = {
-    "dsource_link_appdata": "dsource",
-    "dsource_link_appdata_defaults": "dsource",
-    "update_appdata_dsource": "dsource",
+    "dsource_link_connector": "dsource",
+    "dsource_link_connector_defaults": "dsource",
+    "update_connector_dsource": "dsource",
     "provision_by_timestamp": "provision",
     "provision_by_snapshot": "provision",
     "provision_from_bookmark": "provision",
@@ -93,26 +95,26 @@ ACTIONS_REQUIRING_TOOLKIT_SCHEMA: dict[str, str] = {
 }
 
 _TOOLKIT_SCHEMA_HINT_COMMON = (
-    "IMPORTANT — AppData toolkit schema: "
-    "Before populating toolkit-specific parameters, call toolkit_tool(action='search') "
-    "to list available toolkits. Filter results by the engine_id of the environment you "
-    "are operating on — use only toolkits whose engine_id matches.\n"
+    "IMPORTANT — connector schema: "
+    "Before populating connector-specific parameters, call connector_schema_tool(action='search') "
+    "to list available connectors. Filter results by the engine_id of the environment you "
+    "are operating on — use only connectors whose engine_id matches.\n"
 )
 
 TOOLKIT_SCHEMA_HINT_DSOURCE = (
     _TOOLKIT_SCHEMA_HINT_COMMON
-    + "    Use the matching toolkit's 'linked_source_definition.parameters' schema "
+    + "    Use the matching connector's 'linked_source_definition.parameters' schema "
     "to populate 'parameters', and 'snapshot_parameters_definition' for 'sync_parameters'."
 )
 
 TOOLKIT_SCHEMA_HINT_PROVISION = (
-    "IMPORTANT — AppData VDB only: "
-    "If provisioning an AppData VDB (i.e., you need to populate 'appdata_source_params' "
-    "or 'appdata_config_params'), call toolkit_tool(action='search') first and filter "
+    "IMPORTANT — VDBs from a connector that defines its own parameters: "
+    "If you need to populate 'appdata_source_params' "
+    "or 'appdata_config_params', call connector_schema_tool(action='search') first and filter "
     "by the engine_id of the target environment, and use environment_user_id. "
-    "Use the matching toolkit's 'virtual_source_definition.parameters' schema for "
+    "Use the matching connector's 'virtual_source_definition.parameters' schema for "
     "'appdata_source_params', and 'source_config_definition.parameters' for 'appdata_config_params'. "
-    "For Oracle, MSSQL, PostgreSQL, or other non-AppData types, skip this step."
+    "For Oracle, MSSQL, PostgreSQL, or any other connector that needs no schema, skip this step."
 )
 
 # Action-level domain hints injected into the per-action docstring section.
@@ -137,7 +139,7 @@ ACTION_DOMAIN_HINTS: dict[str, str] = {
         "fields (ase_db_vault, ase_db_vault_username, ase_db_hashicorp_vault_*, "
         "ase_db_azure_vault_*, ase_db_cyberark_vault_query_string) — these are "
         "ASE-specific and must not be inferred from the host credential fields.\n"
-        "    • For non-ASE environments (Oracle, MSSQL, PostgreSQL, AppData, "
+        "    • For non-ASE environments (Oracle, MSSQL, PostgreSQL, other connectors, "
         "plain UNIX/Windows hosts, etc.), skip all ase_db_* fields entirely — "
         "do not ask the user about them."
     ),
@@ -296,6 +298,7 @@ prefix = """from mcp.server.fastmcp import FastMCP
 from typing import Dict,Any,Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation, requires_confirmation
+from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 from datetime import datetime, timezone
 import asyncio
 import logging
@@ -366,6 +369,15 @@ def check_confirmation(method: str, api_path: str, action: str, tool_name: str, 
     message = confirmation.get("message", "Please confirm this operation.")
     if context:
         message = message.format_map(_SafeDict(context))
+    # Resolve the remaining {name}/{days}/{count} placeholders (or drop their
+    # clause) so a raw brace never reaches the user (PPM-1129).
+    message = render_message_template(
+        message,
+        api_path,
+        None,
+        {"retention_days": (context or {}).get("days")},
+        path_template=confirmation.get("path_pattern"),
+    )
 
     return {
         "status": "confirmation_required",
@@ -845,7 +857,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                             "oracle": "Oracle only",
                             "mssql": "MSSql only",
                             "sybase": "ASE/Sybase only",
-                            "appdata": "AppData only",
+                            "appdata": "Connector only",
                             "postgres": "Postgres only",
                         }
                         label = subcommand_labels.get(
@@ -1107,7 +1119,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             req_note = f"Required for: {', '.join(required_actions)}"
         else:
             req_note = "Optional for all actions"
-        desc = param_info["description"]
+        desc = to_canonical(param_info["description"]) or ""
         if len(desc) > 80:
             desc = desc[:77] + "..."
         return [
@@ -1126,7 +1138,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
         "oracle": "Oracle-specific parameters",
         "mssql": "MSSql-specific parameters",
         "sybase": "ASE/Sybase-specific parameters",
-        "appdata": "AppData-specific parameters",
+        "appdata": "Connector-specific parameters",
         "postgres": "Postgres-specific parameters",
     }
     for subcommand, params in sorted(typed_params.items()):
@@ -1153,7 +1165,9 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
 
     docstring = '    """\n'
     for line in docstring_lines:
-        docstring += f"    {line}\n"
+        # Spec prose goes into the tool description the model reads; render it in
+        # canonical vocabulary (identifiers, paths and code are never rewritten).
+        docstring += f"    {to_canonical(line)}\n"
     docstring += '    """\n'
 
     func_code += docstring

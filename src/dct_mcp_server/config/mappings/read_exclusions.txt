@@ -12,3 +12,15 @@
 /paas-snapshots/search
 /environments/compatible_repositories_by_snapshot
 /file-mapping/validate-file-mapping-by-snapshot
+# Read-shaped POST searches. Their request body is a filter, not a change, but their
+# descriptions mention snapshots/refresh and tripped the keyword fallback.
+/vdbs/search
+/timeflows/search
+/masking-jobs/search
+/data-library/search
+/paas-databases/search
+/paas-instances/search
+/rule-sets/search
+/database-table-metadata/search
+/data-formats/{fileFormatId}/rule-sets/search
+/bookmarks/{bookmarkId}/vdb-groups/search

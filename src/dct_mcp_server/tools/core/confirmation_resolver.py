@@ -9,11 +9,15 @@ Supports standard levels (standard, elevated, manual) and conditional levels:
   policy_impact_check:N — triggers when context["affected_object_count"] > N
 """
 
+import re
 from typing import Any
 
 from dct_mcp_server.config.loader import get_confirmation_for_operation
 from dct_mcp_server.core.logging import get_logger
-from dct_mcp_server.tools.core.confirmation_levels import build_required_fields
+from dct_mcp_server.tools.core.confirmation_levels import (
+    _extract_resource_id,
+    build_required_fields,
+)
 from dct_mcp_server.tools.core.velocity_counter import increment_and_check
 
 logger = get_logger(__name__)
@@ -135,6 +139,131 @@ def check_confirmation(
     }
 
 
+# Placeholders a rule message may carry, with the words bound to them:
+#   prep  -- a preposition that only exists to introduce a number
+#            ("deleted in {days} day(s)")
+#   quote -- quotes around a name ("VDB '{name}'")
+#   unit  -- the noun phrase the number counts, up to its "(s)" noun
+#            ("{count} snapshot(s)/bookmark(s)", "{count} existing resource(s)")
+# Each is resolved from the live request before the message is shown to a
+# user; when one cannot be resolved its clause is dropped by one uniform rule
+# (see _render_placeholder) rather than printed raw (PPM-1129).
+_PLACEHOLDER_RE = re.compile(
+    r"(?P<prep>\s+(?:in|within|after|for|over)\b)?"
+    r"(?P<lead>\s*)"
+    r"(?P<quote>'?)\{(?P<key>name|days|count)\}(?P=quote)"
+    r"(?P<unit>(?:\s+[A-Za-z]+){0,2}?\s+[A-Za-z]+\(s\)(?:/[A-Za-z]+(?:\(s\))?)*"
+    r"|\s+[A-Za-z]+)?"
+)
+
+# "snapshot(s)" -> "snapshot"/"snapshots" once the count is known.
+_PLURAL_RE = re.compile(r"\(s\)")
+
+
+def _render_placeholder(match: re.Match, value: Any) -> str:
+    """
+    Render one placeholder and the words bound to it.
+
+    Resolved: the value is substituted, and any "(s)" in its unit agrees with
+    it ("1 day", "3 days").
+
+    Unresolved -- one rule for every placeholder: remove the placeholder and
+    whatever only existed to frame it, never the rest of the sentence.
+      - a name's quotes go with it: "delete VDB '{name}'?" -> "delete VDB?"
+      - a number introduced by a preposition goes with the preposition and
+        its unit: "deleted in {days} day(s)." -> "deleted."
+      - a number used as a determiner leaves its unit, in the plural:
+        "cause {count} snapshot(s)/bookmark(s) to" -> "cause
+        snapshots/bookmarks to"
+    """
+    prep = match.group("prep") or ""
+    lead = match.group("lead")
+    quote = match.group("quote")
+    unit = match.group("unit") or ""
+    numeric = match.group("key") in ("days", "count")
+
+    if value is not None and value != "":
+        if numeric and unit:
+            unit = _PLURAL_RE.sub("" if str(value) == "1" else "s", unit)
+        return f"{prep}{lead}{quote}{value}{quote}{unit}"
+
+    if not numeric:
+        # Name: drop it and its quotes; the following words are ordinary prose.
+        return f"{prep}{unit}"
+    if prep:
+        return ""
+    return _PLURAL_RE.sub("s", unit)
+
+
+def render_message_template(
+    template: str | None,
+    path: str,
+    body: dict | None = None,
+    context: dict[str, Any] | None = None,
+    path_template: str | None = None,
+) -> str | None:
+    """
+    Substitute the placeholders in a confirmation message template.
+
+    Rules in manual_confirmation.txt are written with ``{name}``, ``{days}`` and
+    ``{count}`` placeholders. Without this pass those braces reach the user
+    verbatim ("permanently delete VDB '{name}'?"), so an approval prompt cannot
+    name the resource it is asking about.
+
+    Resolution order for ``{name}``:
+      1. ``body["name"]`` — present on most create/update payloads
+      2. :func:`_extract_resource_id` on the resolved path, aligned with
+         *path_template* when given, e.g.
+         "/management/engines/eng-1" -> "eng-1"
+      3. unresolvable — the clause is dropped (see :func:`_render_placeholder`)
+
+    ``{days}`` and ``{count}`` resolve from *context* keys ``retention_days``
+    and ``affected_object_count`` (``velocity_count`` for batch rules), and
+    are dropped by the same rule when absent.
+
+    Args:
+        template:      Raw message from the rule file, or None.
+        path:          Fully-resolved API path.
+        body:          Request body, if any.
+        context:       Conditional-rule context.
+        path_template: The matched rule's path pattern, if known.
+
+    Returns:
+        The rendered message, or None if *template* was None.
+    """
+    if not template:
+        return template
+
+    ctx = context or {}
+    count = ctx.get("affected_object_count")
+    if count is None:
+        count = ctx.get("velocity_count")
+    values = {
+        "name": _resolve_resource_name(path, body, path_template),
+        "days": ctx.get("retention_days"),
+        "count": count,
+    }
+
+    rendered = _PLACEHOLDER_RE.sub(
+        lambda m: _render_placeholder(m, values.get(m.group("key"))), template
+    )
+    # Tidy spacing left behind by a dropped clause.
+    rendered = re.sub(r"\s{2,}", " ", rendered)
+    rendered = re.sub(r"\s+([?.,!])", r"\1", rendered)
+    return rendered.strip()
+
+
+def _resolve_resource_name(
+    path: str, body: dict | None, path_template: str | None = None
+) -> str | None:
+    """Best-effort human-meaningful name for the operation's target."""
+    if isinstance(body, dict):
+        name = body.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return _extract_resource_id(path, path_template)
+
+
 def check_confirmation_with_fallback(
     method: str,
     path: str,
@@ -204,7 +333,13 @@ def check_confirmation_with_fallback(
     return {
         "requires_confirmation": requires_confirmation,
         "confirmation_level": level,
-        "message_template": base.get("message_template"),
+        "message_template": render_message_template(
+            base.get("message_template"),
+            path,
+            body,
+            {**(context or {}), "velocity_count": velocity_count},
+            path_template,
+        ),
         "required_fields": base.get(
             "required_fields", build_required_fields(level or "none")
         ),

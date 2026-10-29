@@ -684,3 +684,80 @@ def test_requires_confirmation_post_delete_path_returns_true():
     # Patch rules to return nothing so the heuristic is reached
     with patch.object(_loader_mod, "load_manual_confirmation_rules", return_value=()):
         assert requires_confirmation("POST", "/vdbs/vdb-1/delete") is True
+
+
+# ---------------------------------------------------------------------------
+# GAP-4: register_cache_clear_hook() and clear_cache() hook invocation (S17)
+# ---------------------------------------------------------------------------
+
+
+def test_register_cache_clear_hook_is_importable():
+    """register_cache_clear_hook is a public function in loader (S17 setup)."""
+    from dct_mcp_server.config.loader import register_cache_clear_hook
+
+    assert callable(register_cache_clear_hook)
+
+
+def test_register_cache_clear_hook_stores_and_invokes_on_clear_cache():
+    """clear_cache() calls every registered hook (S17 core)."""
+    from dct_mcp_server.config.loader import clear_cache, register_cache_clear_hook
+
+    called = []
+    register_cache_clear_hook("test.s17.hook", lambda: called.append(1))
+    try:
+        clear_cache()
+        assert called == [1], "Hook was not called by clear_cache()"
+    finally:
+        # Clean up our test hook so it doesn't pollute other tests
+        _loader_mod._CACHE_CLEAR_HOOKS.pop("test.s17.hook", None)
+        clear_cache()
+
+
+def test_register_cache_clear_hook_replaces_on_re_register():
+    """Re-registering the same name replaces the old hook (S17 idempotency)."""
+    from dct_mcp_server.config.loader import clear_cache, register_cache_clear_hook
+
+    calls_a, calls_b = [], []
+    register_cache_clear_hook("test.s17.idem", lambda: calls_a.append("a"))
+    register_cache_clear_hook("test.s17.idem", lambda: calls_b.append("b"))
+    try:
+        clear_cache()
+        # Only the second registration should fire
+        assert calls_a == [], "Old hook was not replaced"
+        assert calls_b == ["b"], "New hook was not called"
+    finally:
+        _loader_mod._CACHE_CLEAR_HOOKS.pop("test.s17.idem", None)
+        clear_cache()
+
+
+def test_register_cache_clear_hook_failure_is_swallowed(caplog):
+    """A hook that raises does not abort clear_cache() (S17 fault isolation)."""
+    import logging
+
+    from dct_mcp_server.config.loader import clear_cache, register_cache_clear_hook
+
+    called_after = []
+
+    def bad_hook():
+        raise RuntimeError("hook failure")
+
+    def good_hook():
+        called_after.append(1)
+
+    register_cache_clear_hook("test.s17.bad", bad_hook)
+    register_cache_clear_hook("test.s17.good", good_hook)
+    try:
+        with caplog.at_level(logging.WARNING, logger="dct_mcp_server.config.loader"):
+            clear_cache()  # must not raise
+        # A WARNING was logged for the bad hook
+        assert any(
+            "test.s17.bad" in r.message
+            for r in caplog.records
+            if r.levelno >= logging.WARNING
+        ), "Expected a WARNING for the failing hook"
+        # The good hook still ran
+        assert called_after == [1], "Subsequent hooks were not called after a bad hook"
+    finally:
+        _loader_mod._CACHE_CLEAR_HOOKS.pop("test.s17.bad", None)
+        _loader_mod._CACHE_CLEAR_HOOKS.pop("test.s17.good", None)
+        clear_cache()

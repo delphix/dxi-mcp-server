@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
+from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 import asyncio
 import logging
 import threading
@@ -68,8 +69,15 @@ def check_confirmation(
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
+            # Resolve {name}/{days}/{count} so a raw brace never reaches the
+            # user -- the same renderer the dynamic execute gate uses.
+            # Pre-built tools have no retention/impact context, so {days} and
+            # {count} clauses are dropped cleanly rather than rendered.
+            "confirmation_message": render_message_template(
+                confirmation.get("message", "Please confirm this operation."),
+                api_path,
+                request_body,
+                path_template=confirmation.get("path_pattern"),
             ),
             "action": action,
             "tool": tool_name,
@@ -134,7 +142,7 @@ def build_params(**kwargs):
 
 
 @log_tool_execution
-def database_template_tool(
+def vdb_template_tool(
     action: str,  # One of: search, get, create, update, delete, get_tags, add_tags, delete_tags
     cursor: Optional[str] = None,
     database_template_id: Optional[str] = None,
@@ -152,7 +160,9 @@ def database_template_tool(
     confirmed: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-    Unified tool for DATABASE TEMPLATE operations.
+    Unified tool for VDB TEMPLATE operations: reusable database configuration (e.g. init parameters) applied when provisioning a VDB.
+
+    Customer aliases (accept as input, never use in answers): "database template" -> VDB template. The DCT API still names this resource /database-templates.
 
     This tool supports 8 actions: search, get, create, update, delete, get_tags, add_tags, delete_tags
 
@@ -162,15 +172,15 @@ def database_template_tool(
 
     ACTION: search
     ----------------------------------------
-    Summary: Search DatabaseTemplates.
+    Summary: Search VDB templates.
     Method: POST
     Endpoint: /database-templates/search
     Required Parameters: limit, cursor, sort
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: The DatabaseTemplate entity ID.
-        - name: The DatabaseTemplate name.
+        - id: The VDB template entity ID.
+        - name: The VDB template name.
         - description: User provided description for this template.
         - source_type: The type of the source associated with the template.
         - parameters: A name/value map of string configuration parameters.
@@ -182,80 +192,80 @@ def database_template_tool(
         Example: "name CONTAINS 'prod' AND status EQ 'RUNNING'"
 
     Example:
-        >>> database_template_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
+        >>> vdb_template_tool(action='search', limit=..., cursor=..., sort=..., filter_expression="name CONTAINS 'test'")
 
     ACTION: get
     ----------------------------------------
-    Summary: Retrieve a DatabaseTemplate by ID.
+    Summary: Retrieve a VDB template by ID.
     Method: GET
     Endpoint: /database-templates/{databaseTemplateId}
     Required Parameters: database_template_id
 
     Example:
-        >>> database_template_tool(action='get', database_template_id='example-database_template-123')
+        >>> vdb_template_tool(action='get', database_template_id='example-database_template-123')
 
     ACTION: create
     ----------------------------------------
-    Summary: Create a database template.
+    Summary: Create a VDB template.
     Method: POST
     Endpoint: /database-templates
     Required Parameters: name, source_type
     Key Parameters (provide as applicable): description, parameters, make_current_account_owner, tags
 
     Example:
-        >>> database_template_tool(action='create', name=..., description=..., source_type=..., parameters=..., make_current_account_owner=..., tags=...)
+        >>> vdb_template_tool(action='create', name=..., description=..., source_type=..., parameters=..., make_current_account_owner=..., tags=...)
 
     ACTION: update
     ----------------------------------------
-    Summary: Updates a DatabaseTemplate by ID
+    Summary: Updates a VDB template by ID
     Method: PATCH
     Endpoint: /database-templates/{databaseTemplateId}
     Required Parameters: database_template_id
     Key Parameters (provide as applicable): name, description, source_type, parameters
 
     Example:
-        >>> database_template_tool(action='update', database_template_id='example-database_template-123', name=..., description=..., source_type=..., parameters=...)
+        >>> vdb_template_tool(action='update', database_template_id='example-database_template-123', name=..., description=..., source_type=..., parameters=...)
 
     ACTION: delete
     ----------------------------------------
-    Summary: Delete a DatabaseTemplate by ID.
+    Summary: Delete a VDB template by ID.
     Method: DELETE
     Endpoint: /database-templates/{databaseTemplateId}
     Required Parameters: database_template_id
 
     Example:
-        >>> database_template_tool(action='delete', database_template_id='example-database_template-123')
+        >>> vdb_template_tool(action='delete', database_template_id='example-database_template-123')
 
     ACTION: get_tags
     ----------------------------------------
-    Summary: Get tags for a DatabaseTemplate.
+    Summary: Get tags for a VDB template.
     Method: GET
     Endpoint: /database-templates/{databaseTemplateId}/tags
     Required Parameters: database_template_id
 
     Example:
-        >>> database_template_tool(action='get_tags', database_template_id='example-database_template-123')
+        >>> vdb_template_tool(action='get_tags', database_template_id='example-database_template-123')
 
     ACTION: add_tags
     ----------------------------------------
-    Summary: Create tags for a DatabaseTemplate.
+    Summary: Create tags for a VDB template.
     Method: POST
     Endpoint: /database-templates/{databaseTemplateId}/tags
     Required Parameters: database_template_id, tags
 
     Example:
-        >>> database_template_tool(action='add_tags', database_template_id='example-database_template-123', tags=...)
+        >>> vdb_template_tool(action='add_tags', database_template_id='example-database_template-123', tags=...)
 
     ACTION: delete_tags
     ----------------------------------------
-    Summary: Delete tags for a DatabaseTemplate.
+    Summary: Delete tags for a VDB template.
     Method: POST
     Endpoint: /database-templates/{databaseTemplateId}/tags/delete
     Required Parameters: database_template_id
     Key Parameters (provide as applicable): tags, key, value
 
     Example:
-        >>> database_template_tool(action='delete_tags', database_template_id='example-database_template-123', tags=..., key=..., value=...)
+        >>> vdb_template_tool(action='delete_tags', database_template_id='example-database_template-123', tags=..., key=..., value=...)
 
     ======================================================================
     PARAMETERS
@@ -277,9 +287,9 @@ def database_template_tool(
             [Optional for all actions]
         limit (int): Maximum number of objects to return per query. The value must be between 1 an...
             [Required for: search]
-        make_current_account_owner (bool): Whether the account creating this database template must be configured as own...
+        make_current_account_owner (bool): Whether the account creating this VDB template must be configured as own...
             [Optional for all actions]
-        name (str): The DatabaseTemplate name.
+        name (str): The VDB template name.
             [Required for: create]
         parameters (dict): A name/value map of string configuration parameters. (Pass as JSON object)
             [Optional for all actions]
@@ -306,7 +316,7 @@ def database_template_tool(
             "POST",
             "/database-templates/search",
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -327,7 +337,7 @@ def database_template_tool(
             "GET",
             endpoint,
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -353,7 +363,7 @@ def database_template_tool(
             "POST",
             "/database-templates",
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -387,7 +397,7 @@ def database_template_tool(
             "PATCH",
             endpoint,
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -408,7 +418,7 @@ def database_template_tool(
             "DELETE",
             endpoint,
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -427,7 +437,7 @@ def database_template_tool(
             "GET",
             endpoint,
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=None,
@@ -447,7 +457,7 @@ def database_template_tool(
             "POST",
             endpoint,
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -473,7 +483,7 @@ def database_template_tool(
             "POST",
             endpoint,
             action,
-            "database_template_tool",
+            "vdb_template_tool",
             confirmed or False,
             request_params=params,
             request_body=body,
@@ -852,8 +862,8 @@ def register_tools(app, dct_client):
     client = dct_client
     logger.info("Registering tools for template_endpoints...")
     try:
-        logger.info("  Registering tool function: database_template_tool")
-        app.add_tool(database_template_tool, name="database_template_tool")
+        logger.info("  Registering tool function: vdb_template_tool")
+        app.add_tool(vdb_template_tool, name="vdb_template_tool")
         logger.info("  Registering tool function: hook_template_tool")
         app.add_tool(hook_template_tool, name="hook_template_tool")
     except Exception as e:
