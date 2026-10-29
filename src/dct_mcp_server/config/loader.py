@@ -371,10 +371,15 @@ def load_server_instructions() -> str:
 
     try:
         with open(instructions_file, "r", encoding="utf-8") as f:
-            return f.read().strip()
+            text = f.read()
     except (OSError, UnicodeDecodeError) as e:
         logger.warning(f"Could not read server instructions {instructions_file}: {e}")
         return ""
+    # HTML comments are for maintainers (provenance, reviewer notes). Clients keep
+    # only the first few thousand characters of the instructions, so none of that
+    # may be sent to the model.
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 # Optional guard directives a vocabulary.txt line may carry after the term

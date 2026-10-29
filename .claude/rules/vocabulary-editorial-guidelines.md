@@ -42,6 +42,12 @@ is caught by a checklist and a test, not by another reconciliation pass.
    vetoed by `skip_if_text_mentions=` for contrary evidence), and make the final
    fallback line say plainly what is known (see the `delphix engine` entries). A silent
    wrong default is a correctness bug, not a convenience.
+   **Server instructions length.** MCP clients keep only the first ~4,096 characters of a server's
+   instructions (Claude Code cuts there). The "Rules (read first)" block of `server_instructions.md`
+   must stay at the top and within the first 4,000 characters; the long reasoning goes below it.
+   HTML comments in that file are stripped before sending, so reviewer notes cost nothing. A unit test
+   (`test_rules_fit_in_the_first_characters_a_client_keeps`) fails if a required rule or retraining
+   sentence moves past the limit.
 5. **Translated text is customer-facing.** `message_for_user` is shown to end users, so
    the canonical column of `vocabulary.txt` must never contain an instruction to the
    model ("clarify which"). Conversational behaviour belongs in `server_instructions.md`.
@@ -63,6 +69,7 @@ is caught by a checklist and a test, not by another reconciliation pass.
 | A cross-cutting rule the model needs to apply in conversation (e.g. "never say X", "retrain gently", "ask instead of guessing") | `config/server_instructions.md` — add to the terminology table and/or the numbered "Additional rules" |
 | A confirmation/error message template | `config/mappings/manual_confirmation.txt` — use canonical terms only |
 | A tool or action name | Rename in the relevant `config/toolsets/*.txt` file and the corresponding `tools/*_endpoints_tool.py` handler |
+| A hint or example in a **generated** persona tool docstring | `toolsgenerator/driver.py` (`TOOL_DOMAIN_HINTS`, `ACTION_DOMAIN_HINTS`, `ACTIONS_REQUIRING_TOOLKIT_SCHEMA`). Persona servers regenerate their tools from the live spec at startup, so these tables, not only the committed fallback modules, are what the model reads. **When you rename a tool or action, update every name in these tables** -- a stale key silently drops a hint. Spec prose in generated docstrings is translated with `to_canonical` at generation time. |
 | A dynamic-mode tool docstring (`discovery`, `execute`) or elicitation field description (the text shown to a user during confirmation) | Edit directly in `tools/core/dynamic.py`; the `test_dynamic_docstrings_are_free_of_internal_terms` and `test_elicitation_text_is_free_of_internal_terms` tests in `tests/unit/test_vocabulary_regression.py` scan these surfaces (GAP-2) |
 
 ## After making the change

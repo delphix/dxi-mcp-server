@@ -102,7 +102,8 @@ def _compiled_rules() -> tuple[tuple[re.Pattern, dict], ...]:
 _PROTECTED_RE = re.compile(
     r"https?://\S+"
     r"|`[^`\n]*`"
-    r"|[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
+    # A path-like token. A Title/Title pair ("Container/Template") is prose, not a path.
+    r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
     r"|[\w.{}:~%$-]*\\[\w.{}:~%$\\-]*"
     r"|\w+(?:[-.@]\w+)+"
     r"|\{\s*[\w.-]*\s*\}"
@@ -166,6 +167,7 @@ def _guard_blocks(text: str, match: re.Match, rule: dict) -> bool:
 # ``{"error_description":"Timeflow not found."}``). Used to decide whether a
 # replacement should be capitalised.
 _PAREN_REPEAT_RE = re.compile(r"\b([A-Za-z][\w-]*) \(\1\)", re.IGNORECASE)
+_JOINED_REPEAT_RE = re.compile(r"\b([A-Za-z][\w-]*) (?:or|and) \1\b", re.IGNORECASE)
 _SENTENCE_START_RE = re.compile(r'(?:^|[.!?]\s+|\n\s*|":\s*")$')
 
 # "a"/"an" ending the text just before a substituted term, so the article can
@@ -342,11 +344,13 @@ def _translate(text: str) -> str:
             result = "".join(pieces)
 
     if result != text:
-        # DCT writes "connectors (plugins)"; translating the parenthetical must not
-        # leave "connectors (connectors)". Only repeats the translation created.
-        result = _PAREN_REPEAT_RE.sub(
-            lambda m: m.group(0) if m.group(0) in text else m.group(1), result
-        )
+        # DCT writes "connectors (plugins)" and "toolkit or plugin"; translating both words
+        # must not leave "connectors (connectors)" or "connector or connector". Only
+        # repeats the translation itself created are collapsed.
+        for repeat in (_PAREN_REPEAT_RE, _JOINED_REPEAT_RE):
+            result = repeat.sub(
+                lambda m: m.group(0) if m.group(0) in text else m.group(1), result
+            )
 
     return result
 

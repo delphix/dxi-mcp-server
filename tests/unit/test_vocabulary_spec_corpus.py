@@ -136,7 +136,8 @@ def test_translation_never_nests_a_canonical_term_inside_itself():
 _IDENTIFIER_RE = re.compile(
     r"https?://\S+"
     r"|`[^`\n]*`"
-    r"|[\w.{}:~%$-]*[/\\][\w.{}:~%$/\\-]*"
+    # A Title/Title pair such as "Container/Template" is prose, not a path.
+    r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)[\w.{}:~%$-]*[/\\][\w.{}:~%$/\\-]*"
     r"|\w+(?:[-.@]\w+)+"
     r"|\w*_\w+"
     r"|\b[a-z]+[A-Z]\w*"

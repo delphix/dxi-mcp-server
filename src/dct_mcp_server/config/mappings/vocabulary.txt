@@ -136,6 +136,9 @@ delphix engines|Continuous Data or Continuous Compliance engines
 # conversational behavior and stays in server_instructions.md rule 7 -- this
 # flat map cannot add a sentence, only replace a term.
 rewind|refresh from self
+rewinding|refreshing
+rewinds|refreshes
+rewound|refreshed
 
 # --- Retired Continuous Compliance terminology (glossary #27) ---
 # "inventory" is retired only as the old name of the Continuous Compliance

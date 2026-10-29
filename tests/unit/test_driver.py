@@ -7,6 +7,7 @@ Pure unit tests — no network, no real DCT.
 from __future__ import annotations
 
 import os
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -796,7 +797,9 @@ def test_generate_unified_tool_action_in_actions_requiring_toolkit():
         }
     ]
     result = driver_mod._generate_unified_tool("vdb_tool", apis, spec)
-    assert "AppData" in result  # provision hint mentions AppData
+    # The provision hint is injected, in connector terms (PPM-1129).
+    assert "connector_schema_tool(action='search')" in result
+    assert "AppData" not in result
 
 
 def test_generate_unified_tool_action_domain_hint():
@@ -1054,3 +1057,151 @@ def test_generated_tool_confirmation_renders_placeholders(tmp_path):
         "DELETE", "/vdb-groups/vg-1", "delete_vdb_group", "vdb_group_tool", False, None
     )
     assert "{" not in unnamed["confirmation_message"]
+
+
+# --------------------------------------------------------------------------- #
+# Generated tool docstrings carry canonical vocabulary (PPM-1129 levers 1 and 2)
+# --------------------------------------------------------------------------- #
+
+_RETIRED_PROSE = re.compile(
+    r"timeflow|toolkit|plugin|appdata|virtualization engine|masking engine|"
+    r"cloud engine|rewind",
+    re.I,
+)
+
+
+def _prose(text):
+    """Text with identifiers (snake_case names, paths, backticks) removed."""
+    for rx in (
+        r"https?://\S+",
+        r"`[^`\n]*`",
+        r"\S*/\S*",
+        r"\{[^}]*\}",
+        r"\w+(?:[-_.@]\w+)+",
+    ):
+        text = re.sub(rx, " ", text)
+    return text
+
+
+_GEN_SPEC = {
+    "paths": {
+        "/timeflows/{timeflowId}": {
+            "get": {
+                "summary": "Get a timeflow by ID.",
+                "operationId": "getTimeflow",
+                "parameters": [
+                    {
+                        "name": "timeflowId",
+                        "in": "path",
+                        "required": True,
+                        "description": "ID of the timeflow to read.",
+                        "schema": {"type": "string"},
+                    }
+                ],
+                "responses": {"200": {"description": "ok"}},
+            }
+        },
+        "/dsources/appdata": {
+            "post": {
+                "summary": "Link an AppData database as dSource.",
+                "operationId": "linkAppdata",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Name for the new dSource.",
+                                    },
+                                    "plugin_version": {
+                                        "type": "string",
+                                        "description": "Version of the plugin or toolkit.",
+                                    },
+                                },
+                            }
+                        }
+                    }
+                },
+                "responses": {"200": {"description": "ok"}},
+            }
+        },
+    }
+}
+
+
+def _generated_docstring(tool_name, apis, spec=_GEN_SPEC):
+    code = driver_mod._generate_unified_tool(tool_name, apis, spec)
+    return code.split('"""')[1]
+
+
+def test_generated_docstring_translates_spec_prose():
+    doc = _generated_docstring(
+        "data_tool",
+        [
+            {
+                "method": "GET",
+                "path": "/timeflows/{timeflowId}",
+                "action": "get_timeline",
+            },
+            {
+                "method": "POST",
+                "path": "/dsources/appdata",
+                "action": "dsource_link_connector",
+            },
+        ],
+    )
+    assert "timeline" in doc.lower()
+    leaks = [ln for ln in doc.splitlines() if _RETIRED_PROSE.search(_prose(ln))]
+    assert leaks == []
+    # Identifiers are left exactly as the API names them.
+    assert "timeflow_id" in doc
+    assert "/timeflows/{timeflowId}" in doc
+
+
+def test_generated_docstring_hints_use_the_renamed_tool_and_actions():
+    doc = _generated_docstring(
+        "data_tool",
+        [
+            {
+                "method": "POST",
+                "path": "/dsources/appdata",
+                "action": "dsource_link_connector",
+            }
+        ],
+    )
+    assert "dsource_link_appdata" not in doc
+    assert "toolkit_tool" not in doc
+    # The connector-schema lookup hint reaches the renamed action.
+    assert "connector_schema_tool(action='search')" in doc
+
+
+def test_driver_hint_tables_use_current_action_names():
+    old = {
+        "dsource_link_appdata",
+        "dsource_link_appdata_defaults",
+        "update_appdata_dsource",
+    }
+    assert not old & set(driver_mod.ACTIONS_REQUIRING_TOOLKIT_SCHEMA)
+    assert {
+        "dsource_link_connector",
+        "dsource_link_connector_defaults",
+        "update_connector_dsource",
+    } <= set(driver_mod.ACTIONS_REQUIRING_TOOLKIT_SCHEMA)
+
+
+def test_driver_hint_text_is_free_of_retired_terms():
+    texts = list(driver_mod.TOOL_DOMAIN_HINTS.values()) + list(
+        driver_mod.ACTION_DOMAIN_HINTS.values()
+    )
+    texts += [
+        driver_mod._TOOLKIT_SCHEMA_HINT_COMMON,
+        driver_mod.TOOLKIT_SCHEMA_HINT_DSOURCE,
+        driver_mod.TOOLKIT_SCHEMA_HINT_PROVISION,
+    ]
+    leaks = [
+        ln for t in texts for ln in t.splitlines() if _RETIRED_PROSE.search(_prose(ln))
+    ]
+    assert leaks == []
+    assert not any("toolkit_tool" in t for t in texts)

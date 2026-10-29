@@ -1332,3 +1332,110 @@ def test_parenthesised_repeat_already_in_the_source_is_left_alone():
     # Only repeats the translator itself created are collapsed.
     raw = "Delete the VDB (VDB) group"
     assert to_canonical(raw) == raw
+
+
+# --------------------------------------------------------------------------- #
+# Lever 3: the rules must survive a client that cuts the instructions short
+# --------------------------------------------------------------------------- #
+
+# Claude Code keeps only the first ~4,096 characters of a server's instructions.
+_CLIENT_LIMIT = 4000
+
+
+def test_rules_fit_in_the_first_characters_a_client_keeps():
+    # Whitespace-normalised: the markdown is hard-wrapped.
+    head = " ".join(load_server_instructions()[:_CLIENT_LIMIT].split())
+    for needle in (
+        "timeline",
+        "VDB Group is the current term.",
+        "Rewind is retired Delphix terminology — the current term is refresh from self.",
+        "Rule set is the current term; inventory is retired Continuous Compliance terminology.",
+        "Domain is being migrated to data class / classification in Delphix vocabulary.",
+        "Continuous Data engine",
+        "Continuous Compliance engine",
+        "control plane",
+        "confirmation_token",
+        "connector",
+    ):
+        assert needle in head, f"first {_CLIENT_LIMIT} characters lack {needle!r}"
+
+
+def test_rules_come_before_the_domain_model():
+    text = load_server_instructions()
+    assert text.index("## Rules") < text.index("## Domain model")
+
+
+def test_html_comments_are_not_sent_to_the_model(tmp_path, monkeypatch):
+    f = tmp_path / "i.md"
+    f.write_text("<!-- reviewer notes -->\nSay VDB.\n<!--\nmulti\nline\n-->\nDone.")
+    monkeypatch.setenv("DCT_SERVER_INSTRUCTIONS", str(f))
+    load_server_instructions.cache_clear()
+    out = load_server_instructions()
+    assert "reviewer" not in out and "multi" not in out
+    assert "Say VDB." in out and "Done." in out
+    load_server_instructions.cache_clear()
+    assert "<!--" not in load_server_instructions()
+
+
+# --------------------------------------------------------------------------- #
+# Translator defects found by the Opus sweep (PPM-1129 lever 4)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # Two retired words with the same canonical term must not read "X or X".
+        ("A toolkit or plugin.", "A connector."),
+        (
+            "Specifies whether this object is toolkit or plugin",
+            "Specifies whether this object is connector",
+        ),
+        ("Install the plugin and toolkit first.", "Install the connector first."),
+    ],
+)
+def test_translation_never_leaves_a_repeated_term_joined_by_or_and(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+def test_or_repeat_already_in_the_source_is_left_alone():
+    # Something else is translated, so the collapse pass runs; the dSource repeat
+    # was in DCT's own text and is not ours to change.
+    raw = "Install the toolkit, then link a dSource or dSource copy"
+    assert (
+        to_canonical(raw)
+        == "Install the connector, then link a dSource or dSource copy"
+    )
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (
+            "The commands to execute on the target environment after rewinding the VDB.",
+            "The commands to execute on the target environment after refreshing the VDB.",
+        ),
+        ("The VDB was rewound.", "The VDB was refreshed."),
+        ("Rewinds the VDB.", "Refreshes the VDB."),
+    ],
+)
+def test_inflected_forms_of_rewind_are_translated(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+def test_title_case_slash_compound_is_prose_not_a_path():
+    out = to_canonical("List all data-layout (Self-Service Container/Template).")
+    assert "Container" not in out
+    assert "/Template" in out
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "GET /containers/{containerId} failed",
+        "See timeflows/tf-1 for details",
+        "Mount at /var/lib/toolkit/data",
+    ],
+)
+def test_real_paths_are_still_protected(raw):
+    assert to_canonical(raw) == raw
