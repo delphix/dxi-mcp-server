@@ -845,3 +845,151 @@ def test_error_response_translates_a_json_error_body():
     resp = _error_response(raw, 404)
     assert resp["message"] == raw
     assert "Timeline not found." in resp["message_for_user"]
+
+
+# --------------------------------------------------------------------------- #
+# Vocabulary: area names and nested schema text (PPM-1129 comparison gaps 1, 2)
+# --------------------------------------------------------------------------- #
+
+_RETIRED_AREA_SPEC = {
+    "paths": {
+        "/timeflows": {"get": {"summary": "List.", "tags": ["Timeflows"]}},
+        "/toolkits": {"get": {"summary": "List.", "tags": ["Toolkits"]}},
+        "/masking-plugins": {"get": {"summary": "List.", "tags": ["MaskingPlugins"]}},
+        "/paas-timeflows": {"get": {"summary": "List.", "tags": ["PaaSTimeflows"]}},
+        "/vdbs": {"get": {"summary": "List.", "tags": ["VDBs"]}},
+        "/engines": {"get": {"summary": "List.", "tags": ["EnginePerformance"]}},
+    }
+}
+
+
+def test_list_tags_shows_canonical_area_names():
+    from dct_mcp_server.tools.core.dynamic import _action_list_tags
+
+    names = {t["name"] for t in _action_list_tags(_RETIRED_AREA_SPEC["paths"])["tags"]}
+    assert names == {
+        "Timelines",
+        "Connectors",
+        "MaskingConnectors",
+        "PaaSTimelines",
+        "VDBs",  # nothing to translate: unchanged
+        "EnginePerformance",  # bare "engine" is left alone by design (GAP-3)
+    }
+
+
+def test_list_tags_merges_areas_that_translate_to_the_same_name():
+    from dct_mcp_server.tools.core.dynamic import _action_list_tags
+
+    paths = {
+        "/a": {"get": {"tags": ["Timeflows"]}},
+        "/b": {"get": {"tags": ["Timelines"]}},
+    }
+    tags = _action_list_tags(paths)["tags"]
+    assert tags == [{"name": "Timelines", "operation_count": 2}]
+
+
+@pytest.mark.parametrize("tag", ["Timelines", "Timeflows"])
+def test_list_operations_accepts_the_canonical_or_the_original_area_name(tag):
+    from dct_mcp_server.tools.core.dynamic import _action_list_operations
+
+    res = _action_list_operations(
+        _RETIRED_AREA_SPEC["paths"], tag, None, None, 1, 20, _RETIRED_AREA_SPEC
+    )
+    assert [o["path"] for o in res["operations"]] == ["/timeflows"]
+    assert res["operations"][0]["tags"] == ["Timelines"]
+
+
+_NESTED_SPEC = {
+    "paths": {
+        "/bookmarks/transfer": {
+            "post": {
+                "operationId": "transfer",
+                "summary": "Transfer.",
+                "parameters": [
+                    {
+                        "name": "timeflowId",
+                        "in": "query",
+                        "description": "ID of the timeflow to use.",
+                        "schema": {"type": "string"},
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/Transfer"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The timeflow bookmark was moved.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "timeflow_id": {
+                                            "type": "string",
+                                            "description": "Timeflow of the toolkit.",
+                                            "example": "timeflow-1",
+                                        }
+                                    },
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Transfer": {
+                "type": "object",
+                "properties": {
+                    "bookmark": {
+                        "type": "string",
+                        "description": "An engine-direct timeflow bookmark to migrate.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "A free-text plugin description.",
+                    },
+                },
+            }
+        }
+    },
+}
+
+
+def _nested_schema():
+    from dct_mcp_server.tools.core.dynamic import _action_get_operation_schema
+    from dct_mcp_server.tools.core.spec_model import OpenAPISpec
+
+    return _action_get_operation_schema(
+        OpenAPISpec(_NESTED_SPEC), "/bookmarks/transfer", "POST"
+    )
+
+
+def test_operation_schema_translates_parameter_descriptions():
+    res = _nested_schema()
+    assert res["parameters"][0]["description"] == "ID of the timeline to use."
+    assert res["parameters"][0]["name"] == "timeflowId"  # identifiers are untouched
+
+
+def test_operation_schema_translates_request_body_field_descriptions():
+    res = _nested_schema()
+    by_name = {f["name"]: f for f in res["request_body_fields"]}
+    assert "timeline bookmark" in by_name["bookmark"]["description"]
+    assert "timeflow" not in by_name["bookmark"]["description"].lower()
+    # A field that is itself *called* "description" keeps its name and is translated.
+    assert by_name["description"]["description"] == "A free-text connector description."
+
+
+def test_operation_schema_translates_response_text_but_not_examples_or_keys():
+    res = _nested_schema()
+    ok = res["responses"]["200"]
+    assert ok["description"] == "The timeline bookmark was moved."
+    prop = ok["content"]["application/json"]["schema"]["properties"]["timeflow_id"]
+    assert prop["description"] == "Timeline of the connector."
+    assert prop["example"] == "timeflow-1"  # sample data is left as-is

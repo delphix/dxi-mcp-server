@@ -1230,6 +1230,51 @@ def _error_response(raw_message: str, http_status: int | None) -> dict[str, Any]
 # Discovery action implementations
 # =========================================================================== #
 
+# Area (tag) names are CamelCase compounds ("PaaSTimeflows", "MaskingPlugins"), so the
+# whole-word vocabulary rules cannot see the retired word inside them. Split into
+# words, translate, and rejoin; a name the translation leaves alone is returned as is.
+_CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+def _area_label(name: str) -> str:
+    """The canonical-vocabulary form of an API area (tag) name (PPM-1129)."""
+    spaced = _CAMEL_BOUNDARY_RE.sub(" ", name)
+    translated = to_canonical(spaced)
+    if not translated or translated == spaced:
+        return name
+    return "".join(word[:1].upper() + word[1:] for word in translated.split())
+
+
+# Schema keys whose string value is prose. Sample data (example, enum, default) is data,
+# not wording, and stays exactly as DCT sent it.
+_PROSE_KEYS = frozenset({"description", "title", "summary"})
+_SAMPLE_DATA_KEYS = frozenset({"example", "examples", "enum", "default", "const"})
+
+
+def _canonical_text_in(node: Any, names_are_keys: bool = False) -> Any:
+    """Copy of a schema fragment with its prose rendered in canonical vocabulary.
+
+    Only the string values of ``description``/``title``/``summary`` are rewritten.
+    Keys, identifiers, sample data and every other value are returned untouched.
+    ``names_are_keys`` marks a ``properties`` mapping, whose keys are field names
+    (a field may legitimately be called "description" or "example").
+    """
+    if isinstance(node, list):
+        return [_canonical_text_in(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    out: dict[str, Any] = {}
+    for key, value in node.items():
+        if names_are_keys:
+            out[key] = _canonical_text_in(value)
+        elif key in _SAMPLE_DATA_KEYS:
+            out[key] = value
+        elif key in _PROSE_KEYS and isinstance(value, str):
+            out[key] = to_canonical(value) or value
+        else:
+            out[key] = _canonical_text_in(value, names_are_keys=(key == "properties"))
+    return out
+
 
 def _action_list_tags(paths_map: dict[str, Any]) -> dict[str, Any]:
     """Extract all unique tags from spec paths with operation counts."""
@@ -1243,7 +1288,8 @@ def _action_list_tags(paths_map: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(op, dict):
                 continue
             for tag in op.get("tags", []):
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                label = _area_label(tag)
+                tag_counts[label] = tag_counts.get(label, 0) + 1
 
     tags = [
         {"name": name, "operation_count": count}
@@ -1280,8 +1326,10 @@ def _action_list_operations(
                 continue
 
             # Tag filter
-            op_tags = op.get("tags", []) or []
-            if tag_filter and tag_filter not in op_tags:
+            raw_tags = op.get("tags", []) or []
+            op_tags = [_area_label(t) for t in raw_tags]
+            # Accept the area name as shown (canonical) or as DCT names it.
+            if tag_filter and tag_filter not in op_tags and tag_filter not in raw_tags:
                 continue
 
             # Keyword filter
@@ -1397,21 +1445,21 @@ def _action_get_operation_schema(
     for param in op.parameters:
         resolved, truncated = model.resolve_refs(param.raw)
         schema_truncated = schema_truncated or truncated
-        parameters.append(resolved)
+        parameters.append(_canonical_text_in(resolved))
 
     # Resolve $ref in requestBody → flatten to field list
     request_body_fields: list[dict] = []
     if op.request_body is not None:
         _, truncated = model.resolve_refs(op.request_body.raw)
         schema_truncated = schema_truncated or truncated
-        request_body_fields = op.request_body.fields()
+        request_body_fields = _canonical_text_in(op.request_body.fields())
 
     # Resolve $ref in responses
     responses: dict = {}
     for status_code, response in op.responses.items():
         resolved_resp, truncated = model.resolve_refs(response.raw)
         schema_truncated = schema_truncated or truncated
-        responses[status_code] = resolved_resp
+        responses[status_code] = _canonical_text_in(resolved_resp)
 
     # Confirmation annotation
     conf = check_confirmation(operation_method.upper(), path)
