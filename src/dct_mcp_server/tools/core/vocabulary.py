@@ -165,6 +165,7 @@ def _guard_blocks(text: str, match: re.Match, rule: dict) -> bool:
 # the text, or the opening quote of a JSON string value (DCT error bodies are
 # ``{"error_description":"Timeflow not found."}``). Used to decide whether a
 # replacement should be capitalised.
+_PAREN_REPEAT_RE = re.compile(r"\b([A-Za-z][\w-]*) \(\1\)", re.IGNORECASE)
 _SENTENCE_START_RE = re.compile(r'(?:^|[.!?]\s+|\n\s*|":\s*")$')
 
 # "a"/"an" ending the text just before a substituted term, so the article can
@@ -339,6 +340,13 @@ def _translate(text: str) -> str:
         if pieces:
             pieces.append(result[cursor:])
             result = "".join(pieces)
+
+    if result != text:
+        # DCT writes "connectors (plugins)"; translating the parenthetical must not
+        # leave "connectors (connectors)". Only repeats the translation created.
+        result = _PAREN_REPEAT_RE.sub(
+            lambda m: m.group(0) if m.group(0) in text else m.group(1), result
+        )
 
     return result
 

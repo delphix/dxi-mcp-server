@@ -1284,3 +1284,51 @@ def test_json_error_body_keys_and_ids_are_left_alone():
 )
 def test_identifier_placeholders_are_still_protected(text):
     assert to_canonical(text) == text
+
+
+# --------------------------------------------------------------------------- #
+# Gap fixes found by the before/after comparison (PPM-1129)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # The retired engine names have plural forms in real DCT summaries.
+        (
+            "Gets the storage summary report for virtualization engines.",
+            "Gets the storage summary report for Continuous Data engines.",
+        ),
+        (
+            "Lists jobs on all masking engines.",
+            "Lists jobs on all Continuous Compliance engines.",
+        ),
+    ],
+)
+def test_plural_retired_engine_names_are_translated(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # DCT writes "connectors (plugins)"; translating the parenthetical
+        # must not leave "connectors (connectors)".
+        (
+            "Retrieve the list of masking connectors (plugins).",
+            "Retrieve the list of masking connectors.",
+        ),
+        (
+            "Get a masking connector (plugin) by ID or name.",
+            "Get a masking connector by ID or name.",
+        ),
+    ],
+)
+def test_translation_never_repeats_a_term_in_parentheses(raw, expected):
+    assert to_canonical(raw) == expected
+
+
+def test_parenthesised_repeat_already_in_the_source_is_left_alone():
+    # Only repeats the translator itself created are collapsed.
+    raw = "Delete the VDB (VDB) group"
+    assert to_canonical(raw) == raw

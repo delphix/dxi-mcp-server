@@ -7,6 +7,8 @@ Covers: get_confirmation_for_operation_dynamic, _matched_keyword,
 
 from unittest.mock import patch
 
+import pytest
+
 
 from dct_mcp_server.tools.core.dynamic_confirmation import (
     _matched_keyword,
@@ -386,3 +388,38 @@ def test_keyword_fallback_prompt_when_translation_raises():
 
     assert result["level"] == "manual"
     assert "Delete timeflow raw-s37" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# Read-only search endpoints must not be gated (PPM-1129 comparison finding)
+# ---------------------------------------------------------------------------
+
+_SEARCH_PATHS = [
+    "/vdbs/search",
+    "/timeflows/search",
+    "/masking-jobs/search",
+    "/data-library/search",
+    "/paas-databases/search",
+    "/paas-instances/search",
+    "/rule-sets/search",
+    "/database-table-metadata/search",
+    "/data-formats/{fileFormatId}/rule-sets/search",
+    "/bookmarks/{bookmarkId}/vdb-groups/search",
+]
+
+
+@pytest.mark.parametrize("path", _SEARCH_PATHS)
+def test_read_shaped_search_post_is_not_gated(path):
+    # The description mentions a hot keyword ("snapshot"), as real DCT text does.
+    spec = {
+        "paths": {
+            path: {
+                "post": {
+                    "summary": "Search for objects.",
+                    "description": "Returns objects, including their latest snapshot.",
+                }
+            }
+        }
+    }
+    result = get_confirmation_for_operation_dynamic("POST", path, spec)
+    assert result["level"] == "none"

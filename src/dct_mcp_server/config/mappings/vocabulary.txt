@@ -105,7 +105,9 @@ containers|VDB Groups|only_if_text_mentions=@selfservice
 # forbidden -- each names exactly one of the two engine products, so a flat
 # replacement is safe here (unlike bare "engine"/"Delphix engine" below).
 virtualization engine|Continuous Data engine
+virtualization engines|Continuous Data engines
 masking engine|Continuous Compliance engine
+masking engines|Continuous Compliance engines
 delphix masking|Delphix Continuous Compliance
 # Elastic Data is an add-on to the Continuous Data engine, not an engine of its
 # own (glossary #28: "frame as an add-on -- 'the Continuous Data engine with
