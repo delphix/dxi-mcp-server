@@ -1,0 +1,18 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 439210e..ae448c0 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -19,9 +19,10 @@ dependencies = [
+     # click is pulled in transitively via mcp -> uvicorn. Pin here to guarantee
+     # the patched version (>=8.3.3) is installed regardless of what uvicorn resolves.
+     "click>=8.3.3",
+-    # CVE-2026-102268: PyJWT<=2.13.0 asymmetric-PEM detection bypass lets
+-    # whitespace/line-ending-mutated public keys skip the HS/asymmetric confusion
+-    # guard. Pulled in transitively via mcp[crypto]. Pin to >=2.14.0 (fixed version).
++    # CVE-2026-102268, CVE-2026-102273: PyJWT<=2.13.0 has two vulnerabilities:
++    # asymmetric-PEM detection bypass (CVE-2026-102268) and accepting public JWK
++    # containers as HMAC secrets (CVE-2026-102273). Pulled in transitively via
++    # mcp[crypto]. Pin to >=2.14.0 (fixed version).
+     "pyjwt>=2.14.0",
+ ]
+ 
