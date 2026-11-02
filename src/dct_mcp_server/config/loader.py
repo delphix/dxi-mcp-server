@@ -12,12 +12,14 @@ Configuration Files:
 
 import os
 import re
-import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from functools import lru_cache
 
-logger = logging.getLogger(__name__)
+from dct_mcp_server.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Configuration directories
 CONFIG_DIR = Path(__file__).parent
@@ -630,6 +632,127 @@ def get_modules_for_toolset(toolset_name: str) -> List[str]:
 
 
 # ============================================================================
+# APPDATA OPERATIONS LOADING FUNCTIONS
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class AppDataOperation:
+    """Parsed record from appdata_operations.txt (DLPXECO-14781)."""
+
+    method: str  # upper-case HTTP method, e.g. "POST"
+    path_template: str  # e.g. "/dsources/appdata" or "/vdbs/{vdbId}"
+    sub_objects: dict  # {sub_object_name: definition_name}
+    chains: list  # list of raw chain strings; resolver in Task 6 parses them
+
+
+@lru_cache(maxsize=1)
+def load_appdata_operations() -> tuple:
+    """Parse appdata_operations.txt and return (ops, toolkit_path).
+
+    Malformed lines are skipped with a warning; never raises.
+    Returns:
+        Tuple of (list[AppDataOperation], toolkit_path_str)
+    """
+    mapping_path = MAPPINGS_DIR / "appdata_operations.txt"
+    try:
+        text = mapping_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("AppData mapping file not found: %s", exc)
+        return ([], "")
+
+    ops: List[AppDataOperation] = []
+    toolkit_path = ""
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("@toolkit|"):
+            toolkit_path = line.split("|", 1)[1].strip()
+            continue
+        parts = line.split("|")
+        if len(parts) != 4:
+            logger.warning(
+                "AppData mapping: malformed line (expected 4 fields): %r", line
+            )
+            continue
+        method, path_tmpl, sub_obj_str, chain_str = parts
+        method = method.strip().upper()
+        path_tmpl = path_tmpl.strip()
+
+        # Parse sub_objects: "key:def,key2:def2"
+        sub_objects: Dict[str, str] = {}
+        for pair in sub_obj_str.split(","):
+            pair = pair.strip()
+            if ":" not in pair:
+                logger.warning(
+                    "AppData mapping: malformed sub_object pair %r in line %r",
+                    pair,
+                    line,
+                )
+                continue
+            k, v = pair.split(":", 1)
+            sub_objects[k.strip()] = v.strip()
+        if not sub_objects:
+            logger.warning("AppData mapping: no sub_objects in line %r", line)
+            continue
+
+        # Parse chains: semicolon-separated raw chain strings
+        chains: List[str] = []
+        for chain_raw in chain_str.split(";"):
+            chain_raw = chain_raw.strip()
+            if not chain_raw:
+                continue
+            chains.append(chain_raw)
+
+        ops.append(
+            AppDataOperation(
+                method=method,
+                path_template=path_tmpl,
+                sub_objects=sub_objects,
+                chains=chains,
+            )
+        )
+
+    return (ops, toolkit_path)
+
+
+def match_appdata_operation(method: str, path: str) -> Optional[AppDataOperation]:
+    """Return the first AppDataOperation matching *method* and *path*.
+
+    Strips a leading /dct/v<N> or /dct prefix before matching.
+    Prefers literal (non-parameterised) templates over parameterised ones.
+    Returns None if no match.
+    """
+    # Normalise path — strip /dct/v<N> or /dct prefix
+    norm = re.sub(r"^/dct/v\d+", "", path)
+    norm = re.sub(r"^/dct", "", norm)
+    if not norm.startswith("/"):
+        norm = "/" + norm
+
+    method_upper = method.upper()
+    ops, _ = load_appdata_operations()
+
+    literal_match: Optional[AppDataOperation] = None
+    param_match: Optional[AppDataOperation] = None
+
+    for op in ops:
+        if op.method != method_upper:
+            continue
+        if not _path_matches(norm, op.path_template):
+            continue
+        if "{" in op.path_template:
+            if param_match is None:
+                param_match = op
+        else:
+            if literal_match is None:
+                literal_match = op
+
+    return literal_match if literal_match is not None else param_match
+
+
+# ============================================================================
 # CACHE MANAGEMENT
 # ============================================================================
 
@@ -644,6 +767,7 @@ def clear_cache():
     load_toolset_grouped_apis.cache_clear()
     load_manual_confirmation_rules.cache_clear()
     _load_read_exclusions.cache_clear()
+    load_appdata_operations.cache_clear()
     logger.info("Configuration cache cleared")
 
 
