@@ -298,8 +298,13 @@ def _make_discovery_fn(app: FastMCP):
                         '`"format": "password"` in the toolkit schema for sub-objects '
                         + ", ".join(f"`{k}`" for k in op.sub_objects)
                         + " are captured by the host securely. Do NOT request them in "
-                        "chat or include them in the body — the host captures them "
-                        "out-of-band and applies them automatically."
+                        "chat. For each such field the user's chosen setup needs "
+                        "(including fields needed only for that setup, e.g. a "
+                        "keystore password when SSL is enabled), put the literal "
+                        'placeholder value "<secure>" in the body instead of a real '
+                        "value; the host then captures it out-of-band and applies "
+                        "it. Leave out password fields the chosen setup does not "
+                        "use (e.g. when the credential comes from a vault)."
                     )
                     result["description"] = existing_desc + connector_note
                     result["host_captured_connector_secrets"] = sub_obj_list

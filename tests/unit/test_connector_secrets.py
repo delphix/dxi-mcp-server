@@ -278,6 +278,86 @@ def test_expand_missing_conditional_not_flagged():
     assert result == []
 
 
+def test_expand_optional_flagged_when_identity_filled_in_array():
+    """Postgres single-DB ingestion: user name given, password left out."""
+    records = frozenset(
+        [
+            SecretPath(
+                "singleDatabaseIngestion[*].databaseUserPassword",
+                required=False,
+                conditional=False,
+            )
+        ]
+    )
+    body_val = {
+        "singleDatabaseIngestion": [
+            {"databaseName": "mytest", "databaseUserName": "postgres"}
+        ]
+    }
+    result = expand_and_flag("parameters", body_val, records)
+    assert [f.location for f in result] == [
+        "parameters.singleDatabaseIngestion[0].databaseUserPassword"
+    ]
+    assert result[0].name == "databaseUserPassword"
+
+
+def test_expand_optional_not_flagged_when_vault_supplied():
+    """Same request using a vault instead of the password asks for nothing."""
+    records = frozenset(
+        [
+            SecretPath(
+                "singleDatabaseIngestion[*].databaseUserPassword",
+                required=False,
+                conditional=False,
+            )
+        ]
+    )
+    body_val = {
+        "singleDatabaseIngestion": [
+            {
+                "databaseUserName": "postgres",
+                "usesVault": True,
+                "vaultDetails": [{"myCredentials": {"type": "NamedCredential"}}],
+            }
+        ]
+    }
+    assert expand_and_flag("parameters", body_val, records) == []
+
+
+def test_expand_optional_flagged_for_abbreviated_pair():
+    """MySQL replicationUser pairs with replicationPass."""
+    records = frozenset(
+        [SecretPath("replicationPass", required=False, conditional=False)]
+    )
+    body_val = {"dSourceType": "Replication", "replicationUser": "repl"}
+    result = expand_and_flag("parameters", body_val, records)
+    assert [f.location for f in result] == ["parameters.replicationPass"]
+
+
+def test_expand_optional_not_flagged_when_identity_empty():
+    records = frozenset(
+        [SecretPath("replicationPass", required=False, conditional=False)]
+    )
+    body_val = {"replicationUser": ""}
+    assert expand_and_flag("parameters", body_val, records) == []
+
+
+def test_expand_empty_string_password_counts_as_absent():
+    """An unused password left at its "" default is not flagged."""
+    records = frozenset([SecretPath("stagingPass", required=False, conditional=False)])
+    assert expand_and_flag("parameters", {"stagingPass": ""}, records) == []
+
+
+def test_expand_placeholder_flagged():
+    """The model marks a needed password with a placeholder (DB2 HADR SSL)."""
+    records = frozenset(
+        [SecretPath("hadrDetails.keyStorePassword", required=False, conditional=False)]
+    )
+    body_val = {"hadrDetails": {"configureSSL": True, "keyStorePassword": "<secure>"}}
+    result = expand_and_flag("parameters", body_val, records)
+    assert [f.location for f in result] == ["parameters.hadrDetails.keyStorePassword"]
+
+
 def test_expand_present_overrides_conditional():
     """A conditional field that IS present must still be flagged."""
     records = frozenset([SecretPath("authPass", required=True, conditional=True)])

@@ -598,6 +598,74 @@ def _expand_path(
     return results
 
 
+# Suffixes that end a password-format field name, and the identity-field
+# suffixes that can pair with what is left (databaseUserPassword ->
+# databaseUserName, replicationPass -> replicationUser, mongo_db_password ->
+# mongo_db_user). Compared case- and underscore-insensitively.
+_SECRET_SUFFIXES = ("password", "passwd", "pass", "pwd")
+_IDENTITY_SUFFIXES = ("", "user", "username", "name", "userid", "login")
+# A truthy sibling whose name contains one of these means the credential comes
+# from somewhere else (vault, Kerberos, Azure AD), so the password is not asked.
+_ALTERNATIVE_MARKERS = ("vault", "credential", "kerberos", "azuread")
+
+
+def _norm(key: str) -> str:
+    return key.replace("_", "").lower()
+
+
+def _is_supplied(value: Any) -> bool:
+    return value not in (None, "", [], {}, False)
+
+
+def _needs_secret(container: dict, leaf: str) -> bool:
+    """True when an absent optional password is still in use by this request.
+
+    Toolkit schemas rarely mark passwords required, because each one only
+    applies to some ingestion paths. The request body says which path the user
+    chose: a filled identity field paired with the password means it is needed,
+    unless a vault/Kerberos/Azure AD alternative is filled in the same object.
+    """
+    low = _norm(leaf)
+    stem = next(
+        (low[: -len(sfx)] for sfx in _SECRET_SUFFIXES if low.endswith(sfx)), None
+    )
+    if stem is None:
+        return False
+    identities = {
+        stem + sfx for sfx in _IDENTITY_SUFFIXES if stem or sfx not in ("", "name")
+    }
+    has_identity = any(
+        _norm(k) in identities and _is_supplied(v)
+        for k, v in container.items()
+        if k != leaf
+    )
+    if not has_identity:
+        return False
+    return not any(
+        marker in _norm(k) and _is_supplied(v)
+        for k, v in container.items()
+        for marker in _ALTERNATIVE_MARKERS
+    )
+
+
+def _node_at(root: Any, dotted_path: str) -> Any:
+    """Return the value at a dotted/bracketed path, or None if absent."""
+    node: Any = root
+    for part in re.split(r"\.|(?=\[)", dotted_path):
+        if not part:
+            continue
+        if part.startswith("[") and part.endswith("]"):
+            try:
+                node = node[int(part[1:-1])] if isinstance(node, list) else None
+            except (IndexError, ValueError):
+                return None
+        elif isinstance(node, dict):
+            node = node.get(part)
+        else:
+            return None
+    return node
+
+
 def expand_and_flag(
     sub_object: str,
     value: Any,
@@ -617,14 +685,21 @@ def expand_and_flag(
 
         if has_wildcard:
             expansions = _expand_path(path, value)
+            leaf_name = re.split(r"[.\[]", path)[-1].rstrip("]")
             for concrete_path, leaf_val in expansions:
+                full_loc = (
+                    f"{sub_object}.{concrete_path}" if concrete_path else sub_object
+                )
                 if leaf_val is not None or (
                     isinstance(value, dict) and _path_exists(value, concrete_path)
                 ):
-                    leaf_name = re.split(r"[.\[]", path)[-1].rstrip("]")
-                    full_loc = (
-                        f"{sub_object}.{concrete_path}" if concrete_path else sub_object
-                    )
+                    if leaf_val != "":
+                        flagged.append(
+                            FlaggedLocation(name=leaf_name, location=full_loc)
+                        )
+                        continue
+                parent = _node_at(value, concrete_path.rpartition(".")[0])
+                if isinstance(parent, dict) and _needs_secret(parent, leaf_name):
                     flagged.append(FlaggedLocation(name=leaf_name, location=full_loc))
         else:
             # No wildcard — navigate the path
@@ -642,8 +717,13 @@ def expand_and_flag(
                     break
 
             leaf_name = parts[-1] if parts else path
-            if parent_exists and isinstance(node, dict) and leaf_name in node:
-                # Present — always flag
+            if (
+                parent_exists
+                and isinstance(node, dict)
+                and leaf_name in node
+                and node[leaf_name] != ""
+            ):
+                # Present (an empty string counts as absent) — always flag
                 full_loc = f"{sub_object}.{path}" if path else sub_object
                 flagged.append(FlaggedLocation(name=leaf_name, location=full_loc))
             elif (
@@ -654,6 +734,14 @@ def expand_and_flag(
                 and isinstance(node, dict)
             ):
                 # Absent but required and non-conditional — flag
+                full_loc = f"{sub_object}.{path}" if path else sub_object
+                flagged.append(FlaggedLocation(name=leaf_name, location=full_loc))
+            elif (
+                parent_exists
+                and isinstance(node, dict)
+                and _needs_secret(node, leaf_name)
+            ):
+                # Absent and optional, but the body uses the path it belongs to
                 full_loc = f"{sub_object}.{path}" if path else sub_object
                 flagged.append(FlaggedLocation(name=leaf_name, location=full_loc))
 
