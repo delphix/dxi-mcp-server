@@ -541,12 +541,33 @@ def test_placeholder_resolves_from_path():
     assert out == "Are you sure you want to permanently delete VDB 'vdb-123'?"
 
 
-def test_placeholder_prefers_body_name():
+def test_placeholder_prefers_path_id_over_body_name():
+    # The body is caller-supplied and may carry an unrelated name; the prompt
+    # must name the resource the call actually acts on.
     out = render_message_template(
         "Delete VDB '{name}'?", "/vdbs/vdb-123/delete", {"name": "sales-vdb-01"}
     )
+    assert "vdb-123" in out
+    assert "sales-vdb-01" not in out
+
+
+def test_placeholder_uses_body_name_when_path_names_no_resource():
+    out = render_message_template(
+        "Create VDB '{name}'?", "/vdbs/provision_by_snapshot", {"name": "sales-vdb-01"}
+    )
     assert "sales-vdb-01" in out
-    assert "vdb-123" not in out
+
+
+def test_gated_prompt_names_the_path_target_not_the_body_name():
+    from dct_mcp_server.tools.core.confirmation_resolver import (
+        check_confirmation_with_fallback,
+    )
+
+    conf = check_confirmation_with_fallback(
+        "DELETE", "/environments/prod-env", {"name": "test-env"}
+    )
+    assert "prod-env" in conf["message_template"]
+    assert "test-env" not in conf["message_template"]
 
 
 def test_placeholder_clause_dropped_when_unresolvable():
@@ -569,6 +590,9 @@ def test_placeholder_clause_dropped_when_unresolvable():
         # Single-segment collections are unchanged.
         ("/vdbs/vdb-123", "vdb-123"),
         ("/vdbs/vdb-123/delete", "vdb-123"),
+        # Nested paths: the last placeholder is the target, not its parent.
+        ("/environments/env-1/users/u-1", "u-1"),
+        ("/access-groups/ag-1/scopes/s-1", "s-1"),
     ],
 )
 def test_resource_id_skips_the_whole_collection_prefix(path, expected_id):
@@ -989,7 +1013,7 @@ def test_prebuilt_confirmation_message_resolves_name_from_path(module):
     )
 
 
-def test_prebuilt_confirmation_message_prefers_body_name():
+def test_prebuilt_confirmation_message_prefers_path_id_over_body_name():
     from dct_mcp_server.tools.dataset_endpoints_tool import check_confirmation
 
     conf = check_confirmation(
@@ -999,7 +1023,8 @@ def test_prebuilt_confirmation_message_prefers_body_name():
         "vdb_tool",
         request_body={"name": "sales-01"},
     )
-    assert "'sales-01'" in conf["confirmation_message"]
+    assert "'vdb-1'" in conf["confirmation_message"]
+    assert "sales-01" not in conf["confirmation_message"]
     assert "{" not in conf["confirmation_message"]
 
 
@@ -1413,14 +1438,33 @@ def test_or_repeat_already_in_the_source_is_left_alone():
     [
         (
             "The commands to execute on the target environment after rewinding the VDB.",
-            "The commands to execute on the target environment after refreshing the VDB.",
+            "The commands to execute on the target environment after refreshing from self the VDB.",
         ),
-        ("The VDB was rewound.", "The VDB was refreshed."),
-        ("Rewinds the VDB.", "Refreshes the VDB."),
+        # Every inflection keeps "from self": a bare "refreshed" reads as a
+        # refresh from the parent, the opposite of a rollback.
+        ("The VDB was rewound.", "The VDB was refreshed from self."),
+        ("Rewinds the VDB.", "Refreshes from self the VDB."),
     ],
 )
 def test_inflected_forms_of_rewind_are_translated(raw, expected):
     assert to_canonical(raw) == expected
+
+
+def test_json_keys_in_an_error_body_are_never_rewritten():
+    # The model reads message_for_user and may echo field names back to the
+    # API, so a key must stay exactly as DCT sent it while the prose value is
+    # still translated.
+    raw = 'HTTP 400: {"error_description":"Toolkit not found","toolkit":"abc"}'
+    out = to_canonical(raw)
+    assert '"toolkit":"abc"' in out
+    assert "Connector not found" in out
+    assert '"connector"' not in out
+
+
+def test_quoted_prose_that_is_not_a_json_key_is_still_translated():
+    assert (
+        to_canonical('Install the "toolkit" first.') == 'Install the "connector" first.'
+    )
 
 
 def test_title_case_slash_compound_is_prose_not_a_path():

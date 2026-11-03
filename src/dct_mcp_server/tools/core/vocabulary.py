@@ -106,6 +106,9 @@ def _compiled_rules() -> tuple[tuple[re.Pattern, dict], ...]:
 _PROTECTED_RE = re.compile(
     r"https?://\S+"
     r"|`[^`\n]*`"
+    # A quoted JSON key ("toolkit": ...). Keys are field names the API expects
+    # back, so they are never rewritten; the string values stay translatable.
+    r'|"(?:[^"\\\n]|\\.)*"(?=\s*:)'
     # A path-like token. A Title/Title pair ("Container/Template") is prose, not a path.
     r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
     r"|[\w.{}:~%$-]*\\[\w.{}:~%$\\-]*"

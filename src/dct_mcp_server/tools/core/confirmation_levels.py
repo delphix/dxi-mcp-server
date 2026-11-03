@@ -339,9 +339,11 @@ def _id_from_template(
 ) -> tuple[int, str | None] | None:
     """Align *segments* with *template*.
 
-    Returns ``(literal_segment_count, value_at_first_placeholder)`` when the
+    Returns ``(literal_segment_count, value_at_last_placeholder)`` when the
     path matches the template, else None. The value is None when the
-    template has no placeholder (a literal collection or action path).
+    template has no placeholder (a literal collection or action path). In a
+    nested path (``/environments/{id}/users/{userId}``) the last placeholder is
+    the resource the call acts on, not its parent.
     """
     parts = _split_path(template)
     if len(parts) != len(segments):
@@ -349,8 +351,7 @@ def _id_from_template(
     literal, value = 0, None
     for part, segment in zip(parts, segments):
         if part.startswith("{") and part.endswith("}"):
-            if value is None:
-                value = segment
+            value = segment
         elif part.lower() == segment.lower():
             literal += 1
         else:
@@ -364,7 +365,7 @@ def _extract_resource_id(path: str, path_template: str | None = None) -> str | N
     Structural first: the resolved path is aligned with its API path template
     (the matched confirmation rule's pattern when the caller has it, else the
     most specific template the config knows), and the value in the
-    template's first ``{placeholder}`` position is the ID. That is what makes
+    template's last ``{placeholder}`` position is the ID. That is what makes
     multi-segment collection prefixes work:
 
       "/management/engines/eng-1"            → "eng-1"   (/management/engines/{engineId})

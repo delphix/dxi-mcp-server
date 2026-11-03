@@ -256,12 +256,21 @@ def render_message_template(
 def _resolve_resource_name(
     path: str, body: dict | None, path_template: str | None = None
 ) -> str | None:
-    """Best-effort human-meaningful name for the operation's target."""
+    """Best-effort human-meaningful name for the operation's target.
+
+    The ID in the path is the target the call acts on, so it comes first. The
+    request body is supplied by the caller and may carry an unrelated ``name``
+    (a rename's new name, or one the model made up), so it is used only when
+    the path names no resource, e.g. a create.
+    """
+    resource_id = _extract_resource_id(path, path_template)
+    if resource_id:
+        return resource_id
     if isinstance(body, dict):
         name = body.get("name")
         if isinstance(name, str) and name.strip():
             return name.strip()
-    return _extract_resource_id(path, path_template)
+    return None
 
 
 def check_confirmation_with_fallback(
