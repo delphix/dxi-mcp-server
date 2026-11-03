@@ -182,7 +182,7 @@ For confirmation-flow prompts the first call returns `confirmation_required`; re
 145. Search the usages of the classification=internal tag
 146. Delete the classification=internal tag (first call returns confirmation; confirm to proceed)
 
-**toolkit_tool**
+**connector_schema_tool**
 147. Search for all toolkits
 148. Get the details of the first toolkit
 149. Upload a new toolkit using a local test toolkit file

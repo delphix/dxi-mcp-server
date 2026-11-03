@@ -80,7 +80,7 @@ For confirmation-flow prompts the first call returns `confirmation_required`; re
 59. Abandon the first running job from the search results, if any exist (first call returns confirmation; confirm to proceed)
 60. Get the tags for the first job
 
-**timeflow_tool**
+**timeline_tool**
 61. List all timeflows
 62. Search for all timeflows
 63. Get the details of the first timeflow from the previous result

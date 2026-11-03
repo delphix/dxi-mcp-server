@@ -47,7 +47,7 @@ Set `DCT_TOOLSET=reporting_insights` in `.mcp.json` and restart the dct MCP serv
 26. Get the details of the first vCDB
 27. Get the tags for that vCDB
 
-**database_template_tool (read only)**
+**vdb_template_tool (read only)**
 28. Search for all database templates
 29. Get the details of the first database template
 30. Get the tags for that database template

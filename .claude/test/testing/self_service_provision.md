@@ -42,7 +42,7 @@ For confirmation-flow prompts, the first call returns `confirmation_required`. F
 97. Get the details of the first vCDB from the previous result
 98. Get the tags for that vCDB
 
-**database_template_tool**
+**vdb_template_tool**
 99. Search for all database templates
 100. Get the details of the first database template from the previous result
 101. Create a new database template named test-template
@@ -75,7 +75,7 @@ For confirmation-flow prompts, the first call returns `confirmation_required`. F
 122. List the listeners in that environment
 123. Get the tags for that environment
 
-**toolkit_tool**
+**connector_schema_tool**
 124. Search for all toolkits
 125. Get the details of the first toolkit from the previous result
 
@@ -85,7 +85,7 @@ For confirmation-flow prompts, the first call returns `confirmation_required`. F
 128. Create a new tag with key owner and value test-user
 129. Delete the owner=test-user tag (first call returns confirmation; confirm to proceed)
 
-**timeflow_tool**
+**timeline_tool**
 130. List all timeflows
 131. Search for all timeflows
 132. Get the details of the first timeflow from the previous result

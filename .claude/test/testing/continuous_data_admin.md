@@ -186,7 +186,7 @@ For confirmation-flow prompts the first call returns `confirmation_required`; re
 163. Remove the db=vcdb tag from that vCDB
 164. Delete that vCDB (first call returns confirmation; confirm to proceed)
 
-**database_template_tool**
+**vdb_template_tool**
 165. Search for all database templates
 166. Get the details of the first database template
 167. Create a new database template named test-cda-template
@@ -399,7 +399,7 @@ For confirmation-flow prompts the first call returns `confirmation_required`; re
 346. Create a new API client named test-cda-api-client
 347. Delete test-cda-api-client (first call returns confirmation; confirm to proceed)
 
-**toolkit_tool**
+**connector_schema_tool**
 348. Search for all toolkits
 349. Get the details of the first toolkit from the previous result
 350. Upload a new toolkit using a local test toolkit file
@@ -462,7 +462,7 @@ For confirmation-flow prompts the first call returns `confirmation_required`; re
 395. Search for all dataset groups
 396. Get the details of the first dataset group
 
-**timeflow_tool**
+**timeline_tool**
 397. List all timeflows
 398. Search for all timeflows
 399. Get the details of the first timeflow
