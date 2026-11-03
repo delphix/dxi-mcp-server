@@ -20,6 +20,8 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
     │       ├── tools/core/meta_tools.py          ← Retained spec helpers (find_endpoint, get_spec_chunk)
     │       ├── tools/core/tool_factory.py         ← Runtime tool generation from OpenAPI spec
     │       ├── tools/core/dynamic.py              ← Dynamic mode: discovery + execute + FR-001–008 gate
+    │       ├── tools/core/host_trust.py           ← Shared nonce check (_SENSITIVE_NONCE_ENV, host_nonce_ok); moved from dynamic.py (DLPXECO-14781)
+    │       ├── tools/core/connector_secrets.py    ← AppData connector-secret detection: toolkit walker, caches, gate entry point (DLPXECO-14781)
     │       ├── tools/core/confirmation_token.py   ← Single-use body-bound HMAC tokens + ConsumedTokenStore
     │       ├── tools/core/confirmation_store.py   ← ConsumedTokenStore + GrantStore (in-memory, TTL)
     │       ├── tools/core/confirmation_levels.py  ← validate_elevated(), validate_manual(), build_required_fields()
@@ -33,7 +35,8 @@ main.py                              ← Entry point; FastMCP app, lifespan, sta
     │       ├── config/toolsets/*.txt              ← Persona toolset definitions
     │       ├── config/mappings/manual_confirmation.txt
     │       ├── config/mappings/floor_operations.txt  ← Patterns for non-bypassable operations
-    │       └── config/mappings/read_exclusions.txt   ← POSTs excluded from keyword fallback
+    │       ├── config/mappings/read_exclusions.txt   ← POSTs excluded from keyword fallback
+    │       └── config/mappings/appdata_operations.txt← AppData operation→sub-object→toolkit-definition→resolver-chain mapping (DLPXECO-14781)
     ├── dct_client/client.py         ← Async httpx client with retry/backoff
     ├── testing/cli.py               ← dct-mcp-test CLI — test runner wrapping pytest with layer routing
     └── core/
@@ -165,3 +168,4 @@ dct-mcp-test remote --layer llm            # Run Layer 5 tests against remote DC
 - **Retries**: Exponential backoff up to `DCT_MAX_RETRIES` (default 3) on transient failures
 - **Toolset config cache**: `loader.py` uses `@lru_cache` — call `clear_cache()` if `.txt` files change at runtime
 - **Telemetry**: Opt-in only (`IS_LOCAL_TELEMETRY_ENABLED=true`); session logs written to `logs/sessions/{id}.log`
+- **AppData secret detection** (DLPXECO-14781): capture-host-only (embedded mode + nonce), fail-open on any lookup failure, time-budgeted by `DCT_TIMEOUT`, in-memory caches only (not persisted across restart). `config/mappings/appdata_operations.txt` maps 19 AppData operations.
