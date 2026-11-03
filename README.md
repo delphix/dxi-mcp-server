@@ -506,9 +506,6 @@ default `dynamic` toolset (`discovery` / `execute`) is not affected.
 | Action | `get_snapshot_timeflow_range` / `get_timeflow_range` | `get_snapshot_timeline_range` / `get_timeline_range` |
 | Action | `check_database_connectivity` | `check_connectivity` |
 
-The full table, with the toolsets each rename applies to, is in
-`docs/PPM-1129/PPM-1129-agent-ready-api-surface-proposal.md`.
-
 ## Available Tools
 
 The tools available depend on the configured toolset. Below are the grouped tools for each toolset.

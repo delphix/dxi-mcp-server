@@ -443,10 +443,8 @@ _RENAMES = [
     ("check_database_connectivity", "check_connectivity"),
 ]
 
-_PROPOSAL_DOC = (
-    Path(__file__).resolve().parents[2]
-    / "docs/PPM-1129/PPM-1129-agent-ready-api-surface-proposal.md"
-)
+# The old-to-new rename table users see: the upgrade note in the README.
+_RENAME_DOC = Path(__file__).resolve().parents[2] / "README.md"
 _TOOLSETS_DIR = _SRC / "config/toolsets"
 
 
@@ -469,7 +467,7 @@ def _all_toolset_identifiers() -> set[str]:
 
 def test_persona_renames_are_complete_and_documented():
     """S29: every FR-005 rename must be registered under its *new* name only
-    and documented old-to-new in the proposal doc.
+    and documented old-to-new in the README upgrade note.
 
     Three assertions:
     1. new_name is present in at least one config/toolsets/*.txt file (as a
@@ -477,10 +475,10 @@ def test_persona_renames_are_complete_and_documented():
     2. old_name is absent from every toolsets/*.txt file in column 3 / TOOL headers
        (note: the unchanged DCT API path column may still contain the old word;
        that is intentional per NG3 and is not checked here).
-    3. Both old_name and new_name appear in the proposal doc's rename table.
+    3. Both old_name and new_name appear in the README's rename table.
     """
     toolset_ids = _all_toolset_identifiers()
-    proposal_text = _PROPOSAL_DOC.read_text()
+    rename_doc_text = _RENAME_DOC.read_text()
 
     missing_new: list[str] = []
     present_old: list[str] = []
@@ -491,7 +489,7 @@ def test_persona_renames_are_complete_and_documented():
             missing_new.append(new_name)
         if old_name in toolset_ids:
             present_old.append(old_name)
-        if old_name not in proposal_text or new_name not in proposal_text:
+        if old_name not in rename_doc_text or new_name not in rename_doc_text:
             undocumented.append((old_name, new_name))
 
     assert not missing_new, (
@@ -501,7 +499,7 @@ def test_persona_renames_are_complete_and_documented():
         f"Old names still present in config/toolsets/*.txt: {present_old}"
     )
     assert not undocumented, (
-        f"Rename pairs not in PPM-1129-agent-ready-api-surface-proposal.md: {undocumented}"
+        f"Rename pairs not in the README upgrade note: {undocumented}"
     )
 
 
