@@ -33,7 +33,7 @@ POST|/vdbs/{vdbId}/undo_refresh|undo_vdb_refresh
 POST|/vdbs/{vdbId}/rollback_by_timestamp|rollback_vdb_by_timestamp
 POST|/vdbs/{vdbId}/rollback_by_snapshot|rollback_vdb_by_snapshot
 POST|/vdbs/{vdbId}/rollback_from_bookmark|rollback_vdb_from_bookmark
-POST|/vdbs/{vdbId}/switch_timeflow|switch_vdb_timeflow
+POST|/vdbs/{vdbId}/switch_timeflow|switch_vdb_timeline
 POST|/vdbs/{vdbId}/lock|lock_vdb
 POST|/vdbs/{vdbId}/unlock|unlock_vdb
 POST|/vdbs/{vdbId}/migrate|migrate_vdb
@@ -116,10 +116,10 @@ POST|/dsources/oracle/{dsourceId}/upgrade|upgrade_oracle_dsource
 POST|/dsources/ase|dsource_link_ase
 POST|/dsources/ase/defaults|dsource_link_ase_defaults
 PATCH|/dsources/ase/{dsourceId}|update_ase_dsource
-# dSource Linking - AppData
-POST|/dsources/appdata|dsource_link_appdata
-POST|/dsources/appdata/defaults|dsource_link_appdata_defaults
-PATCH|/dsources/appdata/{dsourceId}|update_appdata_dsource
+# dSource Linking - Connector
+POST|/dsources/appdata|dsource_link_connector
+POST|/dsources/appdata/defaults|dsource_link_connector_defaults
+PATCH|/dsources/appdata/{dsourceId}|update_connector_dsource
 # dSource Linking - MSSql
 POST|/dsources/mssql|dsource_link_mssql
 POST|/dsources/mssql/defaults|dsource_link_mssql_defaults
@@ -149,7 +149,7 @@ GET|/snapshots/{snapshotId}|get_snapshot
 PATCH|/snapshots/{snapshotId}|update_snapshot
 POST|/snapshots/{snapshotId}/delete|delete_snapshot
 POST|/snapshots/{snapshotId}/unset_expiration|unset_snapshot_expiration
-GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeflow_range
+GET|/snapshots/{snapshotId}/timeflow_range|get_snapshot_timeline_range
 GET|/snapshots/{snapshotId}/runtime|get_runtime
 GET|/snapshots/find_by_location|find_snapshot_by_location
 GET|/snapshots/find_by_timestamp|find_snapshot_by_timestamp
@@ -192,7 +192,7 @@ POST|/vcdbs/{vcdbId}/tags|add_vcdb_tags
 POST|/vcdbs/{vcdbId}/tags/delete|delete_vcdb_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 4: database_template_tool - VDB Templates
+# TOOL 4: vdb_template_tool - VDB Templates
 # ----------------------------------------------------------------------------
 POST|/database-templates/search|search
 GET|/database-templates/{databaseTemplateId}|get
@@ -242,7 +242,7 @@ POST|/jobs/{jobId}/tags|add_tags
 POST|/jobs/{jobId}/tags/delete|delete_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 8: engine_tool - CD Engines
+# TOOL 8: engine_tool - Engines (Continuous Data and Continuous Compliance)
 # ----------------------------------------------------------------------------
 POST|/management/engines/search|search
 GET|/management/engines/{engineId}|get
@@ -303,8 +303,8 @@ POST|/sources/postgres|create_postgres_source
 PATCH|/sources/postgres/{sourceId}|update_postgres_source
 POST|/sources/ase|create_ase_source
 PATCH|/sources/ase/{sourceId}|update_ase_source
-POST|/sources/appdata|create_appdata_source
-PATCH|/sources/appdata/{sourceId}|update_appdata_source
+POST|/sources/appdata|create_connector_source
+PATCH|/sources/appdata/{sourceId}|update_connector_source
 POST|/sources/mssql|create_mssql_source
 PATCH|/sources/mssql/{sourceId}|update_mssql_source
 
@@ -433,12 +433,12 @@ POST|/access-groups/{accessGroupId}/scopes/{scopeId}/always_allowed_permissions/
 # Authentication
 
 # ----------------------------------------------------------------------------
-# TOOL 13: toolkit_tool - Toolkits (AppData plugin schemas)
+# TOOL 13: connector_schema_tool - Connectors (schema definitions)
 # ----------------------------------------------------------------------------
 POST|/toolkits/search|search
 GET|/toolkits/{toolkitId}|get
-POST|/toolkits/upload|upload_toolkit
-DELETE|/toolkits/{toolkitId}|delete_toolkit
+POST|/toolkits/upload|upload_connector_schema
+DELETE|/toolkits/{toolkitId}|delete_connector_schema
 GET|/toolkits/{toolkitId}/tags|get_tags
 POST|/toolkits/{toolkitId}/tags|add_tags
 POST|/toolkits/{toolkitId}/tags/delete|delete_tags
@@ -513,7 +513,7 @@ POST|/groups/search|search
 GET|/groups/{groupId}|get
 
 # ----------------------------------------------------------------------------
-# TOOL 20: timeflow_tool - Timeflows
+# TOOL 20: timeline_tool - Timelines
 # ----------------------------------------------------------------------------
 GET|/timeflows|list
 POST|/timeflows/search|search
@@ -548,7 +548,7 @@ GET|/kerberos-configs/{kerberosConfigId}|get_kerberos_config
 # ----------------------------------------------------------------------------
 # Connectivity Checks
 POST|/connectivity/check|check_engine_connectivity
-POST|/database/connectivity/check|check_database_connectivity
+POST|/database/connectivity/check|check_connectivity
 POST|/netbackup/connectivity/check|check_netbackup_connectivity
 POST|/commvault/connectivity/check|check_commvault_connectivity
 # Network Performance Tests

@@ -256,3 +256,111 @@ def test_domain_object_returns_curated_subclasses(spec_dict):
 def test_domain_object_cached(spec_dict):
     spec = OpenAPISpec(spec_dict)
     assert spec.domain_object("VDB") is spec.domain_object("VDB")
+
+
+# --------------------------------------------------------------------------- #
+# GAP-5: RequestBody._resolved() uses resolve_refs, not the dead 5-hop loop
+# --------------------------------------------------------------------------- #
+
+
+def test_request_body_resolved_uses_resolve_refs_not_resolve_ref(spec_dict):
+    """S45: _resolved() delegates to spec.resolve_refs, never calls resolve_ref.
+
+    The former 5-hop loop called spec.resolve_ref (singular) which does not
+    exist on OpenAPISpec, so hasattr always returned False and the loop exited
+    on the first iteration. _resolved() now calls spec.resolve_refs directly.
+    """
+    # Use a spy subclass; __slots__ on OpenAPISpec prevents instance patching.
+    calls = []
+    real_spec = OpenAPISpec(spec_dict)
+
+    class SpySpec(OpenAPISpec):
+        def resolve_refs(self, obj, **kw):
+            calls.append(obj)
+            return super().resolve_refs(obj, **kw)
+
+    spy = SpySpec(spec_dict)
+    # A request body that has a top-level $ref
+    rb = RequestBody(spy, {"$ref": "#/components/requestBodies/SearchParams"})
+    rb._resolved()
+
+    assert calls, (
+        "resolve_refs was not called — _resolved() may still use the dead loop"
+    )
+    # Confirm the dead method still does not exist
+    assert not hasattr(real_spec, "resolve_ref"), (
+        "OpenAPISpec must NOT have a resolve_ref (singular) method; "
+        "the dead loop depended on its absence"
+    )
+
+
+def test_request_body_resolved_warns_once_for_missing_ref(spec_dict, caplog):
+    """S46: _resolved() emits a WARNING (once) when the body $ref is not found."""
+    import logging
+
+    from dct_mcp_server.tools.core import spec_model
+
+    # Clear the module-level warning deduplication set before the test
+    spec_model._WARNED_BODY_REFS.discard("#/components/schemas/Ghost")
+
+    spec = OpenAPISpec(spec_dict)
+    rb = RequestBody(spec, {"$ref": "#/components/schemas/Ghost"})
+
+    with caplog.at_level(
+        logging.WARNING, logger="dct_mcp_server.tools.core.spec_model"
+    ):
+        result = rb._resolved()
+
+    assert isinstance(result, dict), (
+        "Expected a dict (possibly error marker), got non-dict"
+    )
+    # A WARNING was emitted for the missing ref
+    warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert warnings, "Expected a WARNING for unresolvable body $ref"
+    assert any("Ghost" in r.message for r in warnings), (
+        f"WARNING should mention the bad ref name. Got: {[r.message for r in warnings]}"
+    )
+
+
+def test_request_body_resolved_warns_only_once_for_same_ref(spec_dict, caplog):
+    """S46b: The WARNING for a bad body $ref is emitted at most once (rate-limited)."""
+    import logging
+
+    from dct_mcp_server.tools.core import spec_model
+
+    ref = "#/components/schemas/Ghost2"
+    spec_model._WARNED_BODY_REFS.discard(ref)
+
+    spec = OpenAPISpec(spec_dict)
+    rb = RequestBody(spec, {"$ref": ref})
+
+    with caplog.at_level(
+        logging.WARNING, logger="dct_mcp_server.tools.core.spec_model"
+    ):
+        rb._resolved()
+        caplog.clear()
+        rb._resolved()  # second call — WARNING must NOT fire again
+
+    warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert not warnings, (
+        f"Second call for same bad ref must not emit a WARNING; got {[r.message for r in warnings]}"
+    )
+
+
+def test_request_body_resolved_inline_body_returns_content(spec_dict):
+    """S45 variant: A request body without a top-level $ref returns its inline dict."""
+    spec = OpenAPISpec(spec_dict)
+    inline_body = {
+        "required": True,
+        "content": {
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                }
+            }
+        },
+    }
+    rb = RequestBody(spec, inline_body)
+    result = rb._resolved()
+    assert result.get("content") is not None, "Inline body should return itself"

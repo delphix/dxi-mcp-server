@@ -186,11 +186,15 @@ async def test_DLPXECO14611_level_preserved_for_audit(
 async def test_DLPXECO14611_policy_message_passed_through(
     spec_loaded, monkeypatch
 ):  # AI-generated
-    """The rule's own message still reaches the caller unchanged, placeholder
-    included -- the flag waives the typed-id checks, not the policy text."""
+    """The rule's own message still reaches the caller -- the flag waives the
+    typed-id checks, not the policy text.
+
+    Placeholders are resolved before the message is shown (PPM-1129); the raw
+    ``{name}`` brace must never reach a user."""
     monkeypatch.setenv("DCT_CONFIRMATION_HOST_APPROVAL", "true")
     execute, _ = make_execute()
 
     first = await _first_leg(execute)
     assert "permanently delete environment" in first["message"]
     assert "Provide confirmed_resource_name" not in first["message"]
+    assert "{name}" not in first["message"]

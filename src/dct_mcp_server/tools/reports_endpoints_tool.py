@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from dct_mcp_server.core.decorators import log_tool_execution
 from dct_mcp_server.config import get_confirmation_for_operation
+from dct_mcp_server.tools.core.confirmation_resolver import render_message_template
 import asyncio
 import logging
 import threading
@@ -68,8 +69,15 @@ def check_confirmation(
         return {
             "status": "confirmation_required",
             "confirmation_level": confirmation["level"],
-            "confirmation_message": confirmation.get(
-                "message", "Please confirm this operation."
+            # Resolve {name}/{days}/{count} so a raw brace never reaches the
+            # user -- the same renderer the dynamic execute gate uses.
+            # Pre-built tools have no retention/impact context, so {days} and
+            # {count} clauses are dropped cleanly rather than rendered.
+            "confirmation_message": render_message_template(
+                confirmation.get("message", "Please confirm this operation."),
+                api_path,
+                request_body,
+                path_template=confirmation.get("path_pattern"),
             ),
             "action": action,
             "tool": tool_name,
@@ -174,7 +182,7 @@ def reporting_tool(
 
     ACTION: search_storage_savings_report
     ----------------------------------------
-    Summary: Search the saving storage summary report for virtualization engines.
+    Summary: Search the saving storage summary report for Continuous Data engines.
     Method: POST
     Endpoint: /reporting/storage-savings-report/search
     Required Parameters: limit, cursor, sort
@@ -204,7 +212,7 @@ def reporting_tool(
 
     ACTION: search_vdb_inventory_report
     ----------------------------------------
-    Summary: Search the inventory report for virtualization engine VDBs.
+    Summary: Search the VDB inventory report (a Continuous Data report listing VDBs; not a Continuous Compliance rule set).
     Method: POST
     Endpoint: /reporting/vdb-inventory-report/search
     Required Parameters: limit, cursor, sort
@@ -220,9 +228,9 @@ def reporting_tool(
         - parent_id: A reference to the parent dataset of the VDB.
         - creation_date: The date the VDB was created.
         - last_refreshed_date: The date the VDB was last refreshed.
-        - parent_timeflow_location: The location for the VDB's parent timeflow.
-        - parent_timeflow_timestamp: The timestamp for the VDB's parent timeflow.
-        - parent_timeflow_timezone: The timezone for the VDB's parent timeflow.
+        - parent_timeflow_location: The location for the VDB's parent timeline.
+        - parent_timeflow_timestamp: The timestamp for the VDB's parent timeline.
+        - parent_timeflow_timezone: The timezone for the VDB's parent timeline.
         - enabled: Whether the VDB is enabled
         - status: The runtime status of the VDB. 'Unknown' if all attempts ...
         - storage_size: The actual space used by the VDB, in bytes.
@@ -333,7 +341,7 @@ def reporting_tool(
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - engine_job_id: ID of the virtualization engine job.
+        - engine_job_id: ID of the Continuous Data engine job.
         - engine_id: ID of the RegisteredEngine.
         - legacy_job_type: Legacy type of the job.
         - job_type:
@@ -379,7 +387,7 @@ def reporting_tool(
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: ID of the virtualization engine action.
+        - id: ID of the Continuous Data engine action.
         - engine_id: ID of the RegisteredEngine.
         - action_type: Type of the action.
         - title: The title of the action.
@@ -425,7 +433,7 @@ def reporting_tool(
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: ID of the virtualization engine fault.
+        - id: ID of the Continuous Data engine fault.
         - engine_id: ID of the RegisteredEngine.
         - bundle_id: A unique dot delimited identifier associated with the fault.
         - target_name: The name of the faulted object at the time the fault was ...
@@ -434,7 +442,7 @@ def reporting_tool(
         - title: The summary of the fault.
         - description: The full description of the fault.
         - fault_action: The suggested action to be taken.
-        - response: The automated response taken by the Delphix engine.
+        - response: The automated response taken by the Continuous Data engine.
         - severity: The severity of the fault event.
         - status: The status of the fault.
         - date_diagnosed: The date when the fault was diagnosed.
@@ -471,7 +479,7 @@ def reporting_tool(
 
     ACTION: resolve_fault
     ----------------------------------------
-    Summary: Marks the fault as resolved. The Delphix engine will attempt to automatically detect cases where the fault has been resolved; but this is not always possible and may only occur on periodic intervals. In these cases, the user can proactively mark the fault resolved. This does not change the underlying disposition of the fault - if the problem is still present the system may immediately diagnose the same problem again. This should only be used to notify the system of resolution after the underlying problem has been resolved.
+    Summary: Marks the fault as resolved. The Continuous Data engine will attempt to automatically detect cases where the fault has been resolved; but this is not always possible and may only occur on periodic intervals. In these cases, the user can proactively mark the fault resolved. This does not change the underlying disposition of the fault - if the problem is still present the system may immediately diagnose the same problem again. This should only be used to notify the system of resolution after the underlying problem has been resolved.
     Method: POST
     Endpoint: /virtualization-fault/{faultId}/resolve
     Required Parameters: fault_id
@@ -499,7 +507,7 @@ def reporting_tool(
     Key Parameters (provide as applicable): filter_expression
 
     Filterable Fields:
-        - id: ID of the virtualization engine alert.
+        - id: ID of the Continuous Data engine alert.
         - engine_id: ID of the RegisteredEngine.
         - alert_timestamp: The time the alert occurred.
         - event: The event that caused the alert.

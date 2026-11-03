@@ -433,6 +433,76 @@ async def test_execute_dct_client_error_returns_dct_api_error():
     assert result["http_status"] == 404
 
 
+async def test_execute_dct_client_error_translates_internal_terminology():
+    """PPM-1129: a raw upstream error containing internal terms (e.g. 'timeflow',
+    'appdata') gets an additive message_for_user in canonical vocabulary, while
+    message keeps the raw text verbatim for support-ticket purposes."""
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    app = _make_app_mock()
+    client = _make_client_mock()
+    client.make_request = AsyncMock(
+        side_effect=DCTClientError(
+            "HTTP 404: timeflow 'tf-123' not found for appdata source"
+        )
+    )
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_VALID_SPEC,
+    ):
+        with patch(
+            "dct_mcp_server.tools.core.dynamic.check_confirmation",
+            return_value={
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            },
+        ):
+            result = await fn(path="/vdbs", method="GET")
+
+    assert result["status"] == "error"
+    assert (
+        result["message"] == "HTTP 404: timeflow 'tf-123' not found for appdata source"
+    )
+    assert "message_for_user" in result
+    assert "timeflow" not in result["message_for_user"].lower()
+    assert "appdata" not in result["message_for_user"].lower()
+    assert "timeline" in result["message_for_user"].lower()
+    assert "connector" in result["message_for_user"].lower()
+
+
+async def test_execute_dct_client_error_without_internal_terms_omits_translation():
+    """A raw error with no internal terminology should not get a redundant
+    message_for_user field."""
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    app = _make_app_mock()
+    client = _make_client_mock()
+    client.make_request = AsyncMock(
+        side_effect=DCTClientError("HTTP 404: VDB 'vdb-123' not found")
+    )
+    fn = _make_execute_fn(app, client)
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.get_cached_spec",
+        return_value=_VALID_SPEC,
+    ):
+        with patch(
+            "dct_mcp_server.tools.core.dynamic.check_confirmation",
+            return_value={
+                "requires_confirmation": False,
+                "confirmation_level": None,
+                "message_template": None,
+            },
+        ):
+            result = await fn(path="/vdbs", method="GET")
+
+    assert result["status"] == "error"
+    assert "message_for_user" not in result
+
+
 # =========================================================================== #
 # execute — success path (GET read)
 # =========================================================================== #
@@ -723,3 +793,203 @@ def test_extract_http_status_returns_none_for_no_match():
     from dct_mcp_server.tools.core.dynamic import _extract_http_status
 
     assert _extract_http_status("connection timed out") is None
+
+
+# ---------------------------------------------------------------------------
+# S21: error payload survives a raising translator (GAP-1 layer 4)
+# ---------------------------------------------------------------------------
+
+
+def test_error_response_keeps_raw_error_when_translation_raises(caplog):
+    """S21: When to_canonical (bound at dynamic.py import time) raises, _error_response
+    still returns a valid error dict with no message_for_user.
+
+    Fails on d5f89d6 (no try/except around the to_canonical call in _error_response;
+    RuntimeError propagated to the caller instead of being swallowed);
+    passes at HEAD (GAP-1 layer 4 fix).
+    """
+    import logging
+    from unittest.mock import patch
+
+    from dct_mcp_server.tools.core.dynamic import _error_response
+
+    raw = "HTTP 404: timeflow 'tf-s21' not found for appdata source"
+
+    with patch(
+        "dct_mcp_server.tools.core.dynamic.to_canonical",
+        side_effect=RuntimeError("forced translator crash for S21"),
+    ):
+        with caplog.at_level(
+            logging.WARNING, logger="dct_mcp_server.tools.core.dynamic"
+        ):
+            result = _error_response(raw, 404)
+
+    assert result["status"] == "error", f"Unexpected status: {result}"
+    assert result["code"] == "DCT_API_ERROR"
+    assert result["http_status"] == 404
+    assert result["message"] == raw
+    assert "message_for_user" not in result, (
+        "message_for_user must be absent when translation raised"
+    )
+    assert any(r.levelno >= logging.WARNING for r in caplog.records), (
+        "Expected a WARNING about the translation failure"
+    )
+
+
+def test_error_response_translates_a_json_error_body():
+    """The real DCT error format ``HTTP <code>: {json}`` gets a message_for_user
+    while ``message`` keeps the raw text verbatim."""
+    from dct_mcp_server.tools.core.dynamic import _error_response
+
+    raw = 'HTTP 404: {"error":"failed","error_description":"Timeflow not found."}'
+    resp = _error_response(raw, 404)
+    assert resp["message"] == raw
+    assert "Timeline not found." in resp["message_for_user"]
+
+
+# --------------------------------------------------------------------------- #
+# Vocabulary: area names and nested schema text (PPM-1129 comparison gaps 1, 2)
+# --------------------------------------------------------------------------- #
+
+_RETIRED_AREA_SPEC = {
+    "paths": {
+        "/timeflows": {"get": {"summary": "List.", "tags": ["Timeflows"]}},
+        "/toolkits": {"get": {"summary": "List.", "tags": ["Toolkits"]}},
+        "/masking-plugins": {"get": {"summary": "List.", "tags": ["MaskingPlugins"]}},
+        "/paas-timeflows": {"get": {"summary": "List.", "tags": ["PaaSTimeflows"]}},
+        "/vdbs": {"get": {"summary": "List.", "tags": ["VDBs"]}},
+        "/engines": {"get": {"summary": "List.", "tags": ["EnginePerformance"]}},
+    }
+}
+
+
+def test_list_tags_shows_canonical_area_names():
+    from dct_mcp_server.tools.core.dynamic import _action_list_tags
+
+    names = {t["name"] for t in _action_list_tags(_RETIRED_AREA_SPEC["paths"])["tags"]}
+    assert names == {
+        "Timelines",
+        "Connectors",
+        "MaskingConnectors",
+        "PaaSTimelines",
+        "VDBs",  # nothing to translate: unchanged
+        "EnginePerformance",  # bare "engine" is left alone by design (GAP-3)
+    }
+
+
+def test_list_tags_merges_areas_that_translate_to_the_same_name():
+    from dct_mcp_server.tools.core.dynamic import _action_list_tags
+
+    paths = {
+        "/a": {"get": {"tags": ["Timeflows"]}},
+        "/b": {"get": {"tags": ["Timelines"]}},
+    }
+    tags = _action_list_tags(paths)["tags"]
+    assert tags == [{"name": "Timelines", "operation_count": 2}]
+
+
+@pytest.mark.parametrize("tag", ["Timelines", "Timeflows"])
+def test_list_operations_accepts_the_canonical_or_the_original_area_name(tag):
+    from dct_mcp_server.tools.core.dynamic import _action_list_operations
+
+    res = _action_list_operations(
+        _RETIRED_AREA_SPEC["paths"], tag, None, None, 1, 20, _RETIRED_AREA_SPEC
+    )
+    assert [o["path"] for o in res["operations"]] == ["/timeflows"]
+    assert res["operations"][0]["tags"] == ["Timelines"]
+
+
+_NESTED_SPEC = {
+    "paths": {
+        "/bookmarks/transfer": {
+            "post": {
+                "operationId": "transfer",
+                "summary": "Transfer.",
+                "parameters": [
+                    {
+                        "name": "timeflowId",
+                        "in": "query",
+                        "description": "ID of the timeflow to use.",
+                        "schema": {"type": "string"},
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/Transfer"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The timeflow bookmark was moved.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "timeflow_id": {
+                                            "type": "string",
+                                            "description": "Timeflow of the toolkit.",
+                                            "example": "timeflow-1",
+                                        }
+                                    },
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Transfer": {
+                "type": "object",
+                "properties": {
+                    "bookmark": {
+                        "type": "string",
+                        "description": "An engine-direct timeflow bookmark to migrate.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "A free-text plugin description.",
+                    },
+                },
+            }
+        }
+    },
+}
+
+
+def _nested_schema():
+    from dct_mcp_server.tools.core.dynamic import _action_get_operation_schema
+    from dct_mcp_server.tools.core.spec_model import OpenAPISpec
+
+    return _action_get_operation_schema(
+        OpenAPISpec(_NESTED_SPEC), "/bookmarks/transfer", "POST"
+    )
+
+
+def test_operation_schema_translates_parameter_descriptions():
+    res = _nested_schema()
+    assert res["parameters"][0]["description"] == "ID of the timeline to use."
+    assert res["parameters"][0]["name"] == "timeflowId"  # identifiers are untouched
+
+
+def test_operation_schema_translates_request_body_field_descriptions():
+    res = _nested_schema()
+    by_name = {f["name"]: f for f in res["request_body_fields"]}
+    assert "timeline bookmark" in by_name["bookmark"]["description"]
+    assert "timeflow" not in by_name["bookmark"]["description"].lower()
+    # A field that is itself *called* "description" keeps its name and is translated.
+    assert by_name["description"]["description"] == "A free-text connector description."
+
+
+def test_operation_schema_translates_response_text_but_not_examples_or_keys():
+    res = _nested_schema()
+    ok = res["responses"]["200"]
+    assert ok["description"] == "The timeline bookmark was moved."
+    prop = ok["content"]["application/json"]["schema"]["properties"]["timeflow_id"]
+    assert prop["description"] == "Timeline of the connector."
+    assert prop["example"] == "timeflow-1"  # sample data is left as-is

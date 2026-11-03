@@ -25,7 +25,7 @@ EXPECTED_SELF_SERVICE_TOOLS = {
     "snapshot_bookmark_tool",
     "data_connection_tool",
     "job_tool",
-    "timeflow_tool",
+    "timeline_tool",
 }
 
 

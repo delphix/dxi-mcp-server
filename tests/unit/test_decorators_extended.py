@@ -170,3 +170,249 @@ def test_sync_function_multiple_calls():
     assert counter() == 1
     assert counter() == 2
     assert counter() == 3
+
+
+# ---------------------------------------------------------------------------
+# DCTClientError -- additive vocabulary translation (PPM-1129)
+#
+# A DCTClientError raised by a pre-built tool must still be RAISED, so FastMCP
+# reports the call with isError=True exactly as before the vocabulary layer.
+# The canonical rendering is attached additively: the raw text (and the HTTP
+# status in it) is kept verbatim, and a "message_for_user:" line is appended
+# only when to_canonical() changes the text.
+# ---------------------------------------------------------------------------
+
+
+def test_sync_dct_client_error_is_raised_with_translation_attached():
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    raw = "HTTP 404: timeflow 'tf-1' not found for appdata source"
+
+    @log_tool_execution
+    def failing_tool():
+        raise DCTClientError(raw)
+
+    with pytest.raises(DCTClientError) as info:
+        failing_tool()
+
+    err = info.value
+    assert str(err).startswith(raw)
+    assert err.raw_message == raw
+    assert err.http_status == 404
+    assert "timeline" in err.message_for_user.lower()
+    assert "connector" in err.message_for_user.lower()
+    assert f"message_for_user: {err.message_for_user}" in str(err)
+    assert isinstance(err.__cause__, DCTClientError)
+
+
+def test_sync_dct_client_error_without_internal_terms_is_reraised_unchanged():
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    original = DCTClientError("HTTP 404: VDB 'vdb-1' not found")
+
+    @log_tool_execution
+    def failing_tool():
+        raise original
+
+    with pytest.raises(DCTClientError) as info:
+        failing_tool()
+
+    assert info.value is original
+    assert str(info.value) == "HTTP 404: VDB 'vdb-1' not found"
+    assert info.value.message_for_user is None
+    assert info.value.http_status == 404
+
+
+@pytest.mark.asyncio
+async def test_async_dct_client_error_is_raised_with_translation_attached():
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    @log_tool_execution
+    async def failing_tool():
+        raise DCTClientError(
+            "HTTP 500: Self-Service container 'cg-1' has no active timeflow"
+        )
+
+    with pytest.raises(DCTClientError) as info:
+        await failing_tool()
+
+    assert info.value.http_status == 500
+    assert "vdb group" in info.value.message_for_user.lower()
+    assert "timeline" in info.value.message_for_user.lower()
+
+
+@pytest.mark.asyncio
+async def test_prebuilt_dct_error_reaches_the_mcp_client_as_iserror_with_translation():
+    """End to end through FastMCP: isError is preserved AND the translation
+    reaches the client."""
+    from mcp.server.fastmcp import FastMCP
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    app = FastMCP("t")
+
+    @app.tool()
+    @log_tool_execution
+    def timeline_tool(action: str) -> dict:
+        raise DCTClientError("HTTP 409: timeflow 'tf-1' is locked")
+
+    @app.tool()
+    @log_tool_execution
+    def vdb_tool(action: str) -> dict:
+        raise DCTClientError("HTTP 404: VDB 'vdb-1' not found")
+
+    async with create_connected_server_and_client_session(app._mcp_server) as client:
+        translated = await client.call_tool("timeline_tool", {"action": "get"})
+        untouched = await client.call_tool("vdb_tool", {"action": "get"})
+
+    assert translated.isError is True
+    text = translated.content[0].text
+    assert "HTTP 409: timeflow 'tf-1' is locked" in text
+    assert "message_for_user: HTTP 409: timeline 'tf-1' is locked" in text
+
+    assert untouched.isError is True
+    assert "HTTP 404: VDB 'vdb-1' not found" in untouched.content[0].text
+    assert "message_for_user" not in untouched.content[0].text
+
+
+def test_sync_other_exceptions_still_propagate_unchanged():
+    @log_tool_execution
+    def failing_tool():
+        raise ValueError("not a DCT error")
+
+    with pytest.raises(ValueError, match="not a DCT error"):
+        failing_tool()
+
+
+# ---------------------------------------------------------------------------
+# S24: DCTClientError re-raised unchanged when to_canonical raises (GAP-1)
+# ---------------------------------------------------------------------------
+
+
+def test_sync_dct_client_error_reraised_when_translation_raises(caplog):
+    """S24 sync: When to_canonical raises inside _with_message_for_user, the original
+    DCTClientError is re-raised unchanged and a WARNING is logged.
+
+    Fails on d5f89d6 (no try/except in _with_message_for_user; the RuntimeError from
+    to_canonical propagated through the decorator instead of being caught);
+    passes at HEAD (GAP-1 layer 3 fix).
+    """
+    import logging
+    from unittest.mock import patch
+
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    original = DCTClientError("HTTP 404: timeflow 'tf-s24-sync' not found")
+
+    @log_tool_execution
+    def failing_tool():
+        raise original
+
+    with patch(
+        "dct_mcp_server.tools.core.vocabulary.to_canonical",
+        side_effect=RuntimeError("forced translator crash for S24"),
+    ):
+        with caplog.at_level(logging.WARNING, logger="dct_mcp_server.core.decorators"):
+            with pytest.raises(DCTClientError) as info:
+                failing_tool()
+
+    # Must get the same object back — not a RuntimeError, not a new DCTClientError
+    assert info.value is original, (
+        f"Expected original exception object, got {type(info.value).__name__}"
+    )
+    # No message_for_user was attached (translation failed before it could be set)
+    assert (
+        not hasattr(info.value, "message_for_user")
+        or info.value.message_for_user is None
+    )
+    # The defensive catch must have logged a WARNING
+    assert any(
+        r.levelno >= logging.WARNING and "raised unexpectedly" in r.message
+        for r in caplog.records
+    ), (
+        f"Expected a 'raised unexpectedly' WARNING, records: {[r.message for r in caplog.records]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_async_dct_client_error_reraised_when_translation_raises(caplog):
+    """S24 async: Same guarantee as the sync variant — original DCTClientError is
+    re-raised unchanged when to_canonical raises inside the async wrapper.
+
+    Fails on d5f89d6 for the same reason as the sync variant;
+    passes at HEAD (GAP-1 layer 3 fix).
+    """
+    import logging
+    from unittest.mock import patch
+
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    original = DCTClientError("HTTP 500: timeflow 'tf-s24-async' timed out")
+
+    @log_tool_execution
+    async def async_failing_tool():
+        raise original
+
+    with patch(
+        "dct_mcp_server.tools.core.vocabulary.to_canonical",
+        side_effect=RuntimeError("forced translator crash for S24 async"),
+    ):
+        with caplog.at_level(logging.WARNING, logger="dct_mcp_server.core.decorators"):
+            with pytest.raises(DCTClientError) as info:
+                await async_failing_tool()
+
+    assert info.value is original
+    assert (
+        not hasattr(info.value, "message_for_user")
+        or info.value.message_for_user is None
+    )
+    assert any(
+        r.levelno >= logging.WARNING and "raised unexpectedly" in r.message
+        for r in caplog.records
+    ), (
+        f"Expected a 'raised unexpectedly' WARNING, records: {[r.message for r in caplog.records]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# S25: DCTClientError re-raised unchanged when vocabulary import fails (GAP-1)
+# ---------------------------------------------------------------------------
+
+
+def test_dct_client_error_reraised_when_vocabulary_import_fails(monkeypatch, caplog):
+    """S25: When the vocabulary module itself cannot be imported (None sentinel in
+    sys.modules triggers ImportError on 'from ... import'), the original DCTClientError
+    is re-raised unchanged and a WARNING is logged.
+
+    Fails on d5f89d6 (ImportError propagated from _with_message_for_user before the
+    try/except guard existed); passes at HEAD (GAP-1 layer 3 fix).
+    """
+    import logging
+    import sys
+
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    original = DCTClientError("HTTP 503: timeflow 'tf-s25' service unavailable")
+
+    @log_tool_execution
+    def failing_tool():
+        raise original
+
+    # Setting a module to None in sys.modules makes any 'from <module> import ...'
+    # raise ImportError (the None sentinel means "import failed").
+    monkeypatch.setitem(sys.modules, "dct_mcp_server.tools.core.vocabulary", None)
+    with caplog.at_level(logging.WARNING, logger="dct_mcp_server.core.decorators"):
+        with pytest.raises(DCTClientError) as info:
+            failing_tool()
+
+    assert info.value is original, (
+        f"Expected original exception object, got {type(info.value).__name__}"
+    )
+    assert (
+        not hasattr(info.value, "message_for_user")
+        or info.value.message_for_user is None
+    )
+    assert any(r.levelno >= logging.WARNING for r in caplog.records), (
+        "Expected at least one WARNING from the defensive _with_message_for_user catch"
+    )

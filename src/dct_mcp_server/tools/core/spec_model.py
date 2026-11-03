@@ -43,6 +43,11 @@ logger = get_logger(__name__)
 # path item — "parameters", "summary", vendor extensions — is metadata).
 HTTP_METHODS: frozenset[str] = frozenset({"get", "post", "put", "patch", "delete"})
 
+# Set of body-level $ref strings that have already triggered a WARNING from
+# RequestBody._resolved().  Prevents the same unresolvable or depth-limited
+# body $ref from flooding the log on every discovery/execute call.
+_WARNED_BODY_REFS: set[str] = set()
+
 # Default maximum $ref resolution depth, guarding against circular schemas.
 # Matches the historical _MAX_REF_DEPTH used by dynamic.py.
 DEFAULT_MAX_REF_DEPTH = 10
@@ -388,11 +393,48 @@ class RequestBody:
 
     @property
     def required(self) -> bool:
-        return bool(self.raw.get("required", False))
+        return bool(self._resolved().get("required", False))
 
     @property
     def content(self) -> dict[str, Any]:
-        return self.raw.get("content", {}) or {}
+        return self._resolved().get("content", {}) or {}
+
+    def _resolved(self) -> dict[str, Any]:
+        """The request body with a body-level ``$ref`` followed.
+
+        An operation may point at ``components/requestBodies/X`` rather than
+        inlining ``content``. Without following that pointer first there is no
+        ``content`` to read, so every such operation exposed zero body fields
+        to the model — 238 operations in DCT 2026.x, including all 140
+        ``/search`` endpoints and therefore ``filter_expression``.
+
+        GAP-5: the former 5-hop ``resolve_ref`` loop was dead code.
+        ``OpenAPISpec`` exposes ``resolve_refs`` (plural), not ``resolve_ref``
+        (singular), so ``hasattr(self.spec, "resolve_ref")`` was always False
+        and the loop always exited on the first hop via the fallback branch.
+        The loop is replaced by a single ``resolve_refs()`` call, which already
+        handles cycle detection and nesting depth up to 10.
+        """
+        if not isinstance(self.raw, dict):
+            return {}
+        ref = self.raw.get("$ref")
+        if not ref:
+            # No top-level $ref: the body is already inline; resolve nested refs.
+            resolved, _ = self.spec.resolve_refs(self.raw)
+            return resolved if isinstance(resolved, dict) else {}
+        resolved, truncated = self.spec.resolve_refs(self.raw)
+        if not isinstance(resolved, dict):
+            return {}
+        # Once-per-ref WARNING for unresolvable or depth-limited body refs.
+        is_error = resolved.get("code") == "SCHEMA_REF_NOT_FOUND"
+        is_truncated = truncated or bool(resolved.get("$ref_truncated"))
+        if (is_error or is_truncated) and ref not in _WARNED_BODY_REFS:
+            logger.warning(
+                f"RequestBody: could not fully resolve body $ref {ref!r} "
+                "(depth limit or cycle detected); body fields may be incomplete."
+            )
+            _WARNED_BODY_REFS.add(ref)
+        return resolved
 
     def _primary_schema_dict(self) -> dict[str, Any]:
         """Raw schema of the first media type (DCT bodies are application/json)."""

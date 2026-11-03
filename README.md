@@ -486,6 +486,26 @@ vdb_tool(action="delete_vdb", vdbId="vdb-123", confirmed=True)
 # Response: {"status": "success", ...}
 ```
 
+### Upgrade note: renamed tools and actions (2026.1.0.0)
+
+**Breaking change, no compatibility aliases.** Persona-toolset tools and actions whose names carried
+retired terminology were renamed, and the old names are gone. Scripts, saved prompts, agent
+configurations and tests that call them by name must be updated. DCT API paths are unchanged, and the
+default `dynamic` toolset (`discovery` / `execute`) is not affected.
+
+| Kind | Old name | New name |
+|---|---|---|
+| Tool | `timeflow_tool` | `timeline_tool` |
+| Tool | `toolkit_tool` | `connector_schema_tool` |
+| Tool | `database_template_tool` | `vdb_template_tool` |
+| Action | `upload_toolkit` / `delete_toolkit` | `upload_connector_schema` / `delete_connector_schema` |
+| Action | `dsource_link_appdata` / `dsource_link_appdata_defaults` | `dsource_link_connector` / `dsource_link_connector_defaults` |
+| Action | `update_appdata_dsource` | `update_connector_dsource` |
+| Action | `switch_vdb_timeflow` / `switch_timeflow` | `switch_vdb_timeline` / `switch_timeline` |
+| Action | `create_appdata_source` / `update_appdata_source` | `create_connector_source` / `update_connector_source` |
+| Action | `get_snapshot_timeflow_range` / `get_timeflow_range` | `get_snapshot_timeline_range` / `get_timeline_range` |
+| Action | `check_database_connectivity` | `check_connectivity` |
+
 ## Available Tools
 
 The tools available depend on the configured toolset. Below are the grouped tools for each toolset.
@@ -563,7 +583,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>database_template_tool</code></strong> - VDB templates (7 actions)</summary>
+<summary><strong><code>vdb_template_tool</code></strong> - VDB templates (7 actions)</summary>
 
 - **Actions**: `search`, `get`, `create`, `update`, `delete`
 - **Use cases**: Standardized VDB provisioning
@@ -591,7 +611,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>toolkit_tool</code></strong> - AppData plugin toolkits</summary>
+<summary><strong><code>connector_schema_tool</code></strong> - AppData plugin toolkits</summary>
 
 - **Actions**: `search`, `get`, `upload`, `update`, `delete`
 - **Use cases**: AppData plugin schema discovery for dSource linking and VDB provisioning
@@ -626,7 +646,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>timeflow_tool</code></strong> - Timeflows</summary>
+<summary><strong><code>timeline_tool</code></strong> - Timeflows</summary>
 
 - **Actions**: `search`, `get`, `delete`, `get_ranges`
 - **Use cases**: Timeline management and recovery points
@@ -672,7 +692,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 <details>
 <summary><strong><code>snapshot_tool</code></strong> - Snapshot operations (6 actions)</summary>
 
-- **Actions**: `search`, `get`, `get_timeflow_range`, `get_runtime`, `find_by_location`, `find_by_timestamp`
+- **Actions**: `search`, `get`, `get_timeline_range`, `get_runtime`, `find_by_location`, `find_by_timestamp`
 - **Use cases**: Point-in-time recovery, snapshot discovery
 </details>
 
@@ -691,7 +711,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>timeflow_tool</code></strong> - Timeflows (read-only)</summary>
+<summary><strong><code>timeline_tool</code></strong> - Timeflows (read-only)</summary>
 
 - **Actions**: `search`, `get`, `get_ranges`
 - **Use cases**: Timeline discovery, recovery point inspection
@@ -704,7 +724,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 <details>
 <summary><strong><code>vdb_tool</code></strong> - VDB operations with provisioning (28 actions)</summary>
 
-- **Actions**: All self_service actions plus: `provision_by_timestamp`, `get_provision_by_timestamp_defaults`, `provision_by_snapshot`, `get_provision_by_snapshot_defaults`, `provision_from_bookmark`, `get_provision_from_bookmark_defaults`, `provision_by_location`, `get_provision_by_location_defaults`, `update`, `delete`, `switch_timeflow`, `undo_refresh`, `get_deletion_dependencies`, `add_tags`, `delete_tags`
+- **Actions**: All self_service actions plus: `provision_by_timestamp`, `get_provision_by_timestamp_defaults`, `provision_by_snapshot`, `get_provision_by_snapshot_defaults`, `provision_from_bookmark`, `get_provision_from_bookmark_defaults`, `provision_by_location`, `get_provision_by_location_defaults`, `update`, `delete`, `switch_timeline`, `undo_refresh`, `get_deletion_dependencies`, `add_tags`, `delete_tags`
 - **Use cases**: VDB provisioning, lifecycle management, tagging
 </details>
 
@@ -725,7 +745,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 <details>
 <summary><strong><code>snapshot_tool</code></strong> - Snapshot operations (6 actions)</summary>
 
-- **Actions**: `search`, `get`, `get_timeflow_range`, `get_runtime`, `find_by_location`, `find_by_timestamp`
+- **Actions**: `search`, `get`, `get_timeline_range`, `get_runtime`, `find_by_location`, `find_by_timestamp`
 - **Use cases**: Point-in-time recovery, snapshot discovery
 </details>
 
@@ -751,7 +771,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>database_template_tool</code></strong> - VDB Templates (7 actions)</summary>
+<summary><strong><code>vdb_template_tool</code></strong> - VDB Templates (7 actions)</summary>
 
 - **Actions**: `search`, `get`, `create`, `update`, `delete`, `add_tags`, `delete_tags`
 - **Use cases**: Standardized VDB provisioning templates
@@ -786,14 +806,14 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>toolkit_tool</code></strong> - AppData plugin toolkits</summary>
+<summary><strong><code>connector_schema_tool</code></strong> - AppData plugin toolkits</summary>
 
 - **Actions**: `search`, `get`
 - **Use cases**: Schema discovery for AppData provisioning
 </details>
 
 <details>
-<summary><strong><code>timeflow_tool</code></strong> - Timeflows</summary>
+<summary><strong><code>timeline_tool</code></strong> - Timeflows</summary>
 
 - **Actions**: `search`, `get`, `get_ranges`
 - **Use cases**: Timeline management, recovery point discovery
@@ -872,7 +892,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>toolkit_tool</code></strong> - AppData plugin toolkits</summary>
+<summary><strong><code>connector_schema_tool</code></strong> - AppData plugin toolkits</summary>
 
 - **Actions**: `search`, `get`, `upload`, `update`, `delete`
 - **Use cases**: AppData plugin lifecycle management
@@ -906,7 +926,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 <details>
 <summary><strong><code>snapshot_bookmark_tool</code></strong> - Snapshots and Bookmarks read-only (7 actions)</summary>
 
-- **Actions**: `search_snapshots`, `get_snapshot`, `get_snapshot_capacity`, `get_snapshot_timeflow_range`, `search_bookmarks`, `get_bookmark`, `get_bookmark_vdb_groups`
+- **Actions**: `search_snapshots`, `get_snapshot`, `get_snapshot_capacity`, `get_snapshot_timeline_range`, `search_bookmarks`, `get_bookmark`, `get_bookmark_vdb_groups`
 - **Use cases**: Snapshot and bookmark reporting
 </details>
 
@@ -918,7 +938,7 @@ The tools available depend on the configured toolset. Below are the grouped tool
 </details>
 
 <details>
-<summary><strong><code>database_template_tool</code></strong> - VDB Templates read-only (2 actions)</summary>
+<summary><strong><code>vdb_template_tool</code></strong> - VDB Templates read-only (2 actions)</summary>
 
 - **Actions**: `search`, `get`
 - **Use cases**: Template inventory

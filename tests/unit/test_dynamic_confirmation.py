@@ -7,6 +7,8 @@ Covers: get_confirmation_for_operation_dynamic, _matched_keyword,
 
 from unittest.mock import patch
 
+import pytest
+
 
 from dct_mcp_server.tools.core.dynamic_confirmation import (
     _matched_keyword,
@@ -287,4 +289,137 @@ def test_get_confirmation_dynamic_spec_none_triggers_lazy_import():
     ):
         # spec=None forces the lazy import path; empty spec → no keyword → none
         result = get_confirmation_for_operation_dynamic("POST", "/any/path")
+    assert result["level"] == "none"
+
+
+# ---------------------------------------------------------------------------
+# GAP-1: decorator exception guard
+# ---------------------------------------------------------------------------
+
+
+def test_with_message_for_user_returns_original_exception_when_vocabulary_raises():
+    """GAP-1 decorator guard: _with_message_for_user falls back to the original exception if the
+    vocabulary layer raises, so tool calls still fail with a proper MCP error."""
+    from unittest.mock import patch
+
+    from dct_mcp_server.core.decorators import _with_message_for_user
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    original_exc = DCTClientError("HTTP 404: VDB not found")
+
+    with patch(
+        "dct_mcp_server.tools.core.vocabulary.to_canonical",
+        side_effect=RuntimeError("simulated translator crash"),
+    ):
+        result = _with_message_for_user(original_exc)
+
+    # Must return the original (undecorated) exception, not raise
+    assert result is original_exc
+
+
+def test_with_message_for_user_attaches_canonical_message_for_user_on_success():
+    """GAP-1 decorator success path: when the vocabulary layer succeeds, message_for_user is attached."""
+    from dct_mcp_server.core.decorators import _with_message_for_user
+    from dct_mcp_server.core.exceptions import DCTClientError
+
+    exc = DCTClientError("HTTP 500: timeflow tf-1 not found")
+    result = _with_message_for_user(exc)
+
+    # "timeflow" should be translated to "timeline" in message_for_user
+    assert result.message_for_user is not None
+    assert "timeline" in result.message_for_user.lower()
+    assert "timeflow" not in result.message_for_user.lower()
+
+
+# ---------------------------------------------------------------------------
+# FR-007: keyword-fallback prompt renders the OpenAPI summary canonically
+# ---------------------------------------------------------------------------
+
+_TIMEFLOW_SPEC = {
+    "paths": {
+        "/vdbs/vdb-123": {
+            "post": {
+                "operationId": "deleteTimeflow",
+                "summary": "Delete timeflow",
+                "description": "",
+            }
+        }
+    }
+}
+
+
+def test_keyword_fallback_prompt_uses_canonical_summary():
+    """S36: the OpenAPI summary is rendered into canonical terms in the prompt."""
+    result = get_confirmation_for_operation_dynamic(
+        "POST", "/vdbs/vdb-123", _TIMEFLOW_SPEC
+    )
+    assert result["level"] == "manual"
+    assert "timeline" in result["message"].lower()
+    assert "timeflow" not in result["message"].lower()
+
+
+def test_keyword_fallback_prompt_when_translation_raises():
+    """S37: a failing translator must not break the prompt; confirmation is still
+    required and the prompt is built from the raw summary (GAP-1 layer 2)."""
+    import dct_mcp_server.tools.core.vocabulary as vocab_mod
+
+    spec = {
+        "paths": {
+            "/vdbs/vdb-456": {
+                "post": {
+                    "operationId": "deleteTimeflowRaw",
+                    "summary": "Delete timeflow raw-s37",
+                    "description": "",
+                }
+            }
+        }
+    }
+    vocab_mod._translate.cache_clear()
+    try:
+        with patch.object(
+            vocab_mod, "_translate", side_effect=RuntimeError("forced for S37")
+        ):
+            result = get_confirmation_for_operation_dynamic(
+                "POST", "/vdbs/vdb-456", spec
+            )
+    finally:
+        vocab_mod._translate.cache_clear()
+        vocab_mod._failure_logged = False
+
+    assert result["level"] == "manual"
+    assert "Delete timeflow raw-s37" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# Read-only search endpoints must not be gated (PPM-1129 comparison finding)
+# ---------------------------------------------------------------------------
+
+_SEARCH_PATHS = [
+    "/vdbs/search",
+    "/timeflows/search",
+    "/masking-jobs/search",
+    "/data-library/search",
+    "/paas-databases/search",
+    "/paas-instances/search",
+    "/rule-sets/search",
+    "/database-table-metadata/search",
+    "/data-formats/{fileFormatId}/rule-sets/search",
+    "/bookmarks/{bookmarkId}/vdb-groups/search",
+]
+
+
+@pytest.mark.parametrize("path", _SEARCH_PATHS)
+def test_read_shaped_search_post_is_not_gated(path):
+    # The description mentions a hot keyword ("snapshot"), as real DCT text does.
+    spec = {
+        "paths": {
+            path: {
+                "post": {
+                    "summary": "Search for objects.",
+                    "description": "Returns objects, including their latest snapshot.",
+                }
+            }
+        }
+    }
+    result = get_confirmation_for_operation_dynamic("POST", path, spec)
     assert result["level"] == "none"

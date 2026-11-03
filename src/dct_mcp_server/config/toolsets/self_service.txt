@@ -58,7 +58,7 @@ GET|/dsources/{dsourceId}/tags|get_tags
 # ----------------------------------------------------------------------------
 POST|/snapshots/search|search
 GET|/snapshots/{snapshotId}|get
-GET|/snapshots/{snapshotId}/timeflow_range|get_timeflow_range
+GET|/snapshots/{snapshotId}/timeflow_range|get_timeline_range
 GET|/snapshots/{snapshotId}/runtime|get_runtime
 GET|/snapshots/find_by_location|find_by_location
 GET|/snapshots/find_by_timestamp|find_by_timestamp
@@ -88,7 +88,7 @@ POST|/jobs/{jobId}/abandon|abandon
 GET|/jobs/{jobId}/tags|get_tags
 
 # ----------------------------------------------------------------------------
-# TOOL 7: timeflow_tool - Timeflows
+# TOOL 7: timeline_tool - Timelines
 # ----------------------------------------------------------------------------
 GET|/timeflows|list
 POST|/timeflows/search|search

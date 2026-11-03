@@ -45,6 +45,7 @@ Key optional env vars:
 - `DCT_CONFIRMATION_FALLBACK` — `keyword` (default) or `off`; keyword resolver catches ungated mutating operations
 - `DCT_GRANT_TTL` — seconds, default `900`; TTL for scoped batch grants
 - `DCT_BATCH_COUNTER_PERSISTENCE` — `off` (default) or `file`; opt-in persistence for velocity counters
+- `DCT_SERVER_INSTRUCTIONS` — path to a vocabulary/domain-model instructions file; defaults to the packaged `config/server_instructions.md`
 
 ## Architecture
 
@@ -94,6 +95,36 @@ The confirmation system was hardened in DLPXECO-14458 to add:
 
 Read-shaped POSTs (e.g. `/vdbs/provision_by_snapshot/defaults`, `/snapshots/search`) are excluded from the keyword fallback via `config/mappings/read_exclusions.txt`.
 
+### Vocabulary Layer
+
+PPM-1129. The server is treated as a product voice channel: internal terminology must not reach
+users. Three surfaces, all config-driven:
+
+- `config/server_instructions.md` — cross-cutting vocabulary and domain-model rules, loaded by
+  `load_server_instructions()` and passed as `instructions=` to `FastMCP(...)` in `main.py`.
+  `FastMCP.instructions` is read-only, so it must be supplied at construction.
+- `config/mappings/vocabulary.txt` — `internal|canonical[|guard=words]` term map applied by
+  `tools/core/vocabulary.py:to_canonical()` to text that originates upstream (raw DCT error
+  bodies, OpenAPI summaries). Only prose is rewritten: URLs, paths, hyphen/dot-joined IDs and
+  `{placeholders}` are never touched, and optional guards (`skip_if_preceded_by`,
+  `skip_if_followed_by`, `only_if_text_mentions`) keep words with an unrelated meaning
+  ("Oracle container database", "VDB inventory report") intact. Error translation is always
+  **additive**: `message` keeps the raw text and `message_for_user` carries the rendering.
+- `config/mappings/manual_confirmation.txt` — message templates. Placeholders (`{name}`,
+  `{days}`, `{count}`) are resolved by `render_message_template()` in
+  `tools/core/confirmation_resolver.py`; an unresolvable placeholder has its clause dropped
+  rather than printing a raw brace.
+
+Canonical terms: VDB, dSource, environment, snapshot, **timeline** (not timeflow), **VDB Group**
+(not container), **connector** (never expose the AppData vs. native split), and DCT vs.
+*Continuous Data engine* (never bare "engine"). Regression guards live in
+`tests/unit/test_vocabulary_regression.py`.
+
+Reconciled against the real `DCT_MCP_Server_Vocabulary_Glossary_v1.2.xlsx` (32 canonical-term
+rows, 169 synonym rows). Before adding or renaming any tool, action, docstring, or user-facing
+message, read [`.claude/rules/vocabulary-editorial-guidelines.md`](.claude/rules/vocabulary-editorial-guidelines.md) —
+it's the checklist that keeps this layer from regressing.
+
 **AppData connector secrets (DLPXECO-14781):** On a capture-capable host, the gate also resolves the toolkit behind each AppData operation (DB2, MySQL, HANA, MongoDB, Couchbase) and detects connector parameters declared `"format": "password"` in the toolkit's schema. Those fields are routed through secure capture like spec-annotated credentials. The gate response gains an additive `sensitive_field_locations` key (list of `{name, location}`) when connector secrets are flagged. Detection is host-scoped (embedded mode only), fail-open, and time-budgeted (budget = `DCT_TIMEOUT`). Caches are in-memory only (not persisted across restart). The `config/mappings/appdata_operations.txt` file maps 19 AppData operations to their sub-objects and toolkit resolver chains.
 
 **Known gaps:** `POST /vdb-groups/provision_from_bookmark` (nested `provision_parameters.<vdb_id>` AppData params) is not mapped. Resolution falls back to annotation-only for operations where the toolkit id cannot be determined.
@@ -110,11 +141,13 @@ src/dct_mcp_server/
 ├── config/
 │   ├── config.py              # Env var loading/validation
 │   ├── loader.py              # Toolset + confirmation rule loading
+│   ├── server_instructions.md # Vocabulary + domain model sent as MCP `instructions`
 │   ├── toolsets/*.txt         # Persona toolset definitions
 │   └── mappings/
 │       ├── manual_confirmation.txt   # Per-operation confirmation rules
 │       ├── floor_operations.txt      # Non-bypassable floor operations
 │       ├── read_exclusions.txt       # POSTs excluded from keyword fallback
+│       ├── vocabulary.txt            # Internal→canonical term map for upstream text
 │       └── appdata_operations.txt    # AppData operation → sub-object → toolkit resolver mapping (DLPXECO-14781)
 ├── core/
 │   ├── logging.py             # Global + session logging setup

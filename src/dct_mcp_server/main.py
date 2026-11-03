@@ -20,6 +20,7 @@ from dct_mcp_server.config import (
     print_config_help,
     get_configured_toolset,
     is_dynamic_mode,
+    load_server_instructions,
     validate_all_configs,
 )
 from dct_mcp_server.core import end_session, start_session
@@ -68,6 +69,10 @@ async def lifespan(app: FastMCP):
 # Server instance
 app = FastMCP(
     name="dct-mcp-server",
+    # Cross-cutting vocabulary and domain-model guidance (PPM-1129). Must be
+    # supplied here: FastMCP.instructions is read-only and the value is
+    # captured into the MCP initialize response at construction time.
+    instructions=load_server_instructions(),
     lifespan=lifespan,
 )
 
