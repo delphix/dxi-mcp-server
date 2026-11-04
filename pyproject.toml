@@ -35,6 +35,10 @@ dependencies = [
     # WS-2026-0133: certifi < 2026.10.19 ships a stale CA bundle missing revocations.
     # Pulled in transitively via httpx. Pin to >=2026.10.19.
     "certifi>=2026.10.19",
+    # CVE-2026-114605: dnspython < 2.9.0 follows attacker-controlled DNS compression pointer
+    # chains without a hop limit, enabling DoS via CPU exhaustion when processing untrusted
+    # DNS messages. Pulled in transitively via pydantic -> email-validator. Pin to >=2.9.0.
+    "dnspython>=2.9.0",
 ]
 
 [project.scripts]
