@@ -30,6 +30,14 @@ pydantic>=2.0.0
 # bypass, and DoS vulnerabilities. Pin to >=4.14.2.
 anyio>=4.14.2
 
+# CVE-2026-96760, CVE-2026-104056: authlib <= 1.8.0 has empty-signature JWS bypass (Critical 9.8)
+# and cached discovery metadata vulnerability. Pin to >=1.9.0.
+authlib>=1.9.0
+
+# CVE-2026-114603: opentelemetry-api <= 1.45.0 has unbounded tracestate parsing (Medium).
+# Pin to >=1.45.1.
+opentelemetry-api>=1.45.1
+
 # Additional utilities that might be needed
 typing-extensions>=4.0.0
 

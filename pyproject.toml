@@ -35,6 +35,13 @@ dependencies = [
     # WS-2026-0133: certifi < 2026.10.19 ships a stale CA bundle missing revocations.
     # Pulled in transitively via httpx. Pin to >=2026.10.19.
     "certifi>=2026.10.19",
+    # CVE-2026-96760, CVE-2026-104056: authlib <= 1.8.0 has empty-signature JWS bypass
+    # (Critical 9.8) and cached discovery metadata vulnerability. Pulled in transitively
+    # via fastmcp. Pin to >=1.9.0 (first patched version).
+    "authlib>=1.9.0",
+    # CVE-2026-114603: opentelemetry-api <= 1.45.0 has unbounded tracestate parsing (Medium).
+    # Pulled in transitively via fastmcp. Pin to >=1.45.1 (first patched version).
+    "opentelemetry-api>=1.45.1",
 ]
 
 [project.scripts]
