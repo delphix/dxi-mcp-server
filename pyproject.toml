@@ -42,6 +42,10 @@ dependencies = [
     # CVE-2026-114603: opentelemetry-api <= 1.45.0 has unbounded tracestate parsing (Medium).
     # Pulled in transitively via fastmcp. Pin to >=1.45.1 (first patched version).
     "opentelemetry-api>=1.45.1",
+    # CVE-2026-114605 (GHSA-45c3-73f7-pv4m): dnspython < 2.9.0 follows attacker-controlled
+    # DNS compression pointer chains without a hop limit, enabling DoS via CPU exhaustion.
+    # Pulled in transitively via pydantic[email] -> email-validator. Pin to >=2.9.0.
+    "dnspython>=2.9.0",
 ]
 
 [project.scripts]
