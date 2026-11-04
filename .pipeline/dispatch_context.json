@@ -1,8 +1,8 @@
 {
-  "plugin_name": "",
-  "skill_name": "mcp-cve-fix",
-  "skill_flags": "--start-from mcp-cve-fix",
-  "worktree_path": "/aidlc-app/dxi-aidlc/repos/users/akshay.kamble/dxi-mcp-server/.worktrees/dlpxeco-14812",
-  "ticket_id": "DLPXECO-14812",
+  "plugin_name": "dataconnectors-and-integrations@dlpx-claude-plugins",
+  "skill_name": "feature-implement",
+  "skill_flags": "--pipeline-skill feature-implement --no-interview",
+  "worktree_path": "/aidlc-app/dxi-aidlc/repos/users/ankit.batra/dxi-mcp-server/.worktrees/dlpxeco-14881",
+  "ticket_id": "DLPXECO-14881",
   "spec_review_feedback": false
 }
