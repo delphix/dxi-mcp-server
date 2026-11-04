@@ -30,6 +30,15 @@ pydantic>=2.0.0
 # bypass, and DoS vulnerabilities. Pin to >=4.14.2.
 anyio>=4.14.2
 
+# CVE-2026-96760, CVE-2026-116672, CVE-2026-114616, CVE-2026-114615, CVE-2026-114618,
+# CVE-2026-114620, CVE-2026-114619, CVE-2026-114617, CVE-2026-114614: authlib < 1.9.1
+# has multiple authentication vulnerabilities (CVSS up to 9.8). Pin to >=1.9.1.
+authlib>=1.9.1
+
+# CVE-2026-114603: opentelemetry-api < 1.45.1 has a ReDoS vulnerability in W3C tracestate
+# header parsing (CVSS 5.3). Pin to >=1.45.1.
+opentelemetry-api>=1.45.1
+
 # Additional utilities that might be needed
 typing-extensions>=4.0.0
 
