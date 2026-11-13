@@ -1,2 +1,0 @@
-{"source": ".claude/tmp-raw/ticket.json", "mode": "allowlist:summary,description,issuetype,acceptance_criteria_field,parent,labels,components,reporter,assignee", "bytes_in": 42684, "bytes_out": 8835, "fields_dropped": ["expand", "id", "self", "key", "fields"], "at": "2026-11-13T08:24:22Z"}
-{"source": ".claude/tmp-raw/ticket.json", "mode": "allowlist:summary,description,issuetype,acceptance_criteria_field,parent,labels,components,reporter,assignee", "bytes_in": 42684, "bytes_out": 8835, "fields_dropped": ["expand", "id", "self", "key", "fields"], "at": "2026-11-13T08:24:44Z"}
