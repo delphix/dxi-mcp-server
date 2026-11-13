@@ -101,6 +101,8 @@ toolkits|connectors
 # talking about Self-Service/Jetstream. Qualified forms are unambiguous. ---
 vdb group|VDB Group
 vdbgroup|VDB Group
+templates/containers|templates/VDB Groups
+template/container|template/VDB Group
 delphix self-service container|VDB Group
 delphix self-service containers|VDB Groups
 self-service container|VDB Group

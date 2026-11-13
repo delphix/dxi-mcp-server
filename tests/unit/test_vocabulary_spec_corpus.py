@@ -136,8 +136,11 @@ def test_translation_never_nests_a_canonical_term_inside_itself():
 _IDENTIFIER_RE = re.compile(
     r"https?://\S+"
     r"|`[^`\n]*`"
-    # A Title/Title pair such as "Container/Template" is prose, not a path.
-    r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)[\w.{}:~%$-]*[/\\][\w.{}:~%$/\\-]*"
+    # A Title/Title pair such as "Container/Template" is prose, not a path. So is the
+    # complete lowercase pair "template/container" (APIGW-31447 / TC-112); mirrors
+    # _PROTECTED_RE in vocabulary.py, where "templates/containers/{id}" stays a path.
+    r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)"
+    r"(?![Tt]emplates?/[Cc]ontainers?(?![\w/]))[\w.{}:~%$-]*[/\\][\w.{}:~%$/\\-]*"
     r"|\w+(?:[-.@]\w+)+"
     r"|\w*_\w+"
     r"|\b[a-z]+[A-Z]\w*"
@@ -158,8 +161,12 @@ def test_identifiers_survive_byte_for_byte():
     assert not offenders, offenders[:10]
 
 
+# "template/container" is itself Self-Service evidence: the pair names the Self-Service
+# template and its container (now VDB Group) and has no Kubernetes/CDB/Azure reading
+# (APIGW-31447 / TC-112). The lookarounds keep it from matching inside a longer path.
 _SELF_SERVICE_EVIDENCE = re.compile(
-    r"(?<![\w-])(self[\s-]*service|jetstream|data[\s-]+(layouts?|templates?)|coordinated)(?![\w-])",
+    r"(?<![\w-])(self[\s-]*service|jetstream|data[\s-]+(layouts?|templates?)|coordinated)(?![\w-])"
+    r"|(?<![\w/.-])templates?/containers?(?![\w/])",
     re.I,
 )
 

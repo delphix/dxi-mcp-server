@@ -241,6 +241,13 @@ def test_vocabulary_map_is_ordered_longest_first():
             "Cannot rewind VDB vdb-1: active connections",
             "Cannot refresh from self VDB vdb-1: active connections",
         ),
+        # APIGW-31447 (TC-112): lowercase "template/container" is prose, not a path
+        ("DCT Id of the template/container.", "DCT Id of the template/VDB Group."),
+        ("Name of the template/container", "Name of the template/VDB Group"),
+        (
+            "Lists the templates/containers in the account",
+            "Lists the templates/VDB Groups in the account",
+        ),
         # APIGW-31447 (TC-111): "AppData container" is a VDB, never "connector container"
         (
             "Mount a subdirectory of an AppData container.",
@@ -254,6 +261,22 @@ def test_vocabulary_map_is_ordered_longest_first():
 )
 def test_to_canonical_translates_and_preserves_case(raw, expected):
     assert to_canonical(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "GET /templates/containers/{containerId}",
+        "see templates/containers/list for details",
+        "/data-layouts/template/container",
+        "open docs/template/container.md",
+        "`template/container`",
+    ],
+)
+def test_template_container_pair_inside_a_path_is_left_alone(raw):
+    # APIGW-31447 (TC-112): only the complete prose pair is translated; paths, file
+    # paths and code spans that merely contain the same words stay byte-for-byte.
+    assert to_canonical(raw) == raw
 
 
 def test_to_canonical_never_defaults_ambiguous_delphix_engine_to_one_product():

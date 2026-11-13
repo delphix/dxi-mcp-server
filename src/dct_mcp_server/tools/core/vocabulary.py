@@ -110,7 +110,11 @@ _PROTECTED_RE = re.compile(
     # back, so they are never rewritten; the string values stay translatable.
     r'|"(?:[^"\\\n]|\\.)*"(?=\s*:)'
     # A path-like token. A Title/Title pair ("Container/Template") is prose, not a path.
-    r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
+    # So is the lowercase Self-Service pair "template/container" (spec prose such as "Name
+    # of the template/container"), but only as a complete pair: "templates/containers/{id}"
+    # or "template/container/x" remain paths.
+    r"|(?<![\w.{}:~%$-])(?![A-Z][a-z]+/[A-Z][a-z]+\b)"
+    r"(?![Tt]emplates?/[Cc]ontainers?(?![\w/]))[\w.{}:~%$-]*/[\w.{}:~%$/-]*"
     r"|[\w.{}:~%$-]*\\[\w.{}:~%$\\-]*"
     # A hyphen/dot/@-joined identifier. "plugin-specific" and the like are prose.
     r"|(?<![\w.@-])(?!\w+-(?:specific|based|related)\b(?![-.@]\w))\w+(?:[-.@]\w+)+"
