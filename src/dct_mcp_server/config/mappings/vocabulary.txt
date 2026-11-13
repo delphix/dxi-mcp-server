@@ -122,6 +122,8 @@ virtualization engine|Continuous Data engine
 virtualization engines|Continuous Data engines
 masking engine|Continuous Compliance engine
 masking engines|Continuous Compliance engines
+compliance node|Continuous Compliance engine
+compliance nodes|Continuous Compliance engines
 delphix masking|Delphix Continuous Compliance
 # Elastic Data is an add-on to the Continuous Data engine, not an engine of its
 # own (glossary #28: "frame as an add-on -- 'the Continuous Data engine with

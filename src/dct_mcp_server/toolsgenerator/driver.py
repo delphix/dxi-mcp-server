@@ -1060,9 +1060,10 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                                 )
                                 props = response_schema.get("properties", {})
                                 for prop_name, prop_def in props.items():
-                                    prop_desc = to_canonical(
-                                        prop_def.get("description", "")
-                                    ) or ""
+                                    prop_desc = (
+                                        to_canonical(prop_def.get("description", ""))
+                                        or ""
+                                    )
                                     if len(prop_desc) > 60:
                                         prop_desc = _truncate_at_word_boundary(
                                             prop_desc, 60
