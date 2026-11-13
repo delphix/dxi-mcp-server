@@ -77,6 +77,12 @@ timeflow|timeline
 timeflows|timelines
 
 # --- Connectors: never expose the AppData vs native split (glossary #3a) ---
+# "AppData container" is the engine's old name for the VDB itself (e.g. "mount a
+# subdirectory of an AppData container"). Map the whole phrase, article included, so the
+# generic "appdata" -> "connector" rule below cannot leave "connector container" behind.
+an appdata container|a VDB
+appdata containers|VDBs
+appdata container|VDB
 appdata plugin|connector
 appdata plugins|connectors
 appdata toolkit|connector

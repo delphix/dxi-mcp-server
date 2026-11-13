@@ -503,7 +503,7 @@ default `dynamic` toolset (`discovery` / `execute`) is not affected.
 | Action (in `data_tool`) | `update_appdata_dsource` | `update_connector_dsource` | `continuous_data_admin` |
 | Action (in `data_tool` / `timeline_tool`) | `switch_vdb_timeflow` / `switch_timeflow` | `switch_vdb_timeline` / `switch_timeline` | `continuous_data_admin` / `self_service_provision` |
 | Action (in `data_tool`) | `create_appdata_source` / `update_appdata_source` | `create_connector_source` / `update_connector_source` | `continuous_data_admin` |
-| Action (in `snapshot_tool` / `timeline_tool`) | `get_snapshot_timeflow_range` / `get_timeflow_range` | `get_snapshot_timeline_range` / `get_timeline_range` | `continuous_data_admin`, `reporting_insights` / `self_service` |
+| Action (in `snapshot_tool` / `timeline_tool`) | `get_snapshot_timeflow_range` / `get_timeflow_range` | `get_snapshot_timeline_range` / `get_timeline_range` | `continuous_data_admin`, `reporting_insights` / `self_service`, `self_service_provision` (inherits `self_service`) |
 | Action (in `diagnostic_tool`) | `check_database_connectivity` | `check_connectivity` | `continuous_data_admin`, `platform_admin` |
 
 ## Available Tools

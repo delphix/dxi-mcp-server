@@ -241,6 +241,15 @@ def test_vocabulary_map_is_ordered_longest_first():
             "Cannot rewind VDB vdb-1: active connections",
             "Cannot refresh from self VDB vdb-1: active connections",
         ),
+        # APIGW-31447 (TC-111): "AppData container" is a VDB, never "connector container"
+        (
+            "Mount a subdirectory of an AppData container.",
+            "Mount a subdirectory of a VDB.",
+        ),
+        (
+            "Specifies additional locations of AppData containers",
+            "Specifies additional locations of VDBs",
+        ),
     ],
 )
 def test_to_canonical_translates_and_preserves_case(raw, expected):

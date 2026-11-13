@@ -87,8 +87,9 @@ is caught by a checklist and a test, not by another reconciliation pass.
    proving that meaning is left alone.
 2. **Run the full suite**, not just the vocabulary tests — tool/action renames touch
    dynamic-mode registration and toolset loading, which have their own tests.
-3. **Update `docs/PPM-1129/PPM-1129-agent-ready-api-surface-proposal.md` and the
-   Confluence Vocabulary Detail page** if the change adds or retires a term-level mapping,
+3. **Update the README "Upgrade note: renamed tools and actions" table (it lists the
+   toolsets for every rename) and the Confluence Vocabulary Detail page** if the change
+   adds or retires a term-level mapping or renames a tool or action,
    so the term-by-term reference stays in sync with the code. These are reference
    documents, not just historical records — let them drift and the next engineer
    reconciles against a stale page instead of the real glossary.
