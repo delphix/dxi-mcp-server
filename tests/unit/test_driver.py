@@ -1205,3 +1205,50 @@ def test_driver_hint_text_is_free_of_retired_terms():
     ]
     assert leaks == []
     assert not any("toolkit_tool" in t for t in texts)
+
+
+# ---------------------------------------------------------------------------
+# TC-111/TC-112: word-boundary truncation helper
+# ---------------------------------------------------------------------------
+
+
+def test_truncate_at_word_boundary_exact():
+    """Strings within the limit are returned unchanged."""
+    assert driver_mod._truncate_at_word_boundary("hello world", 20) == "hello world"
+
+
+def test_truncate_at_word_boundary_cuts_at_space():
+    """Long strings are cut before the word that would overflow, appending '...'."""
+    text = "The quick brown fox jumps over the lazy dog"
+    result = driver_mod._truncate_at_word_boundary(text, 20)
+    assert result.endswith("...")
+    assert len(result) <= 20
+    # Must end on a complete word (no mid-word cut).
+    assert not result[:-3].endswith(" ")
+
+
+def test_truncate_at_word_boundary_no_mid_word_cut():
+    """A word that starts right at the limit boundary is not split."""
+    text = "A" * 77 + "extra"  # 82 chars; without word-boundary logic the old code
+    # would return "A" * 77 + "...", cutting nothing but passing with the old limit.
+    # With a space boundary at position 76: 'A'*76 + ' boundary'
+    text = "A" * 76 + " boundary word"
+    result = driver_mod._truncate_at_word_boundary(text, 80)
+    assert result == "A" * 76 + "..."
+
+
+def test_truncate_at_word_boundary_applies_canonical_before_truncation():
+    """Retired terms in search-filter descriptions are translated before truncation.
+
+    Previously the code sliced the raw description before calling to_canonical,
+    which could leave retired terms in the output or cause mid-word cuts if
+    to_canonical expanded a term (TC-111/TC-112 regression guard).
+    """
+    # A description where to_canonical expands "timeflow" → "timeline" and the
+    # result is still short enough to avoid truncation.
+    from dct_mcp_server.tools.core.vocabulary import to_canonical
+
+    raw = "The timeflow identifier for this snapshot."
+    translated = to_canonical(raw)
+    assert "timeline" in translated
+    assert "timeflow" not in translated

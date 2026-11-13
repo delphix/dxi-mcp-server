@@ -1543,7 +1543,34 @@ def test_hyphenated_prose_compounds_are_translated(raw, expected):
         "Pass the timeflowId field.",
         "A PostgreSQL DataLayout and VirtualizationPolicies object.",
         "Install the JenkinsPlugin first.",
+        # Hyphen-joined tokens are machine identifiers, not prose: appdata-plugin,
+        # timeflow-bookmarks, etc. are protected as slugs by _PROTECTED_RE and are
+        # never rewritten regardless of their component words (TC-113 design decision:
+        # the hyphenated form stays; space-separated "appdata plugin" is prose and
+        # translates normally — see test_hyphenated_prose_compounds_are_translated).
+        "The appdata-plugin documentation is available online.",
+        "See the appdata-plugin reference guide for parameters.",
     ],
 )
 def test_values_identifiers_and_unrelated_type_names_are_left_alone(raw):
     assert to_canonical(raw) == raw
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # TC-113: space-separated form IS prose and translates; hyphenated form is an
+        # identifier and does NOT.  Both are correct outcomes by design.
+        (
+            "See TimeflowRange and the appdata-plugin docs.",
+            "See TimelineRange and the appdata-plugin docs.",
+        ),
+        (
+            "Install the appdata plugin.",
+            "Install the connector.",
+        ),
+    ],
+)
+def test_hyphenated_vs_space_separated_appdata_translation(raw, expected):
+    """TC-113: appdata-plugin (hyphenated) is an identifier; appdata plugin (space) is prose."""
+    assert to_canonical(raw) == expected

@@ -72,13 +72,21 @@ OpenAPI summaries. Parsed by `loader.py:load_vocabulary_rules()`.
 
 **Format:**
 ```
+@preserve Token1,Token2,...
 @signals name=word,word,...
 internal_term|canonical_term[|directive=word,word...]...
 ```
 
+**Special directives:**
+
+| Line prefix | Effect |
+|---|---|
+| `@preserve Token1,Token2,...` | Mark comma-separated tokens as API values the client must echo back to DCT exactly as given (e.g. `link_type` enum values). They are protected from rewriting even if they contain a retired word. Parsed by `loader.py:load_vocabulary_preserved()`; matched whole-word (not mid-identifier). Current use: `AppDataDirect`, `AppDataStaged` (the `link_type` values for connector-linked dSources). |
+| `@signals name=w1,w2,...` | Declare a named word set referenced by guard directives as `@name` (e.g. `@selfservice`). |
+
 - Matching is case-insensitive and whole-word; longer internal terms are applied first.
   Several lines may share an internal term: the first whose text conditions hold wins.
-- Directives (all optional, comma-separated, whole-word; a space in a phrase also matches a
+- Directives on translation lines (all optional, comma-separated, whole-word; a space in a phrase also matches a
   hyphen; `@name` expands to a declared `@signals` set):
 
 | Directive | Effect |
@@ -90,6 +98,9 @@ internal_term|canonical_term[|directive=word,word...]...
 
 - Never translated: URLs, `/` and `\` paths, hyphen/dot/@-joined identifiers, `code spans`,
   `{placeholders}`. A substitution never doubles a term ("VDB containers" -> "VDB Groups").
+- **Hyphenated forms**: `appdata-plugin` and similar hyphen-joined tokens are machine identifiers,
+  never prose; they are always left unchanged regardless of their component words. Add a `@preserve`
+  entry only for API enum values — never to work around a false-positive translation.
 - Words with an everyday meaning (`container`, `inventory`) or an ambiguous referent
   (`Delphix engine`) are translated only on positive evidence -- tighten the `@signals` set
   rather than adding skip words for the latest false positive.

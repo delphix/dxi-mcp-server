@@ -49,8 +49,12 @@ HTTP_METHODS: frozenset[str] = frozenset({"get", "post", "put", "patch", "delete
 _WARNED_BODY_REFS: set[str] = set()
 
 # Default maximum $ref resolution depth, guarding against circular schemas.
-# Matches the historical _MAX_REF_DEPTH used by dynamic.py.
-DEFAULT_MAX_REF_DEPTH = 10
+# Raised from 10 to 15: provision_by_snapshot and similar deeply-nested schemas
+# (engines, tags, tasks, virtualization_tasks) hit the depth-10 ceiling and
+# returned schema_truncated: true markers with $ref_truncated / max_depth_exceeded
+# placeholders in the discovery output (TC-109). 15 handles all known cases while
+# keeping cycle detection intact for truly recursive schemas.
+DEFAULT_MAX_REF_DEPTH = 15
 
 
 # =========================================================================== #
