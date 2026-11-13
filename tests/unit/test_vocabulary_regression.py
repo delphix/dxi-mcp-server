@@ -508,6 +508,27 @@ def test_persona_renames_are_complete_and_documented():
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# APIGW-31432: "compliance node" alias for Continuous Compliance engine
+# --------------------------------------------------------------------------- #
+
+
+def test_compliance_node_alias_is_registered():
+    """APIGW-31432: 'compliance node' must remain a recognized alias for
+    Continuous Compliance engine in server_instructions.md.
+
+    Fails if someone removes the alias from the terminology table.
+    """
+    from dct_mcp_server.config.loader import load_server_instructions
+
+    text = load_server_instructions()
+    assert "compliance node" in text.lower(), (
+        "'compliance node' alias missing from server_instructions.md (APIGW-31432) "
+        "— restore it to the 'Also accept from the user' column of the "
+        "Continuous Compliance engine row in the terminology table"
+    )
+
+
 def test_editorial_guidelines_mention_dynamic_docstring_scan():
     """S43: vocabulary-editorial-guidelines.md must document the GAP-2 scan.
 

@@ -241,6 +241,15 @@ def test_vocabulary_map_is_ordered_longest_first():
             "Cannot rewind VDB vdb-1: active connections",
             "Cannot refresh from self VDB vdb-1: active connections",
         ),
+        # APIGW-31432: "compliance node" is an alias for Continuous Compliance engine
+        (
+            "Compliance node is offline",
+            "Continuous Compliance engine is offline",
+        ),
+        (
+            "compliance nodes registered: 2",
+            "Continuous Compliance engines registered: 2",
+        ),
     ],
 )
 def test_to_canonical_translates_and_preserves_case(raw, expected):

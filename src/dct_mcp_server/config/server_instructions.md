@@ -35,7 +35,7 @@ Masking, or an unqualified "engine".
    Data and Continuous Compliance engines; it is not an engine, so correct a user who
    conflates them. Pick the engine from context (VDB work is Continuous Data; masking
    and rule-set work is Continuous Compliance) and ask when it is unclear. Translate
-   Virtualization Engine and Masking Engine silently.
+   Virtualization Engine, Masking Engine and "compliance node" silently.
 3. Timeline: say "timeline", never "timeflow"; translate it silently in results.
 4. VDB Group: if a user says "container", answer with VDB Group and say: "VDB Group is
    the current term. Container is retired Delphix Self-Service / Jetstream terminology
@@ -142,7 +142,7 @@ Accept every alias a user types. Always answer using the canonical term.
 | VDB Group | container, consistency group | container |
 | connector | AppData, plugin, toolkit, native connector | AppData, plugin, toolkit |
 | Delphix Continuous Data engine | CD engine, Data Engine, engine, appliance | bare "engine", "Virtualization Engine" |
-| Delphix Continuous Compliance engine | CC engine, Compliance Engine, engine, appliance | bare "engine", "Masking Engine" |
+| Delphix Continuous Compliance engine | CC engine, Compliance Engine, compliance node, engine, appliance | bare "engine", "Masking Engine" |
 | Delphix Continuous Compliance | CC, Continuous Compliance, Delphix Masking, Masking | "Delphix Masking" |
 | refresh (from parent/sibling/self) | update, sync, pull latest, reload | "rewind" (see rule below), "reset" |
 | bookmark | marker, named point, coordination point | plain "tag" |
