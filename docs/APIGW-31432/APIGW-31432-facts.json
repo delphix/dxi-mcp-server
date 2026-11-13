@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "ticket": "APIGW-31432",
+  "title": "DCT MCP Server: assistant does not treat \"compliance node\" as a Continuous Compliance engine",
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "text": "Prompt \"Which compliance node is registered in DCT?\" (and the same with \"masking engine\") returns Continuous Compliance engines and does not say \"node\" or \"Masking Engine\" back to the user.",
+      "permanent": true
+    },
+    {
+      "id": "ac-2",
+      "text": "Asking how to use a compliance engine produces the agreed two-approach explanation.",
+      "permanent": true
+    },
+    {
+      "id": "ac-3",
+      "text": "Regression test fails if the alias is removed.",
+      "permanent": true
+    }
+  ],
+  "constraints": [
+    {
+      "text": "The two approaches for using a compliance engine still need to be defined by the feature owner \u2014 this is an open question that must be resolved before AC-2 can be completed.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "The 'Rules (read first)' block in server_instructions.md must remain within the first 4,000 characters after any addition.",
+      "source": "ticket",
+      "permanent": true
+    },
+    {
+      "text": "A regression test must be added in tests/unit/test_vocabulary_regression.py that fails if the 'compliance node' alias is removed.",
+      "source": "ticket",
+      "permanent": true
+    }
+  ],
+  "limits": {
+    "coverage_threshold": 80,
+    "build_retry_max": 3
+  },
+  "branch": null,
+  "worktree_path": null,
+  "domain": null,
+  "current_state": {
+    "phase": "pr",
+    "updated_at": "2026-11-13T08:34:46Z"
+  },
+  "decisions": [],
+  "scope": {
+    "expected_files_hint": [
+      "src/dct_mcp_server/config/server_instructions.md",
+      "src/dct_mcp_server/config/mappings/vocabulary.txt",
+      "tests/unit/test_vocabulary_regression.py",
+      "tests/unit/test_vocabulary.py"
+    ],
+    "non_goals": []
+  }
+}

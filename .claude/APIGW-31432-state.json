@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "APIGW-31432",
+  "domain": "bugfix",
+  "lite_mode": true,
+  "domain_source": "Jira issuetype: Bug",
+  "created_at": "2026-11-13T08:27:50Z",
+  "steps": {
+    "context": "completed",
+    "vision": "pending",
+    "design": "pending",
+    "implement": "completed",
+    "build": "pending",
+    "test-infra": "pending",
+    "test": "pending",
+    "validate": "pending",
+    "pr": "completed",
+    "release": "pending",
+    "retrospective": "pending"
+  },
+  "last_completed": "pr",
+  "next_step": "",
+  "skipped_phases": [],
+  "pr_url": "https://github.com/delphix/dxi-mcp-server/pull/new/dlpx/pr/vinay.byrappa/apigw-31432"
+}
