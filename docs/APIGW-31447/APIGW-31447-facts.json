@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "ticket": "APIGW-31447",
+  "title": "DCT MCP Server 2026.1.0.0: vocabulary leaks, truncated discovery schema and doc gaps found in prompt-driven testing",
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "text": "No retired term or mid-word truncation in generated persona tool text or discovery schema text (rows TC-111, TC-112 pass).",
+      "permanent": true
+    },
+    {
+      "id": "ac-2",
+      "text": "TC-109, TC-113, TC-114 and TC-021 pass, or their expectations are updated with a recorded decision.",
+      "permanent": true
+    },
+    {
+      "id": "ac-3",
+      "text": "TC-074, TC-076, TC-081 and TC-082 pass on a clean checkout of the tag, or each is split into its own ticket.",
+      "permanent": true
+    }
+  ],
+  "constraints": [],
+  "limits": {
+    "coverage_threshold": 80,
+    "build_retry_max": 3
+  },
+  "branch": null,
+  "worktree_path": null,
+  "domain": null,
+  "current_state": {
+    "phase": "pr",
+    "updated_at": "2026-11-13T09:32:44Z"
+  },
+  "decisions": [],
+  "scope": {
+    "expected_files_hint": [
+      "src/dct_mcp_server/toolsgenerator/driver.py",
+      "src/dct_mcp_server/tools/core/dynamic.py",
+      "src/dct_mcp_server/tools/core/vocabulary.py",
+      "src/dct_mcp_server/config/mappings/vocabulary.txt",
+      "src/dct_mcp_server/tools/core/spec_model.py",
+      "src/dct_mcp_server/tools/core/confirmation_resolver.py",
+      "src/dct_mcp_server/tools/reports_endpoints_tool.py",
+      "src/dct_mcp_server/config/CLAUDE.md",
+      ".claude/rules/vocabulary-editorial-guidelines.md",
+      "src/dct_mcp_server/config/server_instructions.md",
+      "README.md",
+      "tests/unit/test_vocabulary_regression.py",
+      "tests/unit/test_confirmation_resolver.py",
+      "tests/unit/test_vocabulary.py",
+      "src/dct_mcp_server/config/loader.py"
+    ],
+    "non_goals": []
+  }
+}
