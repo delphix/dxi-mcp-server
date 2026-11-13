@@ -493,18 +493,18 @@ retired terminology were renamed, and the old names are gone. Scripts, saved pro
 configurations and tests that call them by name must be updated. DCT API paths are unchanged, and the
 default `dynamic` toolset (`discovery` / `execute`) is not affected.
 
-| Kind | Old name | New name |
-|---|---|---|
-| Tool | `timeflow_tool` | `timeline_tool` |
-| Tool | `toolkit_tool` | `connector_schema_tool` |
-| Tool | `database_template_tool` | `vdb_template_tool` |
-| Action | `upload_toolkit` / `delete_toolkit` | `upload_connector_schema` / `delete_connector_schema` |
-| Action | `dsource_link_appdata` / `dsource_link_appdata_defaults` | `dsource_link_connector` / `dsource_link_connector_defaults` |
-| Action | `update_appdata_dsource` | `update_connector_dsource` |
-| Action | `switch_vdb_timeflow` / `switch_timeflow` | `switch_vdb_timeline` / `switch_timeline` |
-| Action | `create_appdata_source` / `update_appdata_source` | `create_connector_source` / `update_connector_source` |
-| Action | `get_snapshot_timeflow_range` / `get_timeflow_range` | `get_snapshot_timeline_range` / `get_timeline_range` |
-| Action | `check_database_connectivity` | `check_connectivity` |
+| Kind | Old name | New name | Toolset(s) |
+|---|---|---|---|
+| Tool | `timeflow_tool` | `timeline_tool` | `continuous_data_admin`, `self_service`, `self_service_provision` |
+| Tool | `toolkit_tool` | `connector_schema_tool` | `continuous_data_admin`, `platform_admin`, `self_service_provision` |
+| Tool | `database_template_tool` | `vdb_template_tool` | `continuous_data_admin`, `reporting_insights`, `self_service_provision` |
+| Action (in `connector_schema_tool`) | `upload_toolkit` / `delete_toolkit` | `upload_connector_schema` / `delete_connector_schema` | `continuous_data_admin`, `platform_admin` |
+| Action (in `data_tool`) | `dsource_link_appdata` / `dsource_link_appdata_defaults` | `dsource_link_connector` / `dsource_link_connector_defaults` | `continuous_data_admin` |
+| Action (in `data_tool`) | `update_appdata_dsource` | `update_connector_dsource` | `continuous_data_admin` |
+| Action (in `data_tool` / `timeline_tool`) | `switch_vdb_timeflow` / `switch_timeflow` | `switch_vdb_timeline` / `switch_timeline` | `continuous_data_admin` / `self_service_provision` |
+| Action (in `data_tool`) | `create_appdata_source` / `update_appdata_source` | `create_connector_source` / `update_connector_source` | `continuous_data_admin` |
+| Action (in `snapshot_tool` / `timeline_tool`) | `get_snapshot_timeflow_range` / `get_timeflow_range` | `get_snapshot_timeline_range` / `get_timeline_range` | `continuous_data_admin`, `reporting_insights` / `self_service`, `self_service_provision` (inherits `self_service`) |
+| Action (in `diagnostic_tool`) | `check_database_connectivity` | `check_connectivity` | `continuous_data_admin`, `platform_admin` |
 
 ## Available Tools
 

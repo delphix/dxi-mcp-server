@@ -66,6 +66,8 @@ is caught by a checklist and a test, not by another reconciliation pass.
 | Situation | Where it goes |
 |---|---|
 | A raw string from an upstream API/error body needs translating | `config/mappings/vocabulary.txt` (`internal_term\|canonical_term[\|guard=words]`) |
+| An API enum value that must be echoed back to DCT exactly (e.g. a `link_type` value) but contains a retired word | `config/mappings/vocabulary.txt` — add `@preserve TokenName` at the top (before `@signals` lines). The token is then whole-word protected from rewriting by `tools/core/vocabulary.py:_preserved_re()`. Never add `@preserve` just to suppress a false-positive translation in prose — tighten the rule's guard conditions instead. |
+| A hyphen-joined compound like `appdata-plugin` that should stay untranslated | No change needed. All hyphen/dot/@-joined tokens are already protected as machine identifiers by `vocabulary.py:_PROTECTED_RE`. Hyphenated forms are **never** translated regardless of their component words. If a test expects translation of a hyphenated token, update the test expectation — do not change the protection logic. |
 | A cross-cutting rule the model needs to apply in conversation (e.g. "never say X", "retrain gently", "ask instead of guessing") | `config/server_instructions.md` — add to the terminology table and/or the numbered "Additional rules" |
 | A confirmation/error message template | `config/mappings/manual_confirmation.txt` — use canonical terms only |
 | A tool or action name | Rename in the relevant `config/toolsets/*.txt` file and the corresponding `tools/*_endpoints_tool.py` handler |
@@ -85,8 +87,9 @@ is caught by a checklist and a test, not by another reconciliation pass.
    proving that meaning is left alone.
 2. **Run the full suite**, not just the vocabulary tests — tool/action renames touch
    dynamic-mode registration and toolset loading, which have their own tests.
-3. **Update `docs/PPM-1129/PPM-1129-agent-ready-api-surface-proposal.md` and the
-   Confluence Vocabulary Detail page** if the change adds or retires a term-level mapping,
+3. **Update the README "Upgrade note: renamed tools and actions" table (it lists the
+   toolsets for every rename) and the Confluence Vocabulary Detail page** if the change
+   adds or retires a term-level mapping or renames a tool or action,
    so the term-by-term reference stays in sync with the code. These are reference
    documents, not just historical records — let them drift and the next engineer
    reconciles against a stale page instead of the real glossary.

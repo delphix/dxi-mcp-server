@@ -146,6 +146,32 @@ ACTION_DOMAIN_HINTS: dict[str, str] = {
 }
 
 
+def _truncate_at_word_boundary(text: str, max_len: int) -> str:
+    """Truncate *text* to at most *max_len* chars, cutting at a word boundary.
+
+    Avoids mid-word breaks that occur when ``text[:max_len - 3] + "..."`` slices
+    into the middle of a word.  Also avoids mid-word breaks that arise after
+    ``to_canonical`` expands a short internal term into a longer canonical one.
+
+    Args:
+        text:    The string to truncate (already translated by ``to_canonical``).
+        max_len: Maximum length of the returned string, including the "..." suffix.
+
+    Returns:
+        *text* unchanged when ``len(text) <= max_len``, otherwise the longest
+        prefix that ends on a word boundary followed by "...".
+    """
+    if len(text) <= max_len:
+        return text
+    # Reserve 3 chars for "..." and find the last space before the cut point.
+    cut = max_len - 3
+    space_pos = text.rfind(" ", 0, cut)
+    if space_pos > 0:
+        return text[:space_pos] + "..."
+    # No space found — fall back to a hard cut (better than returning nothing).
+    return text[:cut] + "..."
+
+
 def load_api_endpoints_from_toolsets():
     """
     Load API endpoints from the SELECTED toolset file and group by TOOL NAME.
@@ -1034,9 +1060,14 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
                                 )
                                 props = response_schema.get("properties", {})
                                 for prop_name, prop_def in props.items():
-                                    prop_desc = prop_def.get("description", "")
+                                    prop_desc = (
+                                        to_canonical(prop_def.get("description", ""))
+                                        or ""
+                                    )
                                     if len(prop_desc) > 60:
-                                        prop_desc = prop_desc[:57] + "..."
+                                        prop_desc = _truncate_at_word_boundary(
+                                            prop_desc, 60
+                                        )
                                     docstring_lines.append(
                                         f"    - {prop_name}: {prop_desc}"
                                     )
@@ -1121,7 +1152,7 @@ def _generate_unified_tool(tool_name: str, apis: list, api_spec: dict) -> str:
             req_note = "Optional for all actions"
         desc = to_canonical(param_info["description"]) or ""
         if len(desc) > 80:
-            desc = desc[:77] + "..."
+            desc = _truncate_at_word_boundary(desc, 80)
         return [
             f"    {param_name} ({param_info['type']}): {desc}",
             f"        [{req_note}]",
